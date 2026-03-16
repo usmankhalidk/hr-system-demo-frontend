@@ -1,0 +1,48 @@
+import type { TFunction } from 'i18next';
+
+/**
+ * Extracts the backend error `code` from an Axios error response and returns
+ * the corresponding i18n string. Falls back to `fallback` (if provided) or
+ * the generic `errors.DEFAULT` key.
+ *
+ * Usage:
+ *   catch (err) {
+ *     setError(translateApiError(err, t));
+ *   }
+ */
+export function translateApiError(
+  err: unknown,
+  t: TFunction,
+  fallback?: string,
+): string {
+  const axiosErr = err as {
+    response?: { data?: { code?: string } };
+    code?: string;
+    message?: string;
+  };
+
+  // Network error — no response from server
+  const isNetworkError =
+    !axiosErr?.response &&
+    (axiosErr?.code === 'ERR_NETWORK' ||
+      axiosErr?.code === 'ECONNABORTED' ||
+      axiosErr?.message === 'Network Error');
+
+  if (isNetworkError) {
+    return t('errors.NETWORK_ERROR' as never);
+  }
+
+  const code = axiosErr?.response?.data?.code;
+
+  if (code && typeof code === 'string') {
+    // Use defaultValue so i18next returns the fallback when the key is absent
+    // rather than the key string itself — works regardless of fallbackLng config.
+    const translated = (t as (key: string, opts: { defaultValue: string }) => string)(
+      `errors.${code}`,
+      { defaultValue: '' },
+    );
+    if (translated) return translated;
+  }
+
+  return fallback ?? (t('errors.DEFAULT' as never) as string);
+}
