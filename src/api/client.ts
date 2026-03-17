@@ -10,25 +10,63 @@ if (apiBase && !apiBase.startsWith('http://') && !apiBase.startsWith('https://')
 }
 const BASE_URL = apiBase ? `${apiBase}/api` : '/api';
 
+// ── Key transformers ──────────────────────────────────────────────────────────
+
+function toCamel(s: string): string {
+  return s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+function toSnake(s: string): string {
+  return s.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function camelizeKeys(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(camelizeKeys);
+  }
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof File) && !(obj instanceof Blob)) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [toCamel(k), camelizeKeys(v)])
+    );
+  }
+  return obj;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function snakeKeys(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(snakeKeys);
+  }
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof File) && !(obj instanceof Blob)) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [toSnake(k), snakeKeys(v)])
+    );
+  }
+  return obj;
+}
+
+// ── Axios instance ────────────────────────────────────────────────────────────
+
 const client = axios.create({ baseURL: BASE_URL });
 
-// Attach JWT token to every request
+// Request: convert camelCase body → snake_case
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (config.data !== undefined && config.data !== null) {
+    config.data = snakeKeys(config.data);
+  }
   return config;
 });
 
-// Redirect to login on 401
+// Response: convert snake_case keys → camelCase
 client.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+  (res) => {
+    if (res.data !== undefined && res.data !== null) {
+      res.data = camelizeKeys(res.data);
     }
-    return Promise.reject(err);
-  }
+    return res;
+  },
+  (err) => Promise.reject(err)
 );
 
 export default client;
