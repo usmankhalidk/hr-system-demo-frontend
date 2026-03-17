@@ -61,7 +61,7 @@ const ROLE_ACCENT: Record<UserRole, string> = {
   store_manager: '#7C3AED', employee: '#64748B', store_terminal: '#64748B',
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose }) => {
   const { user, permissions, logout } = useAuth();
   const { t } = useTranslation();
 
@@ -111,8 +111,22 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
     try { await logout(); } catch { /* ignore */ }
   };
 
+  const isMobileView = window.innerWidth < 768;
+
   return (
-    <aside style={{
+    <aside style={isMobileView ? {
+      position: 'fixed',
+      left: mobileOpen ? 0 : '-280px',
+      top: 0,
+      height: '100vh',
+      width: '252px',
+      zIndex: 200,
+      transition: 'left 0.28s cubic-bezier(0.16,1,0.3,1)',
+      background: 'var(--sidebar-bg)',
+      display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
+      borderRight: '1px solid rgba(255,255,255,0.05)',
+    } : {
       width: collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)',
       minWidth: collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)',
       height: '100vh',
@@ -155,6 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
       <NavLink
         to="/profilo"
         title={collapsed ? t('nav.myProfile') : undefined}
+        onClick={() => { if (window.innerWidth < 768 && onMobileClose) onMobileClose(); }}
         style={({ isActive }) => ({
           padding: collapsed ? '12px 0' : '14px 16px',
           borderBottom: '1px solid rgba(255,255,255,0.07)',
@@ -196,6 +211,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
             end={item.path === '/'}
             className="sidebar-item"
             title={collapsed ? t(item.labelKey) : undefined}
+            onClick={() => { if (window.innerWidth < 768 && onMobileClose) onMobileClose(); }}
             style={({ isActive }) => ({
               display: 'flex', alignItems: 'center',
               justifyContent: collapsed ? 'center' : 'flex-start',
