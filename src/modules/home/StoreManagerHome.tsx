@@ -1,11 +1,12 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 interface StoreInfo {
   id: number;
   name: string;
   code: string;
-  max_staff: number | null;
+  maxStaff: number | null;
 }
 
 export interface StoreManagerHomeData {
@@ -80,14 +81,15 @@ const MetricRow: React.FC<{ label: string; value: string | number; accent?: stri
 export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
   const { store, employeeCount } = data;
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
 
-  const available = store.max_staff ? Math.max(0, store.max_staff - employeeCount) : null;
+  const available = store.maxStaff ? Math.max(0, store.maxStaff - employeeCount) : null;
 
   return (
     <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
       {/* Header banner */}
-      <div style={{
+      <div className="banner-inner" style={{
         background: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)',
         borderRadius: 'var(--radius-lg)', padding: '22px 28px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
@@ -112,7 +114,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', alignItems: 'start' }}>
 
         {/* Capacity ring card */}
         <div style={{
@@ -125,8 +127,8 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{t('home.storeManager.capacityDesc')}</p>
           </div>
-          <div style={{ padding: '28px 20px', display: 'flex', justifyContent: 'center' }}>
-            <CapacityRing current={employeeCount} max={store.max_staff} />
+          <div style={{ padding: '28px 20px', display: 'flex', justifyContent: isMobile ? 'center' : 'center' }}>
+            <CapacityRing current={employeeCount} max={store.maxStaff} />
           </div>
         </div>
 
@@ -143,7 +145,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
           <div style={{ padding: '4px 20px 12px' }}>
             <MetricRow label={t('home.storeManager.storeName')} value={store.name} />
             <MetricRow label={t('home.storeManager.storeCode')} value={store.code} />
-            <MetricRow label={t('home.storeManager.maxCapacity')} value={store.max_staff ?? '—'} />
+            <MetricRow label={t('home.storeManager.maxCapacity')} value={store.maxStaff ?? '—'} />
             <MetricRow label={t('home.storeManager.activeEmployees')} value={employeeCount} accent="#15803D" />
             <MetricRow label={t('home.storeManager.availableSlots')} value={available ?? '—'} accent={available === null ? undefined : available > 0 ? '#0284C7' : '#DC2626'} />
           </div>
@@ -151,7 +153,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
       </div>
 
       {/* Phase 2 placeholders */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
         {[t('home.storeManager.todayShifts'), t('home.storeManager.todayAttendance')].map((title) => (
           <div key={title} style={{
             background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
