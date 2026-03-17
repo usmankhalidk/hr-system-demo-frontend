@@ -27,10 +27,15 @@ const Layout: React.FC<LayoutProps> = ({ children, title = 'Dashboard' }) => {
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
-        setMobileOpen(false);
-      }
-      if (window.innerWidth < 1024) {
         setCollapsed(true);
+        setMobileOpen(false);
+      } else if (window.innerWidth < 1024) {
+        setCollapsed(true);
+        setMobileOpen(false);
+      } else {
+        // Desktop: restore sidebar and close any mobile overlay
+        setCollapsed(false);
+        setMobileOpen(false);
       }
     };
     window.addEventListener('resize', handleResize);

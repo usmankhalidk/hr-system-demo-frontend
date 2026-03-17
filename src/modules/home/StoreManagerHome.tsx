@@ -127,7 +127,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{t('home.storeManager.capacityDesc')}</p>
           </div>
-          <div style={{ padding: '28px 20px', display: 'flex', justifyContent: isMobile ? 'center' : 'center' }}>
+          <div style={{ padding: '28px 20px', display: 'flex', justifyContent: isMobile ? 'center' : 'flex-start' }}>
             <CapacityRing current={employeeCount} max={store.maxStaff} />
           </div>
         </div>

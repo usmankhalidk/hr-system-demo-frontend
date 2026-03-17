@@ -92,7 +92,9 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
       }}>{title}</h1>
 
       {/* Language switcher */}
-      <LanguageSwitcher variant="pill" />
+      <span className="hide-mobile">
+        <LanguageSwitcher variant="pill" />
+      </span>
 
       {/* User pill */}
       {user && (

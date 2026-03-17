@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 import { UserRole } from '../../types';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -111,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
     try { await logout(); } catch { /* ignore */ }
   };
 
-  const isMobileView = window.innerWidth < 768;
+  const { isMobile: isMobileView } = useBreakpoint();
 
   return (
     <aside style={isMobileView ? {

@@ -6,6 +6,7 @@ import { translateApiError } from '../../utils/apiErrors';
 import { getStores } from '../../api/stores';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { Employee, Store, UserRole } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
@@ -55,6 +56,7 @@ export function EmployeeList() {
   const page = parseInt(searchParams.get('page') ?? '1', 10);
   const limit = 20;
 
+  const { isMobile } = useBreakpoint();
   const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr';
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
   const hasActiveFilters = !!(search || storeId || department || status || role);
@@ -195,8 +197,9 @@ export function EmployeeList() {
 
       {/* Header */}
       <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', marginBottom: '24px', gap: '16px',
+        display: 'flex', alignItems: isMobile ? 'flex-start' : 'center',
+        justifyContent: 'space-between', marginBottom: '24px', gap: '12px',
+        flexWrap: 'wrap',
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '3px' }}>

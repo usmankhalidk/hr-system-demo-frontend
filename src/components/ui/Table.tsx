@@ -52,6 +52,7 @@ export function Table<T extends object>({
         borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border)',
         background: 'var(--surface)',
+        overflow: 'hidden',
       }),
     }}>
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
