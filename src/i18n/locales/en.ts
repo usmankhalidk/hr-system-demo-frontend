@@ -7,6 +7,7 @@ const en = {
     edit: 'Edit',
     delete: 'Delete',
     deactivate: 'Deactivate',
+    activate: 'Activate',
     create: 'Create',
     back: 'Back',
     next: 'Next',
@@ -161,6 +162,7 @@ const en = {
       totalEmployees: 'Total employees',
       employeesPerStore: 'Employees per Store',
       employeesPerStoreDesc: 'Active staff by location',
+      employeesLabel: 'employees',
     },
     storeManager: {
       title: 'My Store',
@@ -174,6 +176,7 @@ const en = {
       todayAttendance: "Today's attendance",
       capacityTitle: 'Staff Capacity',
       capacityDesc: 'Current headcount vs maximum',
+      capacityBadge: 'capacity',
     },
     employee: {
       title: 'My Profile',
@@ -248,6 +251,10 @@ const en = {
     maritalStatusField: 'Marital status',
     confirmDeactivate: 'Confirm deactivation',
     confirmDeactivateMsg: 'Are you sure you want to deactivate employee {{name}}? This action can be undone later.',
+    confirmActivate: 'Confirm activation',
+    confirmActivateMsg: 'Are you sure you want to reactivate employee {{name}}?',
+    activatedSuccess: 'Employee reactivated successfully',
+    errorActivate: 'Error reactivating employee',
     step1: 'Main Data',
     step2: 'Contractual Details',
     selectRole: 'Select role...',
@@ -256,6 +263,7 @@ const en = {
     supervisorIdPlaceholder: 'ID number',
     fieldRequired: 'Required field',
     selectOption: 'Select...',
+    regenerateId: 'Generate new ID',
     createdSuccess: 'Employee created successfully',
     updatedSuccess: 'Employee updated successfully',
     deactivatedSuccess: 'Employee deactivated successfully',
@@ -293,9 +301,13 @@ const en = {
     confirmDeactivate: 'Confirm Deactivation',
     confirmDeactivateMsg:
       'Are you sure you want to deactivate store {{name}}? This action can be undone later by editing the store.',
+    confirmActivate: 'Confirm Activation',
+    confirmActivateMsg: 'Are you sure you want to reactivate store {{name}}?',
     createdSuccess: 'Store created successfully',
     updatedSuccess: 'Store updated successfully',
     deactivatedSuccess: 'Store deactivated successfully',
+    activatedSuccess: 'Store reactivated successfully',
+    errorActivate: 'Error reactivating store. Please try again.',
   },
 
   // ─── Companies ────────────────────────────────────────────────────────────

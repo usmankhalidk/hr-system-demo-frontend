@@ -7,6 +7,7 @@ const it = {
     edit: 'Modifica',
     delete: 'Elimina',
     deactivate: 'Disattiva',
+    activate: 'Riattiva',
     create: 'Crea',
     back: 'Indietro',
     next: 'Avanti',
@@ -161,6 +162,7 @@ const it = {
       totalEmployees: 'Dipendenti totali',
       employeesPerStore: 'Dipendenti per Negozio',
       employeesPerStoreDesc: 'Personale attivo per sede',
+      employeesLabel: 'dipendenti',
     },
     storeManager: {
       title: 'Il Mio Negozio',
@@ -174,6 +176,7 @@ const it = {
       todayAttendance: 'Presenze oggi',
       capacityTitle: 'Capienza Personale',
       capacityDesc: 'Organico attuale vs massimo',
+      capacityBadge: 'capienza',
     },
     employee: {
       title: 'Il Mio Profilo',
@@ -248,6 +251,10 @@ const it = {
     maritalStatusField: 'Stato civile',
     confirmDeactivate: 'Conferma disattivazione',
     confirmDeactivateMsg: 'Sei sicuro di voler disattivare il dipendente {{name}}? Questa azione può essere annullata in seguito.',
+    confirmActivate: 'Conferma riattivazione',
+    confirmActivateMsg: 'Sei sicuro di voler riattivare il dipendente {{name}}?',
+    activatedSuccess: 'Dipendente riattivato con successo',
+    errorActivate: 'Errore nella riattivazione del dipendente',
     step1: 'Dati Principali',
     step2: 'Dettagli Contrattuali',
     selectRole: 'Seleziona ruolo...',
@@ -256,6 +263,7 @@ const it = {
     supervisorIdPlaceholder: 'Numero ID',
     fieldRequired: 'Campo obbligatorio',
     selectOption: 'Seleziona...',
+    regenerateId: 'Genera nuovo ID',
     createdSuccess: 'Dipendente creato con successo',
     updatedSuccess: 'Dipendente aggiornato con successo',
     deactivatedSuccess: 'Dipendente disattivato con successo',
@@ -293,9 +301,13 @@ const it = {
     confirmDeactivate: 'Conferma Disattivazione',
     confirmDeactivateMsg:
       'Sei sicuro di voler disattivare il negozio {{name}}? Questa azione può essere annullata successivamente modificando il negozio.',
+    confirmActivate: 'Conferma Riattivazione',
+    confirmActivateMsg: 'Sei sicuro di voler riattivare il negozio {{name}}?',
     createdSuccess: 'Negozio creato con successo',
     updatedSuccess: 'Negozio aggiornato con successo',
     deactivatedSuccess: 'Negozio disattivato con successo',
+    activatedSuccess: 'Negozio riattivato con successo',
+    errorActivate: 'Errore nella riattivazione del negozio. Riprova.',
   },
 
   // ─── Companies ────────────────────────────────────────────────────────────

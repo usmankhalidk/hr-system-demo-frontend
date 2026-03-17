@@ -26,25 +26,27 @@ interface AreaManagerHomeProps {
 
 const BAR_COLORS = ['#C9973A', '#0D2137', '#0284C7', '#15803D', '#7C3AED', '#B45309'];
 
-const ChartTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-sm)', padding: '8px 12px',
-      boxShadow: 'var(--shadow)', fontSize: '12px', fontFamily: 'var(--font-body)',
-    }}>
-      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{payload[0].payload.name}</span>
-      <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{payload[0].value} employees</span>
-    </div>
-  );
-};
+const makeChartTooltip = (employeesLabel: string) =>
+  ({ active, payload }: { active?: boolean; payload?: any[] }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-sm)', padding: '8px 12px',
+        boxShadow: 'var(--shadow)', fontSize: '12px', fontFamily: 'var(--font-body)',
+      }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{payload[0].payload.name}</span>
+        <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{payload[0].value} {employeesLabel}</span>
+      </div>
+    );
+  };
 
 export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
   const navigate = useNavigate();
   const { assignedStores } = data;
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
+  const ChartTooltip = React.useMemo(() => makeChartTooltip(t('home.areaManager.employeesLabel')), [t]);
 
   const barData = assignedStores.map((s) => ({ name: s.name, value: s.employeeCount, id: s.id }));
   const totalEmployees = assignedStores.reduce((sum, s) => sum + s.employeeCount, 0);

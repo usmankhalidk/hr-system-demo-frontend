@@ -19,7 +19,7 @@ interface StoreManagerHomeProps {
 }
 
 // ── Circular capacity ring ─────────────────────────────────────────────────────
-function CapacityRing({ current, max }: { current: number; max: number | null }) {
+function CapacityRing({ current, max, capacityLabel }: { current: number; max: number | null; capacityLabel: string }) {
   const pct = max && max > 0 ? Math.min(current / max, 1) : 0;
   const r = 54;
   const circumference = 2 * Math.PI * r;
@@ -60,7 +60,7 @@ function CapacityRing({ current, max }: { current: number; max: number | null })
           background: `${color}12`, border: `1px solid ${color}25`,
           fontSize: '12px', fontWeight: 600, color,
         }}>
-          {Math.round(pct * 100)}% capacity
+          {Math.round(pct * 100)}% {capacityLabel}
         </div>
       </div>
     </div>
@@ -128,7 +128,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{t('home.storeManager.capacityDesc')}</p>
           </div>
           <div style={{ padding: '28px 20px', display: 'flex', justifyContent: isMobile ? 'center' : 'flex-start' }}>
-            <CapacityRing current={employeeCount} max={store.maxStaff} />
+            <CapacityRing current={employeeCount} max={store.maxStaff} capacityLabel={t('home.storeManager.capacityBadge')} />
           </div>
         </div>
 
