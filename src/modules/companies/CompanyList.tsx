@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getCompanies, updateCompany } from '../../api/companies';
 import { translateApiError } from '../../utils/apiErrors';
 import { Company } from '../../types';
@@ -58,8 +59,9 @@ const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value })
 );
 
 export function CompanyList() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +146,8 @@ export function CompanyList() {
 
   if (!company) return null;
 
-  const createdDate = new Date(company.createdAt).toLocaleDateString('it-IT', {
+  const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
+  const createdDate = new Date(company.createdAt).toLocaleDateString(locale, {
     year: 'numeric', month: 'long',
   });
 
@@ -156,6 +159,7 @@ export function CompanyList() {
         background: 'linear-gradient(135deg, #C9973A 0%, #B5852E 100%)',
         borderRadius: 'var(--radius-lg)', padding: '24px 28px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
+        flexWrap: 'wrap',
         boxShadow: '0 4px 20px rgba(201,151,58,0.25)',
       }}>
         <div>
@@ -188,7 +192,7 @@ export function CompanyList() {
       </div>
 
       {/* ── Stats ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
         <StatChip value={company.storeCount} label={t('companies.statStores')} accent="#0284C7" />
         <StatChip value={company.employeeCount} label={t('companies.statEmployees')} accent="#15803D" />
       </div>
