@@ -17,11 +17,20 @@ FROM nginx:alpine AS runner
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# nginx config: serve index.html for all routes (SPA routing)
+# nginx config: SPA routing + no-cache on index.html so browsers always get fresh bundles
 RUN printf 'server {\n\
   listen 80;\n\
   root /usr/share/nginx/html;\n\
   index index.html;\n\
+  # Hashed assets: cache forever\n\
+  location ~* \\.(?:js|css)$ {\n\
+    expires 1y;\n\
+    add_header Cache-Control "public, immutable";\n\
+  }\n\
+  # index.html: never cache so new deploys take effect immediately\n\
+  location = /index.html {\n\
+    add_header Cache-Control "no-store, no-cache, must-revalidate";\n\
+  }\n\
   location / {\n\
     try_files $uri $uri/ /index.html;\n\
   }\n\

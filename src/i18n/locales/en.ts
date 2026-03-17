@@ -301,6 +301,7 @@ const en = {
     placeholderMaxStaff: 'E.g. 20',
     validationName: 'Name is required',
     validationCode: 'Code is required',
+    codeAutoHint: 'Suggested from name — editable',
     confirmDeactivate: 'Confirm Deactivation',
     confirmDeactivateMsg:
       'Are you sure you want to deactivate store {{name}}? This action can be undone later by editing the store.',

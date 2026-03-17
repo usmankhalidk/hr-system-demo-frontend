@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
   const navItems = NAV_ITEMS[user.role].filter((item) => {
     if (!item.permissionKey) return true;
-    return permissions[item.permissionKey] !== false;
+    return permissions[item.permissionKey] === true;
   });
 
   const initials = `${user.name.charAt(0)}${user.surname ? user.surname.charAt(0) : ''}`.toUpperCase();

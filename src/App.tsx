@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import ToastContainer from './components/ui/ToastContainer';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -14,6 +14,14 @@ import CompanyList from './modules/companies/CompanyList';
 import PermissionsPanel from './modules/permissions/PermissionsPanel';
 import ProfilePage from './modules/profile/ProfilePage';
 
+// Terminal role gets a bare full-screen view — no header or sidebar
+function HomeRoute() {
+  const { user } = useAuth();
+  const { t } = useTranslation();
+  if (user?.role === 'store_terminal') return <HomePage />;
+  return <Layout title={t('nav.dashboard')}><HomePage /></Layout>;
+}
+
 function AppRoutes() {
   const { t } = useTranslation();
 
@@ -23,18 +31,18 @@ function AppRoutes() {
 
       <Route path="/" element={
         <ProtectedRoute>
-          <Layout title={t('nav.dashboard')}><HomePage /></Layout>
+          <HomeRoute />
         </ProtectedRoute>
       } />
 
       <Route path="/dipendenti" element={
-        <ProtectedRoute>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
           <Layout title={t('nav.employees')}><EmployeeList /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/dipendenti/:id" element={
-        <ProtectedRoute>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
           <Layout title={t('employees.colName')}><EmployeeDetail /></Layout>
         </ProtectedRoute>
       } />
@@ -58,7 +66,7 @@ function AppRoutes() {
       } />
 
       <Route path="/profilo" element={
-        <ProtectedRoute roles={['employee']}>
+        <ProtectedRoute>
           <Layout title={t('profile.title')}><ProfilePage /></Layout>
         </ProtectedRoute>
       } />

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -34,6 +34,37 @@ interface FormErrors {
   code?: string;
 }
 
+// Words to skip when deriving a store code from the name
+const SKIP_WORDS = new Set([
+  'negozio', 'store', 'shop', 'il', 'la', 'lo', 'le', 'gli', 'i',
+  'di', 'del', 'della', 'dei', 'delle', 'degli', 'the', 'a', 'an',
+]);
+
+function generateStoreCode(name: string, existingCodes: string[]): string {
+  const words = name.trim().split(/\s+/);
+  const meaningful = words.find((w) => {
+    const clean = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return clean.length >= 2 && !SKIP_WORDS.has(clean);
+  });
+  if (!meaningful) return '';
+
+  const prefix = meaningful
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z]/g, '')
+    .slice(0, 3)
+    .toUpperCase();
+
+  if (prefix.length < 2) return '';
+
+  const pattern = new RegExp(`^${prefix}-(\\d+)$`);
+  const nums = existingCodes
+    .map((c) => { const m = c.match(pattern); return m ? parseInt(m[1], 10) : NaN; })
+    .filter((n) => !isNaN(n));
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  return `${prefix}-${String(next).padStart(2, '0')}`;
+}
+
 export function StoreList() {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -51,6 +82,8 @@ export function StoreList() {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // true while the code field shows an auto-suggested value (new form only)
+  const codeIsAuto = useRef(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deactivatingStore, setDeactivatingStore] = useState<Store | null>(null);
@@ -84,6 +117,7 @@ export function StoreList() {
     setFormData(emptyForm);
     setFormErrors({});
     setFormError(null);
+    codeIsAuto.current = true;
     setFormOpen(true);
   };
 
@@ -98,6 +132,7 @@ export function StoreList() {
     });
     setFormErrors({});
     setFormError(null);
+    codeIsAuto.current = false;
     setFormOpen(true);
   };
 
@@ -107,6 +142,7 @@ export function StoreList() {
     setFormData(emptyForm);
     setFormErrors({});
     setFormError(null);
+    codeIsAuto.current = false;
   };
 
   const validateForm = (): boolean => {
@@ -317,17 +353,39 @@ export function StoreList() {
           <Input
             label={t('stores.fieldName')}
             value={formData.name}
-            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            onChange={(e) => {
+              const name = e.target.value;
+              setFormData((prev) => {
+                if (codeIsAuto.current) {
+                  const existingCodes = stores
+                    .filter((s) => !editingStore || s.id !== editingStore.id)
+                    .map((s) => s.code);
+                  const suggested = generateStoreCode(name, existingCodes);
+                  return { ...prev, name, code: suggested };
+                }
+                return { ...prev, name };
+              });
+            }}
             error={formErrors.name}
             placeholder={t('stores.placeholderName')}
           />
-          <Input
-            label={t('stores.fieldCode')}
-            value={formData.code}
-            onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value }))}
-            error={formErrors.code}
-            placeholder={t('stores.placeholderCode')}
-          />
+          <div>
+            <Input
+              label={t('stores.fieldCode')}
+              value={formData.code}
+              onChange={(e) => {
+                codeIsAuto.current = false;
+                setFormData((prev) => ({ ...prev, code: e.target.value.toUpperCase() }));
+              }}
+              error={formErrors.code}
+              placeholder={t('stores.placeholderCode')}
+            />
+            {codeIsAuto.current && formData.code && (
+              <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
+                {t('stores.codeAutoHint')}
+              </p>
+            )}
+          </div>
           <Input
             label={t('stores.fieldAddress')}
             value={formData.address}

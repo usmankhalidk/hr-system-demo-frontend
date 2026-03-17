@@ -301,6 +301,7 @@ const it = {
     placeholderMaxStaff: 'Es. 20',
     validationName: 'Il nome è obbligatorio',
     validationCode: 'Il codice è obbligatorio',
+    codeAutoHint: 'Suggerito dal nome — modificabile',
     confirmDeactivate: 'Conferma Disattivazione',
     confirmDeactivateMsg:
       'Sei sicuro di voler disattivare il negozio {{name}}? Questa azione può essere annullata successivamente modificando il negozio.',

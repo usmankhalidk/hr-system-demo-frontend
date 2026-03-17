@@ -1,21 +1,37 @@
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Role } from '../types';
+import { UserRole } from '../types';
+import { Spinner } from './ui';
 
 interface Props {
   children: React.ReactNode;
-  roles?: Role[];
+  roles?: UserRole[];
 }
 
 export default function ProtectedRoute({ children, roles }: Props) {
   const { user, loading } = useAuth();
 
-  if (loading) return <div style={{ padding: 32 }}>Loading...</div>;
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: 'var(--background)',
+        }}
+      >
+        <Spinner size="lg" color="var(--primary)" />
+      </div>
+    );
+  }
 
   if (!user) return <Navigate to="/login" replace />;
 
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
