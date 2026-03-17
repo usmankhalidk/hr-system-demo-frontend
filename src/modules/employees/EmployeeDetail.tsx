@@ -36,7 +36,7 @@ function formatDate(dateStr: string | null | undefined, lang: string): string {
   if (!dateStr) return '—';
   try {
     const locale = lang.startsWith('it') ? 'it-IT' : 'en-GB';
-    return new Date(dateStr.split('T')[0] + 'T00:00:00').toLocaleDateString(locale);
+    return new Date(dateStr.split('T')[0] + 'T00:00:00Z').toLocaleDateString(locale);
   } catch {
     return dateStr;
   }

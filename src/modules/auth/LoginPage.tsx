@@ -376,20 +376,6 @@ const LoginPage: React.FC = () => {
               </div>
             </form>
 
-            {/* Demo hint */}
-            <div style={{
-              marginTop: '32px',
-              padding: '14px 16px',
-              background: 'rgba(201,151,58,0.06)',
-              border: '1px solid rgba(201,151,58,0.2)',
-              borderLeft: '3px solid #C9973A',
-              borderRadius: '0 8px 8px 0',
-            }}>
-              <p style={{ fontSize: '12px', color: '#6B7280', lineHeight: 1.65, margin: 0 }}>
-                <strong style={{ color: '#C9973A', fontWeight: 600 }}>{t('login.demoAccount')}</strong>{' '}
-                admin@fusarouomo.com · password123
-              </p>
-            </div>
           </div>
         </div>
       </div>
