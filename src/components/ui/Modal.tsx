@@ -109,7 +109,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return ReactDOM.createPortal(
     <div style={backdropStyle} onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-inner" style={dialogStyle} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <h2 id="modal-title" style={titleStyle}>{title}</h2>
           <button style={closeBtnStyle} onClick={onClose} aria-label="Chiudi">
