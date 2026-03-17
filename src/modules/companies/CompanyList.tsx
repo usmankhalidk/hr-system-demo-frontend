@@ -245,6 +245,7 @@ export function CompanyList() {
             onChange={(e) => setFormName(e.target.value)}
             error={formNameError}
             placeholder={t('companies.placeholderName')}
+            disabled={formSaving}
           />
         </div>
       </Modal>
