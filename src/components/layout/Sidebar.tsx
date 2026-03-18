@@ -56,6 +56,24 @@ const IconLogout = () => (
     <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
   </svg>
 );
+const IconCalendar = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+const IconClock = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <polyline points="12 7 12 12 15 15"/>
+  </svg>
+);
+const IconUmbrella = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 12a11.05 11.05 0 00-22 0zm-5 7a3 3 0 01-6 0v-7"/>
+  </svg>
+);
 
 const ROLE_ACCENT: Record<UserRole, string> = {
   admin: '#C9973A', hr: '#0284C7', area_manager: '#15803D',
@@ -76,24 +94,37 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.companies',  path: '/aziende',               icon: <IconBuilding /> },
       { labelKey: 'nav.stores',     path: '/negozi',                icon: <IconStore /> },
       { labelKey: 'nav.employees',  path: '/dipendenti',            icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.turni',      path: '/turni',                 icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',   path: '/presenze',              icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',   path: '/permessi',              icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.permissions',path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'impostazioni' },
     ],
     hr: [
       { labelKey: 'nav.dashboard', path: '/',           icon: <IconDashboard /> },
       { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.stores',    path: '/negozi',     icon: <IconStore /> },
+      { labelKey: 'nav.turni',     path: '/turni',      icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',  path: '/presenze',   icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',  path: '/permessi',   icon: <IconUmbrella />, permissionKey: 'permessi' },
     ],
     area_manager: [
       { labelKey: 'nav.dashboard', path: '/',           icon: <IconDashboard /> },
       { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.turni',     path: '/turni',      icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',  path: '/presenze',   icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',  path: '/permessi',   icon: <IconUmbrella />, permissionKey: 'permessi' },
     ],
     store_manager: [
       { labelKey: 'nav.dashboard', path: '/',           icon: <IconDashboard /> },
       { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.turni',     path: '/turni',      icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',  path: '/presenze',   icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',  path: '/permessi',   icon: <IconUmbrella />, permissionKey: 'permessi' },
     ],
     employee: [
-      { labelKey: 'nav.dashboard', path: '/',        icon: <IconDashboard /> },
-      { labelKey: 'nav.myProfile', path: '/profilo', icon: <IconPerson /> },
+      { labelKey: 'nav.dashboard', path: '/',           icon: <IconDashboard /> },
+      { labelKey: 'nav.myProfile', path: '/profilo',    icon: <IconPerson /> },
+      { labelKey: 'nav.permessi',  path: '/permessi',   icon: <IconUmbrella />, permissionKey: 'permessi' },
     ],
     store_terminal: [],
   };

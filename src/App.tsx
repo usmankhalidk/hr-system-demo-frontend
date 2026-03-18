@@ -13,6 +13,10 @@ import StoreList from './modules/stores/StoreList';
 import CompanyList from './modules/companies/CompanyList';
 import PermissionsPanel from './modules/permissions/PermissionsPanel';
 import ProfilePage from './modules/profile/ProfilePage';
+import ShiftsPage from './modules/shifts/ShiftsPage';
+import AttendanceLogsPage from './modules/attendance/AttendanceLogsPage';
+import TerminalPage from './modules/attendance/TerminalPage';
+import LeavePage from './modules/leave/LeavePage';
 
 // Terminal role gets a bare full-screen view — no header or sidebar
 function HomeRoute() {
@@ -68,6 +72,30 @@ function AppRoutes() {
       <Route path="/profilo" element={
         <ProtectedRoute>
           <Layout title={t('profile.title')}><ProfilePage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/turni" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+          <Layout title={t('nav.turni')}><ShiftsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/presenze" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+          <Layout title={t('nav.presenze')}><AttendanceLogsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/terminale" element={
+        <ProtectedRoute roles={['store_terminal']}>
+          <TerminalPage />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/permessi" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+          <Layout title={t('nav.permessi')}><LeavePage /></Layout>
         </ProtectedRoute>
       } />
 
