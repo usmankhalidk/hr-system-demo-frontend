@@ -259,7 +259,7 @@ export default function WeeklyCalendar({
                         const leave = getLeaveForUserDate(userId, dateStr);
                         if (!leave) return null;
                         const isVacation = leave.leaveType === 'vacation';
-                        const isPending = !['hr_approved', 'approved'].includes(leave.status);
+                        const isPending = leave.status !== 'hr_approved';
                         return (
                           <div style={{
                             marginTop: 3, padding: '2px 6px', borderRadius: 4,
