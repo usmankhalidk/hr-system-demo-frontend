@@ -6,6 +6,7 @@ import client from '../../api/client';
 import { formatLocalDate } from '../../utils/date';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { WeekPicker } from '../../components/ui/WeekPicker';
+import AnomalyList from './AnomalyList';
 
 // Convert ISO week 'YYYY-WNN' → { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } (Mon–Sun)
 function isoWeekToDateRange(isoWeek: string): { from: string; to: string } | null {
@@ -68,6 +69,7 @@ export default function AttendanceLogsPage() {
   const [dateFrom, setDateFrom]   = useState(weekAgo);
   const [dateTo, setDateTo]       = useState(today);
   const [eventType, setEventType] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'events' | 'anomalies'>('events');
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -259,6 +261,28 @@ export default function AttendanceLogsPage() {
         position: 'sticky', top: 0, zIndex: 20,
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
       }}>
+        {/* Tab bar */}
+        <div style={{ display: 'flex', gap: 2, background: 'var(--background)', border: '1.5px solid var(--border)', borderRadius: 8, padding: 2, flexShrink: 0 }}>
+          {([
+            { key: 'events' as const,    label: 'Registro' },
+            { key: 'anomalies' as const, label: 'Anomalie' },
+          ]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              style={{
+                padding: '5px 14px', borderRadius: 6,
+                background: activeTab === key ? 'var(--primary)' : 'transparent',
+                color: activeTab === key ? '#fff' : 'var(--text-secondary)',
+                border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                transition: 'background 0.15s, color 0.15s', whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />
         {/* Date range — DatePicker components */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1.2px', flexShrink: 0 }}>
@@ -336,174 +360,178 @@ export default function AttendanceLogsPage() {
       </div>
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 32px' }}>
+      {activeTab === 'events' ? (
+        <div style={{ padding: '20px 32px' }}>
 
-        {/* Error */}
-        {error && (
-          <div style={{
-            background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)',
-            borderLeft: '4px solid #dc2626', borderRadius: 8,
-            padding: '12px 16px', marginBottom: 16,
-            color: '#dc2626', fontSize: 13, fontWeight: 500,
-          }}>
-            {error}
-          </div>
-        )}
-
-        {/* Table card */}
-        <div style={{
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border)',
-          overflow: 'hidden',
-          boxShadow: 'var(--shadow-sm)',
-        }}>
-          {!loading && events.length === 0 ? (
-            <div style={{ padding: '56px 32px', textAlign: 'center' }}>
-              <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.25 }}>⏱</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                {t('common.noData')}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                {dateFrom} → {dateTo}
-              </div>
+          {/* Error */}
+          {error && (
+            <div style={{
+              background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)',
+              borderLeft: '4px solid #dc2626', borderRadius: 8,
+              padding: '12px 16px', marginBottom: 16,
+              color: '#dc2626', fontSize: 13, fontWeight: 500,
+            }}>
+              {error}
             </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'var(--surface)' }}>
-                  {[
-                    t('employees.colName'),
-                    t('common.store'),
-                    t('attendance.eventType'),
-                    t('common.date'),
-                    t('attendance.source'),
-                  ].map((h, i) => (
-                    <th key={h} style={{
-                      padding: '10px 16px', textAlign: 'left',
-                      fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
-                      textTransform: 'uppercase', letterSpacing: '1.5px',
-                      borderBottom: '2px solid var(--border)',
-                      ...(i === 0 ? { paddingLeft: 20 } : {}),
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((ev, idx) => {
-                  const meta     = EVENT_META[ev.eventType] ?? EVENT_META.checkin;
-                  const labelKey = EVENT_TYPE_LABEL_KEYS[ev.eventType] ?? 'attendance.checkin';
-                  const srcBadge = SOURCE_BADGE[ev.source] ?? { label: ev.source.toUpperCase(), color: '#6b7280' };
-                  const dt       = formatDateTime(ev.eventTime);
-                  return (
-                    <tr
-                      key={ev.id}
-                      className="att-row"
-                      style={{
-                        borderBottom: '1px solid var(--border)',
-                        animationDelay: `${Math.min(idx * 18, 300)}ms`,
-                        transition: 'background 0.1s',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
-                    >
-                      {/* Name — with left colored border */}
-                      <td style={{ padding: '11px 16px 11px 0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                          <div style={{
-                            width: 4, alignSelf: 'stretch', borderRadius: '0 2px 2px 0',
-                            background: meta.dot, flexShrink: 0, marginRight: 16,
-                          }} />
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
-                              {ev.userSurname} {ev.userName}
+          )}
+
+          {/* Table card */}
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border)',
+            overflow: 'hidden',
+            boxShadow: 'var(--shadow-sm)',
+          }}>
+            {!loading && events.length === 0 ? (
+              <div style={{ padding: '56px 32px', textAlign: 'center' }}>
+                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.25 }}>⏱</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  {t('common.noData')}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  {dateFrom} → {dateTo}
+                </div>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface)' }}>
+                    {[
+                      t('employees.colName'),
+                      t('common.store'),
+                      t('attendance.eventType'),
+                      t('common.date'),
+                      t('attendance.source'),
+                    ].map((h, i) => (
+                      <th key={h} style={{
+                        padding: '10px 16px', textAlign: 'left',
+                        fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                        textTransform: 'uppercase', letterSpacing: '1.5px',
+                        borderBottom: '2px solid var(--border)',
+                        ...(i === 0 ? { paddingLeft: 20 } : {}),
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((ev, idx) => {
+                    const meta     = EVENT_META[ev.eventType] ?? EVENT_META.checkin;
+                    const labelKey = EVENT_TYPE_LABEL_KEYS[ev.eventType] ?? 'attendance.checkin';
+                    const srcBadge = SOURCE_BADGE[ev.source] ?? { label: ev.source.toUpperCase(), color: '#6b7280' };
+                    const dt       = formatDateTime(ev.eventTime);
+                    return (
+                      <tr
+                        key={ev.id}
+                        className="att-row"
+                        style={{
+                          borderBottom: '1px solid var(--border)',
+                          animationDelay: `${Math.min(idx * 18, 300)}ms`,
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
+                      >
+                        {/* Name — with left colored border */}
+                        <td style={{ padding: '11px 16px 11px 0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                            <div style={{
+                              width: 4, alignSelf: 'stretch', borderRadius: '0 2px 2px 0',
+                              background: meta.dot, flexShrink: 0, marginRight: 16,
+                            }} />
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
+                                {ev.userSurname} {ev.userName}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Store */}
-                      <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
-                        {ev.storeName}
-                      </td>
+                        {/* Store */}
+                        <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                          {ev.storeName}
+                        </td>
 
-                      {/* Event type badge */}
-                      <td style={{ padding: '11px 16px' }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          padding: '4px 11px', borderRadius: 20,
-                          fontSize: 11, fontWeight: 800, letterSpacing: '0.8px',
-                          background: meta.bg, color: meta.color,
-                          textTransform: 'uppercase', border: `1px solid ${meta.dot}33`,
-                        }}>
-                          <span>{meta.icon}</span>
-                          {t(labelKey)}
-                        </span>
-                      </td>
-
-                      {/* Date + time */}
-                      <td style={{ padding: '11px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                            {dt.date}
-                          </span>
+                        {/* Event type badge */}
+                        <td style={{ padding: '11px 16px' }}>
                           <span style={{
-                            fontSize: 13, fontWeight: 700, color: 'var(--text)',
-                            fontVariantNumeric: 'tabular-nums',
-                            background: 'var(--bg)', padding: '2px 8px',
-                            borderRadius: 6, border: '1px solid var(--border)',
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '4px 11px', borderRadius: 20,
+                            fontSize: 11, fontWeight: 800, letterSpacing: '0.8px',
+                            background: meta.bg, color: meta.color,
+                            textTransform: 'uppercase', border: `1px solid ${meta.dot}33`,
                           }}>
-                            {dt.time}
+                            <span>{meta.icon}</span>
+                            {t(labelKey)}
                           </span>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Source */}
-                      <td style={{ padding: '11px 16px' }}>
-                        <span style={{
-                          display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                          fontSize: 10, fontWeight: 800, letterSpacing: '1px',
-                          background: `${srcBadge.color}18`, color: srcBadge.color,
-                          border: `1px solid ${srcBadge.color}30`,
-                          fontFamily: 'monospace',
-                        }}>
-                          {srcBadge.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+                        {/* Date + time */}
+                        <td style={{ padding: '11px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                              {dt.date}
+                            </span>
+                            <span style={{
+                              fontSize: 13, fontWeight: 700, color: 'var(--text)',
+                              fontVariantNumeric: 'tabular-nums',
+                              background: 'var(--bg)', padding: '2px 8px',
+                              borderRadius: 6, border: '1px solid var(--border)',
+                            }}>
+                              {dt.time}
+                            </span>
+                          </div>
+                        </td>
 
-          {/* Table footer */}
-          {!loading && events.length > 0 && (
-            <div style={{
-              padding: '10px 20px',
-              borderTop: '1px solid var(--border)',
-              background: 'var(--bg)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {events.length < total
-                  ? <>{t('attendance.showing')} <strong>{events.length}</strong> / <strong>{total}</strong></>
-                  : <><strong>{total}</strong> {t('attendance.found')}</>
-                }
-              </div>
-              {total > 500 && (
-                <div style={{
-                  fontSize: 11, color: '#b45309',
-                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
-                  padding: '3px 10px', borderRadius: 4, fontWeight: 600,
-                }}>
-                  {t('attendance.maxResults')}
+                        {/* Source */}
+                        <td style={{ padding: '11px 16px' }}>
+                          <span style={{
+                            display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+                            fontSize: 10, fontWeight: 800, letterSpacing: '1px',
+                            background: `${srcBadge.color}18`, color: srcBadge.color,
+                            border: `1px solid ${srcBadge.color}30`,
+                            fontFamily: 'monospace',
+                          }}>
+                            {srcBadge.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {/* Table footer */}
+            {!loading && events.length > 0 && (
+              <div style={{
+                padding: '10px 20px',
+                borderTop: '1px solid var(--border)',
+                background: 'var(--bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {events.length < total
+                    ? <>{t('attendance.showing')} <strong>{events.length}</strong> / <strong>{total}</strong></>
+                    : <><strong>{total}</strong> {t('attendance.found')}</>
+                  }
                 </div>
-              )}
-            </div>
-          )}
+                {total > 500 && (
+                  <div style={{
+                    fontSize: 11, color: '#b45309',
+                    background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
+                    padding: '3px 10px', borderRadius: 4, fontWeight: 600,
+                  }}>
+                    {t('attendance.maxResults')}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <AnomalyList dateFrom={dateFrom} dateTo={dateTo} />
+      )}
     </div>
   );
 }
