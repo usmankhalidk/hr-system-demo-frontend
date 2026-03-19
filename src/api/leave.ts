@@ -132,3 +132,29 @@ export async function downloadCertificate(leaveId: number): Promise<Blob> {
   const { data } = await apiClient.get(`/leave/${leaveId}/certificate`, { responseType: 'blob' });
   return data as Blob;
 }
+
+export interface LeaveBlock {
+  userId: number;
+  userName: string;
+  userSurname: string;
+  leaveType: 'vacation' | 'sick';
+  startDate: string;
+  endDate: string;
+  status: string;
+}
+
+/** Return approved/pending leave requests in a date range as block objects. */
+export async function getLeaveBlocks(dateFrom: string, dateTo: string): Promise<LeaveBlock[]> {
+  const res = await getLeaveRequests({ dateFrom, dateTo });
+  return res.requests
+    .filter((r) => r.status !== 'rejected')
+    .map((r) => ({
+      userId:      r.userId,
+      userName:    r.userName ?? '',
+      userSurname: r.userSurname ?? '',
+      leaveType:   r.leaveType,
+      startDate:   r.startDate,
+      endDate:     r.endDate,
+      status:      r.status,
+    }));
+}

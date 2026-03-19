@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Shift } from '../../api/shifts';
+import { LeaveBlock } from '../../api/leave';
 
 const STATUS_META: Record<string, {
   bg: string; color: string; dot: string;
@@ -51,6 +52,7 @@ interface WeeklyCalendarProps {
   onShiftClick: (shift: Shift) => void;
   onCellClick: (userId: number, date: string) => void;
   canEdit: boolean;
+  leaveBlocks?: LeaveBlock[];
 }
 
 function addDays(date: Date, days: number): Date {
@@ -82,6 +84,7 @@ export default function WeeklyCalendar({
   onShiftClick,
   onCellClick,
   canEdit,
+  leaveBlocks,
 }: WeeklyCalendarProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
@@ -95,6 +98,13 @@ export default function WeeklyCalendar({
     t('shifts.daySun', 'Sun'),
   ];
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+
+  function getLeaveForUserDate(userId: number, dateStr: string): LeaveBlock | null {
+    if (!leaveBlocks) return null;
+    return leaveBlocks.find((lb) =>
+      lb.userId === userId && dateStr >= lb.startDate && dateStr <= lb.endDate
+    ) ?? null;
+  }
 
   // Build 7 day columns
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -245,6 +255,28 @@ export default function WeeklyCalendar({
                           </div>
                         );
                       })}
+                      {(() => {
+                        const leave = getLeaveForUserDate(userId, dateStr);
+                        if (!leave) return null;
+                        const isVacation = leave.leaveType === 'vacation';
+                        const isPending = !['hr_approved', 'approved'].includes(leave.status);
+                        return (
+                          <div style={{
+                            marginTop: 3, padding: '2px 6px', borderRadius: 4,
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.5px',
+                            textTransform: 'uppercase',
+                            background: isVacation ? 'rgba(29,78,216,0.12)' : 'rgba(180,83,9,0.12)',
+                            color: isVacation ? '#1d4ed8' : '#b45309',
+                            border: `1px solid ${isVacation ? 'rgba(29,78,216,0.3)' : 'rgba(180,83,9,0.3)'}`,
+                            opacity: isPending ? 0.65 : 1,
+                            display: 'flex', alignItems: 'center', gap: 4,
+                          }}>
+                            {isVacation ? '🏖' : '🤒'}
+                            {isVacation ? 'Ferie' : 'Malattia'}
+                            {isPending && <span style={{ opacity: 0.8 }}>(att.)</span>}
+                          </div>
+                        );
+                      })()}
                     </td>
                   );
                 })}

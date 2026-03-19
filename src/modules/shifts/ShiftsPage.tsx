@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { listShifts, Shift, copyWeek, exportShifts, importShifts, downloadImportTemplate, ImportResult } from '../../api/shifts';
+import { getLeaveBlocks, LeaveBlock } from '../../api/leave';
 import { getStores } from '../../api/stores';
 import { Store } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
@@ -149,6 +150,7 @@ export default function ShiftsPage() {
   const [guideOpen, setGuideOpen]             = useState(false);
   const fileInputRef                          = useRef<HTMLInputElement>(null);
   const [affluenceOpen, setAffluenceOpen] = useState(false);
+  const [leaveBlocks, setLeaveBlocks] = useState<LeaveBlock[]>([]);
 
   const canEdit = user ? MANAGEMENT_ROLES.includes(user.role) : false;
   const isStoreManager = user?.role === 'store_manager';
@@ -170,6 +172,21 @@ export default function ShiftsPage() {
       if (storeFilter) params.store_id = storeFilter;
       const data = await listShifts(params);
       setShifts(data.shifts);
+
+      // Fetch leave blocks for week/day views
+      if (viewMode === 'week' || viewMode === 'day') {
+        const weekStart = viewMode === 'day' ? getWeekStart(currentDate) : currentDate;
+        const dateFrom = formatDateDisplay(weekStart);
+        const dateTo = formatDateDisplay(addDays(weekStart, 6));
+        try {
+          const blocks = await getLeaveBlocks(dateFrom, dateTo);
+          setLeaveBlocks(blocks);
+        } catch {
+          setLeaveBlocks([]);
+        }
+      } else {
+        setLeaveBlocks([]);
+      }
     } catch (err: any) {
       const code: string | undefined = err?.response?.data?.code;
       setError(code ? t(`errors.${code}`, t('errors.DEFAULT')) : t('errors.DEFAULT'));
@@ -588,6 +605,7 @@ export default function ShiftsPage() {
               onShiftClick={handleShiftClick}
               onCellClick={handleCellClick}
               canEdit={canEdit}
+              leaveBlocks={leaveBlocks}
             />
           ) : (
             <MonthlyCalendar
