@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { recordCheckin, EventType } from '../../api/attendance';
+import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 const EVENT_TYPES: { type: EventType; labelKey: string; color: string }[] = [
   { type: 'checkin',     labelKey: 'terminal.checkin',    color: '#22c55e' },
@@ -21,6 +22,7 @@ export default function TerminalPage() {
   const [message, setMessage]           = useState('');
   const [loading, setLoading]           = useState(false);
   const [time, setTime]                 = useState(new Date());
+  const { enqueue, queueLength, isOnline } = useOfflineSync();
 
   // Live clock
   useEffect(() => {
@@ -51,8 +53,19 @@ export default function TerminalPage() {
       setMessage('ID dipendente non valido');
       return;
     }
+
     setLoading(true);
     try {
+      if (!isOnline) {
+        enqueue({
+          event_type: selectedType,
+          user_id: uid,
+          event_time: new Date().toISOString(),
+        });
+        setStatus('success');
+        setMessage('Evento salvato in locale (offline). Verrà sincronizzato automaticamente.');
+        return;
+      }
       await recordCheckin({ qrToken: token.trim(), eventType: selectedType, userId: uid });
       setStatus('success');
       setMessage(t('attendance.successMessage'));
@@ -94,6 +107,28 @@ export default function TerminalPage() {
           </div>
         )}
       </div>
+
+      {/* Offline / sync indicator */}
+      {(!isOnline || queueLength > 0) && (
+        <div style={{
+          marginBottom: 16,
+          padding: '8px 18px',
+          borderRadius: 8,
+          background: !isOnline ? 'rgba(220,38,38,0.15)' : 'rgba(245,158,11,0.15)',
+          border: `1px solid ${!isOnline ? 'rgba(220,38,38,0.4)' : 'rgba(245,158,11,0.4)'}`,
+          fontSize: 13,
+          color: !isOnline ? '#fca5a5' : '#fcd34d',
+          display: 'flex', alignItems: 'center', gap: 8,
+          maxWidth: 420, width: '100%',
+        }}>
+          <span>{!isOnline ? '⚡' : '🔄'}</span>
+          <span>
+            {!isOnline
+              ? 'Modalità offline — gli eventi verranno sincronizzati al ripristino della connessione'
+              : `${queueLength} eventi in attesa di sincronizzazione…`}
+          </span>
+        </div>
+      )}
 
       {/* Main card */}
       <div style={{
