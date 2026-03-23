@@ -572,11 +572,24 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
                     />
                   </div>
                   <div style={row2}>
-                    <Input
+                    <Select
                       label={t('employees.maritalStatusField')}
                       value={formData.maritalStatus}
                       onChange={(e) => set('maritalStatus', e.target.value)}
-                    />
+                    >
+                      <option value="">{t('employees.selectOption')}</option>
+                      <option value="Celibe">Celibe</option>
+                      <option value="Nubile">Nubile</option>
+                      <option value="Coniugato">Coniugato</option>
+                      <option value="Coniugata">Coniugata</option>
+                      <option value="Divorziato">Divorziato</option>
+                      <option value="Divorziata">Divorziata</option>
+                      <option value="Vedovo">Vedovo</option>
+                      <option value="Vedova">Vedova</option>
+                      <option value="Separato">Separato</option>
+                      <option value="Separata">Separata</option>
+                      <option value="Unione Civile">Unione Civile</option>
+                    </Select>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '9px', paddingTop: '22px' }}>
                       <input
                         id="firstAidFlag"
