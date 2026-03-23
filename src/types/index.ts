@@ -74,9 +74,9 @@ export interface Training {
   id: number;
   userId: number;
   companyId: number;
-  training_type: TrainingType;
-  start_date: string | null;
-  end_date: string | null;
+  trainingType: TrainingType;
+  startDate: string | null;
+  endDate: string | null;
   notes: string | null;
   createdAt: string;
 }
@@ -85,8 +85,8 @@ export interface MedicalCheck {
   id: number;
   userId: number;
   companyId: number;
-  start_date: string | null;
-  end_date: string | null;
+  startDate: string | null;
+  endDate: string | null;
   notes: string | null;
   createdAt: string;
 }

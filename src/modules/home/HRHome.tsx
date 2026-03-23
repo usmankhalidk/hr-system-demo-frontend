@@ -42,12 +42,12 @@ export interface HRHomeData {
   monthlyHires?: MonthlyHire[];
   statusBreakdown?: StatusItem[];
   expiringTrainings?: Array<{
-    id: number; training_type: string; end_date: string;
-    user_id: number; name: string; surname: string;
+    id: number; trainingType: string; endDate: string;
+    userId: number; name: string; surname: string;
   }>;
   expiringMedicals?: Array<{
-    id: number; end_date: string;
-    user_id: number; name: string; surname: string;
+    id: number; endDate: string;
+    userId: number; name: string; surname: string;
   }>;
 }
 
@@ -286,15 +286,15 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
           </div>
           <div>
             {data.expiringTrainings!.map((tr) => {
-              const daysLeft = Math.ceil((new Date(tr.end_date).getTime() - Date.now()) / 86400000);
+              const daysLeft = Math.ceil((new Date(tr.endDate).getTime() - Date.now()) / 86400000);
               return (
                 <div key={tr.id}
-                  onClick={() => navigate(`/dipendenti/${tr.user_id}`)}
+                  onClick={() => navigate(`/dipendenti/${tr.userId}`)}
                   style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
                 >
                   <div>
                     <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{tr.name} {tr.surname}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{t(`employees.trainingType_${tr.training_type}`)}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{t(`employees.trainingType_${tr.trainingType}`)}</span>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: daysLeft <= 14 ? '#dc2626' : '#ea580c', background: daysLeft <= 14 ? 'rgba(220,38,38,0.1)' : 'rgba(234,88,12,0.1)', padding: '2px 8px', borderRadius: 20 }}>
                     {daysLeft}d
@@ -316,10 +316,10 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
           </div>
           <div>
             {data.expiringMedicals!.map((m) => {
-              const daysLeft = Math.ceil((new Date(m.end_date).getTime() - Date.now()) / 86400000);
+              const daysLeft = Math.ceil((new Date(m.endDate).getTime() - Date.now()) / 86400000);
               return (
                 <div key={m.id}
-                  onClick={() => navigate(`/dipendenti/${m.user_id}`)}
+                  onClick={() => navigate(`/dipendenti/${m.userId}`)}
                   style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
                 >
                   <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{m.name} {m.surname}</span>

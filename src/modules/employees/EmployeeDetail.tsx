@@ -453,8 +453,8 @@ export function EmployeeDetail() {
               <div>
                 {(['product', 'general', 'low_risk_safety', 'fire_safety'] as TrainingType[]).map((type) => {
                   const record = trainings
-                    .filter(tr => tr.training_type === type)
-                    .sort((a, b) => (b.end_date ?? '').localeCompare(a.end_date ?? ''))[0];
+                    .filter(tr => tr.trainingType === type)
+                    .sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? ''))[0];
                   return (
                     <div key={type} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -463,7 +463,7 @@ export function EmployeeDetail() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         {record ? (
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {formatDate(record.start_date, i18n.language)} → {formatDate(record.end_date, i18n.language)}
+                            {formatDate(record.startDate, i18n.language)} → {formatDate(record.endDate, i18n.language)}
                           </span>
                         ) : (
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
@@ -471,7 +471,7 @@ export function EmployeeDetail() {
                         {isAdminOrHr && (
                           <Button size="sm" variant="secondary" onClick={() => {
                             const toDateStr = (d: string | null | undefined) => d ? d.split('T')[0] : null;
-                            setEditingTraining({ trainingType: type, startDate: toDateStr(record?.start_date), endDate: toDateStr(record?.end_date), editing: record?.id ?? null });
+                            setEditingTraining({ trainingType: type, startDate: toDateStr(record?.startDate), endDate: toDateStr(record?.endDate), editing: record?.id ?? null });
                             setTrainingFormOpen(true);
                           }}>
                             {record ? t('common.edit') : t('employees.addTraining')}
@@ -499,12 +499,12 @@ export function EmployeeDetail() {
               medicals.map((m, i) => (
                 <div key={m.id} style={{ padding: '10px 0', borderBottom: i < medicals.length - 1 ? '1px solid var(--border-light)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                   <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                    {t('employees.medicalStartDate')}: {formatDate(m.start_date, i18n.language)} &nbsp;|&nbsp; {t('employees.medicalEndDate')}: {formatDate(m.end_date, i18n.language)}
+                    {t('employees.medicalStartDate')}: {formatDate(m.startDate, i18n.language)} &nbsp;|&nbsp; {t('employees.medicalEndDate')}: {formatDate(m.endDate, i18n.language)}
                   </span>
                   {isAdminOrHr && (
                     <Button size="sm" variant="secondary" onClick={() => {
                       const toDateStr = (d: string | null | undefined) => d ? d.split('T')[0] : null;
-                      setEditingMedical({ startDate: toDateStr(m.start_date), endDate: toDateStr(m.end_date), editing: m.id });
+                      setEditingMedical({ startDate: toDateStr(m.startDate), endDate: toDateStr(m.endDate), editing: m.id });
                       setMedicalFormOpen(true);
                     }}>
                       {t('common.edit')}
@@ -535,12 +535,12 @@ export function EmployeeDetail() {
             <Button onClick={async () => {
               if (!employeeId) return;
               const payload = {
-                training_type: editingTraining.trainingType,
-                start_date: editingTraining.startDate,
-                end_date: editingTraining.endDate,
+                trainingType: editingTraining.trainingType,
+                startDate: editingTraining.startDate,
+                endDate: editingTraining.endDate,
               };
               // Always check current state — prevents duplicates if modal state is stale
-              const existing = trainings.find(tr => tr.training_type === editingTraining.trainingType);
+              const existing = trainings.find(tr => tr.trainingType === editingTraining.trainingType);
               if (existing) {
                 await updateTraining(employeeId, existing.id, payload);
               } else {
@@ -577,7 +577,7 @@ export function EmployeeDetail() {
             <Button variant="secondary" onClick={() => setMedicalFormOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={async () => {
               if (!employeeId) return;
-              const payload = { start_date: editingMedical.startDate, end_date: editingMedical.endDate };
+              const payload = { startDate: editingMedical.startDate, endDate: editingMedical.endDate };
               if (editingMedical.editing) {
                 await updateMedical(employeeId, editingMedical.editing, payload);
               } else {
