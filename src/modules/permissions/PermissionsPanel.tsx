@@ -7,15 +7,15 @@ import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
 
-const MODULE_KEYS: { key: string; phase1: boolean }[] = [
-  { key: 'dipendenti', phase1: true },
-  { key: 'turni', phase1: false },
-  { key: 'presenze', phase1: false },
-  { key: 'permessi', phase1: false },
-  { key: 'documenti', phase1: false },
-  { key: 'ats', phase1: false },
-  { key: 'report', phase1: false },
-  { key: 'impostazioni', phase1: true },
+const MODULE_KEYS: { key: string; implemented: boolean }[] = [
+  { key: 'dipendenti',  implemented: true },
+  { key: 'turni',       implemented: true },
+  { key: 'presenze',    implemented: true },
+  { key: 'permessi',    implemented: true },
+  { key: 'documenti',   implemented: false },
+  { key: 'ats',         implemented: false },
+  { key: 'report',      implemented: false },
+  { key: 'impostazioni', implemented: true },
 ];
 
 const ROLE_KEYS = ['admin', 'hr', 'area_manager', 'store_manager', 'employee', 'store_terminal'];
@@ -36,7 +36,7 @@ function buildLocalGrid(data: PermissionGrid): LocalGrid {
   for (const mod of MODULE_KEYS) {
     result[mod.key] = {};
     for (const roleKey of ROLE_KEYS) {
-      result[mod.key][roleKey] = data.grid?.[mod.key]?.[roleKey] ?? false;
+      result[mod.key][roleKey] = mod.implemented ? (data.grid?.[mod.key]?.[roleKey] ?? false) : false;
     }
   }
   return result;
@@ -44,6 +44,7 @@ function buildLocalGrid(data: PermissionGrid): LocalGrid {
 
 function hasChanges(local: LocalGrid, server: LocalGrid): boolean {
   for (const mod of MODULE_KEYS) {
+    if (!mod.implemented) continue;
     for (const roleKey of ROLE_KEYS) {
       if (local[mod.key]?.[roleKey] !== server[mod.key]?.[roleKey]) {
         return true;
@@ -79,7 +80,7 @@ const PermissionsPanel: React.FC = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [t]);
 
   const handleToggle = (moduleKey: string, roleKey: string) => {
     setLocalGrid((prev) => ({
@@ -96,6 +97,7 @@ const PermissionsPanel: React.FC = () => {
   const handleSave = async () => {
     const updates: { role: string; module: string; enabled: boolean }[] = [];
     for (const mod of MODULE_KEYS) {
+      if (!mod.implemented) continue;
       for (const roleKey of ROLE_KEYS) {
         const localVal = localGrid[mod.key]?.[roleKey];
         const serverVal = serverGrid[mod.key]?.[roleKey];
@@ -113,7 +115,7 @@ const PermissionsPanel: React.FC = () => {
       await updatePermissions(updates);
       const newServer = JSON.parse(JSON.stringify(localGrid));
       setServerGrid(newServer);
-      setSuccessMsg(t('permissions.successSave'));
+      setSuccessMsg(t('permissions.successSaveRelogin'));
     } catch (err) {
       setErrorMsg(translateApiError(err, t, t('permissions.errorSave')));
     } finally {
@@ -200,23 +202,23 @@ const PermissionsPanel: React.FC = () => {
             {MODULE_KEYS.map((mod, rowIdx) => {
               const isLast = rowIdx === MODULE_KEYS.length - 1;
               return (
-                <tr key={mod.key} style={{ background: mod.phase1 ? 'transparent' : 'var(--surface-warm)' }}>
+                <tr key={mod.key} style={{ background: mod.implemented ? 'transparent' : 'var(--surface-warm)' }}>
                   <td style={{
                     padding: '14px 20px', textAlign: 'left',
-                    fontWeight: mod.phase1 ? 600 : 400,
-                    color: mod.phase1 ? 'var(--text-primary)' : 'var(--text-muted)',
+                    fontWeight: mod.implemented ? 600 : 400,
+                    color: mod.implemented ? 'var(--text-primary)' : 'var(--text-muted)',
                     fontSize: 13.5,
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {tModule(mod.key)}
-                      {!mod.phase1 && (
+                      {!mod.implemented && (
                         <span style={{
                           fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)',
                           textTransform: 'uppercase', letterSpacing: '0.06em',
                           background: 'var(--border)', padding: '2px 6px', borderRadius: 4,
                         }}>
-                          Phase 2
+                          {t('common.comingSoon')}
                         </span>
                       )}
                     </div>
@@ -228,7 +230,7 @@ const PermissionsPanel: React.FC = () => {
                         padding: '14px 16px', textAlign: 'center',
                         borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                       }}>
-                        {mod.phase1 ? (
+                        {mod.implemented ? (
                           <Toggle checked={enabled} onChange={() => handleToggle(mod.key, roleKey)} />
                         ) : (
                           <Toggle checked={false} onChange={() => {}} disabled />

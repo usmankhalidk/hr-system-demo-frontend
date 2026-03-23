@@ -36,6 +36,7 @@ const it = {
     showingResults: 'Mostrando {{from}}–{{to}} di {{total}} risultati',
     new: 'Nuovo',
     phase2: 'Disponibile nella Fase 2',
+    comingSoon: 'Prossimamente',
     unsavedChanges: 'Ci sono modifiche non salvate',
     saveChanges: 'Salva modifiche',
     name: 'Nome',
@@ -50,6 +51,9 @@ const it = {
     date: 'Data',
     systemActive: 'Sistema attivo',
     error_generic: 'Si è verificato un errore',
+    viewAll: 'Vedi tutti →',
+    tomorrow: 'Domani',
+    today: 'Oggi',
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────
@@ -69,7 +73,7 @@ const it = {
     companies: 'Azienda',
     stores: 'Negozi',
     employees: 'Dipendenti',
-    permissions: 'Permessi',
+    permissions: 'Gestione Accessi',
     myProfile: 'Il Mio Profilo',
     logout: 'Esci',
     navigation: 'Navigazione',
@@ -77,7 +81,9 @@ const it = {
     appVersion: 'Sistema HR v1',
     turni: 'Turni',
     presenze: 'Presenze',
+    qr: 'Codice QR',
     permessi: 'Permessi/Ferie',
+    settings: 'Impostazioni',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -179,6 +185,7 @@ const it = {
       availableSlots: 'Posti disponibili',
       todayShifts: 'Turni di oggi',
       todayAttendance: 'Presenze oggi',
+      attendanceDesc: 'Riepilogo eventi di oggi',
       capacityTitle: 'Capienza Personale',
       capacityDesc: 'Organico attuale vs massimo',
       capacityBadge: 'capienza',
@@ -193,6 +200,9 @@ const it = {
       store: 'Negozio',
       nextShift: 'Prossimo turno',
       leaveBalance: 'Saldo ferie',
+      noNextShift: 'Nessun turno programmato',
+      birthdayTitle: 'Buon compleanno, {{name}}!',
+      birthdaySubtitle: 'Tanti auguri da tutto il team',
     },
     terminal: {
       welcome: 'Benvenuto',
@@ -342,8 +352,9 @@ const it = {
     title: 'Gestione Permessi',
     subtitle: 'Configura i permessi di accesso ai moduli per ogni ruolo.',
     colModule: 'Modulo',
-    phase2Label: '(Fase 2)',
+    phase2Label: 'Prossimamente',
     successSave: 'Modifiche salvate con successo.',
+    successSaveRelogin: 'Permessi salvati. Gli utenti interessati devono eseguire un nuovo accesso per vedere le modifiche.',
     errorLoad: 'Errore nel caricamento dei permessi.',
     errorSave: 'Errore nel salvataggio dei permessi. Riprova.',
     modules: {
@@ -357,6 +368,13 @@ const it = {
       impostazioni: 'Impostazioni',
     },
   },
+  // ─── Settings ─────────────────────────────────────────────────────────────
+  settings: {
+    title: 'Impostazioni',
+    subtitle: 'Configurazione e preferenze dell\'applicazione.',
+    noSettingsAvailable: 'Nessuna impostazione disponibile per il tuo ruolo al momento.',
+  },
+
   // ─── Profile ──────────────────────────────────────────────────────────────
   profile: {
     title: 'Il mio profilo',
@@ -364,6 +382,18 @@ const it = {
     email: 'Email',
     role: 'Ruolo',
     accountSettings: 'Impostazioni account',
+    languageLabel: 'Lingua interfaccia',
+    languageHint: 'Le modifiche si applicano immediatamente',
+    changePassword: 'Cambia password',
+    changePasswordDesc: 'Aggiorna la tua password di accesso',
+    currentPassword: 'Password attuale',
+    newPassword: 'Nuova password',
+    confirmPassword: 'Conferma nuova password',
+    savePassword: 'Aggiorna password',
+    saving: 'Aggiornamento...',
+    passwordMismatch: 'Le nuove password non corrispondono',
+    passwordTooShort: 'La password deve essere di almeno 8 caratteri',
+    passwordChanged: 'Password aggiornata con successo',
   },
 
   // ─── API Error Codes ──────────────────────────────────────────────────────
@@ -543,6 +573,7 @@ const it = {
   attendance: {
     title: 'Presenze',
     logTitle: 'Registro Presenze',
+    moduleLabel: 'Modulo Presenze',
     checkin: 'Entrata',
     checkout: 'Uscita',
     breakStart: 'Inizio Pausa',
@@ -578,6 +609,42 @@ const it = {
     no_anomalies: 'Nessuna anomalia rilevata',
     error_load_anomalies: 'Errore nel caricamento delle anomalie',
     anomalies_count: '{{count}} anomalie rilevate',
+    // Anomaly detail strings (structured, for i18n)
+    detail_no_show: 'Nessun arrivo registrato. Turno: {{start}}–{{end}}',
+    detail_late_arrival: 'Ritardo di {{minutes}} min. Entrata: {{entry}}, Turno: {{shift}}',
+    detail_early_exit: 'Uscita anticipata di {{minutes}} min. Uscita: {{exit}}, Fine turno: {{shift}}',
+    detail_long_break: 'Pausa di {{minutes}} min (limite: 60 min)',
+  },
+
+  // ─── QR Page ──────────────────────────────────────────────────────────────
+  qr: {
+    title: 'Generatore Codice QR',
+    subtitle: 'Mostra questo codice al terminale per il check-in dei dipendenti',
+    noStore: 'Nessun negozio assegnato al tuo account',
+    generating: 'Generazione codice QR...',
+    errorGenerate: 'Errore nella generazione del codice QR',
+    retry: 'Riprova',
+    expiresIn: 'Scade in {{seconds}}s',
+    autoRefresh: 'Aggiornamento automatico...',
+    refresh: 'Aggiorna ora',
+    store: 'Negozio',
+    tokenCopied: 'Token copiato',
+    copyToken: 'Copia token',
+    validFor: 'Valido per {{seconds}} secondi',
+    selectStore: 'Seleziona negozio',
+    noStoreSelected: 'Seleziona un negozio per generare il codice QR',
+    status: {
+      loading: '↻ Caricamento...',
+      refreshing: '⚡ RINNOVO...',
+      active: '● ATTIVO',
+    },
+    generatedAt: 'Generato: {{time}}',
+    howToUse: 'Come utilizzare il QR',
+    instructions: {
+      step1: 'Mostra questo codice QR al terminale del negozio',
+      step2: 'Il dipendente inserisce il proprio ID e seleziona il tipo di evento',
+      step3: 'La presenza viene registrata automaticamente',
+    },
   },
 
   // ─── Terminal ─────────────────────────────────────────────────────────────
@@ -595,6 +662,10 @@ const it = {
     saved_offline: 'Evento salvato in locale (offline). Verrà sincronizzato automaticamente.',
     offline_mode: 'Modalità offline — gli eventi verranno sincronizzati al ripristino della connessione',
     events_pending: '{{count}} eventi in attesa di sincronizzazione…',
+    uniqueIdLabel: 'Codice Dipendente',
+    uniqueIdPlaceholder: 'Es: EMP-AB12CD',
+    invalidUniqueId: 'Codice dipendente non valido',
+    storeName: '{{name}}',
   },
 
   // ─── Leave ────────────────────────────────────────────────────────────────
@@ -628,7 +699,10 @@ const it = {
     balance_used_of: '{{used}} usati su {{total}}',
     balance_title: 'Saldo Ferie e Permessi',
     no_balance: 'Nessun saldo disponibile',
+    days_label: 'gg',
+    balance_remaining: 'rimanenti',
     error_dates_required: 'Le date sono obbligatorie',
+    error_past_date: 'Non è possibile richiedere un permesso per una data passata',
     error_date_range: 'La data di fine deve essere successiva alla data di inizio',
     submitted_success: 'Richiesta inviata con successo',
     start_date: 'Data inizio',
@@ -640,8 +714,10 @@ const it = {
     medical_certificate_hint: '(opzionale, PDF/JPEG/PNG, max 5MB)',
     certificate_upload: 'Allega certificato medico',
     certificate_download_error: 'Impossibile scaricare il certificato',
-    certificate_btn: '📎 Certificato',
+    certificate_btn: 'Certificato',
     pending_short: 'att.',
+    day_singular: 'giorno',
+    day_plural: 'giorni',
   },
 } as const;
 

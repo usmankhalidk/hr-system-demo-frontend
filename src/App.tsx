@@ -15,8 +15,10 @@ import PermissionsPanel from './modules/permissions/PermissionsPanel';
 import ProfilePage from './modules/profile/ProfilePage';
 import ShiftsPage from './modules/shifts/ShiftsPage';
 import AttendanceLogsPage from './modules/attendance/AttendanceLogsPage';
+import QRPage from './modules/attendance/QRPage';
 import TerminalPage from './modules/attendance/TerminalPage';
 import LeavePage from './modules/leave/LeavePage';
+import SettingsPage from './modules/settings/SettingsPage';
 
 // Terminal role gets a bare full-screen view — no header or sidebar
 function HomeRoute() {
@@ -69,6 +71,12 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/impostazioni" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+          <Layout title={t('settings.title')}><SettingsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/profilo" element={
         <ProtectedRoute>
           <Layout title={t('profile.title')}><ProfilePage /></Layout>
@@ -84,6 +92,12 @@ function AppRoutes() {
       <Route path="/presenze" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
           <Layout title={t('nav.presenze')}><AttendanceLogsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/qr" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+          <Layout title={t('nav.qr')}><QRPage /></Layout>
         </ProtectedRoute>
       } />
 

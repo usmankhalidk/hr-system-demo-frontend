@@ -36,6 +36,7 @@ const en = {
     showingResults: 'Showing {{from}}–{{to}} of {{total}} results',
     new: 'New',
     phase2: 'Available in Phase 2',
+    comingSoon: 'Coming soon',
     unsavedChanges: 'There are unsaved changes',
     saveChanges: 'Save changes',
     name: 'Name',
@@ -50,6 +51,9 @@ const en = {
     date: 'Date',
     systemActive: 'System active',
     error_generic: 'An error occurred',
+    viewAll: 'View all →',
+    tomorrow: 'Tomorrow',
+    today: 'Today',
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────
@@ -77,7 +81,9 @@ const en = {
     appVersion: 'HR System v1',
     turni: 'Shifts',
     presenze: 'Attendance',
+    qr: 'QR Code',
     permessi: 'Leave & Holidays',
+    settings: 'Settings',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -179,6 +185,7 @@ const en = {
       availableSlots: 'Available slots',
       todayShifts: "Today's shifts",
       todayAttendance: "Today's attendance",
+      attendanceDesc: "Today's event summary",
       capacityTitle: 'Staff Capacity',
       capacityDesc: 'Current headcount vs maximum',
       capacityBadge: 'capacity',
@@ -193,6 +200,9 @@ const en = {
       store: 'Store',
       nextShift: 'Next shift',
       leaveBalance: 'Leave balance',
+      noNextShift: 'No shifts scheduled',
+      birthdayTitle: 'Happy birthday, {{name}}!',
+      birthdaySubtitle: 'Warm wishes from the whole team',
     },
     terminal: {
       welcome: 'Welcome',
@@ -342,8 +352,9 @@ const en = {
     title: 'Permission Management',
     subtitle: 'Configure module access permissions for each role.',
     colModule: 'Module',
-    phase2Label: '(Phase 2)',
+    phase2Label: 'Coming soon',
     successSave: 'Changes saved successfully.',
+    successSaveRelogin: 'Permissions saved. Affected users must log out and back in to see changes.',
     errorLoad: 'Error loading permissions.',
     errorSave: 'Error saving permissions. Please try again.',
     modules: {
@@ -357,6 +368,13 @@ const en = {
       impostazioni: 'Settings',
     },
   },
+  // ─── Settings ─────────────────────────────────────────────────────────────
+  settings: {
+    title: 'Settings',
+    subtitle: 'Application configuration and preferences.',
+    noSettingsAvailable: 'No settings are available for your role at this time.',
+  },
+
   // ─── Profile ──────────────────────────────────────────────────────────────
   profile: {
     title: 'My Profile',
@@ -364,6 +382,18 @@ const en = {
     email: 'Email',
     role: 'Role',
     accountSettings: 'Account settings',
+    languageLabel: 'Interface language',
+    languageHint: 'Changes apply immediately',
+    changePassword: 'Change password',
+    changePasswordDesc: 'Update your login password',
+    currentPassword: 'Current password',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm new password',
+    savePassword: 'Update password',
+    saving: 'Updating...',
+    passwordMismatch: 'New passwords do not match',
+    passwordTooShort: 'Password must be at least 8 characters',
+    passwordChanged: 'Password updated successfully',
   },
 
   // ─── API Error Codes ──────────────────────────────────────────────────────
@@ -543,6 +573,7 @@ const en = {
   attendance: {
     title: 'Attendance',
     logTitle: 'Attendance Log',
+    moduleLabel: 'Attendance Module',
     checkin: 'Check-In',
     checkout: 'Check-Out',
     breakStart: 'Break Start',
@@ -578,6 +609,42 @@ const en = {
     no_anomalies: 'No anomalies detected',
     error_load_anomalies: 'Error loading anomalies',
     anomalies_count: '{{count}} anomalies detected',
+    // Anomaly detail strings (structured, for i18n)
+    detail_no_show: 'No check-in recorded. Shift: {{start}}–{{end}}',
+    detail_late_arrival: 'Late by {{minutes}} min. Entry: {{entry}}, Shift: {{shift}}',
+    detail_early_exit: 'Early exit by {{minutes}} min. Exit: {{exit}}, Shift end: {{shift}}',
+    detail_long_break: 'Break of {{minutes}} min (limit: 60 min)',
+  },
+
+  // ─── QR Page ──────────────────────────────────────────────────────────────
+  qr: {
+    title: 'QR Code Generator',
+    subtitle: 'Display this code at the terminal for employee check-in',
+    noStore: 'No store assigned to your account',
+    generating: 'Generating QR code...',
+    errorGenerate: 'Error generating QR code',
+    retry: 'Retry',
+    expiresIn: 'Expires in {{seconds}}s',
+    autoRefresh: 'Auto-refreshing...',
+    refresh: 'Refresh now',
+    store: 'Store',
+    tokenCopied: 'Token copied',
+    copyToken: 'Copy token',
+    validFor: 'Valid for {{seconds}} seconds',
+    selectStore: 'Select store',
+    noStoreSelected: 'Select a store to generate a QR code',
+    status: {
+      loading: '↻ Loading...',
+      refreshing: '⚡ REFRESHING...',
+      active: '● ACTIVE',
+    },
+    generatedAt: 'Generated: {{time}}',
+    howToUse: 'How to use QR',
+    instructions: {
+      step1: 'Show this QR code at the store terminal',
+      step2: 'The employee enters their ID and selects the event type',
+      step3: 'Attendance is recorded automatically',
+    },
   },
 
   // ─── Terminal ─────────────────────────────────────────────────────────────
@@ -595,6 +662,10 @@ const en = {
     saved_offline: 'Event saved locally (offline). Will be synced automatically.',
     offline_mode: 'Offline mode — events will be synced when connection is restored',
     events_pending: '{{count}} events pending sync…',
+    uniqueIdLabel: 'Employee Code',
+    uniqueIdPlaceholder: 'e.g. EMP-AB12CD',
+    invalidUniqueId: 'Invalid employee code',
+    storeName: '{{name}}',
   },
 
   // ─── Leave ────────────────────────────────────────────────────────────────
@@ -628,7 +699,10 @@ const en = {
     balance_used_of: '{{used}} used of {{total}}',
     balance_title: 'Leave Balance',
     no_balance: 'No balance available',
+    days_label: 'd',
+    balance_remaining: 'remaining',
     error_dates_required: 'Dates are required',
+    error_past_date: 'Cannot request leave for a past date',
     error_date_range: 'End date must be after start date',
     submitted_success: 'Request submitted successfully',
     start_date: 'Start date',
@@ -640,8 +714,10 @@ const en = {
     medical_certificate_hint: '(optional, PDF/JPEG/PNG, max 5MB)',
     certificate_upload: 'Attach medical certificate',
     certificate_download_error: 'Unable to download certificate',
-    certificate_btn: '📎 Certificate',
+    certificate_btn: 'Certificate',
     pending_short: 'pend.',
+    day_singular: 'day',
+    day_plural: 'days',
   },
 } as const;
 
