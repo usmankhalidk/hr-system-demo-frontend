@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useToast } from '../../context/ToastContext';
-import { getStores, createStore, updateStore, deactivateStore, activateStore } from '../../api/stores';
+import { getStores, createStore, updateStore, deactivateStore, activateStore, deleteStorePermanent } from '../../api/stores';
 import { translateApiError } from '../../utils/apiErrors';
 import { Store } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
@@ -95,6 +95,11 @@ export function StoreList() {
   const [activating, setActivating] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingStore, setDeletingStore] = useState<Store | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const loadStores = async () => {
     setLoading(true);
     setError(null);
@@ -178,6 +183,34 @@ export function StoreList() {
       setFormError(translateApiError(err, t, t('stores.errorSave')));
     } finally {
       setFormSaving(false);
+    }
+  };
+
+  const openDelete = (store: Store) => {
+    setDeletingStore(store);
+    setDeleteError(null);
+    setDeleteOpen(true);
+  };
+
+  const closeDelete = () => {
+    setDeleteOpen(false);
+    setDeletingStore(null);
+    setDeleteError(null);
+  };
+
+  const handleDeletePermanent = async () => {
+    if (!deletingStore) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteStorePermanent(deletingStore.id);
+      showToast(t('stores.deletedSuccess'), 'success');
+      closeDelete();
+      await loadStores();
+    } catch (err: unknown) {
+      setDeleteError(translateApiError(err, t, t('stores.errorDelete')));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -272,6 +305,11 @@ export function StoreList() {
           {isAdmin && !row.isActive && (
             <Button size="sm" variant="success" onClick={() => openActivate(row)}>
               {t('common.activate')}
+            </Button>
+          )}
+          {isAdmin && !row.isActive && (
+            <Button size="sm" variant="danger" onClick={() => openDelete(row)}>
+              {t('common.delete')}
             </Button>
           )}
         </div>
@@ -461,6 +499,37 @@ export function StoreList() {
           )}
           <p style={{ margin: 0, color: 'var(--text-primary)' }}>
             {t('stores.confirmActivateMsg', { name: activatingStore?.name ?? '' })}
+          </p>
+        </div>
+      </Modal>
+
+      {/* Permanent Delete Modal */}
+      <Modal
+        open={deleteOpen}
+        onClose={closeDelete}
+        title={t('stores.confirmDeleteTitle')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeDelete} disabled={deleting}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="danger" onClick={handleDeletePermanent} loading={deleting}>
+              {t('stores.confirmDeleteBtn')}
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {deleteError && (
+            <Alert variant="danger" onClose={() => setDeleteError(null)}>
+              {deleteError}
+            </Alert>
+          )}
+          <p style={{ margin: 0, color: 'var(--text-primary)' }}>
+            {t('stores.confirmDeleteMsg', { name: deletingStore?.name ?? '' })}
+          </p>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--warning)', fontWeight: 500 }}>
+            {t('stores.confirmDeleteWarning')}
           </p>
         </div>
       </Modal>

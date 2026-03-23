@@ -30,3 +30,7 @@ export async function activateStore(id: number): Promise<Store> {
   const { data } = await apiClient.patch(`/stores/${id}/activate`);
   return data.data;
 }
+
+export async function deleteStorePermanent(id: number): Promise<void> {
+  await apiClient.delete(`/stores/${id}/permanent`);
+}

@@ -329,6 +329,12 @@ const it = {
     deactivatedSuccess: 'Negozio disattivato con successo',
     activatedSuccess: 'Negozio riattivato con successo',
     errorActivate: 'Errore nella riattivazione del negozio. Riprova.',
+    deletedSuccess: 'Negozio eliminato definitivamente.',
+    errorDelete: 'Impossibile eliminare il negozio.',
+    confirmDeleteTitle: 'Elimina Negozio',
+    confirmDeleteBtn: 'Elimina definitivamente',
+    confirmDeleteMsg: 'Sei sicuro di voler eliminare definitivamente "{{name}}"?',
+    confirmDeleteWarning: 'Questa azione è irreversibile. Il negozio non deve avere dipendenti assegnati.',
   },
 
   // ─── Companies ────────────────────────────────────────────────────────────
@@ -435,6 +441,7 @@ const it = {
     OVERLAP_CONFLICT: 'Conflitto turni: gli orari si sovrappongono con un turno esistente.',
     SHIFT_NOT_FOUND: 'Turno non trovato.',
     STORE_NOT_FOUND: 'Negozio non trovato.',
+    STORE_HAS_EMPLOYEES: 'Impossibile eliminare: il negozio ha dipendenti assegnati. Riassegnarli prima di procedere.',
     TEMPLATE_NOT_FOUND: 'Template non trovato.',
     USER_NOT_FOUND: 'Utente non trovato.',
   },

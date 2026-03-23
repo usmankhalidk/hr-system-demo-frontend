@@ -329,6 +329,12 @@ const en = {
     deactivatedSuccess: 'Store deactivated successfully',
     activatedSuccess: 'Store reactivated successfully',
     errorActivate: 'Error reactivating store. Please try again.',
+    deletedSuccess: 'Store permanently deleted.',
+    errorDelete: 'Failed to delete store.',
+    confirmDeleteTitle: 'Delete Store',
+    confirmDeleteBtn: 'Delete permanently',
+    confirmDeleteMsg: 'Are you sure you want to permanently delete "{{name}}"?',
+    confirmDeleteWarning: 'This action is irreversible. The store must have no employees assigned.',
   },
 
   // ─── Companies ────────────────────────────────────────────────────────────
@@ -435,6 +441,7 @@ const en = {
     OVERLAP_CONFLICT: 'Shift conflict: the times overlap with an existing shift.',
     SHIFT_NOT_FOUND: 'Shift not found.',
     STORE_NOT_FOUND: 'Store not found.',
+    STORE_HAS_EMPLOYEES: 'Cannot delete: store has employees assigned. Reassign them before deleting.',
     TEMPLATE_NOT_FOUND: 'Template not found.',
     USER_NOT_FOUND: 'User not found.',
   },
