@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import apiClient from '../api/client';
 import { login as apiLogin, logout as apiLogout, getMyPermissions } from '../api/auth';
 import { User, PermissionMap } from '../types';
+import { useToast } from './ToastContext';
 
 interface AuthContextValue {
   user: User | null;
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<PermissionMap>({});
   const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
 
   // Set up axios request interceptor (token injection)
   useEffect(() => {
@@ -78,10 +80,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userData);
         setPermissions(perms);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        const status = (err as { response?: { status?: number } })?.response?.status;
         localStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(TOKEN_KEY);
         delete apiClient.defaults.headers.common['Authorization'];
+        // Only show a toast for unexpected errors (network down, 5xx).
+        // A 401 means the token simply expired — silent logout is expected.
+        if (status !== 401) {
+          showToast(
+            'Non è stato possibile verificare la sessione. Riprova.',
+            'warning',
+          );
+        }
       })
       .finally(() => setLoading(false));
   }, []);

@@ -41,6 +41,10 @@ export default function QRPage() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectedStoreIdRef = useRef<number | null>(selectedStoreId);
+  // Wall-clock references used to compute accurate elapsed time
+  // regardless of browser tab throttling.
+  const countdownStartRef = useRef<number>(0);
+  const countdownTotalRef = useRef<number>(0);
 
   // Keep ref in sync for use inside interval closure
   useEffect(() => {
@@ -89,6 +93,9 @@ export default function QRPage() {
         setQrData(data);
         setSecondsLeft(data.expiresIn);
         setGeneratedAt(new Date());
+        // M8: record wall-clock start for tab-throttling-safe countdown
+        countdownStartRef.current = Date.now();
+        countdownTotalRef.current = data.expiresIn;
       } catch {
         setError(t('qr.errorGenerate'));
       } finally {
@@ -111,17 +118,16 @@ export default function QRPage() {
     if (timerRef.current) clearInterval(timerRef.current);
 
     timerRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        const next = prev - 1;
-        if (next <= REFRESH_AT_SECONDS) {
-          clearInterval(timerRef.current!);
-          timerRef.current = null;
-          const sid = selectedStoreIdRef.current;
-          if (sid) generate(sid, true);
-          return 0;
-        }
-        return next;
-      });
+      // M8: compute remaining time from wall-clock to survive tab throttling
+      const elapsed = Math.floor((Date.now() - countdownStartRef.current) / 1000);
+      const next = Math.max(0, countdownTotalRef.current - elapsed);
+      setSecondsLeft(next);
+      if (next <= REFRESH_AT_SECONDS) {
+        clearInterval(timerRef.current!);
+        timerRef.current = null;
+        const sid = selectedStoreIdRef.current;
+        if (sid) generate(sid, true);
+      }
     }, 1000);
 
     return () => {

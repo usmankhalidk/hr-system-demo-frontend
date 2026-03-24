@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import client from '../api/client';
+import { useToast } from '../context/ToastContext';
 
 export interface OfflineEvent {
   event_type: 'checkin' | 'checkout' | 'break_start' | 'break_end';
@@ -37,6 +38,7 @@ export function useOfflineSync() {
   const syncingRef = useRef(false);
   const [queueLength, setQueueLength] = useState(() => loadQueue().length);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const { showToast } = useToast();
 
   const drainQueue = useCallback(async () => {
     if (syncingRef.current) return;
@@ -57,10 +59,15 @@ export function useOfflineSync() {
       setQueueLength(0);
     } catch {
       // Leave queue intact — will retry on next reconnect
+      console.warn('[OfflineSync] Sincronizzazione fallita — dati conservati per il prossimo tentativo.');
+      showToast(
+        'Sincronizzazione presenze non riuscita. I dati verranno ritentati.',
+        'warning',
+      );
     } finally {
       syncingRef.current = false;
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     if (navigator.onLine) drainQueue();
