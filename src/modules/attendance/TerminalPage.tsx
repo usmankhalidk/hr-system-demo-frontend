@@ -49,6 +49,10 @@ export default function TerminalPage() {
   const { enqueue, queueLength, isOnline } = useOfflineSync();
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const storeIdRef = useRef<number | null>(user?.storeId ?? null);
+  // Wall-clock references used to compute accurate elapsed time
+  // regardless of browser tab throttling.
+  const countdownStartRef = useRef<number>(0);
+  const countdownTotalRef = useRef<number>(0);
 
   useEffect(() => { storeIdRef.current = user?.storeId ?? null; }, [user?.storeId]);
   useEffect(() => {
@@ -67,6 +71,9 @@ export default function TerminalPage() {
       const data = await generateQrToken(storeId);
       setQrData(data);
       setSecondsLeft(data.expiresIn);
+      // Record wall-clock start for tab-throttling-safe countdown
+      countdownStartRef.current = Date.now();
+      countdownTotalRef.current = data.expiresIn;
     } catch {
       setError(t('terminal.qr_error'));
     } finally {
@@ -84,17 +91,16 @@ export default function TerminalPage() {
     if (!qrData) return;
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        const next = prev - 1;
-        if (next <= REFRESH_AT_SECONDS) {
-          clearInterval(timerRef.current!);
-          timerRef.current = null;
-          const sid = storeIdRef.current;
-          if (sid) generate(sid, true);
-          return 0;
-        }
-        return next;
-      });
+      // Compute remaining time from wall-clock to survive tab throttling
+      const elapsed = Math.floor((Date.now() - countdownStartRef.current) / 1000);
+      const next = Math.max(0, countdownTotalRef.current - elapsed);
+      setSecondsLeft(next);
+      if (next <= REFRESH_AT_SECONDS) {
+        clearInterval(timerRef.current!);
+        timerRef.current = null;
+        const sid = storeIdRef.current;
+        if (sid) generate(sid, true);
+      }
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

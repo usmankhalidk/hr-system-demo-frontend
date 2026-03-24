@@ -269,7 +269,9 @@ export default function ShiftsPage() {
       setImportResult(result);
       if (result.imported > 0) fetchShifts();
     } catch (err: any) {
-      setImportResult({ imported: 0, skipped: 0, failed: 0, errors: [err?.response?.data?.error ?? t('shifts.importErrorGeneric')], total: 0 });
+      // Guard against malformed file content or unexpected parse errors
+      const errMsg = err?.response?.data?.error ?? err?.message ?? t('shifts.importErrorGeneric');
+      setImportResult({ imported: 0, skipped: 0, failed: 0, errors: [errMsg], total: 0 });
     } finally {
       setImporting(false);
     }
@@ -767,8 +769,12 @@ export default function ShiftsPage() {
                   onDragLeave={() => setDragover(false)}
                   onDrop={(e) => {
                     e.preventDefault(); setDragover(false);
-                    const f = e.dataTransfer.files[0];
-                    if (f) setImportFile(f);
+                    try {
+                      const f = e.dataTransfer.files[0];
+                      if (f) setImportFile(f);
+                    } catch (err: any) {
+                      setError(err?.message ?? t('shifts.importErrorGeneric'));
+                    }
                   }}
                   onClick={() => fileInputRef.current?.click()}
                   style={{
@@ -781,7 +787,7 @@ export default function ShiftsPage() {
                   <input
                     ref={fileInputRef} type="file" accept=".xlsx,.csv"
                     style={{ display: 'none' }}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) setImportFile(f); }}
+                    onChange={(e) => { try { const f = e.target.files?.[0]; if (f) setImportFile(f); } catch (err: any) { setError(err?.message ?? t('shifts.importErrorGeneric')); } }}
                   />
                   <div style={{ fontSize: 28, marginBottom: 8 }}>{importFile ? '✓' : '📂'}</div>
                   {importFile ? (

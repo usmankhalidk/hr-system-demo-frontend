@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, useTranslation as useI18n } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
@@ -156,6 +156,8 @@ const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Synchronous mutex — prevents double-submit before the first state update propagates
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!loading && user !== null) navigate('/', { replace: true });
@@ -163,6 +165,8 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setErrorMessage(null);
     setSubmitting(true);
     try {
@@ -172,6 +176,7 @@ const LoginPage: React.FC = () => {
       setErrorMessage(translateApiError(err, t));
     } finally {
       setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 

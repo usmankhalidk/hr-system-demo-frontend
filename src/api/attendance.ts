@@ -63,6 +63,7 @@ export interface AttendanceListResponse {
 /** Generate a QR token for a store (returns JWT string + metadata). */
 export async function generateQrToken(storeId: number): Promise<QrTokenResponse> {
   const { data } = await client.get('/qr/generate', { params: { store_id: storeId } });
+  if (!data.data) throw new Error('Risposta QR non valida dal server');
   return data.data as QrTokenResponse;
 }
 

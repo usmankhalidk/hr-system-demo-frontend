@@ -126,8 +126,9 @@ export function EmployeeList() {
       key: 'name',
       label: t('employees.colName'),
       render: (row) => {
-        const fullName = `${row.name} ${row.surname}`;
-        const initials = `${row.name?.[0] ?? ''}${row.surname?.[0] ?? ''}`.toUpperCase();
+        const fullName = [row.name, row.surname].filter(Boolean).join(' ') || 'Utente';
+        const rawInitials = (row.name?.[0] ?? '') + (row.surname?.[0] ?? '');
+        const initials = (rawInitials || '?').toUpperCase();
         const bg = getAvatarColor(fullName);
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>

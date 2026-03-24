@@ -61,6 +61,13 @@ export default function QRPage() {
     }
   }, [needsStorePicker]);
 
+  // Re-initialise selectedStoreId when the user object changes (e.g. after role refresh)
+  useEffect(() => {
+    if (user?.storeId != null) {
+      setSelectedStoreId(user.storeId);
+    }
+  }, [user?.storeId]);
+
   // Resolve store object for store_manager (fixed store)
   useEffect(() => {
     if (user?.storeId) {
@@ -343,9 +350,8 @@ export default function QRPage() {
                 borderRadius: 16,
                 boxShadow: '0 2px 16px rgba(0,0,0,0.10)',
                 border: `3px solid ${progressColor}`,
-                transition: 'border-color 0.4s ease',
+                transition: 'border-color 0.4s ease, opacity 0.3s ease',
                 opacity: isRefreshing ? 0.3 : 1,
-                transition2: 'opacity 0.3s ease',
               } as React.CSSProperties}
             >
               {(loading && !qrData) ? (

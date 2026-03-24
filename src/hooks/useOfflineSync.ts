@@ -24,6 +24,8 @@ function saveQueue(q: OfflineEvent[]) {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
 }
 
+const BATCH_SIZE = 100;
+
 /**
  * Manages an offline attendance event queue.
  *
@@ -33,9 +35,13 @@ function saveQueue(q: OfflineEvent[]) {
  *
  * Automatically drains the queue via POST /attendance/sync whenever the
  * browser regains connectivity (window 'online' event) or on mount.
+ * Large queues are sent in batches of BATCH_SIZE to avoid body size limits.
+ * On failure, retries use exponential backoff (max 30 s).
  */
+
 export function useOfflineSync() {
   const syncingRef = useRef(false);
+  const retryCountRef = useRef(0);
   const [queueLength, setQueueLength] = useState(() => loadQueue().length);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const { showToast } = useToast();
@@ -47,26 +53,37 @@ export function useOfflineSync() {
 
     syncingRef.current = true;
     try {
-      const res = await client.post('/attendance/sync', { events: queue });
-      const result = res.data?.data;
-      if (result?.failed > 0) {
-        console.warn(
-          `[OfflineSync] ${result.failed} eventi non sincronizzati:`,
-          result.errors,
-        );
+      // Send in batches to avoid exceeding body size limits or timeouts
+      let remaining = [...queue];
+      while (remaining.length > 0) {
+        const batch = remaining.slice(0, BATCH_SIZE);
+        remaining = remaining.slice(BATCH_SIZE);
+        const res = await client.post('/attendance/sync', { events: batch });
+        const result = res.data?.data;
+        if (result?.failed > 0) {
+          console.warn(
+            `[OfflineSync] ${result.failed} eventi non sincronizzati:`,
+            result.errors,
+          );
+        }
       }
       saveQueue([]);
       setQueueLength(0);
+      retryCountRef.current = 0;
     } catch {
-      // Leave queue intact — will retry on next reconnect
+      // Leave queue intact — will retry on next reconnect with exponential backoff
       console.warn('[OfflineSync] Sincronizzazione fallita — dati conservati per il prossimo tentativo.');
       showToast(
         'Sincronizzazione presenze non riuscita. I dati verranno ritentati.',
         'warning',
       );
-    } finally {
-      syncingRef.current = false;
+      retryCountRef.current++;
+      const backoffMs = Math.min(30000, 1000 * Math.pow(2, retryCountRef.current));
+      setTimeout(() => { syncingRef.current = false; }, backoffMs);
+      // Return early so we do not hit the finally block's reset
+      return;
     }
+    syncingRef.current = false;
   }, [showToast]);
 
   useEffect(() => {
