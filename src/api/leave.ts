@@ -127,6 +127,24 @@ export async function getLeaveBalance(params?: { userId?: number; year?: number 
   return data.data as BalanceResponse;
 }
 
+export interface SetBalancePayload {
+  userId: number;
+  year: number;
+  leaveType: LeaveType;
+  totalDays: number;
+}
+
+/** Admin/HR sets the total_days allocation for an employee balance (upsert). */
+export async function setLeaveBalance(payload: SetBalancePayload): Promise<LeaveBalance> {
+  const { data } = await apiClient.put('/leave/balance', {
+    user_id:    payload.userId,
+    year:       payload.year,
+    leave_type: payload.leaveType,
+    total_days: payload.totalDays,
+  });
+  return data.data as LeaveBalance;
+}
+
 /** Download a medical certificate for a sick leave request. */
 export async function downloadCertificate(leaveId: number): Promise<Blob> {
   const { data } = await apiClient.get(`/leave/${leaveId}/certificate`, { responseType: 'blob' });

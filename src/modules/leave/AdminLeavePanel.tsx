@@ -7,8 +7,12 @@ import {
   rejectLeaveRequest,
   createLeaveOnBehalf,
   deleteLeaveRequest,
+  getLeaveBalance,
+  setLeaveBalance,
   LeaveRequest,
   LeaveStatus,
+  LeaveBalance,
+  LeaveType,
 } from '../../api/leave';
 import { getEmployees } from '../../api/employees';
 import { DatePicker } from '../../components/ui/DatePicker';
@@ -59,7 +63,344 @@ function fmtDate(iso: string, locale: string): string {
   });
 }
 
+// ── BalancesTab ────────────────────────────────────────────────────────────
+
+interface BalancesTabProps {
+  showFlash: (msg: string) => void;
+}
+
+function BalancesTab({ showFlash }: BalancesTabProps) {
+  const { t } = useTranslation();
+
+  const currentYear = new Date().getFullYear();
+  const yearOptions: number[] = [];
+  for (let y = 2024; y <= currentYear + 2; y++) yearOptions.push(y);
+
+  const [employees, setEmployees] = useState<Array<{ id: number; name: string; surname: string }>>([]);
+  const [balances, setBalances] = useState<Record<number, LeaveBalance[]>>({});
+  const [year, setYear] = useState(currentYear);
+  const [loading, setLoading] = useState(false);
+
+  // Edit modal state
+  const [editTarget, setEditTarget] = useState<{
+    userId: number;
+    name: string;
+    surname: string;
+    vacationTotal: string;
+    sickTotal: string;
+    origVacation: number | undefined;
+    origSick: number | undefined;
+  } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const labelStyle = {
+    display: 'block', fontSize: 12, fontWeight: 700 as const,
+    color: 'var(--text-secondary)', marginBottom: 6,
+    textTransform: 'uppercase' as const, letterSpacing: '0.8px',
+  };
+
+  const selectStyle = {
+    padding: '8px 12px', borderRadius: 8,
+    border: '1.5px solid var(--border)', background: 'var(--background)',
+    color: 'var(--text)', fontSize: 13, outline: 'none', cursor: 'pointer',
+  };
+
+  // Load employees once
+  useEffect(() => {
+    getEmployees({ limit: 200, status: 'active' })
+      .then((r) => setEmployees(r.employees.map((e) => ({ id: e.id, name: e.name, surname: e.surname }))))
+      .catch(() => {});
+  }, []);
+
+  // Load balances when employees or year changes
+  const loadBalances = useCallback(async (emps: Array<{ id: number; name: string; surname: string }>, selectedYear: number) => {
+    if (emps.length === 0) return;
+    setLoading(true);
+    const balanceMap: Record<number, LeaveBalance[]> = {};
+    await Promise.all(
+      emps.slice(0, 50).map(async (emp) => {
+        try {
+          const res = await getLeaveBalance({ userId: emp.id, year: selectedYear });
+          balanceMap[emp.id] = res.balances;
+        } catch {
+          balanceMap[emp.id] = [];
+        }
+      })
+    );
+    setBalances(balanceMap);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (employees.length > 0) {
+      loadBalances(employees, year);
+    }
+  }, [employees, year, loadBalances]);
+
+  function openEdit(emp: { id: number; name: string; surname: string }) {
+    const empBalances = balances[emp.id] ?? [];
+    const vac = empBalances.find((b) => b.leaveType === 'vacation');
+    const sick = empBalances.find((b) => b.leaveType === 'sick');
+    setEditTarget({
+      userId: emp.id,
+      name: emp.name,
+      surname: emp.surname,
+      vacationTotal: vac ? String(vac.totalDays) : '',
+      sickTotal: sick ? String(sick.totalDays) : '',
+      origVacation: vac?.totalDays,
+      origSick: sick?.totalDays,
+    });
+    setEditError(null);
+  }
+
+  async function handleSave() {
+    if (!editTarget) return;
+    setEditSaving(true);
+    setEditError(null);
+
+    const vacVal = editTarget.vacationTotal.trim();
+    const sickVal = editTarget.sickTotal.trim();
+    const vacNum = vacVal !== '' ? parseFloat(vacVal) : undefined;
+    const sickNum = sickVal !== '' ? parseFloat(sickVal) : undefined;
+
+    if ((vacVal !== '' && (isNaN(vacNum!) || vacNum! < 0)) ||
+        (sickVal !== '' && (isNaN(sickNum!) || sickNum! < 0))) {
+      setEditError(t('leave.balance_set_error'));
+      setEditSaving(false);
+      return;
+    }
+
+    try {
+      const ops: Promise<LeaveBalance>[] = [];
+
+      if (vacNum !== undefined && vacNum !== editTarget.origVacation) {
+        ops.push(setLeaveBalance({ userId: editTarget.userId, year, leaveType: 'vacation', totalDays: vacNum }));
+      }
+      if (sickNum !== undefined && sickNum !== editTarget.origSick) {
+        ops.push(setLeaveBalance({ userId: editTarget.userId, year, leaveType: 'sick', totalDays: sickNum }));
+      }
+
+      if (ops.length === 0) {
+        setEditTarget(null);
+        setEditSaving(false);
+        return;
+      }
+
+      await Promise.all(ops);
+
+      // Refresh just this employee's balances locally
+      const res = await getLeaveBalance({ userId: editTarget.userId, year });
+      setBalances((prev) => ({ ...prev, [editTarget.userId]: res.balances }));
+
+      showFlash(t('leave.balance_set_success'));
+      setEditTarget(null);
+    } catch {
+      setEditError(t('leave.balance_set_error'));
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  function renderBalanceCell(empId: number, type: LeaveType) {
+    const empBalances = balances[empId] ?? [];
+    const b = empBalances.find((x) => x.leaveType === type);
+    if (!b) {
+      return <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>— / — (—)</span>;
+    }
+    return (
+      <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontWeight: 700, color: 'var(--text)' }}>{b.usedDays}</span>
+        <span style={{ color: 'var(--text-muted)' }}> / {b.totalDays}</span>
+        <span style={{ color: '#16a34a', fontSize: 11, marginLeft: 4 }}>
+          ({b.remainingDays} {t('leave.balance_remaining_short').toLowerCase()})
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ padding: '20px 32px' }}>
+      {/* Year selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <label style={{ ...labelStyle, marginBottom: 0 }}>{t('leave.balance_year')}</label>
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          style={selectStyle}
+        >
+          {yearOptions.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        {loading && (
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
+        )}
+      </div>
+
+      {/* Table */}
+      {!loading && employees.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '56px 32px', color: 'var(--text-secondary)' }}>
+          {t('leave.balance_no_data')}
+        </div>
+      ) : (
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+              <thead>
+                <tr style={{ background: 'var(--surface)' }}>
+                  {[
+                    t('leave.col_employee'),
+                    t('leave.balance_vacation'),
+                    t('leave.balance_sick'),
+                    t('common.actions'),
+                  ].map((h, i) => (
+                    <th key={`${h}-${i}`} style={{
+                      padding: '10px 16px', textAlign: 'left',
+                      fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                      textTransform: 'uppercase', letterSpacing: '1.5px',
+                      borderBottom: '2px solid var(--border)',
+                      ...(i === 0 ? { paddingLeft: 20 } : {}),
+                    }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {employees.slice(0, 50).map((emp) => (
+                  <tr
+                    key={emp.id}
+                    style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.1s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
+                  >
+                    <td style={{ padding: '12px 16px 12px 20px' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+                        {emp.surname} {emp.name}
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {renderBalanceCell(emp.id, 'vacation')}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {renderBalanceCell(emp.id, 'sick')}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <button
+                        onClick={() => openEdit(emp)}
+                        style={{
+                          padding: '4px 10px', borderRadius: 6,
+                          border: '1px solid var(--border)',
+                          background: 'var(--background)',
+                          color: 'var(--text-secondary)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        }}
+                      >
+                        {t('leave.balance_edit_btn')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!loading && employees.length === 0 && (
+            <div style={{ padding: '56px 32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
+              {t('leave.balance_no_data')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editTarget && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={(e) => { if (e.target === e.currentTarget && !editSaving) setEditTarget(null); }}
+        >
+          <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 420, border: '1px solid var(--border)' }}>
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                  {year}
+                </div>
+                <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
+                  {t('leave.balance_set_title')}
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {editTarget.surname} {editTarget.name}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditTarget(null)}
+                disabled={editSaving}
+                style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: '20px 24px' }}>
+              {editError && (
+                <div style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)', borderLeft: '4px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#dc2626', fontSize: 13 }}>
+                  {editError}
+                </div>
+              )}
+
+              {/* Vacation */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={labelStyle}>{t('leave.balance_vacation')} — {t('leave.balance_total_label')}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={editTarget.vacationTotal}
+                  onChange={(e) => setEditTarget((prev) => prev ? { ...prev, vacationTotal: e.target.value } : prev)}
+                  style={{ ...selectStyle, width: '100%', boxSizing: 'border-box', cursor: 'text' }}
+                  placeholder="—"
+                />
+              </div>
+
+              {/* Sick */}
+              <div style={{ marginBottom: 24 }}>
+                <label style={labelStyle}>{t('leave.balance_sick')} — {t('leave.balance_total_label')}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={editTarget.sickTotal}
+                  onChange={(e) => setEditTarget((prev) => prev ? { ...prev, sickTotal: e.target.value } : prev)}
+                  style={{ ...selectStyle, width: '100%', boxSizing: 'border-box', cursor: 'text' }}
+                  placeholder="—"
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => setEditTarget(null)}
+                  disabled={editSaving}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={editSaving}
+                  style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: editSaving ? 'not-allowed' : 'pointer', opacity: editSaving ? 0.7 : 1 }}
+                >
+                  {editSaving ? t('common.saving') : t('common.save')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
+
+type PanelTab = 'requests' | 'balances';
 
 export default function AdminLeavePanel() {
   const { t, i18n } = useTranslation();
@@ -67,6 +408,8 @@ export default function AdminLeavePanel() {
 
   const isAdmin = user?.role === 'admin';
   const locale = i18n.language;
+
+  const [panelTab, setPanelTab] = useState<PanelTab>('requests');
 
   const [requests, setRequests]       = useState<LeaveRequest[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -309,205 +652,255 @@ export default function AdminLeavePanel() {
         </div>
       </div>
 
-      {/* ── Filter bar ────────────────────────────────────────────────────── */}
+      {/* ── Tab bar ───────────────────────────────────────────────────────── */}
       <div style={{
-        padding: '12px 32px', background: 'var(--surface)',
+        display: 'flex', gap: 0,
         borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-        position: 'sticky', top: 0, zIndex: 20,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        background: 'var(--surface)',
+        padding: '0 32px',
       }}>
-        {/* Search */}
-        <input
-          type="text"
-          placeholder={t('common.search')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ ...selectStyle, flex: '1 1 140px', minWidth: 120, cursor: 'text' }}
-        />
-        {/* Date range */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 160px', minWidth: 140 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateFrom')}</span>
-          <div style={{ flex: 1 }}><DatePicker value={dateFrom} onChange={setDateFrom} /></div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 160px', minWidth: 140 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateTo')}</span>
-          <div style={{ flex: 1 }}><DatePicker value={dateTo} onChange={setDateTo} /></div>
-        </div>
-        {/* Status filter */}
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...selectStyle, flex: '1 1 140px', minWidth: 120 }}>
-          <option value="">{t('leave.admin_filter_all_status')}</option>
-          <option value="pending">{t('leave.status_pending')}</option>
-          <option value="supervisor_approved">{t('leave.status_supervisor_approved')}</option>
-          <option value="area_manager_approved">{t('leave.status_area_manager_approved')}</option>
-          <option value="hr_approved">{t('leave.status_hr_approved')}</option>
-          <option value="rejected">{t('leave.status_rejected')}</option>
-        </select>
-        {/* Type filter */}
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...selectStyle, flex: '1 1 120px', minWidth: 100 }}>
-          <option value="">{t('leave.admin_filter_all_types')}</option>
-          <option value="vacation">{t('leave.type_vacation')}</option>
-          <option value="sick">{t('leave.type_sick')}</option>
-        </select>
-        {loading && (
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
-        )}
+        {(['requests', 'balances'] as PanelTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setPanelTab(tab)}
+            style={{
+              padding: '12px 20px',
+              fontSize: 14,
+              fontWeight: panelTab === tab ? 700 : 500,
+              color: panelTab === tab ? 'var(--primary)' : 'var(--text-secondary)',
+              background: 'none',
+              border: 'none',
+              borderBottom: panelTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            {tab === 'requests' ? t('leave.admin_title') : t('leave.balance_tab')}
+          </button>
+        ))}
       </div>
 
-      {/* ── Table ─────────────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 32px' }}>
-        {flash && (
+      {/* ── Requests tab ──────────────────────────────────────────────────── */}
+      {panelTab === 'requests' && (
+        <>
+          {/* ── Filter bar ────────────────────────────────────────────────── */}
           <div style={{
-            background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
-            borderLeft: '4px solid #16a34a', borderRadius: 8,
-            padding: '10px 16px', marginBottom: 16, color: '#16a34a', fontSize: 13, fontWeight: 600,
+            padding: '12px 32px', background: 'var(--surface)',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            position: 'sticky', top: 0, zIndex: 20,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
           }}>
-            {flash}
-          </div>
-        )}
-        {error && (
-          <div style={{
-            background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)',
-            borderLeft: '4px solid #dc2626', borderRadius: 8,
-            padding: '10px 16px', marginBottom: 16, color: '#dc2626', fontSize: 13,
-          }}>
-            {error}
-          </div>
-        )}
-
-        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-          {!loading && filtered.length === 0 ? (
-            <div style={{ padding: '56px 32px', textAlign: 'center' }}>
-              <div style={{ fontSize: 36, opacity: 0.2, marginBottom: 12 }}>📋</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('leave.no_requests')}</div>
+            {/* Search */}
+            <input
+              type="text"
+              placeholder={t('common.search')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ ...selectStyle, flex: '1 1 140px', minWidth: 120, cursor: 'text' }}
+            />
+            {/* Date range */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 160px', minWidth: 140 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateFrom')}</span>
+              <div style={{ flex: 1 }}><DatePicker value={dateFrom} onChange={setDateFrom} /></div>
             </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-                <thead>
-                  <tr style={{ background: 'var(--surface)' }}>
-                    {[
-                      t('leave.col_employee'),
-                      t('leave.type_label'),
-                      t('leave.col_period'),
-                      t('leave.col_days'),
-                      t('leave.col_status'),
-                      t('common.actions'),
-                    ].map((h, i) => (
-                      <th key={`${h}-${i}`} style={{
-                        padding: '10px 16px', textAlign: 'left',
-                        fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
-                        textTransform: 'uppercase', letterSpacing: '1.5px',
-                        borderBottom: '2px solid var(--border)',
-                        ...(i === 0 ? { paddingLeft: 20 } : {}),
-                      }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((req) => {
-                    const days = countWorkingDays(req.startDate, req.endDate);
-                    const isVacation = req.leaveType === 'vacation';
-                    const typeColor = isVacation ? '#3b82f6' : '#f59e0b';
-                    const canAct = req.status !== 'hr_approved' && req.status !== 'rejected';
-                    return (
-                      <tr
-                        key={req.id}
-                        style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.1s' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
-                      >
-                        {/* Employee */}
-                        <td style={{ padding: '12px 16px 12px 20px' }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                            {req.userSurname} {req.userName}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                            #{req.id} · {new Date(req.createdAt).toLocaleDateString(locale === 'en' ? 'en-GB' : 'it-IT')}
-                          </div>
-                        </td>
-                        {/* Type */}
-                        <td style={{ padding: '12px 16px' }}>
-                          <span style={{
-                            display: 'inline-block', padding: '3px 10px', borderRadius: 20,
-                            fontSize: 11, fontWeight: 700,
-                            background: `${typeColor}18`, color: typeColor, border: `1px solid ${typeColor}30`,
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 160px', minWidth: 140 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateTo')}</span>
+              <div style={{ flex: 1 }}><DatePicker value={dateTo} onChange={setDateTo} /></div>
+            </div>
+            {/* Status filter */}
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...selectStyle, flex: '1 1 140px', minWidth: 120 }}>
+              <option value="">{t('leave.admin_filter_all_status')}</option>
+              <option value="pending">{t('leave.status_pending')}</option>
+              <option value="supervisor_approved">{t('leave.status_supervisor_approved')}</option>
+              <option value="area_manager_approved">{t('leave.status_area_manager_approved')}</option>
+              <option value="hr_approved">{t('leave.status_hr_approved')}</option>
+              <option value="rejected">{t('leave.status_rejected')}</option>
+            </select>
+            {/* Type filter */}
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...selectStyle, flex: '1 1 120px', minWidth: 100 }}>
+              <option value="">{t('leave.admin_filter_all_types')}</option>
+              <option value="vacation">{t('leave.type_vacation')}</option>
+              <option value="sick">{t('leave.type_sick')}</option>
+            </select>
+            {loading && (
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
+            )}
+          </div>
+
+          {/* ── Table ─────────────────────────────────────────────────────── */}
+          <div style={{ padding: '20px 32px' }}>
+            {flash && (
+              <div style={{
+                background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
+                borderLeft: '4px solid #16a34a', borderRadius: 8,
+                padding: '10px 16px', marginBottom: 16, color: '#16a34a', fontSize: 13, fontWeight: 600,
+              }}>
+                {flash}
+              </div>
+            )}
+            {error && (
+              <div style={{
+                background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)',
+                borderLeft: '4px solid #dc2626', borderRadius: 8,
+                padding: '10px 16px', marginBottom: 16, color: '#dc2626', fontSize: 13,
+              }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+              {!loading && filtered.length === 0 ? (
+                <div style={{ padding: '56px 32px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 36, opacity: 0.2, marginBottom: 12 }}>📋</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('leave.no_requests')}</div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--surface)' }}>
+                        {[
+                          t('leave.col_employee'),
+                          t('leave.type_label'),
+                          t('leave.col_period'),
+                          t('leave.col_days'),
+                          t('leave.col_status'),
+                          t('common.actions'),
+                        ].map((h, i) => (
+                          <th key={`${h}-${i}`} style={{
+                            padding: '10px 16px', textAlign: 'left',
+                            fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                            textTransform: 'uppercase', letterSpacing: '1.5px',
+                            borderBottom: '2px solid var(--border)',
+                            ...(i === 0 ? { paddingLeft: 20 } : {}),
                           }}>
-                            {t(`leave.type_${req.leaveType}`)}
-                          </span>
-                        </td>
-                        {/* Period */}
-                        <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                          {fmtDate(req.startDate, locale)} → {fmtDate(req.endDate, locale)}
-                        </td>
-                        {/* Days */}
-                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                          {days}
-                        </td>
-                        {/* Status */}
-                        <td style={{ padding: '12px 16px' }}>
-                          <StatusBadge status={req.status} />
-                        </td>
-                        {/* Actions */}
-                        <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            {canAct && (
-                              <>
-                                <button
-                                  onClick={() => handleApprove(req)}
-                                  style={{
-                                    padding: '4px 10px', borderRadius: 6,
-                                    border: '1px solid rgba(22,163,74,0.3)',
-                                    background: 'rgba(22,163,74,0.08)',
-                                    color: '#16a34a', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                  }}
-                                >
-                                  {t('leave.action_approve')}
-                                </button>
-                                <button
-                                  onClick={() => { setRejectTarget(req); setRejectNotes(''); setRejectError(null); }}
-                                  style={{
-                                    padding: '4px 10px', borderRadius: 6,
-                                    border: '1px solid rgba(220,38,38,0.3)',
-                                    background: 'rgba(220,38,38,0.08)',
-                                    color: '#dc2626', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                  }}
-                                >
-                                  {t('leave.action_reject')}
-                                </button>
-                              </>
-                            )}
-                            {isAdmin && (
-                              <button
-                                onClick={() => setDeleteTarget(req)}
-                                style={{
-                                  padding: '4px 10px', borderRadius: 6,
-                                  border: '1px solid rgba(107,114,128,0.25)',
-                                  background: 'rgba(107,114,128,0.06)',
-                                  color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                }}
-                              >
-                                {t('common.delete')}
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                            {h}
+                          </th>
+                        ))}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {filtered.map((req) => {
+                        const days = countWorkingDays(req.startDate, req.endDate);
+                        const isVacation = req.leaveType === 'vacation';
+                        const typeColor = isVacation ? '#3b82f6' : '#f59e0b';
+                        const canAct = req.status !== 'hr_approved' && req.status !== 'rejected';
+                        return (
+                          <tr
+                            key={req.id}
+                            style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.1s' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
+                          >
+                            {/* Employee */}
+                            <td style={{ padding: '12px 16px 12px 20px' }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+                                {req.userSurname} {req.userName}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                #{req.id} · {new Date(req.createdAt).toLocaleDateString(locale === 'en' ? 'en-GB' : 'it-IT')}
+                              </div>
+                            </td>
+                            {/* Type */}
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{
+                                display: 'inline-block', padding: '3px 10px', borderRadius: 20,
+                                fontSize: 11, fontWeight: 700,
+                                background: `${typeColor}18`, color: typeColor, border: `1px solid ${typeColor}30`,
+                              }}>
+                                {t(`leave.type_${req.leaveType}`)}
+                              </span>
+                            </td>
+                            {/* Period */}
+                            <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                              {fmtDate(req.startDate, locale)} → {fmtDate(req.endDate, locale)}
+                            </td>
+                            {/* Days */}
+                            <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                              {days}
+                            </td>
+                            {/* Status */}
+                            <td style={{ padding: '12px 16px' }}>
+                              <StatusBadge status={req.status} />
+                            </td>
+                            {/* Actions */}
+                            <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                {canAct && (
+                                  <>
+                                    <button
+                                      onClick={() => handleApprove(req)}
+                                      style={{
+                                        padding: '4px 10px', borderRadius: 6,
+                                        border: '1px solid rgba(22,163,74,0.3)',
+                                        background: 'rgba(22,163,74,0.08)',
+                                        color: '#16a34a', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                      }}
+                                    >
+                                      {t('leave.action_approve')}
+                                    </button>
+                                    <button
+                                      onClick={() => { setRejectTarget(req); setRejectNotes(''); setRejectError(null); }}
+                                      style={{
+                                        padding: '4px 10px', borderRadius: 6,
+                                        border: '1px solid rgba(220,38,38,0.3)',
+                                        background: 'rgba(220,38,38,0.08)',
+                                        color: '#dc2626', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                      }}
+                                    >
+                                      {t('leave.action_reject')}
+                                    </button>
+                                  </>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => setDeleteTarget(req)}
+                                    style={{
+                                      padding: '4px 10px', borderRadius: 6,
+                                      border: '1px solid rgba(107,114,128,0.25)',
+                                      background: 'rgba(107,114,128,0.06)',
+                                      color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                    }}
+                                  >
+                                    {t('common.delete')}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {!loading && filtered.length > 0 && (
+                <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)', background: 'var(--bg)', fontSize: 12, color: 'var(--text-muted)' }}>
+                  <strong>{filtered.length}</strong> {filtered.length === 1 ? t('leave.request_singular') : t('leave.request_plural')}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Balances tab ──────────────────────────────────────────────────── */}
+      {panelTab === 'balances' && (
+        <>
+          {flash && (
+            <div style={{
+              margin: '16px 32px 0',
+              background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
+              borderLeft: '4px solid #16a34a', borderRadius: 8,
+              padding: '10px 16px', color: '#16a34a', fontSize: 13, fontWeight: 600,
+            }}>
+              {flash}
             </div>
           )}
-          {!loading && filtered.length > 0 && (
-            <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)', background: 'var(--bg)', fontSize: 12, color: 'var(--text-muted)' }}>
-              <strong>{filtered.length}</strong> {filtered.length === 1 ? t('leave.request_singular') : t('leave.request_plural')}
-            </div>
-          )}
-        </div>
-      </div>
+          <BalancesTab showFlash={showFlash} />
+        </>
+      )}
 
       {/* ── Create Modal ──────────────────────────────────────────────────── */}
       {createOpen && (
