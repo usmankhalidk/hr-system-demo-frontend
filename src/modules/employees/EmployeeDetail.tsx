@@ -216,7 +216,7 @@ export function EmployeeDetail() {
     if (!file || !employeeId) return;
     setAvatarUploading(true);
     try {
-      const result = await uploadEmployeeAvatar(employeeId, file);
+      await uploadEmployeeAvatar(employeeId, file);
       showToast(t('employees.avatarSuccess'), 'success');
       await loadEmployee();
     } catch {
