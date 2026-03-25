@@ -91,6 +91,7 @@ const IconSettings = () => (
 const ROLE_ACCENT: Record<UserRole, string> = {
   admin: '#C9973A', hr: '#0284C7', area_manager: '#15803D',
   store_manager: '#7C3AED', employee: '#64748B', store_terminal: '#64748B',
+  system_admin: '#C9973A',
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose }) => {
@@ -146,6 +147,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi',  path: '/permessi',          icon: <IconUmbrella />, permissionKey: 'permessi' },
     ],
     store_terminal: [],
+    system_admin: [
+      { labelKey: 'nav.systemPermissions', path: '/sistema/permessi', icon: <IconShield /> },
+    ],
   };
 
   const navItems = NAV_ITEMS[user.role].filter((item) => {
@@ -252,7 +256,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       <nav style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
         {!collapsed && (
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.28)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 10px 4px', marginBottom: '2px' }}>
-            {t('nav.navigation')}
+            {user.role === 'system_admin' ? t('nav.sistema') : t('nav.navigation')}
           </div>
         )}
         {navItems.map((item) => (
