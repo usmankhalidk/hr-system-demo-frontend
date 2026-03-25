@@ -106,12 +106,18 @@ function BalancesTab({ showFlash }: BalancesTabProps) {
     color: 'var(--text)', fontSize: 13, outline: 'none', cursor: 'pointer',
   };
 
+  const [empError, setEmpError] = useState<string | null>(null);
+
   // Load employees once
   useEffect(() => {
+    setEmpError(null);
     getEmployees({ limit: 200, status: 'active' })
       .then((r) => setEmployees(r.employees.map((e) => ({ id: e.id, name: e.name, surname: e.surname }))))
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        setEmpError(t('common.error'));
+        setEmployees([]);
+      });
+  }, [t]);
 
   // Load balances when employees or year changes
   const loadBalances = useCallback(async (emps: Array<{ id: number; name: string; surname: string }>, selectedYear: number) => {
@@ -156,50 +162,72 @@ function BalancesTab({ showFlash }: BalancesTabProps) {
 
   async function handleSave() {
     if (!editTarget) return;
-    setEditSaving(true);
-    setEditError(null);
+    const vacTotal = parseFloat(editTarget.vacationTotal);
+    const sickTotal = parseFloat(editTarget.sickTotal);
 
-    const vacVal = editTarget.vacationTotal.trim();
-    const sickVal = editTarget.sickTotal.trim();
-    const vacNum = vacVal !== '' ? parseFloat(vacVal) : undefined;
-    const sickNum = sickVal !== '' ? parseFloat(sickVal) : undefined;
-
-    if ((vacVal !== '' && (isNaN(vacNum!) || vacNum! < 0)) ||
-        (sickVal !== '' && (isNaN(sickNum!) || sickNum! < 0))) {
+    if (isNaN(vacTotal) || vacTotal < 0 || isNaN(sickTotal) || sickTotal < 0) {
       setEditError(t('leave.balance_set_error'));
-      setEditSaving(false);
       return;
     }
 
-    try {
-      const ops: Promise<LeaveBalance>[] = [];
+    setEditSaving(true);
+    setEditError(null);
 
-      if (vacNum !== undefined && vacNum !== editTarget.origVacation) {
-        ops.push(setLeaveBalance({ userId: editTarget.userId, year, leaveType: 'vacation', totalDays: vacNum }));
+    const origVac = (balances[editTarget.userId] ?? []).find((b) => b.leaveType === 'vacation');
+    const origSick = (balances[editTarget.userId] ?? []).find((b) => b.leaveType === 'sick');
+
+    const newBalances: LeaveBalance[] = [...(balances[editTarget.userId] ?? [])];
+    let hasError = false;
+
+    // Save vacation if changed
+    if (origVac === undefined || vacTotal !== origVac.totalDays) {
+      try {
+        const updated = await setLeaveBalance({
+          userId: editTarget.userId,
+          year,
+          leaveType: 'vacation',
+          totalDays: vacTotal,
+        });
+        const idx = newBalances.findIndex((b) => b.leaveType === 'vacation');
+        if (idx >= 0) newBalances[idx] = updated;
+        else newBalances.push(updated);
+      } catch (err: unknown) {
+        const e = err as { response?: { data?: { error?: string } } };
+        setEditError(e?.response?.data?.error ?? t('leave.balance_set_error'));
+        hasError = true;
       }
-      if (sickNum !== undefined && sickNum !== editTarget.origSick) {
-        ops.push(setLeaveBalance({ userId: editTarget.userId, year, leaveType: 'sick', totalDays: sickNum }));
+    }
+
+    // Save sick if changed (even if vacation failed — attempt both)
+    if (origSick === undefined || sickTotal !== origSick.totalDays) {
+      try {
+        const updated = await setLeaveBalance({
+          userId: editTarget.userId,
+          year,
+          leaveType: 'sick',
+          totalDays: sickTotal,
+        });
+        const idx = newBalances.findIndex((b) => b.leaveType === 'sick');
+        if (idx >= 0) newBalances[idx] = updated;
+        else newBalances.push(updated);
+      } catch (err: unknown) {
+        if (!hasError) {
+          const e = err as { response?: { data?: { error?: string } } };
+          setEditError(e?.response?.data?.error ?? t('leave.balance_set_error'));
+        }
+        hasError = true;
       }
+    }
 
-      if (ops.length === 0) {
-        setEditTarget(null);
-        setEditSaving(false);
-        return;
-      }
+    // Always update local state with whatever succeeded
+    setBalances((prev) => ({ ...prev, [editTarget.userId]: newBalances }));
+    setEditSaving(false);
 
-      await Promise.all(ops);
-
-      // Refresh just this employee's balances locally
-      const res = await getLeaveBalance({ userId: editTarget.userId, year });
-      setBalances((prev) => ({ ...prev, [editTarget.userId]: res.balances }));
-
+    if (!hasError) {
       showFlash(t('leave.balance_set_success'));
       setEditTarget(null);
-    } catch {
-      setEditError(t('leave.balance_set_error'));
-    } finally {
-      setEditSaving(false);
     }
+    // If hasError, modal stays open with the error message shown
   }
 
   function renderBalanceCell(empId: number, type: LeaveType) {
@@ -237,6 +265,19 @@ function BalancesTab({ showFlash }: BalancesTabProps) {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
         )}
       </div>
+
+      {/* Employee fetch error */}
+      {empError && (
+        <div style={{
+          padding: '12px 16px', margin: '16px 0',
+          background: 'rgba(220,38,38,0.08)',
+          border: '1px solid rgba(220,38,38,0.25)',
+          borderLeft: '4px solid #dc2626',
+          borderRadius: 8, color: '#dc2626', fontSize: 13,
+        }}>
+          {empError}
+        </div>
+      )}
 
       {/* Table */}
       {!loading && employees.length === 0 ? (
