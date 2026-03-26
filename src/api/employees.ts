@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { Employee, PaginatedResponse } from '../types';
+import { Employee, EmployeeListResponse } from '../types';
 
 export interface EmployeeListParams {
   search?: string;
@@ -10,13 +10,15 @@ export interface EmployeeListParams {
   page?: number;
   limit?: number;
   targetCompanyId?: number | null;
+  /** Area managers: employees in supervised stores (aligned with shift assignment). */
+  forShiftPlanning?: boolean;
 }
 
 // ── API functions ─────────────────────────────────────────────────────────────
 // Note: client.ts has global camelizeKeys/snakeKeys interceptors — no manual
 // field mapping is needed here.
 
-export async function getEmployees(params?: EmployeeListParams): Promise<PaginatedResponse<Employee>> {
+export async function getEmployees(params?: EmployeeListParams): Promise<EmployeeListResponse> {
   const query: Record<string, string | number> = {};
   if (params?.search) query.search = params.search;
   if (params?.storeId != null) query.store_id = params.storeId;
@@ -26,6 +28,7 @@ export async function getEmployees(params?: EmployeeListParams): Promise<Paginat
   if (params?.page != null) query.page = params.page;
   if (params?.limit != null) query.limit = params.limit;
   if (params?.targetCompanyId != null) query.target_company_id = params.targetCompanyId;
+  if (params?.forShiftPlanning) query.for_shift_planning = 1;
   const { data } = await apiClient.get('/employees', { params: query });
   return data.data;
 }

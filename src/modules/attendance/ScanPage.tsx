@@ -86,6 +86,7 @@ export default function ScanPage() {
         <button
           onClick={() => navigate('/')}
           className="btn btn-primary"
+          data-testid="scan-back-home"
           style={{ padding: '11px 28px', borderRadius: 10, marginTop: 8 }}
         >
           {t('common.backToHome')}
@@ -146,6 +147,7 @@ export default function ScanPage() {
         </div>
         <button
           onClick={() => { setStage('ready'); setTappedType(null); }}
+          data-testid="scan-back-to-actions"
           style={{
             marginTop: 28,
             padding: '14px 40px',
@@ -225,6 +227,7 @@ export default function ScanPage() {
               key={type}
               onClick={() => handleAction(type)}
               disabled={stage === 'loading'}
+              data-testid={`scan-action-${type}`}
               style={{
                 padding: '38px 12px',
                 borderRadius: 20,

@@ -17,7 +17,6 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
   store_manager:  { bg: 'rgba(124,58,237,0.10)',  color: '#7C3AED' },
   employee:       { bg: 'rgba(107,114,128,0.10)', color: '#6B7280' },
   store_terminal: { bg: 'rgba(107,114,128,0.10)', color: '#6B7280' },
-  system_admin:   { bg: '#C9973A22',               color: '#C9973A' },
 };
 
 const MenuIcon = () => (
@@ -42,12 +41,14 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
 
   return (
     <header style={{
-      height: 'var(--header-height)',
+      minHeight: 'var(--header-height)',
       background: 'var(--surface)',
       borderBottom: '1px solid var(--border)',
       display: 'flex',
       alignItems: 'center',
-      padding: isMobile ? '0 16px' : '0 24px',
+      padding: isMobile
+        ? 'max(4px, env(safe-area-inset-top, 0px)) 16px 0 16px'
+        : '0 24px',
       gap: '12px',
       flexShrink: 0,
       boxShadow: '0 1px 0 var(--border)',
@@ -79,7 +80,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
       </button>
 
       {/* Title */}
-      <h1 style={{
+      <div role="heading" aria-level={2} style={{
         flex: 1,
         fontSize: '16px',
         fontWeight: 600,
@@ -90,10 +91,13 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-      }}>{title}</h1>
+      }}>{title}</div>
 
-      {/* Language switcher */}
+      {/* Language switcher — desktop header + duplicate for small screens (sidebar may be icon-only) */}
       <span className="hide-mobile">
+        <LanguageSwitcher variant="pill" />
+      </span>
+      <span className="show-mobile-only-header">
         <LanguageSwitcher variant="pill" />
       </span>
 
@@ -110,11 +114,20 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
           }}>
             <div style={{
               width: 22, height: 22, borderRadius: '50%',
-              background: roleStyle.color,
+              background: user?.avatarFilename ? 'transparent' : roleStyle.color,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontSize: '10px', fontWeight: 700,
               fontFamily: 'var(--font-display)',
-            }}>{initials}</div>
+              overflow: 'hidden',
+            }}>
+              {user?.avatarFilename ? (
+                <img
+                  src={`/uploads/avatars/${user.avatarFilename}`}
+                  alt={fullName}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : initials}
+            </div>
             <span style={{ fontSize: '12px', fontWeight: 600, color: roleStyle.color, whiteSpace: 'nowrap' }}>
               {roleLabel}
             </span>

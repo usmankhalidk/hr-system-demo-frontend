@@ -10,8 +10,7 @@ import HomePage from './modules/home/HomePage';
 import EmployeeList from './modules/employees/EmployeeList';
 import EmployeeDetail from './modules/employees/EmployeeDetail';
 import StoreList from './modules/stores/StoreList';
-import CompanyList from './modules/companies/CompanyList';
-import PermissionsPanel from './modules/permissions/PermissionsPanel';
+import SystemCompanyManagement from './modules/companies/SystemCompanyManagement';
 import SystemPermissionsPanel from './modules/permissions/SystemPermissionsPanel';
 import ProfilePage from './modules/profile/ProfilePage';
 import ShiftsPage from './modules/shifts/ShiftsPage';
@@ -22,13 +21,13 @@ import LeavePage from './modules/leave/LeavePage';
 import SettingsPage from './modules/settings/SettingsPage';
 import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
 import ScanPage from './modules/attendance/ScanPage';
+import HRChatPage from './modules/messages/HRChatPage';
 
 // Terminal role gets a bare full-screen view — no header or sidebar
 function HomeRoute() {
   const { user } = useAuth();
   const { t } = useTranslation();
   if (user?.role === 'store_terminal') return <HomePage />;
-  if (user?.role === 'system_admin') return <Navigate to="/sistema/permessi" replace />;
   return <Layout title={t('nav.dashboard')}><HomePage /></Layout>;
 }
 
@@ -64,20 +63,14 @@ function AppRoutes() {
       } />
 
       <Route path="/aziende" element={
-        <ProtectedRoute roles={['admin']}>
-          <Layout title={t('nav.companies')}><CompanyList /></Layout>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
+          <Layout title={t('nav.companies')}><SystemCompanyManagement /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/impostazioni/permessi" element={
-        <ProtectedRoute roles={['admin']}>
-          <Layout title={t('nav.permissions')}><PermissionsPanel /></Layout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/sistema/permessi" element={
-        <ProtectedRoute roles={['system_admin']}>
-          <Layout title={t('nav.systemPermissions')}><SystemPermissionsPanel /></Layout>
+        <ProtectedRoute roles={['admin']} superAdminOnly>
+          <Layout title={t('nav.permissions')}><SystemPermissionsPanel /></Layout>
         </ProtectedRoute>
       } />
 
@@ -90,6 +83,12 @@ function AppRoutes() {
       <Route path="/profilo" element={
         <ProtectedRoute>
           <Layout title={t('profile.title')}><ProfilePage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/hr-chat" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+          <Layout title={t('nav.messaggi')}><HRChatPage /></Layout>
         </ProtectedRoute>
       } />
 

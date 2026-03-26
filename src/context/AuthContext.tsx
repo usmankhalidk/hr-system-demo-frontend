@@ -11,6 +11,7 @@ interface AuthContextValue {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   refreshPermissions: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -125,8 +126,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions(perms);
   };
 
+  const refreshUser = async () => {
+    const userData = await apiClient.get('/auth/me').then((r) => r.data.data as User);
+    setUser(userData);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, permissions, loading, login, logout, refreshPermissions }}>
+    <AuthContext.Provider value={{ user, permissions, loading, login, logout, refreshPermissions, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

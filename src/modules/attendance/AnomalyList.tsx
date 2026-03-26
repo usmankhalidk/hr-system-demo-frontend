@@ -8,6 +8,7 @@ interface Anomaly {
   userId: number;
   userName: string;
   userSurname: string;
+  userAvatarFilename?: string | null;
   storeName: string;
   date: string;
   anomalyType: 'late_arrival' | 'no_show' | 'long_break' | 'early_exit';
@@ -259,11 +260,14 @@ export default function AnomalyList({ dateFrom, dateTo }: Props) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                    background: avatarBg, color: '#fff',
+                    background: a.userAvatarFilename ? 'transparent' : avatarBg, color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-display)',
+                    overflow: 'hidden',
                   }}>
-                    {initials}
+                    {a.userAvatarFilename ? (
+                      <img src={`/uploads/avatars/${a.userAvatarFilename}`} alt={`${a.userSurname} ${a.userName}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : initials}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
@@ -370,12 +374,14 @@ export default function AnomalyList({ dateFrom, dateTo }: Props) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                           <div style={{
                             width: 30, height: 30, borderRadius: '50%',
-                            background: avatarBg, color: '#fff',
+                            background: a.userAvatarFilename ? 'transparent' : avatarBg, color: '#fff',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: 10, fontWeight: 700, flexShrink: 0,
-                            fontFamily: 'var(--font-display)',
+                            fontFamily: 'var(--font-display)', overflow: 'hidden',
                           }}>
-                            {initials}
+                            {a.userAvatarFilename ? (
+                              <img src={`/uploads/avatars/${a.userAvatarFilename}`} alt={`${a.userSurname} ${a.userName}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : initials}
                           </div>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>

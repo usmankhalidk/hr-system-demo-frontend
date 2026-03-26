@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation, useTranslation as useI18n } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -47,11 +47,12 @@ function LangPill() {
 /* ─── tiny local primitives with no CSS-var dependency ─── */
 
 function Field({
-  label, type = 'text', value, onChange, placeholder, disabled, required, autoComplete,
+  label, type = 'text', value, onChange, placeholder, disabled, required, autoComplete, testId,
 }: {
   label: string; type?: string; value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string; disabled?: boolean; required?: boolean; autoComplete?: string;
+  testId?: string;
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -61,6 +62,7 @@ function Field({
       </label>
       <input
         type={type}
+        data-testid={testId}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
@@ -87,11 +89,12 @@ function Field({
 }
 
 function PasswordField({
-  label, value, onChange, placeholder, disabled,
+  label, value, onChange, placeholder, disabled, testId,
 }: {
   label: string; value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string; disabled?: boolean;
+  testId?: string;
 }) {
   const [show, setShow] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -103,6 +106,7 @@ function PasswordField({
       <div style={{ position: 'relative' }}>
         <input
           type={show ? 'text' : 'password'}
+          data-testid={testId}
           value={value}
           onChange={onChange}
           placeholder={placeholder ?? '••••••••'}
@@ -148,8 +152,12 @@ function PasswordField({
 const LoginPage: React.FC = () => {
   const { user, login, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
+
+  const from = (location.state as { from?: { pathname: string; search: string } } | null)?.from;
+  const returnTo = from ? `${from.pathname}${from.search}` : '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -160,8 +168,8 @@ const LoginPage: React.FC = () => {
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    if (!loading && user !== null) navigate('/', { replace: true });
-  }, [user, loading, navigate]);
+    if (!loading && user !== null) navigate(returnTo, { replace: true });
+  }, [user, loading, navigate, returnTo]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -171,7 +179,7 @@ const LoginPage: React.FC = () => {
     setSubmitting(true);
     try {
       await login(email, password, rememberMe);
-      navigate('/', { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (err: unknown) {
       setErrorMessage(translateApiError(err, t));
     } finally {
@@ -325,6 +333,7 @@ const LoginPage: React.FC = () => {
                   disabled={isDisabled}
                   required
                   autoComplete="email"
+                  testId="login-email"
                 />
 
                 <PasswordField
@@ -332,6 +341,7 @@ const LoginPage: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   disabled={isDisabled}
+                  testId="login-password"
                 />
 
                 {/* Remember me */}
@@ -352,6 +362,7 @@ const LoginPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isDisabled}
+                  data-testid="login-submit"
                   style={{
                     width: '100%',
                     padding: '13px 24px',

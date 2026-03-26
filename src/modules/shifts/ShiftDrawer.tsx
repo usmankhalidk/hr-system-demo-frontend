@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../context/AuthContext';
 import { Shift, CreateShiftPayload, createShift, updateShift, deleteShift } from '../../api/shifts';
 import { getEmployees } from '../../api/employees';
 import { getStores } from '../../api/stores';
@@ -68,6 +69,7 @@ const EMPTY_FORM: FormState = {
 
 export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, onClose }: ShiftDrawerProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -142,7 +144,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     if (!open) return;
     // Load employees and stores for dropdowns
     Promise.all([
-      getEmployees({ limit: 200, status: 'active' }),
+      getEmployees({ limit: 200, status: 'active', forShiftPlanning: true }),
       getStores(),
     ]).then(([empData, storeData]) => {
       setEmployees(empData.employees.sort((a, b) => a.surname.localeCompare(b.surname)));
@@ -178,7 +180,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     setError(null);
     setOverlapConflict(false);
     setFormErrors({});
-  }, [open, shift, prefillDate, prefillUserId]);
+  }, [open, shift, prefillDate, prefillUserId, user?.role]);
 
   function set(field: keyof FormState) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -209,6 +211,16 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     setSaving(true);
     try {
       const isFlexible = form.break_type === 'flexible';
+      const isStoreManager = user?.role === 'store_manager';
+      let statusOut: CreateShiftPayload['status'] = form.status;
+      if (isStoreManager && form.status === 'confirmed') {
+        setError(t('shifts.storeManagerCannotConfirm'));
+        setSaving(false);
+        return;
+      }
+      if (isStoreManager && shift?.status === 'confirmed') {
+        statusOut = undefined;
+      }
       const payload: CreateShiftPayload = {
         user_id: parseInt(form.user_id, 10),
         store_id: parseInt(form.store_id, 10),
@@ -223,13 +235,14 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
         split_start2: form.is_split ? (form.split_start2 || null) : null,
         split_end2: form.is_split ? (form.split_end2 || null) : null,
         notes: form.notes || null,
-        status: form.status,
+        status: statusOut,
       };
       if (shift) {
         await updateShift(shift.id, payload);
       } else {
         await createShift(payload);
       }
+      setFormErrors({});
       onClose(true);
     } catch (err: any) {
       const code: string | undefined = err?.response?.data?.code;
@@ -568,29 +581,62 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
 
           {/* ─── Section: Stato ─────────────── */}
           <SectionDivider label={t('shifts.form.status')} />
-          <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-            {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
-              const active = form.status === s;
-              const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
-              const bg    = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-              return (
-                <button
-                  key={s} type="button"
-                  onClick={() => setForm((p) => ({ ...p, status: s }))}
-                  style={{
-                    flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                    border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                    background: active ? bg : 'transparent',
-                    color: active ? color : 'var(--text-muted)',
-                    fontFamily: 'var(--font-body)',
-                  }}
-                >
-                  {t(`shifts.status.${s}`)}
-                </button>
-              );
-            })}
-          </div>
+          {user?.role === 'store_manager' && shift?.status === 'confirmed' ? (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.45 }}>
+              <strong style={{ color: 'var(--primary)' }}>{t('shifts.status.confirmed')}</strong>
+              <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                {t('shifts.storeManagerConfirmedHint')}
+              </span>
+            </div>
+          ) : user?.role === 'store_manager' ? (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+              {(['scheduled', 'cancelled'] as const).map((s) => {
+                const active = form.status === s;
+                const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
+                const bg    = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                return (
+                  <button
+                    key={s} type="button"
+                    onClick={() => setForm((p) => ({ ...p, status: s }))}
+                    style={{
+                      flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
+                      fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                      border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                      background: active ? bg : 'transparent',
+                      color: active ? color : 'var(--text-muted)',
+                      fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    {t(`shifts.status.${s}`)}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+              {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
+                const active = form.status === s;
+                const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
+                const bg    = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                return (
+                  <button
+                    key={s} type="button"
+                    onClick={() => setForm((p) => ({ ...p, status: s }))}
+                    style={{
+                      flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
+                      fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                      border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                      background: active ? bg : 'transparent',
+                      color: active ? color : 'var(--text-muted)',
+                      fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    {t(`shifts.status.${s}`)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* ─── Notes ──────────────────────── */}
           <div style={fieldRow}>

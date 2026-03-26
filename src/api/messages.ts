@@ -26,3 +26,13 @@ export async function markMessageAsRead(id: number): Promise<Message> {
   const { data } = await apiClient.patch(`/messages/${id}/read`);
   return data.data;
 }
+
+export interface HrRecipient {
+  recipientId: number;
+  recipientName: string;
+}
+
+export async function getHrRecipient(): Promise<HrRecipient> {
+  const { data } = await apiClient.get('/messages/hr');
+  return data.data;
+}

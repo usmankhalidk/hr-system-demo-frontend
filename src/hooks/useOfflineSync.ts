@@ -77,11 +77,8 @@ export function useOfflineSync() {
         'Sincronizzazione presenze non riuscita. I dati verranno ritentati.',
         'warning',
       );
+      syncingRef.current = false;  // reset immediately so future reconnects can retry
       retryCountRef.current++;
-      const backoffMs = Math.min(30000, 1000 * Math.pow(2, retryCountRef.current));
-      setTimeout(() => { syncingRef.current = false; }, backoffMs);
-      // Return early so we do not hit the finally block's reset
-      return;
     }
     syncingRef.current = false;
   }, [showToast]);

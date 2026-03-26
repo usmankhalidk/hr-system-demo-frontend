@@ -4,14 +4,16 @@ import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useToast } from '../../context/ToastContext';
 import { getStores, createStore, updateStore, deactivateStore, activateStore, deleteStorePermanent } from '../../api/stores';
+import { getCompanies } from '../../api/companies';
 import { translateApiError } from '../../utils/apiErrors';
-import { Store } from '../../types';
+import { Company, Store } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
+import { Select } from '../../components/ui/Select';
 
 interface StoreFormData {
   name: string;
@@ -32,6 +34,7 @@ const emptyForm: StoreFormData = {
 interface FormErrors {
   name?: string;
   code?: string;
+  companyId?: string;
 }
 
 // Words to skip when deriving a store code from the name
@@ -78,6 +81,10 @@ export function StoreList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [formCompanyId, setFormCompanyId] = useState<number | null>(null);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [formData, setFormData] = useState<StoreFormData>(emptyForm);
@@ -119,11 +126,24 @@ export function StoreList() {
     loadStores();
   }, []);
 
+  // Load companies for any admin/HR so grouped users can pick a target company
+  useEffect(() => {
+    if (!isAdminOrHr) return;
+    setCompaniesLoading(true);
+    getCompanies()
+      .then(setCompanies)
+      .catch(() => setCompanies([]))
+      .finally(() => setCompaniesLoading(false));
+  }, [isAdminOrHr]);
+
   const openNewForm = () => {
     setEditingStore(null);
     setFormData(emptyForm);
     setFormErrors({});
     setFormError(null);
+    // Super-admin has no default company; require explicit selection.
+    // Grouped admin/hr default to their own company.
+    setFormCompanyId(isSuperAdmin ? null : (user?.companyId ?? null));
     codeIsAuto.current = true;
     setFormOpen(true);
   };
@@ -150,12 +170,17 @@ export function StoreList() {
     setFormErrors({});
     setFormError(null);
     codeIsAuto.current = false;
+    setFormCompanyId(null);
   };
+
+  // Show company selector when multiple companies are available (grouped admin/HR + super admin)
+  const showCompanyPicker = companies.length > 1;
 
   const validateForm = (): boolean => {
     const errors: FormErrors = {};
     if (!formData.name.trim()) errors.name = t('stores.validationName');
     if (!formData.code.trim()) errors.code = t('stores.validationCode');
+    if (showCompanyPicker && !editingStore && !formCompanyId) errors.companyId = t('stores.validationCompany');
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -172,6 +197,11 @@ export function StoreList() {
         cap: formData.cap.trim() || null,
         maxStaff: formData.maxStaff ? parseInt(formData.maxStaff, 10) : 0,
       };
+
+      // Cross-company store creation: send the target company
+      if (showCompanyPicker && !editingStore && formCompanyId != null) {
+        payload.companyId = formCompanyId;
+      }
       if (editingStore) {
         await updateStore(editingStore.id, payload);
         showToast(t('stores.updatedSuccess'), 'success');
@@ -273,7 +303,7 @@ export function StoreList() {
   };
 
   const columns: Column<Store>[] = [
-    ...(isSuperAdmin ? [{
+    ...(isSuperAdmin || stores.some((s) => !!s.companyName) ? [{
       key: 'companyName' as keyof Store,
       label: t('stores.colCompany'),
       render: (row: Store) => (
@@ -398,6 +428,31 @@ export function StoreList() {
             <Alert variant="danger" onClose={() => setFormError(null)}>
               {formError}
             </Alert>
+          )}
+          {showCompanyPicker && !editingStore && (
+            <div>
+              <Select
+                label={t('stores.fieldCompany')}
+                value={formCompanyId ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setFormCompanyId(raw ? parseInt(raw, 10) : null);
+                }}
+                disabled={formSaving || companiesLoading}
+              >
+                <option value="">{t('stores.placeholderCompany')}</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+              {formErrors.companyId && (
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
+                  {formErrors.companyId}
+                </p>
+              )}
+            </div>
           )}
           <Input
             label={t('stores.fieldName')}

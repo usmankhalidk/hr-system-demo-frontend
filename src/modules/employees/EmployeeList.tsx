@@ -29,7 +29,6 @@ const ROLE_BADGE_VARIANT: Record<UserRole, 'accent' | 'primary' | 'info' | 'succ
   store_manager: 'warning',
   employee: 'neutral',
   store_terminal: 'neutral',
-  system_admin: 'accent',
 };
 
 const AVATAR_PALETTE = ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'];
@@ -135,12 +134,18 @@ export function EmployeeList() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
             <div style={{
               width: '34px', height: '34px', borderRadius: '50%',
-              background: bg, color: '#fff', flexShrink: 0,
+              background: row.avatarFilename ? 'transparent' : bg, color: '#fff', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em',
-              fontFamily: 'var(--font-display)',
+              fontFamily: 'var(--font-display)', overflow: 'hidden',
             }}>
-              {initials}
+              {row.avatarFilename ? (
+                <img
+                  src={`/uploads/avatars/${row.avatarFilename}`}
+                  alt={fullName}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : initials}
             </div>
             <div>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13.5px', lineHeight: 1.3 }}>

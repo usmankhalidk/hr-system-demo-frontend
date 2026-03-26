@@ -354,12 +354,18 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
                   {/* Avatar */}
                   <div style={{
                     width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-                    background: avatarBg, color: '#fff',
+                    background: req.userAvatarFilename ? 'transparent' : avatarBg, color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)',
-                    letterSpacing: 0.5,
+                    letterSpacing: 0.5, overflow: 'hidden',
                   }}>
-                    {initials}
+                    {req.userAvatarFilename ? (
+                      <img
+                        src={`/uploads/avatars/${req.userAvatarFilename}`}
+                        alt={`${req.userSurname} ${req.userName}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : initials}
                   </div>
 
                   {/* Name + date */}

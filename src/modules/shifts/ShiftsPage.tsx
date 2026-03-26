@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { listShifts, Shift, copyWeek, exportShifts, importShifts, downloadImportTemplate, ImportResult } from '../../api/shifts';
+import { listShifts, Shift, copyWeek, exportShifts, importShifts, downloadImportTemplate, ImportResult, approveWeekForEmployee } from '../../api/shifts';
 import { getLeaveBlocks, LeaveBlock } from '../../api/leave';
 import { getStores } from '../../api/stores';
 import { Store } from '../../types';
@@ -13,6 +13,7 @@ import DayCalendar from './DayCalendar';
 import ShiftDrawer from './ShiftDrawer';
 import ShiftTemplatesPanel from './ShiftTemplatesPanel';
 import AffluencePanel from './AffluencePanel';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -126,6 +127,7 @@ function IconUpload() {
 export default function ShiftsPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const { isMobile } = useBreakpoint();
 
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState<Date>(getWeekStart(new Date()));
@@ -151,9 +153,11 @@ export default function ShiftsPage() {
   const fileInputRef                          = useRef<HTMLInputElement>(null);
   const [affluenceOpen, setAffluenceOpen] = useState(false);
   const [leaveBlocks, setLeaveBlocks] = useState<LeaveBlock[]>([]);
+  const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
 
   const canEdit = user ? MANAGEMENT_ROLES.includes(user.role) : false;
   const isStoreManager = user?.role === 'store_manager';
+  const canApproveWeek = Boolean(user && ['admin', 'hr', 'area_manager'].includes(user.role));
 
   // Load stores for admin/hr/area_manager store filter (not for store_manager or employee)
   useEffect(() => {
@@ -293,6 +297,32 @@ export default function ShiftsPage() {
     setCopyConfirmOpen(true);
   }
 
+  async function handleApproveWeekForUser(userId: number) {
+    if (!canApproveWeek) return;
+    setApprovingUserId(userId);
+    setError(null);
+    try {
+      const { updated } = await approveWeekForEmployee({
+        user_id: userId,
+        week: formatIsoWeek(currentDate),
+        store_id: storeFilter ?? undefined,
+      });
+      if (updated === 0) {
+        setSuccess(t('shifts.approveWeekNone', 'Nessun turno da confermare per questo dipendente.'));
+      } else {
+        setSuccess(t('shifts.approveWeekDone', { count: updated, defaultValue: `${updated} turni confermati` }));
+      }
+      setTimeout(() => setSuccess(null), 3500);
+      await fetchShifts();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { code?: string; error?: string } } };
+      const code = axiosErr?.response?.data?.code;
+      setError(code ? t(`errors.${code}`, axiosErr?.response?.data?.error ?? t('errors.DEFAULT')) : (axiosErr?.response?.data?.error ?? t('errors.DEFAULT')));
+    } finally {
+      setApprovingUserId(null);
+    }
+  }
+
   async function doCopyWeek() {
     setCopyConfirmOpen(false);
     setError(null);
@@ -330,7 +360,7 @@ export default function ShiftsPage() {
   const targetWeek = formatIsoWeek(addWeeks(currentDate, 1));
 
   return (
-    <div className="page-enter" style={{ padding: '24px 32px' }}>
+    <div className="page-enter" style={{ padding: isMobile ? '16px' : '24px 32px', maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* ── Page header ────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -616,6 +646,9 @@ export default function ShiftsPage() {
               onCellClick={handleCellClick}
               canEdit={canEdit}
               leaveBlocks={leaveBlocks}
+              canApproveWeek={canApproveWeek}
+              onApproveWeekForUser={handleApproveWeekForUser}
+              approvingUserId={approvingUserId}
             />
           ) : (
             <MonthlyCalendar

@@ -51,6 +51,11 @@ const IconPerson = () => (
     <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
   </svg>
 );
+const IconMessage = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
 const IconLogout = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
@@ -101,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
-    if (user?.role !== 'employee') return;
+    if (!user || user.role === 'store_terminal') return;
     getUnreadCount().then(setUnreadMessages).catch(() => {});
     const interval = setInterval(() => {
       getUnreadCount().then(setUnreadMessages).catch(() => {});
@@ -111,7 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
   if (!user || user.role === 'store_terminal') return null;
 
-  type NavItem = { labelKey: string; path: string; icon: React.ReactNode; permissionKey?: string };
+  type NavItem = { labelKey: string; path: string; icon: React.ReactNode; permissionKey?: string; superAdminOnly?: boolean };
 
   const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     admin: [
@@ -122,37 +127,44 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.turni',      path: '/turni',                 icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.presenze',   path: '/presenze',              icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.permessi',   path: '/permessi',              icon: <IconUmbrella />, permissionKey: 'permessi' },
-      { labelKey: 'nav.permissions',path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'impostazioni' },
+      { labelKey: 'nav.messaggi',   path: '/hr-chat',               icon: <IconMessage /> },
+      { labelKey: 'nav.permissions',path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'impostazioni', superAdminOnly: true },
       { labelKey: 'nav.settings',   path: '/impostazioni',          icon: <IconSettings /> },
     ],
     hr: [
-      { labelKey: 'nav.dashboard', path: '/',           icon: <IconDashboard /> },
-      { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },
-      { labelKey: 'nav.stores',    path: '/negozi',     icon: <IconStore />, permissionKey: 'negozi' },
-      { labelKey: 'nav.turni',     path: '/turni',      icon: <IconCalendar />, permissionKey: 'turni' },
-      { labelKey: 'nav.presenze',  path: '/presenze',   icon: <IconClock />, permissionKey: 'presenze' },
-      { labelKey: 'nav.permessi',  path: '/permessi',   icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
+      { labelKey: 'nav.companies', path: '/aziende',      icon: <IconBuilding /> },
+      { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
+      { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage /> },
       { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     area_manager: [
-      { labelKey: 'nav.dashboard', path: '/',           icon: <IconDashboard /> },
-      { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },
-      { labelKey: 'nav.turni',     path: '/turni',      icon: <IconCalendar />, permissionKey: 'turni' },
-      { labelKey: 'nav.presenze',  path: '/presenze',   icon: <IconClock />, permissionKey: 'presenze' },
-      { labelKey: 'nav.permessi',  path: '/permessi',   icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
+      { labelKey: 'nav.companies', path: '/aziende',      icon: <IconBuilding /> },
+      { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage /> },
       { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     store_manager: [
-      { labelKey: 'nav.dashboard', path: '/',           icon: <IconDashboard /> },
-      { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },
-      { labelKey: 'nav.turni',     path: '/turni',      icon: <IconCalendar />, permissionKey: 'turni' },
-      { labelKey: 'nav.presenze',  path: '/presenze',   icon: <IconClock />, permissionKey: 'presenze' },
-      { labelKey: 'nav.permessi',  path: '/permessi',   icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
+      { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage /> },
       { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     employee: [
       { labelKey: 'nav.dashboard', path: '/',                  icon: <IconDashboard /> },
       { labelKey: 'nav.myProfile', path: '/profilo',           icon: <IconPerson /> },
+      { labelKey: 'nav.messaggi',  path: '/hr-chat',           icon: <IconMessage /> },
       { labelKey: 'nav.turni',     path: '/turni',             icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.checkin',   path: '/presenze/checkin',  icon: <IconQr /> },
       { labelKey: 'nav.permessi',  path: '/permessi',          icon: <IconUmbrella />, permissionKey: 'permessi' },
@@ -161,6 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
   };
 
   const navItems = NAV_ITEMS[user.role].filter((item) => {
+    if (item.superAdminOnly && user.isSuperAdmin !== true) return false;
     if (!item.permissionKey) return true;
     return permissions[item.permissionKey] === true;
   });
@@ -247,11 +260,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       >
         <div style={{
           width: 34, height: 34, borderRadius: '50%',
-          background: `${roleColor}20`, border: `2px solid ${roleColor}50`,
+          background: user.avatarFilename ? 'transparent' : `${roleColor}20`,
+          border: `2px solid ${roleColor}50`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: roleColor, fontWeight: 700, fontSize: '12px',
           fontFamily: 'var(--font-display)', flexShrink: 0,
-        }}>{initials}</div>
+          overflow: 'hidden',
+        }}>
+          {user.avatarFilename ? (
+            <img
+              src={`/uploads/avatars/${user.avatarFilename}`}
+              alt={fullName}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : initials}
+        </div>
         {!collapsed && (
           <div style={{ overflow: 'hidden', flex: 1 }}>
             <div style={{ color: 'rgba(255,255,255,0.92)', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
@@ -293,7 +316,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
           >
             <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
             {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(item.labelKey)}</span>}
-            {!collapsed && item.labelKey === 'nav.myProfile' && unreadMessages > 0 && (
+            {!collapsed && item.labelKey === 'nav.messaggi' && unreadMessages > 0 && (
               <span style={{
                 background: 'var(--accent)',
                 color: 'white',
@@ -315,8 +338,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
       {/* ── Language switcher (full) + Logout ── */}
       <div style={{ padding: '8px', borderTop: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
-        {!collapsed && (
-          <LanguageSwitcher variant="full" />
+        {(isMobileView || !collapsed) && (
+          <div style={{ marginBottom: 8 }}>
+            <LanguageSwitcher variant="full" />
+          </div>
         )}
         <button
           className="sidebar-item"

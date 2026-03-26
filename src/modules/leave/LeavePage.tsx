@@ -47,6 +47,7 @@ function PersonalLeavePage() {
   const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
   const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
+  const [balanceVisible, setBalanceVisible] = useState(true);
 
   const [loadingMine, setLoadingMine] = useState(true);
   const [loadingPending, setLoadingPending] = useState(false);
@@ -88,6 +89,8 @@ function PersonalLeavePage() {
     try {
       const res = await getLeaveBalance({ year: new Date().getFullYear() });
       setBalances(res.balances);
+      // balanceVisible defaults to true for non-employees (admin/hr); employees get explicit flag
+      setBalanceVisible(res.balanceVisible !== false);
     } catch {
       // Silently handle
     } finally {
@@ -154,8 +157,8 @@ function PersonalLeavePage() {
         )}
       </div>
 
-      {/* Balance card */}
-      {user?.role !== 'store_terminal' && (
+      {/* Balance card — hidden when admin has disabled balance visibility for employees */}
+      {user?.role !== 'store_terminal' && balanceVisible && (
         <LeaveBalanceCard balances={balances} loading={loadingBalance} />
       )}
 

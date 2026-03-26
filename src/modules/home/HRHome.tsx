@@ -35,6 +35,27 @@ interface StatusItem {
   count: number;
 }
 
+interface PendingShiftHomeRow {
+  id: number;
+  userId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  userName: string;
+  userSurname: string;
+  storeName?: string | null;
+}
+
+interface PendingLeaveHomeRow {
+  id: number;
+  userId: number;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  userName: string;
+  userSurname: string;
+}
+
 export interface HRHomeData {
   expiringContracts: ExpiringContract[];
   newHires: NewHire[];
@@ -49,6 +70,10 @@ export interface HRHomeData {
     id: number; endDate: string;
     userId: number; name: string; surname: string;
   }>;
+  pendingShiftPreview?: PendingShiftHomeRow[];
+  pendingShiftCount?: number;
+  pendingLeavePreview?: PendingLeaveHomeRow[];
+  pendingLeaveCount?: number;
 }
 
 interface HRHomeProps {
@@ -58,7 +83,8 @@ interface HRHomeProps {
 function formatDate(dateStr: string, lang: string): string {
   try {
     const locale = lang.startsWith('it') ? 'it-IT' : 'en-GB';
-    return new Date(dateStr).toLocaleDateString(locale);
+    const d = new Date(dateStr.length === 10 ? dateStr + 'T12:00:00' : dateStr);
+    return d.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
   } catch { return dateStr; }
 }
 
@@ -129,7 +155,10 @@ const SectionCard: React.FC<{ title: string; subtitle: string; badge?: { label: 
 );
 
 export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
-  const { expiringContracts, newHires, totalEmployees, monthlyHires = [], statusBreakdown = [] } = data;
+  const {
+    expiringContracts, newHires, totalEmployees, monthlyHires = [], statusBreakdown = [],
+    pendingShiftPreview = [], pendingShiftCount = 0, pendingLeavePreview = [], pendingLeaveCount = 0,
+  } = data;
   const { t, i18n } = useTranslation();
   const { isMobile, isTablet } = useBreakpoint();
   const navigate = useNavigate();
@@ -175,7 +204,7 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
             {t('home.hr.title')}
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.60)', fontSize: '13px', margin: 0 }}>
-            {t('home.hr.subtitle')}
+            {t('home.hr.subtitle')} · {new Date().toLocaleDateString(i18n.language.startsWith('it') ? 'it-IT' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
@@ -192,6 +221,52 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
               {t('home.hr.totalEmployees')}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Approvals: shifts + leave */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
+        <div
+          onClick={() => navigate('/turni')}
+          className="card-lift"
+          style={{
+            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
+            padding: '18px 20px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
+            borderTop: '3px solid #1E4A7A',
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            {t('home.hr.pendingShiftsTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('home.hr.pendingShiftsSubtitle')}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--primary)', lineHeight: 1 }}>{pendingShiftCount}</div>
+          {pendingShiftPreview.slice(0, 3).map((row) => (
+            <div key={row.id} style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
+              {row.userSurname} {row.userName} · {formatDate(row.date, i18n.language)} · {String(row.startTime).slice(0, 5)}
+            </div>
+          ))}
+          <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{t('home.hr.viewShifts')} →</div>
+        </div>
+        <div
+          onClick={() => navigate('/permessi')}
+          className="card-lift"
+          style={{
+            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
+            padding: '18px 20px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
+            borderTop: '3px solid #0284C7',
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            {t('home.hr.pendingLeaveTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('home.hr.pendingLeaveSubtitle')}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#0284C7', lineHeight: 1 }}>{pendingLeaveCount}</div>
+          {pendingLeavePreview.slice(0, 3).map((row) => (
+            <div key={row.id} style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
+              {row.userSurname} {row.userName} · {formatDate(row.startDate, i18n.language)} — {formatDate(row.endDate, i18n.language)}
+            </div>
+          ))}
+          <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{t('home.hr.viewLeave')} →</div>
         </div>
       </div>
 
@@ -297,7 +372,7 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
                     <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{t(`employees.trainingType_${tr.trainingType}`)}</span>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: daysLeft <= 14 ? '#dc2626' : '#ea580c', background: daysLeft <= 14 ? 'rgba(220,38,38,0.1)' : 'rgba(234,88,12,0.1)', padding: '2px 8px', borderRadius: 20 }}>
-                    {daysLeft}{t('leave.days_label')}
+                    {daysLeft > 0 ? `${daysLeft} ${t('leave.days_label')}` : 'Oggi'}
                   </span>
                 </div>
               );
@@ -324,7 +399,7 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
                 >
                   <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{m.name} {m.surname}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: daysLeft <= 14 ? '#dc2626' : '#7c3aed', background: daysLeft <= 14 ? 'rgba(220,38,38,0.1)' : 'rgba(124,58,237,0.1)', padding: '2px 8px', borderRadius: 20 }}>
-                    {daysLeft}{t('leave.days_label')}
+                    {daysLeft > 0 ? `${daysLeft} ${t('leave.days_label')}` : 'Oggi'}
                   </span>
                 </div>
               );

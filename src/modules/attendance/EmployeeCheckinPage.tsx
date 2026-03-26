@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../context/AuthContext';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -9,11 +10,16 @@ const STEPS = [
 
 export default function EmployeeCheckinPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+
+  const initials = user
+    ? `${user.name?.[0] ?? ''}${user.surname ? user.surname[0] : ''}`.toUpperCase()
+    : '';
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* Header banner */}
+      {/* Header banner with employee identity */}
       <div
         className="pop-in"
         style={{
@@ -21,16 +27,32 @@ export default function EmployeeCheckinPage() {
           borderRadius: 'var(--radius-lg)',
           padding: '20px 24px',
           boxShadow: 'var(--shadow-sm)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
         }}
       >
+        {/* Avatar */}
         <div style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 4,
+          width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+          background: 'rgba(201,151,58,0.20)',
+          border: '2px solid rgba(201,151,58,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, color: '#C9973A',
         }}>
-          {t('checkin.title')}
+          {initials}
         </div>
-        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', fontFamily: 'var(--font-body)' }}>
-          {t('checkin.subtitle')}
+
+        <div>
+          <div style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 2,
+          }}>
+            {user ? `${user.name}${user.surname ? ` ${user.surname}` : ''}` : t('checkin.title')}
+          </div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-body)' }}>
+            {t('checkin.subtitle')}
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal' | 'system_admin';
+export type UserRole = 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal';
 
 export interface User {
   id: number;
@@ -11,11 +11,15 @@ export interface User {
   role: UserRole;
   status: 'active' | 'inactive';
   isSuperAdmin: boolean;
+  avatarFilename?: string | null;
 }
 
 export interface Company {
   id: number;
   name: string;
+  slug?: string;
+  isActive: boolean;
+  groupId?: number | null;
   storeCount: number;
   employeeCount: number;
   createdAt: string;
@@ -105,6 +109,9 @@ export interface Message {
   createdAt: string;
   senderName?: string;
   senderRole?: UserRole;
+  recipientName?: string;
+  recipientRole?: UserRole;
+  direction?: 'received' | 'sent';
 }
 
 export interface PermissionGrid {
@@ -126,8 +133,8 @@ export interface ApiError {
   code: string;
 }
 
-export interface PaginatedResponse<T> {
-  employees: T[];
+export interface EmployeeListResponse {
+  employees: Employee[];
   total: number;
   page: number;
   limit: number;

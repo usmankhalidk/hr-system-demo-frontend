@@ -15,6 +15,7 @@ vi.mock('../api/client', () => ({
 }));
 
 import { useOfflineSync } from '../hooks/useOfflineSync';
+import { ToastProvider } from '../context/ToastContext';
 
 const QUEUE_KEY = 'hr_offline_queue';
 
@@ -33,7 +34,7 @@ describe('useOfflineSync', () => {
   });
 
   it('enqueue() persists an event to localStorage under the correct key', () => {
-    const { result } = renderHook(() => useOfflineSync());
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
 
     act(() => {
       result.current.enqueue({
@@ -49,7 +50,7 @@ describe('useOfflineSync', () => {
   });
 
   it('queueLength updates reactively after enqueue()', () => {
-    const { result } = renderHook(() => useOfflineSync());
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
 
     expect(result.current.queueLength).toBe(0);
 
@@ -65,13 +66,13 @@ describe('useOfflineSync', () => {
   });
 
   it('isOnline reflects navigator.onLine initial state (true)', () => {
-    const { result } = renderHook(() => useOfflineSync());
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
     expect(result.current.isOnline).toBe(true);
   });
 
   it('isOnline is false when navigator.onLine starts as false', () => {
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
-    const { result } = renderHook(() => useOfflineSync());
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
     expect(result.current.isOnline).toBe(false);
   });
 
@@ -81,7 +82,7 @@ describe('useOfflineSync', () => {
 
     mockPost.mockResolvedValueOnce({ data: { data: { synced: 1, failed: 0, errors: [] } } });
 
-    const { result } = renderHook(() => useOfflineSync());
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
 
     // Enqueue an event while offline
     act(() => {
@@ -114,7 +115,7 @@ describe('useOfflineSync', () => {
 
     mockPost.mockRejectedValueOnce(new Error('Network error'));
 
-    const { result } = renderHook(() => useOfflineSync());
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
 
     act(() => {
       result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP999', event_time: new Date().toISOString() });

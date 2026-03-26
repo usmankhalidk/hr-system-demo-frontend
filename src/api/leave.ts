@@ -28,6 +28,7 @@ export interface LeaveRequest {
   updatedAt: string;
   userName?: string;
   userSurname?: string;
+  userAvatarFilename?: string | null;
   medicalCertificateName?: string | null;
 }
 
@@ -68,6 +69,7 @@ export interface BalanceResponse {
   balances: LeaveBalance[];
   year: number;
   userId: number;
+  balanceVisible?: boolean;
 }
 
 // ---------------------------------------------------------------------------

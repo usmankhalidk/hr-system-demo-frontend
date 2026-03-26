@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Eye, EyeOff, RefreshCw, Copy, CheckCircle2, KeyRound } from 'lucide-react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { useAuth } from '../../context/AuthContext';
 import { getEmployee, createEmployee, updateEmployee, getEmployees } from '../../api/employees';
+import { getCompanies } from '../../api/companies';
 import { translateApiError } from '../../utils/apiErrors';
 import { getStores } from '../../api/stores';
-import { Employee, Store, UserRole } from '../../types';
+import { Company, Employee, Store, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
@@ -25,6 +28,7 @@ interface FormData {
   email: string;
   uniqueId: string;
   role: UserRole | '';
+  companyId: string;
   storeId: string;
   supervisorId: string;
   department: string;
@@ -49,6 +53,7 @@ interface FormData {
 
 const initialFormData: FormData = {
   name: '', surname: '', email: '', uniqueId: '', role: '',
+  companyId: '',
   storeId: '', supervisorId: '', department: '',
   hireDate: '', contractEndDate: '', workingType: '', weeklyHours: '',
   personalEmail: '', dateOfBirth: '', nationality: '', gender: '',
@@ -61,6 +66,24 @@ function generateUniqueId(): string {
   let id = 'EMP-';
   for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
   return id;
+}
+
+function generateTempPassword(): string {
+  const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower   = 'abcdefghjkmnpqrstuvwxyz';
+  const digits  = '23456789';
+  const special = '@#!$%&';
+  const all = upper + lower + digits + special;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  // Guarantee at least one from each class then fill to 12 chars
+  const chars = [pick(upper), pick(lower), pick(digits), pick(special)];
+  for (let i = 0; i < 8; i++) chars.push(pick(all));
+  // Fisher-Yates shuffle
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
 }
 
 function SectionDivider({ label }: { label: string }) {
@@ -84,6 +107,7 @@ function SectionDivider({ label }: { label: string }) {
 export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormProps) {
   const isEditMode = employeeId !== undefined;
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { isMobile } = useBreakpoint();
 
   const row2: React.CSSProperties = {
@@ -91,6 +115,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
   };
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [supervisors, setSupervisors] = useState<Employee[]>([]);
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
@@ -99,6 +124,19 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
   const [error, setError] = useState<string | null>(null);
   const [step1Errors, setStep1Errors] = useState<Partial<Record<keyof FormData, string>>>({});
 
+  // Password for new employee (create mode only)
+  const [tempPassword, setTempPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | undefined>();
+  // After creation: show credentials card
+  const [createdCredentials, setCreatedCredentials] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const regeneratePassword = useCallback(() => {
+    setTempPassword(generateTempPassword());
+    setPasswordError(undefined);
+  }, []);
+
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
 
   useEffect(() => {
@@ -106,6 +144,15 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
       setError(t('employees.errorLoadStores'));
     });
   }, []);
+
+  // Load companies for admin/hr so grouped users can pick a target company
+  useEffect(() => {
+    if (!isEditMode && (user?.role === 'admin' || user?.role === 'hr')) {
+      getCompanies()
+        .then(setCompanies)
+        .catch(() => setCompanies([]));
+    }
+  }, [isEditMode, user?.role]);
 
   // Load supervisor options (same company, filtered client-side)
   useEffect(() => {
@@ -132,10 +179,11 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
     return () => { mounted = false; };
   }, [employeeId]);
 
-  // Auto-generate uniqueId for new employees only
+  // Auto-generate uniqueId and temp password for new employees only
   useEffect(() => {
     if (!isEditMode) {
       setFormData((prev) => ({ ...prev, uniqueId: generateUniqueId() }));
+      setTempPassword(generateTempPassword());
     }
   }, [isEditMode]);
 
@@ -152,6 +200,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
           email: emp.email ?? '',
           uniqueId: emp.uniqueId ?? '',
           role: emp.role ?? '',
+          companyId: emp.companyId != null ? String(emp.companyId) : '',
           storeId: emp.storeId != null ? String(emp.storeId) : '',
           supervisorId: emp.supervisorId != null ? String(emp.supervisorId) : '',
           department: emp.department ?? '',
@@ -205,7 +254,14 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
     return Object.keys(errs).length === 0;
   };
 
-  const handleNext = () => { if (validateStep1()) setStep(2); };
+  const handleNext = () => {
+    // Validate password for new employees before advancing
+    if (!isEditMode && tempPassword.length < 8) {
+      setPasswordError(t('employees.passwordTooShort'));
+      return;
+    }
+    if (validateStep1()) setStep(2);
+  };
   const handleBack = () => setStep(1);
 
   const validateStep2 = (): string | null => {
@@ -280,10 +336,24 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
       };
       if (isEditMode && employeeId) {
         await updateEmployee(employeeId, payload);
+        onSuccess();
       } else {
-        await createEmployee({ ...payload, email: formData.email, name: formData.name, surname: formData.surname, role: formData.role as UserRole });
+        const createPayload: Parameters<typeof createEmployee>[0] = {
+          ...payload,
+          email: formData.email,
+          name: formData.name,
+          surname: formData.surname,
+          role: formData.role as UserRole,
+          password: tempPassword,
+        };
+        // Cross-company creation: include target companyId if selected
+        if (formData.companyId) {
+          (createPayload as Record<string, unknown>).companyId = parseInt(formData.companyId, 10);
+        }
+        await createEmployee(createPayload);
+        // Show credentials card instead of closing immediately
+        setCreatedCredentials({ name: `${formData.name} ${formData.surname}`, email: formData.email, password: tempPassword });
       }
-      onSuccess();
     } catch (err: unknown) {
       setError(translateApiError(err, t, t('employees.errorSave')));
     } finally {
@@ -403,8 +473,137 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
           </div>
         </div>
 
+        {/* ── Credentials card (shown after successful create) ── */}
+        {createdCredentials && (
+          <>
+            <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '20px' : '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%',
+                background: 'rgba(21,128,61,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--success)',
+              }}>
+                <CheckCircle2 size={28} />
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>
+                  {t('employees.credentialsTitle')}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 340 }}>
+                  {t('employees.credentialsSubtitle')}
+                </div>
+              </div>
+
+              <div style={{
+                width: '100%',
+                background: 'var(--surface-warm)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '18px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: '50%',
+                    background: 'var(--primary)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14,
+                    flexShrink: 0,
+                  }}>
+                    {createdCredentials.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14 }}>{createdCredentials.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{createdCredentials.email}</div>
+                  </div>
+                </div>
+
+                <div style={{ height: 1, background: 'var(--border-light)' }} />
+
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+                    {t('employees.tempPasswordLabel')}
+                  </div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)', padding: '10px 14px',
+                  }}>
+                    <KeyRound size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
+                    <code style={{
+                      flex: 1, fontFamily: 'monospace', fontSize: 15,
+                      fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.06em',
+                      userSelect: 'all',
+                    }}>
+                      {createdCredentials.password}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(createdCredentials.password);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      style={{
+                        background: copied ? 'rgba(21,128,61,0.1)' : 'var(--accent-light)',
+                        border: 'none', borderRadius: 'var(--radius-sm)',
+                        padding: '5px 10px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        fontSize: 11, fontWeight: 600,
+                        color: copied ? 'var(--success)' : 'var(--accent)',
+                        transition: 'background 0.2s',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+                      {copied ? t('employees.copied') : t('employees.copyPassword')}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                  background: 'rgba(180,83,9,0.06)',
+                  border: '1px solid rgba(180,83,9,0.15)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '10px 12px',
+                }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>⚠️</span>
+                  <span style={{ fontSize: 12, color: 'var(--warning)', fontWeight: 500, lineHeight: 1.4 }}>
+                    {t('employees.credentialsWarning')}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div style={{
+              padding: '14px 24px',
+              borderTop: '1px solid var(--border)',
+              background: 'var(--surface-warm)',
+              display: 'flex', justifyContent: 'flex-end',
+              flexShrink: 0,
+            }}>
+              <button
+                onClick={onSuccess}
+                style={{
+                  padding: '9px 24px',
+                  background: 'var(--primary)',
+                  color: '#fff', border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '13px', fontWeight: 600,
+                  fontFamily: 'var(--font-body)', cursor: 'pointer',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </>
+        )}
+
         {/* Scrollable body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '24px' }}>
+        {!createdCredentials && <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '24px' }}>
           {loadingData ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '56px' }}>
               <Spinner size="md" />
@@ -466,6 +665,22 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
                       )}
                     </div>
                   </div>
+                  {/* Company selector: only shown when the user has access to multiple companies */}
+                  {!isEditMode && companies.length > 1 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <Select
+                        label={t('employees.companyField')}
+                        value={formData.companyId}
+                        onChange={(e) => set('companyId', e.target.value)}
+                      >
+                        <option value="">{t('employees.sameCompany')}</option>
+                        {companies.map((c) => (
+                          <option key={c.id} value={String(c.id)}>{c.name}</option>
+                        ))}
+                      </Select>
+                    </div>
+                  )}
+
                   <div style={{ marginBottom: '14px' }}>
                     <Select
                       label={`${t('common.role')} *`}
@@ -516,6 +731,82 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
                       onChange={(e) => set('department', e.target.value)}
                     />
                   </div>
+
+                  {/* Password (create mode only) */}
+                  {!isEditMode && (
+                    <>
+                      <SectionDivider label={t('employees.sectionSystemAccess')} />
+                      <div style={{ marginBottom: '14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '5px', fontFamily: 'var(--font-body)' }}>
+                          {t('employees.tempPasswordLabel')} *
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, position: 'relative' }}>
+                            <input
+                              type={showPassword ? 'text' : 'password'}
+                              value={tempPassword}
+                              onChange={(e) => { setTempPassword(e.target.value); setPasswordError(undefined); }}
+                              style={{
+                                width: '100%',
+                                height: '38px',
+                                padding: '0 38px 0 12px',
+                                border: `1px solid ${passwordError ? 'var(--danger)' : 'var(--border)'}`,
+                                borderRadius: 'var(--radius-sm)',
+                                fontSize: '13px',
+                                fontFamily: 'var(--font-body)',
+                                background: 'var(--surface)',
+                                color: 'var(--text-primary)',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                                letterSpacing: showPassword ? 'normal' : '0.12em',
+                              }}
+                              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-light)'; }}
+                              onBlur={(e) => { e.currentTarget.style.borderColor = passwordError ? 'var(--danger)' : 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((v) => !v)}
+                              style={{
+                                position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: 0,
+                              }}
+                            >
+                              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={regeneratePassword}
+                            title={t('employees.regeneratePassword')}
+                            style={{
+                              height: 38, padding: '0 10px',
+                              border: '1px solid var(--border)',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--surface)',
+                              cursor: 'pointer',
+                              color: 'var(--text-secondary)',
+                              display: 'flex', alignItems: 'center', gap: 5,
+                              fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 500,
+                              flexShrink: 0,
+                              transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-warm)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)'; }}
+                          >
+                            <RefreshCw size={13} />
+                            {t('employees.regeneratePassword')}
+                          </button>
+                        </div>
+                        {passwordError && (
+                          <div style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '4px' }}>{passwordError}</div>
+                        )}
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px' }}>
+                          {t('employees.tempPasswordHint')}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -694,10 +985,10 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
               )}
             </>
           )}
-        </div>
+        </div>}
 
-        {/* Footer */}
-        <div style={{
+        {/* Footer (only shown when not on credentials card) */}
+        {!createdCredentials && <div style={{
           padding: '14px 24px',
           borderTop: '1px solid var(--border)',
           background: 'var(--surface-warm)',
@@ -734,7 +1025,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
               </Button>
             )}
           </div>
-        </div>
+        </div>}
       </div>
     </div>,
     document.body

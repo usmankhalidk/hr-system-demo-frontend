@@ -1,11 +1,15 @@
 import apiClient from './client';
 
 export interface CompanyGrid {
-  turni: { hr: boolean; area_manager: boolean; store_manager: boolean };
-  permessi: { hr: boolean; area_manager: boolean; store_manager: boolean };
-  presenze: { hr: boolean; area_manager: boolean; store_manager: boolean };
-  negozi: { hr: boolean; area_manager: boolean; store_manager: boolean };
-  dipendenti: { hr: boolean; area_manager: boolean; store_manager: boolean };
+  // Axios client camelizes response keys from backend:
+  // - area_manager -> areaManager
+  // - store_manager -> storeManager
+  // - store_terminal -> storeTerminal
+  turni: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  permessi: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  presenze: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  negozi: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  dipendenti: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
 }
 
 export interface CompanyPermissions {
@@ -20,7 +24,7 @@ export async function getCompaniesPermissions(): Promise<{ companies: CompanyPer
 }
 
 export interface SystemPermissionUpdate {
-  role: 'hr' | 'area_manager' | 'store_manager';
+  role: 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal';
   module: 'turni' | 'permessi' | 'presenze' | 'negozi' | 'dipendenti';
   enabled: boolean;
 }

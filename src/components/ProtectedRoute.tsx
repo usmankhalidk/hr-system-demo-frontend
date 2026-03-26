@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { Spinner } from './ui';
@@ -7,10 +7,12 @@ import { Spinner } from './ui';
 interface Props {
   children: React.ReactNode;
   roles?: UserRole[];
+  superAdminOnly?: boolean;
 }
 
-export default function ProtectedRoute({ children, roles }: Props) {
+export default function ProtectedRoute({ children, roles, superAdminOnly }: Props) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -28,11 +30,10 @@ export default function ProtectedRoute({ children, roles }: Props) {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
 
-  // system_admin has no company context — only the system permissions route is valid for them
-  if (user.role === 'system_admin' && (!roles || !roles.includes('system_admin'))) {
-    return <Navigate to="/sistema/permessi" replace />;
+  if (superAdminOnly && user.isSuperAdmin !== true) {
+    return <Navigate to="/" replace />;
   }
 
   if (roles && !roles.includes(user.role)) {

@@ -407,6 +407,17 @@ input, select, textarea {
   .hide-mobile { display: none !important; }
 }
 
+/* Language pill in header — shown only under 768px (sidebar may hide full switcher when collapsed) */
+.show-mobile-only-header {
+  display: none !important;
+}
+@media (max-width: 767px) {
+  .show-mobile-only-header {
+    display: inline-flex !important;
+    align-items: center;
+  }
+}
+
 /* Stack flex rows on mobile */
 @media (max-width: 600px) {
   .flex-col-mobile {

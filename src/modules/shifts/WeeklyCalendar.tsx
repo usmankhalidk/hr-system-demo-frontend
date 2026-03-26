@@ -54,6 +54,10 @@ interface WeeklyCalendarProps {
   onCellClick: (userId: number, date: string) => void;
   canEdit: boolean;
   leaveBlocks?: LeaveBlock[];
+  /** Admin / HR / Area manager: show weekly approve control per row */
+  canApproveWeek?: boolean;
+  onApproveWeekForUser?: (userId: number) => void;
+  approvingUserId?: number | null;
 }
 
 function addDays(date: Date, days: number): Date {
@@ -79,6 +83,14 @@ function todayStr(): string {
   return formatDate(new Date());
 }
 
+function hoursForShiftTotal(shift: Shift): number {
+  if (shift.status === 'cancelled') return 0;
+  const v = shift.shiftHours;
+  if (v == null || v === '') return 0;
+  const n = parseFloat(String(v));
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default function WeeklyCalendar({
   shifts,
   weekStart,
@@ -86,6 +98,9 @@ export default function WeeklyCalendar({
   onCellClick,
   canEdit,
   leaveBlocks,
+  canApproveWeek = false,
+  onApproveWeekForUser,
+  approvingUserId = null,
 }: WeeklyCalendarProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
@@ -131,6 +146,19 @@ export default function WeeklyCalendar({
     a[1].surname.localeCompare(b[1].surname)
   );
 
+  function weeklyTotalsForUser(userId: number, userShifts: Map<string, Shift[]>): { hours: number; hasScheduled: boolean } {
+    let hours = 0;
+    let hasScheduled = false;
+    for (const day of days) {
+      const dateStr = formatDate(day);
+      for (const sh of userShifts.get(dateStr) ?? []) {
+        hours += hoursForShiftTotal(sh);
+        if (sh.status === 'scheduled') hasScheduled = true;
+      }
+    }
+    return { hours, hasScheduled };
+  }
+
   return (
     <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
       <table style={{
@@ -161,17 +189,24 @@ export default function WeeklyCalendar({
                 </th>
               );
             })}
+            <th style={{ padding: '10px 8px', textAlign: 'center', minWidth: 100, background: 'var(--primary)', color: '#fff' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '0.8rem' }}>
+                {t('shifts.weeklyHoursCol', 'Tot. h')}
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
           {users.length === 0 ? (
             <tr>
-              <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <td colSpan={9} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>
                 {t('shifts.noShiftsThisWeek', 'Nessun turno questa settimana')}
               </td>
             </tr>
           ) : (
-            users.map(([userId, userData], rowIdx) => (
+            users.map(([userId, userData], rowIdx) => {
+              const { hours: weekHours, hasScheduled } = weeklyTotalsForUser(userId, userData.shifts);
+              return (
               <tr
                 key={userId}
                 style={{ background: hoveredRow === rowIdx ? 'var(--surface-warm)' : rowIdx % 2 === 0 ? 'var(--surface)' : 'var(--background)', transition: 'background 0.12s' }}
@@ -304,8 +339,43 @@ export default function WeeklyCalendar({
                     </td>
                   );
                 })}
+                <td style={{
+                  padding: '8px 6px',
+                  textAlign: 'center',
+                  verticalAlign: 'middle',
+                  borderRight: '1px solid var(--border)',
+                  borderBottom: '1px solid var(--border)',
+                  background: 'rgba(13,33,55,0.03)',
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>
+                    {weekHours.toFixed(1)}h
+                  </div>
+                  {canApproveWeek && hasScheduled && onApproveWeekForUser && (
+                    <button
+                      type="button"
+                      disabled={approvingUserId === userId}
+                      onClick={() => onApproveWeekForUser(userId)}
+                      style={{
+                        marginTop: 6,
+                        padding: '4px 8px',
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        borderRadius: 6,
+                        border: '1px solid var(--accent)',
+                        background: 'rgba(201,151,58,0.12)',
+                        color: 'var(--accent)',
+                        cursor: approvingUserId === userId ? 'wait' : 'pointer',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'var(--font-body)',
+                      }}
+                    >
+                      {approvingUserId === userId ? '…' : t('shifts.approveWeek', 'Approva sett.')}
+                    </button>
+                  )}
+                </td>
               </tr>
-            ))
+            );
+            })
           )}
         </tbody>
       </table>

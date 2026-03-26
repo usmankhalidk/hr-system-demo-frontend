@@ -16,8 +16,33 @@ interface AssignedStore {
   employeeCount: number;
 }
 
+interface PendingShiftHomeRow {
+  id: number;
+  userId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  userName: string;
+  userSurname: string;
+  storeName?: string | null;
+}
+
+interface PendingLeaveHomeRow {
+  id: number;
+  userId: number;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  userName: string;
+  userSurname: string;
+}
+
 export interface AreaManagerHomeData {
   assignedStores: AssignedStore[];
+  pendingShiftPreview?: PendingShiftHomeRow[];
+  pendingShiftCount?: number;
+  pendingLeavePreview?: PendingLeaveHomeRow[];
+  pendingLeaveCount?: number;
 }
 
 interface AreaManagerHomeProps {
@@ -43,7 +68,13 @@ const makeChartTooltip = (employeesLabel: string) =>
 
 export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
   const navigate = useNavigate();
-  const { assignedStores } = data;
+  const {
+    assignedStores,
+    pendingShiftPreview = [],
+    pendingShiftCount = 0,
+    pendingLeavePreview = [],
+    pendingLeaveCount = 0,
+  } = data;
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
   const ChartTooltip = React.useMemo(() => makeChartTooltip(t('home.areaManager.employeesLabel')), [t]);
@@ -100,6 +131,51 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
           <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', marginTop: '2px', fontWeight: 500 }}>
             {t('home.areaManager.totalEmployees')}
           </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
+        <div
+          onClick={() => navigate('/turni')}
+          className="card-lift"
+          style={{
+            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
+            padding: '18px 20px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
+            borderTop: '3px solid #15803D',
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            {t('home.areaManager.pendingShiftsTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('home.areaManager.pendingShiftsSubtitle')}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#15803D', lineHeight: 1 }}>{pendingShiftCount}</div>
+          {pendingShiftPreview.slice(0, 3).map((row) => (
+            <div key={row.id} style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
+              {row.userSurname} {row.userName} · {row.date} · {String(row.startTime).slice(0, 5)}
+            </div>
+          ))}
+          <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{t('home.areaManager.viewShifts')} →</div>
+        </div>
+        <div
+          onClick={() => navigate('/permessi')}
+          className="card-lift"
+          style={{
+            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
+            padding: '18px 20px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
+            borderTop: '3px solid #C9973A',
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            {t('home.areaManager.pendingLeaveTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('home.areaManager.pendingLeaveSubtitle')}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#B45309', lineHeight: 1 }}>{pendingLeaveCount}</div>
+          {pendingLeavePreview.slice(0, 3).map((row) => (
+            <div key={row.id} style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
+              {row.userSurname} {row.userName} · {row.startDate} — {row.endDate}
+            </div>
+          ))}
+          <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{t('home.areaManager.viewLeave')} →</div>
         </div>
       </div>
 

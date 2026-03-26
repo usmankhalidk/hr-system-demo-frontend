@@ -22,7 +22,14 @@ const IconMessage = () => (
   </svg>
 );
 
-export function MessageBoard() {
+interface MessageBoardProps {
+  /** If true, shows a Reply button for expanded messages. */
+  enableReply?: boolean;
+  /** Called with the expanded message when user clicks Reply. */
+  onReply?: (msg: Message) => void;
+}
+
+export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps) {
   const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +148,30 @@ export function MessageBoard() {
                   whiteSpace: 'pre-wrap',
                 }}>
                   {msg.body}
+
+                  {enableReply && onReply && (
+                    <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReply(msg);
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid rgba(201,151,58,0.30)',
+                          background: 'rgba(201,151,58,0.12)',
+                          color: 'rgba(201,151,58,0.9)',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {t('messages.reply')}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

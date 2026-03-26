@@ -107,6 +107,16 @@ export async function copyWeek(payload: {
   return res.data.data;
 }
 
+/** Confirm all scheduled shifts for an employee in the given ISO week (admin / hr / area_manager). */
+export async function approveWeekForEmployee(payload: {
+  user_id: number;
+  week: string;
+  store_id?: number | null;
+}): Promise<{ updated: number }> {
+  const res = await client.post('/shifts/approve-week', payload);
+  return res.data.data;
+}
+
 export async function listTemplates(store_id?: number): Promise<{ templates: ShiftTemplate[] }> {
   const res = await client.get('/shifts/templates', { params: store_id ? { store_id } : {} });
   return res.data.data;

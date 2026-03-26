@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { useAuth } from '../../context/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,6 +11,19 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, title = 'Dashboard' }) => {
   const { isMobile } = useBreakpoint();
+  const { refreshPermissions } = useAuth();
+
+  // Re-fetch permissions when the tab regains focus so that admin permission changes
+  // are reflected for already-logged-in users without requiring a logout/login.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshPermissions();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [refreshPermissions]);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     return window.innerWidth < 1024;
   });
@@ -65,7 +79,10 @@ const Layout: React.FC<LayoutProps> = ({ children, title = 'Dashboard' }) => {
   const contentStyle: React.CSSProperties = {
     flex: 1,
     background: 'var(--background)',
-    padding: 'var(--content-padding)',
+    paddingTop: 'var(--content-padding)',
+    paddingLeft: `max(var(--content-padding), env(safe-area-inset-left, 0px))`,
+    paddingRight: `max(var(--content-padding), env(safe-area-inset-right, 0px))`,
+    paddingBottom: `max(var(--content-padding), env(safe-area-inset-bottom, 0px))`,
     overflowY: 'auto',
   };
 

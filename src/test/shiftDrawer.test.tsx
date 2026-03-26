@@ -5,6 +5,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '../i18n/config';
 
+// ── Mock auth context used by ShiftDrawer ─────────────────────────────────────
+vi.mock('../context/AuthContext', () => ({
+  useAuth: () => ({
+    user: { role: 'admin' },
+  }),
+}));
+
 // ── Make createPortal render inline (not into document.body separately) ───────
 vi.mock('react-dom', async () => {
   const actual = await vi.importActual<typeof import('react-dom')>('react-dom');

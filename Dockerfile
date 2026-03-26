@@ -22,6 +22,19 @@ RUN printf 'server {\n\
   listen 80;\n\
   root /usr/share/nginx/html;\n\
   index index.html;\n\
+  # Proxy /uploads/ to the backend container so avatar images load in Docker\n\
+  location /uploads/ {\n\
+    proxy_pass http://backend:3001/uploads/;\n\
+    proxy_http_version 1.1;\n\
+    proxy_set_header Host $host;\n\
+  }\n\
+  # Proxy /api/ to the backend container\n\
+  location /api/ {\n\
+    proxy_pass http://backend:3001/api/;\n\
+    proxy_http_version 1.1;\n\
+    proxy_set_header Host $host;\n\
+    proxy_set_header X-Real-IP $remote_addr;\n\
+  }\n\
   # Hashed assets: cache forever\n\
   location ~* \\.(?:js|css)$ {\n\
     expires 1y;\n\

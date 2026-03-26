@@ -69,7 +69,7 @@ interface BalancesTabProps {
   showFlash: (msg: string) => void;
 }
 
-function BalancesTab({ showFlash }: BalancesTabProps) {
+export function BalancesTab({ showFlash }: BalancesTabProps) {
   const { t } = useTranslation();
 
   const currentYear = new Date().getFullYear();

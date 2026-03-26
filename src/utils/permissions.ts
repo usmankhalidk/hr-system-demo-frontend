@@ -13,7 +13,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   store_manager: 'Responsabile Negozio',
   employee: 'Dipendente',
   store_terminal: 'Terminale Negozio',
-  system_admin: 'Amministratore di Sistema',
 };
 
 // Module display names in Italian
@@ -36,5 +35,4 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   store_manager: '#16A34A',
   employee: '#64748B',
   store_terminal: '#1E3A5F',
-  system_admin: '#C9973A',
 };

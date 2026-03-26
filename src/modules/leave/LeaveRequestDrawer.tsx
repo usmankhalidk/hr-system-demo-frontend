@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { submitLeaveRequest, LeaveType } from '../../api/leave';
@@ -22,6 +22,13 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
   const [certificate, setCertificate] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      reset();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   function reset() {
     setLeaveType('vacation');
