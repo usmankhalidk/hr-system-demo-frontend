@@ -79,7 +79,7 @@ const PermissionsPanel: React.FC = () => {
 
   const handleToggle = async (moduleKey: string, roleKey: string) => {
     const cellKey = `${moduleKey}:${roleKey}`;
-    const newValue = !grid[moduleKey]?.[roleKey];
+    const newValue = !(grid[moduleKey]?.[roleKey] ?? false);
 
     // Optimistic update
     setGrid((prev) => ({

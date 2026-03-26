@@ -37,7 +37,7 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     if (!isAdmin) { setLoading(false); return; }
     apiClient.get('/companies/settings')
-      .then(r => setShowLeaveBalance(r.data.data.showLeaveBalanceToEmployee ?? true))
+      .then(r => setShowLeaveBalance(r.data?.data?.showLeaveBalanceToEmployee ?? true))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [isAdmin]);

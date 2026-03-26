@@ -249,7 +249,7 @@ export default function AnomalyList({ dateFrom, dateTo }: Props) {
             const avatarBg = getAvatarColor((a.userSurname || '') + (a.userName || ''));
             const dateShort = new Date(a.date + 'T12:00:00').toLocaleDateString(locale, { day: '2-digit', month: 'short', weekday: 'short' });
             return (
-              <div key={`${a.shiftId}-${a.anomalyType}-${idx}`} style={{
+              <div key={`${a.shiftId}-${a.anomalyType}`} style={{
                 background: 'var(--surface)',
                 borderRadius: 10,
                 border: `1px solid var(--border)`,
@@ -365,7 +365,7 @@ export default function AnomalyList({ dateFrom, dateTo }: Props) {
                   const avatarBg = getAvatarColor((a.userSurname || '') + (a.userName || ''));
                   return (
                     <tr
-                      key={`${a.shiftId}-${a.anomalyType}-${idx}`}
+                      key={`${a.shiftId}-${a.anomalyType}`}
                       style={{ borderBottom: '1px solid var(--border-light)', transition: 'background 0.1s' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}

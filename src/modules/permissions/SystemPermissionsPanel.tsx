@@ -84,7 +84,7 @@ const SystemPermissionsPanel: React.FC = () => {
     if (!activeCompany) return;
     const cid = activeCompany.id;
     const cellKey = `${mod}:${role}`;
-    const newValue = !grids[cid]?.[mod]?.[role];
+    const newValue = !(grids[cid]?.[mod]?.[role] ?? true);
 
     // Optimistic update
     setGrids((prev) => ({

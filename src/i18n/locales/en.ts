@@ -722,6 +722,8 @@ const en = {
     overlapHint: 'This employee already has a shift that overlaps these times on the selected date. Check their existing shifts and adjust the start/end times or choose a different date.',
     validation: {
       dateRequired:       'Please select a date for the shift.',
+      employeeRequired:   'Please select an employee.',
+      storeRequired:      'Please select a store.',
       endAfterStart:      'End time must be after start time.',
       breakBothRequired:     'If a break is entered, both start and end times are required.',
       breakEndAfterStart:    'Break end time must be after break start time.',

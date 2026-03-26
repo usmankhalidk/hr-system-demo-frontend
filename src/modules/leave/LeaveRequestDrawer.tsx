@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { submitLeaveRequest, LeaveType } from '../../api/leave';
 import { useToast } from '../../context/ToastContext';
 import { DatePicker } from '../../components/ui/DatePicker';
+import { formatLocalDate } from '../../utils/date';
 
 interface Props {
   open: boolean;
@@ -52,7 +53,7 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
       setError(t('leave.error_dates_required'));
       return;
     }
-    const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
+    const todayStr = formatLocalDate(new Date()); // YYYY-MM-DD in local timezone
     if (startDate < todayStr) {
       setError(t('leave.error_past_date'));
       return;

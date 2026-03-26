@@ -73,7 +73,7 @@ function formatDate(dateStr: string | null | undefined, lang: string): string {
   if (!dateStr) return '—';
   try {
     const locale = lang.startsWith('it') ? 'it-IT' : 'en-GB';
-    return new Date(dateStr.split('T')[0] + 'T00:00:00Z').toLocaleDateString(locale);
+    return new Date(dateStr.split('T')[0] + 'T00:00:00').toLocaleDateString(locale);
   } catch {
     return dateStr;
   }
@@ -645,11 +645,11 @@ export function EmployeeDetail() {
       {/* Training Edit Modal */}
       <Modal
         open={trainingFormOpen}
-        onClose={() => { setTrainingFormOpen(false); setTrainingModalError(null); }}
+        onClose={() => { setTrainingFormOpen(false); setTrainingModalError(null); setEditingTraining({}); }}
         title={editingTraining.editing != null ? t('common.edit') : t('employees.addTraining')}
         footer={
           <>
-            <Button variant="secondary" onClick={() => { setTrainingFormOpen(false); setTrainingModalError(null); }} disabled={trainingModalSaving}>{t('common.cancel')}</Button>
+            <Button variant="secondary" onClick={() => { setTrainingFormOpen(false); setTrainingModalError(null); setEditingTraining({}); }} disabled={trainingModalSaving}>{t('common.cancel')}</Button>
             <Button loading={trainingModalSaving} onClick={async () => {
               if (!employeeId) return;
               if (!editingTraining.startDate) {
@@ -673,6 +673,7 @@ export function EmployeeDetail() {
                 setTrainings(tr);
                 setTrainingFormOpen(false);
                 setTrainingModalError(null);
+                setEditingTraining({});
               } catch (err: unknown) {
                 setTrainingModalError(translateApiError(err, t, t('employees.errorSave')));
               } finally {
@@ -704,11 +705,11 @@ export function EmployeeDetail() {
       {/* Medical Edit Modal */}
       <Modal
         open={medicalFormOpen}
-        onClose={() => { setMedicalFormOpen(false); setMedicalModalError(null); }}
+        onClose={() => { setMedicalFormOpen(false); setMedicalModalError(null); setEditingMedical({}); }}
         title={editingMedical.editing != null ? t('common.edit') : t('employees.addMedical')}
         footer={
           <>
-            <Button variant="secondary" onClick={() => { setMedicalFormOpen(false); setMedicalModalError(null); }} disabled={medicalModalSaving}>{t('common.cancel')}</Button>
+            <Button variant="secondary" onClick={() => { setMedicalFormOpen(false); setMedicalModalError(null); setEditingMedical({}); }} disabled={medicalModalSaving}>{t('common.cancel')}</Button>
             <Button loading={medicalModalSaving} onClick={async () => {
               if (!employeeId) return;
               if (!editingMedical.startDate) {
@@ -728,6 +729,7 @@ export function EmployeeDetail() {
                 setMedicals(med);
                 setMedicalFormOpen(false);
                 setMedicalModalError(null);
+                setEditingMedical({});
               } catch (err: unknown) {
                 setMedicalModalError(translateApiError(err, t, t('employees.errorSave')));
               } finally {

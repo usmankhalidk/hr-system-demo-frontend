@@ -722,6 +722,8 @@ const it = {
     overlapHint: 'Questo dipendente ha già un turno che si sovrappone agli orari inseriti nella data selezionata. Controlla i turni esistenti e modifica gli orari oppure scegli una data diversa.',
     validation: {
       dateRequired:       'Seleziona una data per il turno.',
+      employeeRequired:   'Seleziona un dipendente.',
+      storeRequired:      'Seleziona un negozio.',
       endAfterStart:      "L'orario di fine deve essere successivo all'inizio.",
       breakBothRequired:     'Se si inserisce una pausa, entrambi gli orari sono obbligatori.',
       breakEndAfterStart:    "L'orario di fine pausa deve essere successivo all'inizio.",

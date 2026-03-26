@@ -36,6 +36,8 @@ interface FormState {
 }
 
 interface FormErrors {
+  user_id?: string;
+  store_id?: string;
   start_time?: string;
   end_time?: string;
   break_start?: string;
@@ -46,7 +48,10 @@ interface FormErrors {
 }
 
 function toMins(t: string): number {
-  const [h, m] = t.split(':').map(Number);
+  const parts = t.split(':');
+  if (parts.length < 2) return NaN;
+  const [h, m] = parts.map(Number);
+  if (isNaN(h) || isNaN(m)) return NaN;
   return h * 60 + m;
 }
 
@@ -82,6 +87,10 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
 
   function validateForm(f: FormState): FormErrors {
     const errs: FormErrors = {};
+
+    // Required employee and store
+    if (!f.user_id || isNaN(parseInt(f.user_id, 10))) errs.user_id = t('shifts.validation.employeeRequired');
+    if (!f.store_id || isNaN(parseInt(f.store_id, 10))) errs.store_id = t('shifts.validation.storeRequired');
 
     // Required time fields
     if (!f.start_time) errs.start_time = t('shifts.validation.startRequired');
