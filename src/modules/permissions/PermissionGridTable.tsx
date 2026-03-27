@@ -5,6 +5,9 @@ import { Spinner } from '../../components/ui/Spinner';
 import { Toggle } from '../../components/ui/Toggle';
 import { MANAGED_ROLE_KEYS, ROLE_COLORS, ManagedRoleKey, isRoleEligibleForModule } from './permissionCatalog';
 
+// store_terminal is a valid role but doesn't need to be managed in the permissions UI
+const GRID_ROLE_KEYS = MANAGED_ROLE_KEYS.filter((r) => r !== 'store_terminal');
+
 export interface GridModuleDef {
   key: string;
   icon: React.ReactNode;
@@ -60,7 +63,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
             }}>
               {t('permissions.colModule')}
             </th>
-            {MANAGED_ROLE_KEYS.map((roleKey) => (
+            {GRID_ROLE_KEYS.map((roleKey) => (
               <th key={roleKey} style={{
                 padding: '16px 10px',
                 textAlign: 'center',
@@ -127,7 +130,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                     </span>
                   </div>
                 </td>
-                {MANAGED_ROLE_KEYS.map((roleKey) => {
+                {GRID_ROLE_KEYS.map((roleKey) => {
                   const cellKey = `${mod.key}:${roleKey}`;
                   const isSaving = !!saving[cellKey];
                   const isSaved = lastSaved === cellKey;
@@ -159,7 +162,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
           {/* Upcoming modules section header */}
           {upcomingModules.length > 0 && (
             <tr>
-              <td colSpan={MANAGED_ROLE_KEYS.length + 1} style={{
+              <td colSpan={GRID_ROLE_KEYS.length + 1} style={{
                 padding: '10px 20px 8px',
                 background: 'var(--surface-warm)',
               }}>
@@ -224,7 +227,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                     </div>
                   </div>
                 </td>
-                {MANAGED_ROLE_KEYS.map((roleKey) => (
+                {GRID_ROLE_KEYS.map((roleKey) => (
                   <td key={roleKey} style={{
                     padding: '12px 10px',
                     textAlign: 'center',
