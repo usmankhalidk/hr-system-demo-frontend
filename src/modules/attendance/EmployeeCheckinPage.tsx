@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useEffect, useState } from 'react';
+import { listMyAttendanceEvents, type AttendanceEvent } from '../../api/attendance';
+import { Spinner } from '../../components/ui/Spinner';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -8,13 +11,57 @@ const STEPS = [
   { icon: '✅', key: 'step4' },
 ];
 
+const EVENT_COLORS: Record<string, string> = {
+  checkin:     '#16a34a',
+  break_start: '#d97706',
+  break_end:   '#2563eb',
+  checkout:    '#dc2626',
+};
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+type Filter = '7' | '30';
+
 export default function EmployeeCheckinPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
 
+  const [filter, setFilter] = useState<Filter>('7');
+  const [events, setEvents] = useState<AttendanceEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const initials = user
     ? `${user.name?.[0] ?? ''}${user.surname ? user.surname[0] : ''}`.toUpperCase()
     : '';
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    const days = parseInt(filter, 10);
+    const dateFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    listMyAttendanceEvents({ dateFrom })
+      .then((res) => setEvents(res.events))
+      .catch(() => setError('Errore nel caricamento delle presenze'))
+      .finally(() => setLoading(false));
+  }, [filter]);
+
+  // Group events by date
+  const grouped: { date: string; items: AttendanceEvent[] }[] = [];
+  for (const ev of events) {
+    const date = new Date(ev.eventTime ?? (ev as any).event_time).toISOString().split('T')[0];
+    let group = grouped.find((g) => g.date === date);
+    if (!group) {
+      group = { date, items: [] };
+      grouped.push(group);
+    }
+    group.items.push(ev);
+  }
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -144,6 +191,126 @@ export default function EmployeeCheckinPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Attendance history */}
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-sm)',
+        padding: '20px 24px',
+      }}>
+        {/* Header + filter pills */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+            fontFamily: 'var(--font-display)',
+          }}>
+            {t('checkin.myHistory')}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['7', '30'] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 20,
+                  border: filter === f ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+                  background: filter === f ? 'var(--primary)' : 'var(--surface)',
+                  color: filter === f ? '#fff' : 'var(--text-secondary)',
+                  fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-display)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {t(f === '7' ? 'checkin.filterLast7' : 'checkin.filterLast30')}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+            <Spinner size="md" color="var(--accent)" />
+          </div>
+        )}
+
+        {error && !loading && (
+          <div style={{ color: 'var(--danger)', fontSize: 13, textAlign: 'center', padding: '12px 0' }}>
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && grouped.length === 0 && (
+          <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
+            {t('checkin.noHistory')}
+          </div>
+        )}
+
+        {!loading && !error && grouped.map(({ date, items }) => (
+          <div key={date} style={{ marginBottom: 16 }}>
+            {/* Date header */}
+            <div style={{
+              fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+              fontFamily: 'var(--font-display)',
+              marginBottom: 8,
+              paddingBottom: 4,
+              borderBottom: '1px solid var(--border-light)',
+            }}>
+              {formatDate(date)}
+            </div>
+
+            {/* Events for this day */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {items.map((ev) => {
+                const rawTime = (ev as any).event_time ?? ev.eventTime;
+                const rawType = (ev as any).event_type ?? ev.eventType;
+                const storeName = (ev as any).store_name ?? ev.storeName;
+                const color = EVENT_COLORS[rawType] ?? '#6b7280';
+                const labelKey = rawType === 'checkin' ? 'scan.checkin'
+                  : rawType === 'break_start' ? 'scan.breakStart'
+                  : rawType === 'break_end' ? 'scan.breakEnd'
+                  : 'scan.checkout';
+                return (
+                  <div key={ev.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    background: `${color}0d`,
+                    border: `1px solid ${color}28`,
+                  }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: color, flexShrink: 0,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700,
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-display)',
+                      }}>
+                        {t(labelKey)}
+                      </span>
+                      {storeName && (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
+                          {storeName}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>
+                      {formatTime(rawTime)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

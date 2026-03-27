@@ -892,6 +892,11 @@ const it = {
     step3: 'Tocca il pulsante corrispondente alla tua azione (Entrata, Pausa, Uscita)',
     step4: 'La presenza viene registrata e confermata a schermo',
     actionTypes: 'Azioni di presenza',
+    myHistory: 'Le mie presenze',
+    filterLast7: 'Ultimi 7 giorni',
+    filterLast30: 'Ultimi 30 giorni',
+    noHistory: 'Nessuna presenza trovata per questo periodo.',
+    historyStore: 'Negozio',
   },
 
   // ─── Pagina Scansione QR ──────────────────────────────────────────────────

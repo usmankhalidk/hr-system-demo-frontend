@@ -81,3 +81,12 @@ export async function listAttendanceEvents(
   const { data } = await client.get('/attendance', { params });
   return data.data as AttendanceListResponse;
 }
+
+/** List the current employee's own attendance events (employee role only). */
+export async function listMyAttendanceEvents(params?: {
+  dateFrom?: string;
+  dateTo?: string;
+}): Promise<AttendanceListResponse> {
+  const { data } = await client.get('/attendance/my', { params });
+  return data.data as AttendanceListResponse;
+}

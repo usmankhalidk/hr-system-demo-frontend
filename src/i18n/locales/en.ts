@@ -891,6 +891,11 @@ const en = {
     step3: 'Tap the action button that matches what you are doing (Check-In, Break, Check-Out)',
     step4: 'Your attendance is recorded and confirmed on screen',
     actionTypes: 'Attendance actions',
+    myHistory: 'My Attendance History',
+    filterLast7: 'Last 7 days',
+    filterLast30: 'Last 30 days',
+    noHistory: 'No attendance records found for this period.',
+    historyStore: 'Store',
   },
 
   // ─── QR Scan Landing Page ─────────────────────────────────────────────────
