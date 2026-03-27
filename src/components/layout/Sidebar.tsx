@@ -172,7 +172,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.messaggi',  path: '/hr-chat',           icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.turni',     path: '/turni',             icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.checkin',   path: '/presenze/checkin',  icon: <IconQr />, permissionKey: 'presenze' },
-      { labelKey: 'nav.permessi',  path: '/permessi',          icon: <IconUmbrella />, permissionKey: 'permessi' },
     ],
     store_terminal: [],
   };
