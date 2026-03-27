@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import ToastContainer from './components/ui/ToastContainer';
@@ -24,6 +25,27 @@ import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
 import ScanPage from './modules/attendance/ScanPage';
 import HRChatPage from './modules/messages/HRChatPage';
 
+// Refresh permissions whenever the user navigates to a new route.
+// This ensures that permission changes made by an admin are always picked up
+// without the user needing to manually reload or wait for the 5-minute interval.
+function PermissionsRefresher() {
+  const { user, refreshPermissions } = useAuth();
+  const location = useLocation();
+  const prevPath = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    // Only refresh when the path actually changes (not on initial render, which
+    // is already covered by the session-restore logic in AuthContext).
+    if (prevPath.current !== null && prevPath.current !== location.pathname) {
+      void refreshPermissions();
+    }
+    prevPath.current = location.pathname;
+  }, [location.pathname, user?.id]);
+
+  return null;
+}
+
 // Terminal role gets a bare full-screen view — no header or sidebar
 function HomeRoute() {
   const { user } = useAuth();
@@ -37,6 +59,8 @@ function AppRoutes() {
   const { user } = useAuth();
 
   return (
+    <>
+    <PermissionsRefresher />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
@@ -141,6 +165,7 @@ function AppRoutes() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 
