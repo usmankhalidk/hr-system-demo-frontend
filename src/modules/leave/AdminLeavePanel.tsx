@@ -7,6 +7,7 @@ import {
   rejectLeaveRequest,
   createLeaveOnBehalf,
   deleteLeaveRequest,
+  downloadCertificate,
   getLeaveBalance,
   setLeaveBalance,
   LeaveRequest,
@@ -530,6 +531,21 @@ export default function AdminLeavePanel() {
       })
     : requests;
 
+  // ── Download certificate ────────────────────────────────────────────────────
+  async function handleDownloadCertificate(req: LeaveRequest) {
+    try {
+      const blob = await downloadCertificate(req.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = req.medicalCertificateName ?? 'certificato-medico';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showFlash(t('leave.certificate_download_error'));
+    }
+  }
+
   // ── Approve ────────────────────────────────────────────────────────────────
   async function handleApprove(req: LeaveRequest) {
     try {
@@ -868,6 +884,19 @@ export default function AdminLeavePanel() {
                             {/* Actions */}
                             <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'flex', gap: 6 }}>
+                                {req.medicalCertificateName && (
+                                  <button
+                                    onClick={() => handleDownloadCertificate(req)}
+                                    style={{
+                                      padding: '4px 10px', borderRadius: 6,
+                                      border: '1px solid rgba(3,105,161,0.25)',
+                                      background: 'rgba(3,105,161,0.08)',
+                                      color: '#0369a1', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                    }}
+                                  >
+                                    {t('leave.certificate_btn')}
+                                  </button>
+                                )}
                                 {canAct && (
                                   <>
                                     <button
