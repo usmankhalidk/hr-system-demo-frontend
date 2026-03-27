@@ -10,6 +10,7 @@ export interface CompanyGrid {
   presenze: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   negozi: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   dipendenti: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  messaggi: { hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
 }
 
 export interface CompanyPermissions {
@@ -25,7 +26,7 @@ export async function getCompaniesPermissions(): Promise<{ companies: CompanyPer
 
 export interface SystemPermissionUpdate {
   role: 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal';
-  module: 'turni' | 'permessi' | 'presenze' | 'negozi' | 'dipendenti';
+  module: 'turni' | 'permessi' | 'presenze' | 'negozi' | 'dipendenti' | 'messaggi';
   enabled: boolean;
 }
 

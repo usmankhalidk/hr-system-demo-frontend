@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Users, Clock, CalendarCheck, CalendarOff, Store, CheckCircle2,
+  Users, Clock, CalendarCheck, CalendarOff, Store, CheckCircle2, MessageSquare,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -16,7 +16,7 @@ import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
 import GroupRoleVisibilityPanel from './GroupRoleVisibilityPanel';
 
-type SystemModuleKey = 'turni' | 'permessi' | 'presenze' | 'negozi' | 'dipendenti';
+type SystemModuleKey = 'turni' | 'permessi' | 'presenze' | 'negozi' | 'dipendenti' | 'messaggi';
 
 const SYSTEM_MODULES: { key: SystemModuleKey; icon: React.ReactNode }[] = [
   { key: 'turni',       icon: <Clock size={15} /> },
@@ -24,6 +24,7 @@ const SYSTEM_MODULES: { key: SystemModuleKey; icon: React.ReactNode }[] = [
   { key: 'presenze',    icon: <CalendarCheck size={15} /> },
   { key: 'negozi',      icon: <Store size={15} /> },
   { key: 'dipendenti',  icon: <Users size={15} /> },
+  { key: 'messaggi',    icon: <MessageSquare size={15} /> },
 ];
 
 const MANAGED_ROLES = ['hr', 'area_manager', 'store_manager', 'employee', 'store_terminal'] as const;

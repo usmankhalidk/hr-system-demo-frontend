@@ -45,13 +45,13 @@ function AppRoutes() {
       } />
 
       <Route path="/dipendenti" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="dipendenti">
           <Layout title={t('nav.employees')}><EmployeeList /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/dipendenti/:id" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="dipendenti">
           <Layout title={t('employees.colName')}><EmployeeDetail /></Layout>
         </ProtectedRoute>
       } />
@@ -75,7 +75,7 @@ function AppRoutes() {
       } />
 
       <Route path="/impostazioni" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="impostazioni">
           <Layout title={t('settings.title')}><SettingsPage /></Layout>
         </ProtectedRoute>
       } />
@@ -87,50 +87,50 @@ function AppRoutes() {
       } />
 
       <Route path="/hr-chat" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="messaggi">
           <Layout title={t('nav.messaggi')}><HRChatPage /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/turni" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="turni">
           <Layout title={t('nav.turni')}><ShiftsPage /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/presenze" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="presenze">
           <Layout title={t('nav.presenze')}><AttendanceLogsPage /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/qr" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="presenze">
           <Layout title={t('nav.qr')}><QRPage /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/terminale" element={
-        <ProtectedRoute roles={['store_terminal']}>
+        <ProtectedRoute roles={['store_terminal']} permissionKey="presenze">
           <TerminalPage />
         </ProtectedRoute>
       } />
 
       <Route path="/presenze/checkin" element={
-        <ProtectedRoute roles={['employee']}>
+        <ProtectedRoute roles={['employee']} permissionKey="presenze">
           <Layout title={t('checkin.title')}><EmployeeCheckinPage /></Layout>
         </ProtectedRoute>
       } />
 
       {/* QR scan landing page — opened by scanning the store terminal QR code */}
       <Route path="/presenze/scan" element={
-        <ProtectedRoute roles={['employee']}>
+        <ProtectedRoute roles={['employee']} permissionKey="presenze">
           <ScanPage />
         </ProtectedRoute>
       } />
 
       <Route path="/permessi" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="permessi">
           <Layout title={t('nav.permessi')}><LeavePage /></Layout>
         </ProtectedRoute>
       } />

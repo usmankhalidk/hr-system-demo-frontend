@@ -126,6 +126,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions(perms);
   };
 
+  // Re-fetch permissions when the window regains focus (picks up admin changes to roles)
+  // and every 5 minutes as a fallback for long-running sessions.
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => { getMyPermissions().then(setPermissions).catch(() => {}); };
+    window.addEventListener('focus', refresh);
+    const timer = setInterval(refresh, 5 * 60 * 1000);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      clearInterval(timer);
+    };
+  }, [user?.id]);
+
   const refreshUser = async () => {
     const userData = await apiClient.get('/auth/me').then((r) => r.data.data as User);
     setUser(userData);
