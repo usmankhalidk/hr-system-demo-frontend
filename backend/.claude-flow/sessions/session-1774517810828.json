@@ -1,0 +1,23 @@
+{
+  "id": "session-1774517810828",
+  "startedAt": "2026-03-26T09:36:50.828Z",
+  "cwd": "/Users/user/hr-system-tech-demo/backend",
+  "context": {
+    "lastMatchedPatterns": [
+      "mem-MEMORY-identity",
+      "mem-project_technical_state----",
+      "mem-project-context-free-trial-logic",
+      "mem-MEMORY-key-files",
+      "mem-project-context-what-s-already-built"
+    ]
+  },
+  "metrics": {
+    "edits": 8,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "updatedAt": "2026-03-26T10:01:11.702Z",
+  "endedAt": "2026-03-26T10:01:49.126Z",
+  "duration": 1498301
+}

@@ -1,0 +1,23 @@
+{
+  "id": "session-1774351967967",
+  "startedAt": "2026-03-24T11:32:47.967Z",
+  "cwd": "/Users/user/hr-system-tech-demo/backend",
+  "context": {
+    "lastMatchedPatterns": [
+      "mem-project_scope-roles",
+      "mem-project-context-what-s-already-built",
+      "mem-project_scope-milestones---payment",
+      "mem-project_deployment-demo-accounts--password--passw",
+      "mem-MEMORY-learnworlds-sso--session-7-"
+    ]
+  },
+  "metrics": {
+    "edits": 27,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "updatedAt": "2026-03-25T10:41:07.536Z",
+  "endedAt": "2026-03-26T09:35:37.496Z",
+  "duration": 165769531
+}
