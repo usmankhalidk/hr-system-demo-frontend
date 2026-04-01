@@ -17,6 +17,7 @@ import PermissionsPanel from './modules/permissions/PermissionsPanel';
 import ProfilePage from './modules/profile/ProfilePage';
 import ShiftsPage from './modules/shifts/ShiftsPage';
 import AttendanceLogsPage from './modules/attendance/AttendanceLogsPage';
+import AnomaliesPage from './modules/attendance/AnomaliesPage';
 import QRPage from './modules/attendance/QRPage';
 import TerminalPage from './modules/attendance/TerminalPage';
 import LeavePage from './modules/leave/LeavePage';
@@ -129,6 +130,12 @@ function AppRoutes() {
       <Route path="/presenze" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="presenze">
           <Layout title={t('nav.presenze')}><AttendanceLogsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/anomalie" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="anomalie">
+          <Layout title={t('nav.anomalies', 'Anomalies')}><AnomaliesPage /></Layout>
         </ProtectedRoute>
       } />
 

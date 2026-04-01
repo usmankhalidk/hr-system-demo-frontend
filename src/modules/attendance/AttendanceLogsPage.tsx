@@ -10,7 +10,6 @@ import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
 import { WeekPicker } from '../../components/ui/WeekPicker';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import AnomalyList from './AnomalyList';
 
 // Convert ISO week 'YYYY-WNN' → { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } (Mon–Sun)
 function isoWeekToDateRange(isoWeek: string): { from: string; to: string } | null {
@@ -202,7 +201,6 @@ export default function AttendanceLogsPage() {
   const [dateFrom, setDateFrom]   = useState(weekAgo);
   const [dateTo, setDateTo]       = useState(today);
   const [eventType, setEventType] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'events' | 'anomalies'>('events');
   const [filterSearch, setFilterSearch] = useState('');
   const [filterStoreId, setFilterStoreId] = useState<string>('');
   const [filterUserId, setFilterUserId] = useState<string>('');
@@ -487,33 +485,6 @@ export default function AttendanceLogsPage() {
           width: isMobile ? '100%' : undefined,
           flexWrap: isMobile ? 'wrap' : undefined,
         }}>
-          {/* Tabs */}
-          <div style={{
-            display: 'flex', gap: 2,
-            background: 'var(--background)', border: '1.5px solid var(--border)',
-            borderRadius: 8, padding: 2, flexShrink: 0,
-          }}>
-            {([
-              { key: 'events' as const,    label: t('attendance.tab_events') },
-              { key: 'anomalies' as const, label: t('attendance.tab_anomalies') },
-            ]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                style={{
-                  padding: '5px 12px', borderRadius: 6,
-                  background: activeTab === key ? 'var(--primary)' : 'transparent',
-                  color: activeTab === key ? '#fff' : 'var(--text-secondary)',
-                  border: 'none', cursor: 'pointer',
-                  fontSize: isMobile ? 11 : 12, fontWeight: 600,
-                  transition: 'background 0.15s, color 0.15s', whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           {/* Loading indicator (inline on mobile) */}
           {loading && isMobile && (
             <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -650,42 +621,40 @@ export default function AttendanceLogsPage() {
           </div>
         </div>
 
-        {/* Event type pills (events tab only) */}
-        {activeTab === 'events' && (
-          <div style={{
-            display: 'flex', gap: 6, alignItems: 'center',
-            flexWrap: isMobile ? undefined : 'wrap',
-            overflowX: isMobile ? 'auto' : undefined,
-            width: isMobile ? '100%' : undefined,
-            paddingBottom: isMobile ? 2 : 0,
-          }}>
-            {!isMobile && <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />}
-            {eventTypeOptions.map(({ value, labelKey }) => {
-              const meta   = value ? EVENT_META[value] : null;
-              const active = eventType === value;
-              return (
-                <button
-                  key={value}
-                  className="att-type-btn"
-                  onClick={() => setEventType(value)}
-                  style={{
-                    padding: '5px 11px', borderRadius: 20, flexShrink: 0,
-                    border: `1.5px solid ${active ? (meta?.dot ?? 'var(--accent)') : 'var(--border)'}`,
-                    background: active ? (meta ? meta.bg : 'var(--accent-light)') : 'transparent',
-                    color: active ? (meta?.color ?? 'var(--accent)') : 'var(--text-secondary)',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    transition: 'all 0.15s', letterSpacing: 0.3,
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    outline: 'none', whiteSpace: 'nowrap',
-                  }}
-                >
-                  {meta && <span style={{ fontSize: 11 }}>{meta.icon}</span>}
-                  {t(labelKey)}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Event type pills */}
+        <div style={{
+          display: 'flex', gap: 6, alignItems: 'center',
+          flexWrap: isMobile ? undefined : 'wrap',
+          overflowX: isMobile ? 'auto' : undefined,
+          width: isMobile ? '100%' : undefined,
+          paddingBottom: isMobile ? 2 : 0,
+        }}>
+          {!isMobile && <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />}
+          {eventTypeOptions.map(({ value, labelKey }) => {
+            const meta   = value ? EVENT_META[value] : null;
+            const active = eventType === value;
+            return (
+              <button
+                key={value}
+                className="att-type-btn"
+                onClick={() => setEventType(value)}
+                style={{
+                  padding: '5px 11px', borderRadius: 20, flexShrink: 0,
+                  border: `1.5px solid ${active ? (meta?.dot ?? 'var(--accent)') : 'var(--border)'}`,
+                  background: active ? (meta ? meta.bg : 'var(--accent-light)') : 'transparent',
+                  color: active ? (meta?.color ?? 'var(--accent)') : 'var(--text-secondary)',
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  transition: 'all 0.15s', letterSpacing: 0.3,
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  outline: 'none', whiteSpace: 'nowrap',
+                }}
+              >
+                {meta && <span style={{ fontSize: 11 }}>{meta.icon}</span>}
+                {t(labelKey)}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Loading indicator desktop */}
         {loading && !isMobile && (
@@ -701,8 +670,7 @@ export default function AttendanceLogsPage() {
       </div>
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
-      {activeTab === 'events' ? (
-        <div style={{ padding: contentPad }}>
+      <div style={{ padding: contentPad }}>
 
           {error && (
             <div style={{
@@ -1027,15 +995,6 @@ export default function AttendanceLogsPage() {
             </div>
           )}
         </div>
-      ) : (
-        <AnomalyList
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          storeId={filterStoreId ? parseInt(filterStoreId, 10) : undefined}
-          userId={filterUserId ? parseInt(filterUserId, 10) : undefined}
-          search={filterSearch.trim() || undefined}
-        />
-      )}
 
       {/* ── Edit Event Modal ──────────────────────────────────────────────── */}
       {editingEvent && (

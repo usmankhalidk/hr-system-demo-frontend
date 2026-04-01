@@ -1,7 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare, FileText, Briefcase, BarChart2, Settings, Wallet,
+  Users,
+  Clock,
+  CalendarCheck,
+  CalendarOff,
+  Store,
+  MessageSquare,
+  FileText,
+  Briefcase,
+  BarChart2,
+  Settings,
+  Wallet,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -21,6 +32,7 @@ const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'dipendenti',  implemented: true, icon: <Users size={15} /> },
   { key: 'turni',       implemented: true, icon: <Clock size={15} /> },
   { key: 'presenze',    implemented: true, icon: <CalendarCheck size={15} /> },
+  { key: 'anomalie',    implemented: true, icon: <AlertTriangle size={15} /> },
   { key: 'permessi',    implemented: true, icon: <CalendarOff size={15} /> },
   { key: 'saldi',       implemented: true, icon: <Wallet size={15} /> },
   { key: 'negozi',      implemented: true, icon: <Store size={15} /> },
