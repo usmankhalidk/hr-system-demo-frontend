@@ -508,6 +508,7 @@ const it = {
       presenze: 'Presenze',
       anomalie: 'Anomalie',
       permessi: 'Ferie & Permessi',
+      saldi: 'Saldi',
       messaggi: 'Messaggi',
       documenti: 'Documenti',
       ats: 'ATS',

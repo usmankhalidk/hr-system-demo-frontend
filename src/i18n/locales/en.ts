@@ -508,6 +508,7 @@ const en = {
       presenze: 'Attendance',
       anomalie: 'Anomalies',
       permessi: 'Leave Management',
+      saldi: 'Balances',
       messaggi: 'Messages',
       documenti: 'Documents',
       ats: 'ATS',
