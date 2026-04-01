@@ -20,7 +20,14 @@ export function translateApiError(
   fallback?: string,
 ): string | null {
   const axiosErr = err as {
-    response?: { data?: { code?: string } };
+    response?: {
+      data?: {
+        code?: string;
+        message?: string;
+        errors?: Record<string, string[] | string>;
+      };
+      status?: number;
+    };
     code?: string;
     message?: string;
   };
@@ -41,7 +48,8 @@ export function translateApiError(
     return (t as (key: string) => string)('errors.NETWORK_ERROR');
   }
 
-  const code = axiosErr?.response?.data?.code;
+  const data = axiosErr?.response?.data;
+  const code = data?.code;
 
   if (code && typeof code === 'string') {
     // Use defaultValue so i18next returns the fallback when the key is absent
@@ -51,6 +59,18 @@ export function translateApiError(
       { defaultValue: '' },
     );
     if (translated) return translated;
+  }
+
+  if (data?.errors && typeof data.errors === 'object') {
+    const errorMessages = Object.entries(data.errors)
+      .flatMap(([_, msgs]) => (Array.isArray(msgs) ? msgs : [msgs]))
+      .filter(Boolean)
+      .join(' ');
+    if (errorMessages) return errorMessages;
+  }
+
+  if (data?.message && typeof data.message === 'string') {
+    return data.message;
   }
 
   return fallback ?? (t as (key: string) => string)('errors.DEFAULT');
