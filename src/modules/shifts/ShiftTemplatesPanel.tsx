@@ -28,6 +28,22 @@ interface TemplateData {
   shifts: ShiftPattern[];
 }
 
+// Per-day config used inside the create wizard
+interface DayConfig {
+  enabled: boolean;
+  startTime: string;
+  endTime: string;
+  breakStart: string;
+  breakEnd: string;
+}
+
+const DEFAULT_DAY_CONFIG: DayConfig = {
+  enabled: false,
+  startTime: '',
+  endTime: '',
+  breakStart: '',
+  breakEnd: '',
+};
 
 interface ShiftTemplatesPanelProps {
   open: boolean;
@@ -36,24 +52,23 @@ interface ShiftTemplatesPanelProps {
 
 export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPanelProps) {
   const { t } = useTranslation();
-  const DAY_LABELS = [
-    t('shifts.dayMon', 'Lun'),
-    t('shifts.dayTue', 'Mar'),
-    t('shifts.dayWed', 'Mer'),
-    t('shifts.dayThu', 'Gio'),
-    t('shifts.dayFri', 'Ven'),
-    t('shifts.daySat', 'Sab'),
-    t('shifts.daySun', 'Dom'),
+
+  const DAY_LABELS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const DAY_LABELS_SHORT = [
+    t('shifts.dayMon', 'Mon'),
+    t('shifts.dayTue', 'Tue'),
+    t('shifts.dayWed', 'Wed'),
+    t('shifts.dayThu', 'Thu'),
+    t('shifts.dayFri', 'Fri'),
+    t('shifts.daySat', 'Sat'),
+    t('shifts.daySun', 'Sun'),
   ];
+
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  // Create form
-  const [newName, setNewName] = useState('');
-  const [newStoreId, setNewStoreId] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Expanded template (to view shift patterns)
@@ -61,7 +76,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
   // Apply template state
   const [applyTemplate, setApplyTemplate] = useState<ShiftTemplate | null>(null);
-  const [applyWeek, setApplyWeek] = useState('');   // ISO week string YYYY-Wnn
+  const [applyWeek, setApplyWeek] = useState('');
   const [applyEmployeeIds, setApplyEmployeeIds] = useState<number[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [applying, setApplying] = useState(false);
@@ -69,10 +84,51 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   // Confirm delete
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
+  // ── Create Wizard ──────────────────────────────────────────────────────────
+  // Step 0 = wizard hidden; Step 1 = name/store; Step 2 = day customisation
+  const [wizardStep, setWizardStep] = useState<0 | 1 | 2>(0);
+  const [newName, setNewName] = useState('');
+  const [newStoreId, setNewStoreId] = useState('');
+  const [dayConfigs, setDayConfigs] = useState<DayConfig[]>(
+    Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY_CONFIG }))
+  );
+
+  function openWizard() {
+    setNewName('');
+    setNewStoreId('');
+    setDayConfigs(Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY_CONFIG })));
+    setError(null);
+    setWizardStep(1);
+  }
+
+  function closeWizard() {
+    setWizardStep(0);
+    setError(null);
+  }
+
+  function toggleDay(idx: number) {
+    setDayConfigs((prev) =>
+      prev.map((d, i) => (i === idx ? { ...d, enabled: !d.enabled } : d))
+    );
+  }
+
+  function updateDay(idx: number, field: keyof Omit<DayConfig, 'enabled'>, value: string) {
+    setDayConfigs((prev) =>
+      prev.map((d, i) => (i === idx ? { ...d, [field]: value } : d))
+    );
+  }
+
+  // Apply the same times to ALL enabled days at once
+  function applyGlobalToAll(field: keyof Omit<DayConfig, 'enabled'>, value: string) {
+    setDayConfigs((prev) =>
+      prev.map((d) => (d.enabled ? { ...d, [field]: value } : d))
+    );
+  }
+
   useEffect(() => {
     if (!open) return;
     fetchTemplates();
-    getStores().then(setStores).catch(() => {});
+    getStores().then(setStores).catch(() => { });
   }, [open]);
 
   async function fetchTemplates() {
@@ -91,7 +147,20 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!newName.trim() || !newStoreId) return;
+    const enabledDays = dayConfigs
+      .map((d, i) => ({ ...d, dayOfWeek: i }))
+      .filter((d) => d.enabled);
+
+    if (!newName.trim() || !newStoreId || enabledDays.length === 0) return;
+
+    // Validate each enabled day has start/end times
+    for (const d of enabledDays) {
+      if (!d.startTime || !d.endTime) {
+        setError(`Please set shift start and end time for ${DAY_LABELS_FULL[d.dayOfWeek]}.`);
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -99,17 +168,18 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
         store_id: parseInt(newStoreId, 10),
         name: newName.trim(),
         template_data: {
-          shifts: [
-            { dayOfWeek: 0, startTime: '09:00', endTime: '17:00', breakStart: '13:00', breakEnd: '14:00' },
-            { dayOfWeek: 1, startTime: '09:00', endTime: '17:00', breakStart: '13:00', breakEnd: '14:00' },
-            { dayOfWeek: 2, startTime: '09:00', endTime: '17:00', breakStart: '13:00', breakEnd: '14:00' },
-            { dayOfWeek: 3, startTime: '09:00', endTime: '17:00', breakStart: '13:00', breakEnd: '14:00' },
-            { dayOfWeek: 4, startTime: '09:00', endTime: '17:00', breakStart: '13:00', breakEnd: '14:00' },
-          ],
+          shifts: enabledDays.map((d) => ({
+            dayOfWeek: d.dayOfWeek,
+            startTime: d.startTime,
+            endTime: d.endTime,
+            breakStart: d.breakStart || undefined,
+            breakEnd: d.breakEnd || undefined,
+          })),
         },
       });
-      setNewName('');
-      setNewStoreId('');
+      setSuccessMsg(`✓ Template "${newName.trim()}" created successfully!`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+      closeWizard();
       await fetchTemplates();
     } catch (err: any) {
       const code: string | undefined = err?.response?.data?.code;
@@ -134,10 +204,10 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplyTemplate(tmpl);
     setApplyWeek('');
     setApplyEmployeeIds([]);
-    setEmployees([]); // clear stale list immediately before async fetch
+    setEmployees([]);
     getEmployees({ storeId: tmpl.storeId, status: 'active', limit: 100 })
       .then((d) => setEmployees(d.employees.sort((a, b) => a.surname.localeCompare(b.surname))))
-      .catch(() => {});
+      .catch(() => { });
   }
 
   function getIsoMondayFromWeek(isoWeek: string): Date | null {
@@ -145,7 +215,6 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     if (!m) return null;
     const year = parseInt(m[1]);
     const week = parseInt(m[2]);
-    // Jan 4 is always in week 1
     const jan4 = new Date(year, 0, 4);
     const jan4Day = jan4.getDay() || 7;
     const monday = new Date(jan4);
@@ -162,10 +231,11 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplying(true);
     setError(null);
     let created = 0;
-    let skipped = 0; // overlap conflicts
-    let failed  = 0; // unexpected errors
+    let skipped = 0;
+    let failed = 0;
 
-    const patterns: ShiftPattern[] = ((applyTemplate.templateData as unknown as TemplateData)?.shifts) ?? [];
+    const patterns: ShiftPattern[] =
+      ((applyTemplate.templateData as unknown as TemplateData)?.shifts) ?? [];
 
     for (const emp of applyEmployeeIds) {
       for (const pattern of patterns) {
@@ -201,7 +271,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplyTemplate(null);
     const parts: string[] = [`✓ ${t('shifts.shiftsCreated', { count: created })}`];
     if (skipped > 0) parts.push(t('shifts.shiftsSkipped', { count: skipped }));
-    if (failed  > 0) parts.push(t('shifts.shiftsFailed',  { count: failed }));
+    if (failed > 0) parts.push(t('shifts.shiftsFailed', { count: failed }));
     setSuccessMsg(parts.join(' · '));
     setTimeout(() => setSuccessMsg(null), 4000);
   }
@@ -213,6 +283,329 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   }
 
   if (!open) return null;
+
+  const enabledCount = dayConfigs.filter((d) => d.enabled).length;
+
+  // ── Wizard Step 2: Day customisation UI ───────────────────────────────────
+  const wizard = wizardStep > 0 ? (
+    <>
+      {/* Wizard backdrop */}
+      <div
+        onClick={closeWizard}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(13,33,55,0.55)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 1200,
+        }}
+      />
+
+      {/* Wizard panel */}
+      <div style={{
+        position: 'fixed',
+        top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: wizardStep === 2 ? 'min(700px, 96vw)' : 'min(460px, 96vw)',
+        maxHeight: '90vh',
+        background: 'var(--surface)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-lg)',
+        zIndex: 1201,
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+        transition: 'width 0.25s ease',
+      }}>
+        {/* Accent bar */}
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%)', flexShrink: 0 }} />
+
+        {/* Header */}
+        <div style={{
+          padding: '16px 22px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexShrink: 0,
+        }}>
+          <div>
+            {/* Step pills */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+              {[1, 2].map((s) => (
+                <div key={s} style={{
+                  width: 26, height: 6, borderRadius: 3,
+                  background: s <= wizardStep ? 'var(--accent)' : 'var(--border)',
+                  transition: 'background 0.2s',
+                }} />
+              ))}
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: 'var(--primary)' }}>
+              {wizardStep === 1
+                ? t('shifts.newTemplate', 'New Shift Template')
+                : t('shifts.customizeDays', 'Customize Days & Times')}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              {wizardStep === 1
+                ? t('shifts.wizardStep1Hint', 'Step 1 of 2 — Name & Location')
+                : t('shifts.wizardStep2Hint', 'Step 2 of 2 — Select days and configure shift times')}
+            </div>
+          </div>
+          <button onClick={closeWizard} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: '1.1rem', color: 'var(--text-muted)', padding: '4px 6px',
+          }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
+
+          {error && (
+            <div style={{
+              background: 'var(--danger-bg)', border: '1px solid var(--danger-border)',
+              borderRadius: 8, padding: '9px 12px', marginBottom: 14,
+              color: 'var(--danger)', fontSize: 13,
+            }}>{error}</div>
+          )}
+
+          {/* ── STEP 1 ── */}
+          {wizardStep === 1 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={labelStyle}>Template Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Morning Shift, Weekend Shift…"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Location / Store</label>
+                <select
+                  value={newStoreId}
+                  onChange={(e) => setNewStoreId(e.target.value)}
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                >
+                  <option value="">— Select a store —</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.companyName ? `${s.name} (${s.companyName})` : s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 2 ── */}
+          {wizardStep === 2 && (
+            <div>
+              {/* Day selector pills */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                  Select Working Days
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {DAY_LABELS_FULL.map((label, idx) => {
+                    const enabled = dayConfigs[idx].enabled;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => toggleDay(idx)}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: 20,
+                          border: `2px solid ${enabled ? 'var(--accent)' : 'var(--border)'}`,
+                          background: enabled ? 'var(--accent)' : 'var(--surface-warm)',
+                          color: enabled ? '#fff' : 'var(--text-secondary)',
+                          fontWeight: 600, fontSize: 13,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          fontFamily: 'var(--font-body)',
+                        }}
+                      >
+                        {DAY_LABELS_SHORT[idx]}
+                      </button>
+                    );
+                  })}
+                </div>
+                {enabledCount === 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                    ⚠ Please select at least one day.
+                  </div>
+                )}
+              </div>
+
+              {/* Global time applicator (only if ≥2 days selected) */}
+              {enabledCount >= 2 && (
+                <div style={{
+                  background: 'rgba(201,151,58,0.07)',
+                  border: '1px dashed var(--accent)',
+                  borderRadius: 10, padding: '12px 14px', marginBottom: 18,
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>
+                    ⚡ Apply to All Selected Days
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+                    {[
+                      { field: 'startTime' as const, label: 'Shift Start' },
+                      { field: 'endTime' as const, label: 'Shift End' },
+                      { field: 'breakStart' as const, label: 'Break Start' },
+                      { field: 'breakEnd' as const, label: 'Break End' },
+                    ].map(({ field, label }) => (
+                      <div key={field}>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+                        <input
+                          type="time"
+                          onChange={(e) => applyGlobalToAll(field, e.target.value)}
+                          style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Per-day rows */}
+              {enabledCount > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                    Configure Each Day
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {dayConfigs.map((d, idx) => {
+                      if (!d.enabled) return null;
+                      return (
+                        <div key={idx} style={{
+                          background: 'var(--surface-warm)',
+                          border: '1.5px solid var(--accent)',
+                          borderRadius: 10, padding: '12px 14px',
+                        }}>
+                          <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            marginBottom: 10,
+                          }}>
+                            <div style={{
+                              fontWeight: 700, fontSize: 13,
+                              color: 'var(--primary)', fontFamily: 'var(--font-display)',
+                            }}>
+                              {DAY_LABELS_FULL[idx]}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleDay(idx)}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'var(--text-muted)', fontSize: 12, padding: '2px 4px',
+                              }}
+                            >
+                              ✕ Remove
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+                            <div>
+                              <label style={smallLabelStyle}>Shift Start *</label>
+                              <input
+                                type="time"
+                                value={d.startTime}
+                                onChange={(e) => updateDay(idx, 'startTime', e.target.value)}
+                                required
+                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                              />
+                            </div>
+                            <div>
+                              <label style={smallLabelStyle}>Shift End *</label>
+                              <input
+                                type="time"
+                                value={d.endTime}
+                                onChange={(e) => updateDay(idx, 'endTime', e.target.value)}
+                                required
+                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                              />
+                            </div>
+                            <div>
+                              <label style={smallLabelStyle}>Break Start</label>
+                              <input
+                                type="time"
+                                value={d.breakStart}
+                                onChange={(e) => updateDay(idx, 'breakStart', e.target.value)}
+                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                              />
+                            </div>
+                            <div>
+                              <label style={smallLabelStyle}>Break End</label>
+                              <input
+                                type="time"
+                                value={d.breakEnd}
+                                onChange={(e) => updateDay(idx, 'breakEnd', e.target.value)}
+                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '14px 22px', borderTop: '1px solid var(--border)',
+          display: 'flex', gap: 8, justifyContent: 'flex-end', flexShrink: 0,
+        }}>
+          {wizardStep === 1 ? (
+            <>
+              <button type="button" className="btn btn-secondary" onClick={closeWizard}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!newName.trim() || !newStoreId}
+                onClick={() => { setError(null); setWizardStep(2); }}
+              >
+                Next →
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn btn-secondary" onClick={() => { setError(null); setWizardStep(1); }}>
+                ← Back
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saving || enabledCount === 0}
+                onClick={(e) => handleCreate(e as any)}
+              >
+                {saving ? 'Saving…' : `✓ Create Template (${enabledCount} day${enabledCount !== 1 ? 's' : ''})`}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  ) : null;
 
   const modal = (
     <>
@@ -245,7 +638,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
           }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: 'var(--primary)' }}>
-                {t('shifts.applyTemplate', 'Applica template')}
+                {t('shifts.applyTemplate', 'Apply Template')}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{applyTemplate.name}</div>
             </div>
@@ -255,63 +648,61 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
             }}>✕</button>
           </div>
 
-          {/* Form — flex column so footer stays fixed while content scrolls */}
           <form onSubmit={handleApply} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px' }}>
-            <div style={{ marginBottom: 16 }}>
-              <WeekPicker
-                label={t('shifts.applyWeek', 'Settimana di destinazione')}
-                value={applyWeek}
-                onChange={setApplyWeek}
-                placeholder={t('shifts.weekPickerHint', 'Scegli una settimana')}
-              />
-            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px' }}>
+              <div style={{ marginBottom: 16 }}>
+                <WeekPicker
+                  label={t('shifts.applyWeek', 'Target Week')}
+                  value={applyWeek}
+                  onChange={setApplyWeek}
+                  placeholder={t('shifts.weekPickerHint', 'Choose a week')}
+                />
+              </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                {t('shifts.applyEmployees', 'Dipendenti')}
-                {employees.length > 0 && (
-                  <button type="button" onClick={() =>
-                    setApplyEmployeeIds(applyEmployeeIds.length === employees.length ? [] : employees.map(e => e.id))
-                  } style={{
-                    marginLeft: 10, fontSize: 11, background: 'none', border: 'none',
-                    color: 'var(--accent)', cursor: 'pointer', fontWeight: 600,
-                  }}>
-                    {applyEmployeeIds.length === employees.length ? t('common.none', 'Nessuno') : t('common.all', 'Tutti')}
-                  </button>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  {t('shifts.applyEmployees', 'Employees')}
+                  {employees.length > 0 && (
+                    <button type="button" onClick={() =>
+                      setApplyEmployeeIds(applyEmployeeIds.length === employees.length ? [] : employees.map(e => e.id))
+                    } style={{
+                      marginLeft: 10, fontSize: 11, background: 'none', border: 'none',
+                      color: 'var(--accent)', cursor: 'pointer', fontWeight: 600,
+                    }}>
+                      {applyEmployeeIds.length === employees.length ? t('common.none', 'None') : t('common.all', 'All')}
+                    </button>
+                  )}
+                </div>
+                {employees.length === 0 ? (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Loading...')}</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {employees.map((emp) => (
+                      <label key={emp.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '7px 10px', borderRadius: 8,
+                        border: `1.5px solid ${applyEmployeeIds.includes(emp.id) ? 'var(--accent)' : 'var(--border)'}`,
+                        background: applyEmployeeIds.includes(emp.id) ? 'rgba(201,151,58,0.06)' : 'var(--surface-warm)',
+                        cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                        transition: 'all 0.12s',
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={applyEmployeeIds.includes(emp.id)}
+                          onChange={() => toggleEmployee(emp.id)}
+                          style={{ accentColor: 'var(--accent)', width: 14, height: 14 }}
+                        />
+                        {emp.surname} {emp.name}
+                      </label>
+                    ))}
+                  </div>
                 )}
               </div>
-              {employees.length === 0 ? (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Caricamento...')}</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {employees.map((emp) => (
-                    <label key={emp.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '7px 10px', borderRadius: 8,
-                      border: `1.5px solid ${applyEmployeeIds.includes(emp.id) ? 'var(--accent)' : 'var(--border)'}`,
-                      background: applyEmployeeIds.includes(emp.id) ? 'rgba(201,151,58,0.06)' : 'var(--surface-warm)',
-                      cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                      transition: 'all 0.12s',
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={applyEmployeeIds.includes(emp.id)}
-                        onChange={() => toggleEmployee(emp.id)}
-                        style={{ accentColor: 'var(--accent)', width: 14, height: 14 }}
-                      />
-                      {emp.surname} {emp.name}
-                    </label>
-                  ))}
-                </div>
-              )}
             </div>
-          </div>{/* end scrollable area */}
 
-            {/* Footer — inside the form so type="submit" works correctly */}
             <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, flexShrink: 0 }}>
               <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setApplyTemplate(null)}>
-                {t('common.cancel', 'Annulla')}
+                {t('common.cancel', 'Cancel')}
               </button>
               <button
                 type="submit"
@@ -319,7 +710,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                 style={{ flex: 1 }}
                 disabled={applying || !applyWeek || applyEmployeeIds.length === 0}
               >
-                {applying ? t('common.saving', '...') : t('shifts.applyBtn', 'Applica')}
+                {applying ? t('common.saving', '...') : t('shifts.applyBtn', 'Apply')}
               </button>
             </div>
           </form>
@@ -351,7 +742,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', color: 'var(--primary)', margin: 0 }}>
-            {t('shifts.templatesTitle', 'Template turni')}
+            {t('shifts.templatesTitle', 'Shift Templates')}
           </h2>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
@@ -368,7 +759,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
               color: '#1B6B3A', fontSize: 13,
             }}>{successMsg}</div>
           )}
-          {error && (
+          {error && !wizardStep && (
             <div style={{
               background: 'var(--danger-bg)', border: '1px solid var(--danger-border)',
               borderRadius: 8, padding: '9px 12px', marginBottom: 14,
@@ -376,56 +767,35 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
             }}>{error}</div>
           )}
 
-          {/* Create form */}
-          <div style={{
-            background: 'var(--surface-warm)', borderRadius: 10,
-            border: '1px solid var(--border)', padding: '14px 16px', marginBottom: 20,
-          }}>
-            <p style={{ fontWeight: 700, marginBottom: 10, fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--primary)' }}>
-              + {t('shifts.newTemplate', 'Nuovo template')}
-            </p>
-            <form onSubmit={handleCreate} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                placeholder={t('shifts.templateName', 'Nome template')}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                required
-                style={{ flex: 2, minWidth: 160, ...inputStyle }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
-              />
-              <select
-                value={newStoreId}
-                onChange={(e) => setNewStoreId(e.target.value)}
-                required
-                style={{ flex: 1, minWidth: 130, ...inputStyle, cursor: 'pointer' }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
-              >
-                <option value="">{t('shifts.selectStore', '— Negozio —')}</option>
-                {stores.map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.companyName ? `${s.name} (${s.companyName})` : s.name}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" className="btn btn-primary" disabled={saving} style={{ fontSize: 13 }}>
-                {saving ? '...' : t('common.create', 'Crea')}
-              </button>
-            </form>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, marginBottom: 0 }}>
-              {t('shifts.templateCreateHint', 'I nuovi template partono con orario 09:00–17:00 dal lunedì al venerdì.')}
-            </p>
+          {/* Create new template button */}
+          <div style={{ marginBottom: 20 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={openWizard}
+              style={{
+                width: '100%', padding: '12px',
+                fontSize: 14, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                borderRadius: 10,
+              }}
+            >
+              <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
+              {t('shifts.newTemplate', 'Create New Shift Template')}
+            </button>
           </div>
 
           {/* Template list */}
           {loading ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('common.loading', 'Caricamento...')}</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('common.loading', 'Loading...')}</p>
           ) : templates.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0', fontSize: 13 }}>
-              {t('shifts.noTemplates', 'Nessun template salvato')}
-            </p>
+            <div style={{
+              textAlign: 'center', padding: '32px 0',
+              color: 'var(--text-muted)', fontSize: 13,
+            }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+              <div>{t('shifts.noTemplates', 'No templates yet. Create your first shift template above!')}</div>
+            </div>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {templates.map((tmpl) => {
@@ -472,14 +842,14 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                         onClick={() => openApply(tmpl)}
                         style={{ fontSize: 11, padding: '4px 12px' }}
                       >
-                        {t('shifts.applyBtn', 'Applica')}
+                        {t('shifts.applyBtn', 'Apply')}
                       </button>
                       <button
                         className="btn btn-danger"
                         onClick={() => setConfirmDeleteId(tmpl.id)}
                         style={{ fontSize: 11, padding: '4px 10px' }}
                       >
-                        {t('common.delete', 'Elimina')}
+                        {t('common.delete', 'Delete')}
                       </button>
                     </div>
 
@@ -489,16 +859,16 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                           <thead>
                             <tr style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
-                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableDay', 'Giorno')}</th>
-                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableStart', 'Inizio')}</th>
-                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableEnd', 'Fine')}</th>
-                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableBreak', 'Pausa')}</th>
+                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableDay', 'Day')}</th>
+                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableStart', 'Start')}</th>
+                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableEnd', 'End')}</th>
+                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableBreak', 'Break')}</th>
                             </tr>
                           </thead>
                           <tbody>
                             {patterns.map((p, i) => (
                               <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                                <td style={{ padding: '5px 6px', fontWeight: 600 }}>{DAY_LABELS[p.dayOfWeek]}</td>
+                                <td style={{ padding: '5px 6px', fontWeight: 600 }}>{DAY_LABELS_FULL[p.dayOfWeek]}</td>
                                 <td style={{ padding: '5px 6px' }}>{p.startTime}</td>
                                 <td style={{ padding: '5px 6px' }}>{p.endTime}</td>
                                 <td style={{ padding: '5px 6px', color: 'var(--text-muted)' }}>
@@ -520,7 +890,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
         {/* Footer */}
         <div style={{ padding: '12px 22px', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
           <button className="btn btn-secondary" style={{ fontSize: 13 }} onClick={onClose}>
-            {t('common.close', 'Chiudi')}
+            {t('common.close', 'Close')}
           </button>
         </div>
       </div>
@@ -530,11 +900,12 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   return (
     <>
       {createPortal(modal, document.body)}
+      {wizardStep > 0 && createPortal(wizard, document.body)}
       <ConfirmModal
         open={confirmDeleteId !== null}
-        title={t('shifts.deleteTemplateTitle', 'Elimina template')}
-        message={t('shifts.deleteTemplateMsg', 'Sei sicuro di voler eliminare questo template? L\'operazione non può essere annullata.')}
-        confirmLabel={t('common.delete', 'Elimina')}
+        title={t('shifts.deleteTemplateTitle', 'Delete Template')}
+        message={t('shifts.deleteTemplateMsg', "Are you sure you want to delete this template? This action cannot be undone.")}
+        confirmLabel={t('common.delete', 'Delete')}
         variant="danger"
         onConfirm={() => confirmDeleteId !== null && doDelete(confirmDeleteId)}
         onCancel={() => setConfirmDeleteId(null)}
@@ -554,4 +925,20 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   transition: 'border-color 0.15s',
   boxSizing: 'border-box',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--text-secondary)',
+  marginBottom: 6,
+};
+
+const smallLabelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 10,
+  fontWeight: 600,
+  color: 'var(--text-muted)',
+  marginBottom: 4,
 };
