@@ -211,6 +211,8 @@ const it = {
       capacityTitle: 'Capienza Personale',
       capacityDesc: 'Organico attuale vs massimo',
       capacityBadge: 'capienza',
+      unplannedTitle: 'Turni Settimanali Non Pianificati',
+      unplannedMessage: 'Non hai pianificato i turni per la settimana {{week}}.',
     },
     employee: {
       title: 'Il Mio Profilo',

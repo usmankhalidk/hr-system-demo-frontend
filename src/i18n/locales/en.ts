@@ -211,6 +211,8 @@ const en = {
       capacityTitle: 'Staff Capacity',
       capacityDesc: 'Current headcount vs maximum',
       capacityBadge: 'capacity',
+      unplannedTitle: 'Weekly Schedule Not Planned',
+      unplannedMessage: 'You have not planned the shifts for week {{week}}.',
     },
     employee: {
       title: 'My Profile',
