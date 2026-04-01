@@ -61,16 +61,20 @@ export function translateApiError(
     if (translated) return translated;
   }
 
-  if (data?.errors && typeof data.errors === 'object') {
-    const errorMessages = Object.entries(data.errors)
-      .flatMap(([_, msgs]) => (Array.isArray(msgs) ? msgs : [msgs]))
-      .filter(Boolean)
-      .join(' ');
-    if (errorMessages) return errorMessages;
-  }
+  const status = axiosErr?.response?.status;
 
-  if (data?.message && typeof data.message === 'string') {
-    return data.message;
+  if (status === 422) {
+    if (data?.errors && typeof data.errors === 'object') {
+      const errorMessages = Object.entries(data.errors)
+        .flatMap(([_, msgs]) => (Array.isArray(msgs) ? msgs : [msgs]))
+        .filter(Boolean)
+        .join(' ');
+      if (errorMessages) return errorMessages;
+    }
+
+    if (data?.message && typeof data.message === 'string') {
+      return data.message;
+    }
   }
 
   return fallback ?? (t as (key: string) => string)('errors.DEFAULT');
