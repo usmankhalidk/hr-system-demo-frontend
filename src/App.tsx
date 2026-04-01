@@ -103,7 +103,7 @@ function AppRoutes() {
       } />
 
       <Route path="/impostazioni" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager']} permissionKey="impostazioni">
+        <ProtectedRoute roles={['admin']} permissionKey="impostazioni">
           <Layout title={t('settings.title')}><SettingsPage /></Layout>
         </ProtectedRoute>
       } />

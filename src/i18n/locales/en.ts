@@ -506,6 +506,7 @@ const en = {
       turni: 'Shifts',
       presenze: 'Attendance',
       permessi: 'Leave Management',
+      saldi: 'Balances',
       messaggi: 'Messages',
       documenti: 'Documents',
       ats: 'ATS',

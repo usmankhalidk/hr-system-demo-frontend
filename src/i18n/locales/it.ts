@@ -506,6 +506,7 @@ const it = {
       turni: 'Turni',
       presenze: 'Presenze',
       permessi: 'Ferie & Permessi',
+      saldi: 'Saldi',
       messaggi: 'Messaggi',
       documenti: 'Documenti',
       ats: 'ATS',

@@ -143,7 +143,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield /> },
-      { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     area_manager: [
       { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
@@ -155,7 +154,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield /> },
-      { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     store_manager: [
       { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
@@ -164,7 +162,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     employee: [
       { labelKey: 'nav.dashboard', path: '/',                  icon: <IconDashboard /> },
