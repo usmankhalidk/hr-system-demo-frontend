@@ -445,7 +445,7 @@ type PanelTab = 'requests' | 'balances';
 
 export default function AdminLeavePanel() {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
 
   const isAdmin = user?.role === 'admin';
   const effectiveApproverRole = user?.role === 'admin' ? 'hr' : user?.role;
@@ -718,7 +718,7 @@ export default function AdminLeavePanel() {
         background: 'var(--surface)',
         padding: '0 32px',
       }}>
-        {(['requests', 'balances'] as PanelTab[]).map((tab) => (
+        {((['requests', 'balances'] as PanelTab[]).filter(t => t === 'requests' || permissions?.saldi || user?.isSuperAdmin)).map((tab) => (
           <button
             key={tab}
             onClick={() => setPanelTab(tab)}
