@@ -86,3 +86,49 @@ describe('Sidebar permissions visibility', () => {
     expect(container.querySelector('a[href="/negozi"]')).toBeInTheDocument();
   });
 });
+
+describe('Sidebar — anomalie route removed', () => {
+  beforeEach(() => {
+    mockUseAuth.mockReset();
+  });
+
+  it('does not render an anomalie nav link for admin', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, name: 'Admin', surname: 'User', role: 'admin', companyId: 1, isSuperAdmin: false },
+      permissions: { impostazioni: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
+      logout: vi.fn(),
+    });
+    const { container } = renderSidebar();
+    expect(container.querySelector('a[href="/anomalie"]')).not.toBeInTheDocument();
+  });
+
+  it('does not render an anomalie nav link for hr', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 2, name: 'HR', surname: 'User', role: 'hr', companyId: 1, isSuperAdmin: false },
+      permissions: { impostazioni: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
+      logout: vi.fn(),
+    });
+    const { container } = renderSidebar();
+    expect(container.querySelector('a[href="/anomalie"]')).not.toBeInTheDocument();
+  });
+
+  it('does not render an anomalie nav link for area_manager', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 3, name: 'Area', surname: 'Manager', role: 'area_manager', companyId: 1, isSuperAdmin: false },
+      permissions: { impostazioni: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
+      logout: vi.fn(),
+    });
+    const { container } = renderSidebar();
+    expect(container.querySelector('a[href="/anomalie"]')).not.toBeInTheDocument();
+  });
+
+  it('does not render an anomalie nav link for store_manager', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 4, name: 'Store', surname: 'Manager', role: 'store_manager', companyId: 1, isSuperAdmin: false },
+      permissions: { impostazioni: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
+      logout: vi.fn(),
+    });
+    const { container } = renderSidebar();
+    expect(container.querySelector('a[href="/anomalie"]')).not.toBeInTheDocument();
+  });
+});
