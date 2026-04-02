@@ -514,6 +514,7 @@ const it = {
       report: 'Report',
       impostazioni: 'Impostazioni',
       negozi: 'Negozi',
+      gestione_accessi: 'Gestione Accessi',
     },
   },
   // ─── Settings ─────────────────────────────────────────────────────────────

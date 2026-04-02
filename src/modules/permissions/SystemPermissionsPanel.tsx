@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare, FileText, Briefcase, BarChart2, Settings, AlertTriangle,
+  Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare, FileText, Briefcase, BarChart2, Settings, AlertTriangle, Shield,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -26,6 +26,7 @@ const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'negozi',      implemented: true, icon: <Store size={15} /> },
   { key: 'messaggi',    implemented: true, icon: <MessageSquare size={15} /> },
   { key: 'impostazioni',implemented: true, icon: <Settings size={15} /> },
+  { key: 'gestione_accessi', implemented: true, icon: <Shield size={15} /> },
   { key: 'documenti',   implemented: false, icon: <FileText size={15} /> },
   { key: 'ats',         implemented: false, icon: <Briefcase size={15} /> },
   { key: 'report',      implemented: false, icon: <BarChart2 size={15} /> },
@@ -34,18 +35,22 @@ const SYSTEM_MODULES: GridModuleDef[] = [
 type LocalGrid = Record<SystemModuleKey, Record<ManagedRoleKey, boolean>>;
 type SavingMap = Record<string, boolean>;
 
+const snakeToCamel = (s: string) => s.replace(/_([a-z0-9])/g, (_, l) => l.toUpperCase());
+
 function buildLocalGrid(grid: CompanyPermissions['grid']): LocalGrid {
   const result: any = {};
   for (const modDef of SYSTEM_MODULES) {
     if (!modDef.implemented) continue;
     const mod = modDef.key as SystemModuleKey;
+    const camelMod = snakeToCamel(mod) as SystemModuleKey; // 'gestione_accessi' → 'gestioneAccessi'
+    const g = (grid as any)[camelMod] ?? (grid as any)[mod]; // fallback to snake_case just in case
     result[mod] = {
-      admin:          isRoleEligibleForModule('admin', mod) ? (grid[mod]?.admin ?? false) : false,
-      hr:             isRoleEligibleForModule('hr', mod) ? (grid[mod]?.hr ?? false) : false,
-      area_manager:   isRoleEligibleForModule('area_manager', mod) ? (grid[mod]?.areaManager ?? false) : false,
-      store_manager:  isRoleEligibleForModule('store_manager', mod) ? (grid[mod]?.storeManager ?? false) : false,
-      employee:       isRoleEligibleForModule('employee', mod) ? (grid[mod]?.employee ?? false) : false,
-      store_terminal: isRoleEligibleForModule('store_terminal', mod) ? (grid[mod]?.storeTerminal ?? false) : false,
+      admin:          isRoleEligibleForModule('admin', mod) ? (g?.admin ?? false) : false,
+      hr:             isRoleEligibleForModule('hr', mod) ? (g?.hr ?? false) : false,
+      area_manager:   isRoleEligibleForModule('area_manager', mod) ? (g?.areaManager ?? false) : false,
+      store_manager:  isRoleEligibleForModule('store_manager', mod) ? (g?.storeManager ?? false) : false,
+      employee:       isRoleEligibleForModule('employee', mod) ? (g?.employee ?? false) : false,
+      store_terminal: isRoleEligibleForModule('store_terminal', mod) ? (g?.storeTerminal ?? false) : false,
     };
   }
   return result;

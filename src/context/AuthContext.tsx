@@ -42,6 +42,13 @@ interface EffectivePermissionsResponse {
   modules: Record<string, boolean>;
 }
 
+// Axios camelizes all response keys, so module names like 'gestione_accessi'
+// arrive as 'gestioneAccessi'. We must convert them back to snake_case so they
+// match the keys used in Sidebar, ProtectedRoute, and permissionCatalog.
+function camelToSnake(s: string): string {
+  return s.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
+}
+
 export function resolveStoredToken(localToken: string | null, sessionToken: string | null): string | null {
   if (!localToken && !sessionToken) return null;
   if (localToken && !sessionToken) return localToken;
@@ -92,7 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const mapEffectiveToPermissionMap = (effective: EffectivePermissionsResponse): PermissionMap => {
     const mapped: PermissionMap = {};
     for (const [mod, isEnabled] of Object.entries(effective.modules ?? {})) {
-      mapped[mod] = isEnabled === true;
+      // Convert camelCase key back to snake_case (Axios auto-camelizes response keys)
+      mapped[camelToSnake(mod)] = isEnabled === true;
     }
     return mapped;
   };
