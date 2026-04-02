@@ -555,7 +555,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
             }}>
                <div>
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: '#fff' }}>
-                    {t('leave.balance_import')}
+                    {t('leave.balance_import_title')}
                   </div>
                </div>
                <button onClick={handleImportClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
@@ -615,23 +615,23 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                       <thead>
                         <tr style={{ background: 'var(--bg)' }}>
-                          {['Colonna', 'Obbligatorio', 'Formato'].map((h) => (
+                          {[t('leave.table_column'), t('leave.table_required'), t('leave.table_format')].map((h) => (
                             <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {[
-                          { col: 'Matricola', req: true,  fmt: 'Codice dipendente es. EMP-123456' },
-                          { col: 'Anno',      req: true,  fmt: 'Anno es. 2026' },
-                          { col: 'Totale Ferie', req: true, fmt: 'Numero (ore o giorni)' },
-                          { col: 'Totale Malattia', req: true, fmt: 'Numero (ore o giorni)' },
+                          { col: t('leave.col_matricola'),       req: true, fmt: t('leave.col_matricola_fmt') },
+                          { col: t('leave.col_year'),             req: true, fmt: t('leave.col_year_fmt') },
+                          { col: t('leave.col_total_holidays'),   req: true, fmt: t('leave.col_days_fmt') },
+                          { col: t('leave.col_total_sick'),       req: true, fmt: t('leave.col_days_fmt') },
                         ].map((row, i) => (
                           <tr key={row.col} style={{ background: i % 2 === 0 ? 'var(--surface)' : 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
                             <td style={{ padding: '5px 10px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{row.col}</td>
                             <td style={{ padding: '5px 10px', textAlign: 'center' }}>
                               {row.req
-                                ? <span style={{ color: '#dc2626', fontWeight: 700 }}>Sì</span>
+                                ? <span style={{ color: '#dc2626', fontWeight: 700 }}>{t('leave.yes')}</span>
                                 : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                             </td>
                             <td style={{ padding: '5px 10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{row.fmt}</td>
