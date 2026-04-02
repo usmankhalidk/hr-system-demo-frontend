@@ -152,14 +152,14 @@ function AppRoutes() {
       } />
 
       <Route path="/presenze/checkin" element={
-        <ProtectedRoute roles={['employee']} permissionKey="presenze">
+        <ProtectedRoute roles={['employee']}>
           <Layout title={t('checkin.title')}><EmployeeCheckinPage /></Layout>
         </ProtectedRoute>
       } />
 
       {/* QR scan landing page — opened by scanning the store terminal QR code */}
       <Route path="/presenze/scan" element={
-        <ProtectedRoute roles={['employee']} permissionKey="presenze">
+        <ProtectedRoute roles={['employee']}>
           <ScanPage />
         </ProtectedRoute>
       } />
