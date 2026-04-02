@@ -331,30 +331,34 @@ export function StoreList() {
     {
       key: 'actions',
       label: t('stores.colActions'),
-      render: (row) => (
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {isAdmin && (
-            <Button size="sm" variant="secondary" onClick={() => openEditForm(row)}>
-              {t('common.edit')}
-            </Button>
-          )}
-          {isAdmin && row.isActive && (
-            <Button size="sm" variant="danger" onClick={() => openConfirm(row)}>
-              {t('common.deactivate')}
-            </Button>
-          )}
-          {isAdmin && !row.isActive && (
-            <Button size="sm" variant="success" onClick={() => openActivate(row)}>
-              {t('common.activate')}
-            </Button>
-          )}
-          {isAdmin && !row.isActive && (
-            <Button size="sm" variant="danger" onClick={() => openDelete(row)}>
-              {t('common.delete')}
-            </Button>
-          )}
-        </div>
-      ),
+      render: (row) => {
+        const isAdmin = user?.role === 'admin';
+        const isManager = user?.role === 'store_manager';
+        return (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {(isAdmin || isManager) && (
+              <Button size="sm" variant="secondary" onClick={() => openEditForm(row)}>
+                {t('common.edit')}
+              </Button>
+            )}
+            {isAdmin && row.isActive && (
+              <Button size="sm" variant="danger" onClick={() => openConfirm(row)}>
+                {t('common.deactivate')}
+              </Button>
+            )}
+            {isAdmin && !row.isActive && (
+              <Button size="sm" variant="success" onClick={() => openActivate(row)}>
+                {t('common.activate')}
+              </Button>
+            )}
+            {isAdmin && !row.isActive && (
+              <Button size="sm" variant="danger" onClick={() => openDelete(row)}>
+                {t('common.delete')}
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 

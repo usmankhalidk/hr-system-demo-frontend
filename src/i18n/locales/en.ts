@@ -517,6 +517,7 @@ const en = {
       report: 'Reports',
       impostazioni: 'Settings',
       negozi: 'Stores',
+      gestione_accessi: 'Permissions Management',
     },
   },
   // ─── Settings ─────────────────────────────────────────────────────────────

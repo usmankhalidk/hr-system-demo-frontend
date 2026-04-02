@@ -22,6 +22,7 @@ export const MODULE_KEYS = [
   'documenti',
   'ats',
   'report',
+  'gestione_accessi',
 ] as const;
 
 export type ModuleKey = typeof MODULE_KEYS[number];
@@ -45,6 +46,7 @@ export const SYSTEM_MODULE_KEYS = [
   'negozi',
   'messaggi',
   'impostazioni',
+  'gestione_accessi',
 ] as const;
 
 export type SystemModuleKey = typeof SYSTEM_MODULE_KEYS[number];
@@ -62,6 +64,7 @@ export const MODULE_ROLE_ELIGIBILITY: Record<ModuleKey, readonly ManagedRoleKey[
   documenti: [],
   ats: [],
   report: [],
+  gestione_accessi: ['admin', 'hr', 'area_manager'],
 };
 
 export function isRoleEligibleForModule(role: ManagedRoleKey, moduleKey: ModuleKey): boolean {

@@ -96,7 +96,7 @@ function AppRoutes() {
       } />
 
       <Route path="/impostazioni/permessi" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']} permissionKey="gestione_accessi">
           <Layout title={t('nav.permissions')}>
             {user?.isSuperAdmin ? <SystemPermissionsPanel /> : <PermissionsPanel />}
           </Layout>
