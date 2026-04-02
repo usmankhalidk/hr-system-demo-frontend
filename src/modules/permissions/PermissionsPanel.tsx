@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare,
-  FileText, Briefcase, BarChart2, Settings, AlertTriangle, Shield,
   FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield,
 } from 'lucide-react';
 import { getPermissions, updatePermissions } from '../../api/permissions';
