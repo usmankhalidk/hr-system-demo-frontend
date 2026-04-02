@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -10,6 +11,10 @@ import {
   downloadCertificate,
   getLeaveBalance,
   setLeaveBalance,
+  exportLeaveBalances,
+  importLeaveBalances,
+  downloadLeaveBalanceTemplate,
+  ImportResult,
   LeaveRequest,
   LeaveStatus,
   LeaveBalance,
@@ -82,6 +87,14 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   const [balances, setBalances] = useState<Record<number, LeaveBalance[]>>({});
   const [year, setYear] = useState(currentYear);
   const [loading, setLoading] = useState(false);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [dragover, setDragover] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit modal state
   const [editTarget, setEditTarget] = useState<{
@@ -160,6 +173,59 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
       origSick: sick?.totalDays,
     });
     setEditError(null);
+  }
+
+  async function handleExport() {
+    try {
+      const blob = await exportLeaveBalances(year);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `saldi_${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showFlash(t('common.error'));
+    }
+  }
+
+  async function handleDownloadTemplate() {
+    try {
+      const blob = await downloadLeaveBalanceTemplate();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'saldi_template.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showFlash(t('common.error'));
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importLeaveBalances(importFile);
+      setImportResult(result);
+      if (result.imported > 0 && employees.length > 0) {
+        loadBalances(employees, year);
+      }
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.error ?? err?.message ?? t('common.error');
+      setImportResult({ imported: 0, skipped: 0, failed: 0, errors: [errMsg], total: 0 });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function handleImportClose() {
+    setImportOpen(false);
+    setImportFile(null);
+    setImportResult(null);
+    setDragover(false);
   }
 
   async function handleSave() {
@@ -264,6 +330,40 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
         {loading && (
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
         )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => handleExport()}
+            style={{
+              padding: '8px 14px', borderRadius: 8,
+              border: '1.5px solid var(--border)', background: 'var(--background)',
+              color: 'var(--text-secondary)', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export
+          </button>
+          <button
+            onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}
+            style={{
+              padding: '8px 14px', borderRadius: 8,
+              border: 'none', background: 'var(--accent)',
+              color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Import
+          </button>
+        </div>
       </div>
 
       {/* Employee fetch error */}
@@ -435,6 +535,215 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
           </div>
         </div>
       )}
+
+      {/* Import Modal */}
+      {importOpen && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(13,33,55,0.55)', backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }} onClick={handleImportClose}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
+            width: '100%', maxWidth: 440, overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
+            border: '1px solid var(--border)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{
+              background: 'var(--primary)', padding: '18px 24px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+               <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: '#fff' }}>
+                    {t('leave.balance_import')}
+                  </div>
+               </div>
+               <button onClick={handleImportClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+            
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                <button
+                    onClick={handleDownloadTemplate}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 7,
+                      padding: '7px 14px', borderRadius: 7,
+                      border: '1.5px solid var(--accent)', background: 'var(--accent-light)',
+                      color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    {t('leave.balance_download_template')}
+                </button>
+                <button
+                  onClick={() => setGuideOpen((o) => !o)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '7px 14px', borderRadius: 7,
+                    border: '1.5px solid var(--border)', background: 'transparent',
+                    color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                  {guideOpen ? t('leave.balance_import_guide_hide') : t('leave.balance_import_guide_toggle')}
+                </button>
+              </div>
+
+              {/* Format guide (collapsible) */}
+              {guideOpen && (
+                <div style={{
+                  marginBottom: 16, borderRadius: 8,
+                  border: '1px solid var(--border)', overflow: 'hidden',
+                  fontSize: 12,
+                }}>
+                  <div style={{
+                    background: 'var(--primary)', color: '#fff',
+                    padding: '8px 14px', fontWeight: 700, fontSize: 11,
+                    letterSpacing: '1px', textTransform: 'uppercase',
+                  }}>
+                    {t('leave.balance_import_guide_title')}
+                  </div>
+                  <div className="table-scroll" style={{ borderRadius: 0 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg)' }}>
+                          {['Colonna', 'Obbligatorio', 'Formato'].map((h) => (
+                            <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { col: 'Matricola', req: true,  fmt: 'Codice dipendente es. EMP-123456' },
+                          { col: 'Anno',      req: true,  fmt: 'Anno es. 2026' },
+                          { col: 'Totale Ferie', req: true, fmt: 'Numero (ore o giorni)' },
+                          { col: 'Totale Malattia', req: true, fmt: 'Numero (ore o giorni)' },
+                        ].map((row, i) => (
+                          <tr key={row.col} style={{ background: i % 2 === 0 ? 'var(--surface)' : 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '5px 10px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{row.col}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'center' }}>
+                              {row.req
+                                ? <span style={{ color: '#dc2626', fontWeight: 700 }}>Sì</span>
+                                : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '5px 10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{row.fmt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ padding: '8px 14px', background: 'rgba(201,151,58,0.06)', borderTop: '1px solid var(--border)', fontSize: 11, color: '#b45309', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <span>💡</span>
+                    <span>{t('leave.balance_import_template_hint')}</span>
+                  </div>
+                </div>
+              )}
+
+              {!importResult && (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragover(true); }}
+                  onDragLeave={() => setDragover(false)}
+                  onDrop={(e) => {
+                    e.preventDefault(); setDragover(false);
+                    try {
+                      const f = e.dataTransfer.files[0];
+                      if (f) setImportFile(f);
+                    } catch {
+                      // ignore empty
+                    }
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    border: `2px dashed ${dragover ? 'var(--accent)' : importFile ? '#22c55e' : 'var(--border)'}`,
+                    borderRadius: 10, padding: '28px 20px', textAlign: 'center',
+                    background: dragover ? 'var(--accent-light)' : importFile ? 'rgba(34,197,94,0.05)' : 'var(--bg)',
+                    cursor: 'pointer', transition: 'all 0.18s', marginBottom: 16,
+                  }}
+                >
+                  <input
+                    ref={fileInputRef} type="file" accept=".xlsx,.csv"
+                    style={{ display: 'none' }}
+                    onChange={(e) => { try { const f = e.target.files?.[0]; if (f) setImportFile(f); } catch {} }}
+                  />
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>{importFile ? '✓' : '📂'}</div>
+                  {importFile ? (
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: '#16a34a' }}>{importFile.name}</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-secondary)' }}>
+                        {t('leave.balance_import_drop')}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                        {t('leave.balance_import_browse')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, opacity: 0.7 }}>
+                        {t('leave.balance_import_accept')}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {importResult && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{
+                    padding: '14px 16px', borderRadius: 8, marginBottom: 12,
+                    background: importResult.failed > 0 || importResult.errors.length > 0
+                      ? 'rgba(245,158,11,0.08)' : 'rgba(34,197,94,0.08)',
+                    border: `1px solid ${importResult.failed > 0 ? 'rgba(245,158,11,0.3)' : 'rgba(34,197,94,0.25)'}`,
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
+                      {t('leave.balance_import_success')}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {t('leave.balance_import_result', {
+                        imported: importResult.imported,
+                        skipped: importResult.skipped,
+                        failed: importResult.failed,
+                      })}
+                    </div>
+                  </div>
+                  {importResult.errors.length > 0 && (
+                    <div style={{ maxHeight: 140, overflowY: 'auto', fontSize: 12, color: '#b45309' }}>
+                      {importResult.errors.map((e, i) => (
+                         <div key={i} style={{ padding: '3px 0', borderBottom: '1px solid var(--border)' }}>{e}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ padding: '12px 24px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={handleImportClose} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                {t('common.close')}
+              </button>
+              {!importResult && (
+                <button
+                  onClick={handleImport}
+                  disabled={!importFile || importing}
+                  style={{
+                    padding: '9px 16px', borderRadius: 8, border: 'none', background: 'var(--accent)',
+                    color: '#fff', fontWeight: 600, fontSize: 13, cursor: importing || !importFile ? 'not-allowed' : 'pointer', opacity: importing || !importFile ? 0.7 : 1,
+                  }}
+                >
+                  {importing ? t('common.saving') : t('common.save')}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      , document.body)}
     </div>
   );
 }
