@@ -175,7 +175,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     employee: [
       { labelKey: 'nav.dashboard', path: '/',                  icon: <IconDashboard /> },
