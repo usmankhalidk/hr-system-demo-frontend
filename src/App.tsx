@@ -25,12 +25,9 @@ import SettingsPage from './modules/settings/SettingsPage';
 import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
 import ScanPage from './modules/attendance/ScanPage';
 import HRChatPage from './modules/messages/HRChatPage';
-<<<<<<< HEAD
 import TransfersPage from './modules/transfers/TransfersPage';
-=======
 import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
 import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
->>>>>>> 6945131e925a66527e972c96c698f27f084421d7
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
