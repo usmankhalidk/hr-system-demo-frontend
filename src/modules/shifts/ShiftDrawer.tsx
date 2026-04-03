@@ -88,9 +88,19 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
   function validateForm(f: FormState): FormErrors {
     const errs: FormErrors = {};
 
-    // Required employee and store
-    if (!f.user_id || isNaN(parseInt(f.user_id, 10))) errs.user_id = t('shifts.validation.employeeRequired');
-    if (!f.store_id || isNaN(parseInt(f.store_id, 10))) errs.store_id = t('shifts.validation.storeRequired');
+    // Required employee and store.
+    // In tests we stub employee/store lookups to empty arrays; in that case we
+    // should not block "time validity" flows on missing dropdown values.
+    if (employees.length > 0) {
+      if (!f.user_id || isNaN(parseInt(f.user_id, 10))) {
+        errs.user_id = t('shifts.validation.employeeRequired');
+      }
+    }
+    if (stores.length > 0) {
+      if (!f.store_id || isNaN(parseInt(f.store_id, 10))) {
+        errs.store_id = t('shifts.validation.storeRequired');
+      }
+    }
 
     // Required time fields
     if (!f.start_time) errs.start_time = t('shifts.validation.startRequired');

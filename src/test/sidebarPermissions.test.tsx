@@ -39,7 +39,7 @@ describe('Sidebar permissions visibility', () => {
   it('shows permissions item for admin with impostazioni enabled', async () => {
     mockUseAuth.mockReturnValue({
       user: { id: 1, name: 'Admin', surname: 'User', role: 'admin', companyId: 1, isSuperAdmin: false },
-      permissions: { impostazioni: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
+      permissions: { impostazioni: true, gestione_accessi: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
       logout: vi.fn(),
     });
     const { container } = renderSidebar();
@@ -49,7 +49,7 @@ describe('Sidebar permissions visibility', () => {
   it('shows permissions item for hr when impostazioni enabled', () => {
     mockUseAuth.mockReturnValue({
       user: { id: 2, name: 'HR', surname: 'User', role: 'hr', companyId: 1, isSuperAdmin: false },
-      permissions: { impostazioni: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
+      permissions: { impostazioni: true, gestione_accessi: true, dipendenti: true, turni: true, presenze: true, permessi: true, negozi: true, messaggi: true },
       logout: vi.fn(),
     });
     const { container } = renderSidebar();
