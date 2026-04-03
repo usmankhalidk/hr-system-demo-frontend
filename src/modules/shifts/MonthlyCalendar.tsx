@@ -2,12 +2,14 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
+import { TransferAssignment } from '../../api/transfers';
 
 interface MonthlyCalendarProps {
   shifts: Shift[];
   currentDate: Date;
   onDayClick: (date: string) => void;
   leaveBlocks?: LeaveBlock[];
+  transferBlocks?: TransferAssignment[];
 }
 
 function formatDate(date: Date): string {
@@ -17,7 +19,7 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leaveBlocks }: MonthlyCalendarProps) {
+export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leaveBlocks, transferBlocks }: MonthlyCalendarProps) {
   const { t } = useTranslation();
   const DAY_LABELS = [
     t('shifts.dayMon', 'Lun'),
@@ -54,6 +56,27 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
         const arr = leaveMap.get(key) ?? [];
         arr.push({ type: lb.leaveType, pending: isPending });
         leaveMap.set(key, arr);
+      }
+    }
+  }
+
+  interface TransferDayCounts {
+    active: number;
+    completed: number;
+    cancelled: number;
+  }
+  const transferMap = new Map<string, TransferDayCounts>();
+  if (transferBlocks) {
+    for (const tb of transferBlocks) {
+      const start = new Date(tb.startDate + 'T12:00:00');
+      const end = new Date(tb.endDate + 'T12:00:00');
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = formatDate(d);
+        const existing = transferMap.get(key) ?? { active: 0, completed: 0, cancelled: 0 };
+        if (tb.status === 'completed') existing.completed += 1;
+        else if (tb.status === 'cancelled') existing.cancelled += 1;
+        else existing.active += 1;
+        transferMap.set(key, existing);
       }
     }
   }
@@ -96,8 +119,11 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
           const dateStr = formatDate(date);
           const count = countMap.get(dateStr) ?? 0;
           const leaveDots = leaveMap.get(dateStr) ?? [];
+          const transferCounts = transferMap.get(dateStr) ?? { active: 0, completed: 0, cancelled: 0 };
+          const transferCount = transferCounts.active + transferCounts.completed + transferCounts.cancelled;
           const isToday = dateStr === today;
           const hasLeave = leaveDots.length > 0;
+          const hasTransfer = transferCount > 0;
 
           return (
             <div
@@ -111,7 +137,7 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
                 cursor: 'pointer',
                 background: isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)',
                 transition: 'background 0.15s',
-                boxShadow: (count > 0 || hasLeave) ? 'var(--shadow-xs)' : undefined,
+                boxShadow: (count > 0 || hasLeave || hasTransfer) ? 'var(--shadow-xs)' : undefined,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)')}
@@ -165,6 +191,43 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
                   {leaveDots.length > 4 && (
                     <span style={{ fontSize: 8, color: 'var(--text-muted)', fontWeight: 700, lineHeight: '8px' }}>
                       +{leaveDots.length - 4}
+                    </span>
+                  )}
+                </div>
+              )}
+              {hasTransfer && (
+                <div style={{ marginTop: hasLeave ? 4 : 2, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                  {transferCounts.active > 0 && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      padding: '1px 4px', borderRadius: 999,
+                      border: '1px solid rgba(15,118,110,0.32)',
+                      background: 'rgba(240,253,250,0.95)',
+                    }} title={t('transfers.status.active', 'active')}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0f766e', display: 'inline-block' }} />
+                      <span style={{ fontSize: 8, color: '#0f766e', fontWeight: 800 }}>{transferCounts.active}</span>
+                    </span>
+                  )}
+                  {transferCounts.completed > 0 && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      padding: '1px 4px', borderRadius: 999,
+                      border: '1px solid rgba(30,64,175,0.28)',
+                      background: 'rgba(239,246,255,0.95)',
+                    }} title={t('transfers.status.completed', 'completed')}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1e40af', display: 'inline-block' }} />
+                      <span style={{ fontSize: 8, color: '#1e40af', fontWeight: 800 }}>{transferCounts.completed}</span>
+                    </span>
+                  )}
+                  {transferCounts.cancelled > 0 && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      padding: '1px 4px', borderRadius: 999,
+                      border: '1px solid rgba(185,28,28,0.28)',
+                      background: 'rgba(254,242,242,0.95)',
+                    }} title={t('transfers.status.cancelled', 'cancelled')}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#b91c1c', display: 'inline-block' }} />
+                      <span style={{ fontSize: 8, color: '#b91c1c', fontWeight: 800 }}>{transferCounts.cancelled}</span>
                     </span>
                   )}
                 </div>

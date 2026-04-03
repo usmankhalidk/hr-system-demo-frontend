@@ -25,6 +25,7 @@ import SettingsPage from './modules/settings/SettingsPage';
 import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
 import ScanPage from './modules/attendance/ScanPage';
 import HRChatPage from './modules/messages/HRChatPage';
+import TransfersPage from './modules/transfers/TransfersPage';
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -124,6 +125,12 @@ function AppRoutes() {
       <Route path="/turni" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="turni">
           <Layout title={t('nav.turni')}><ShiftsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/trasferimenti" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="trasferimenti">
+          <Layout title={t('nav.trasferimenti', 'Trasferimenti')}><TransfersPage /></Layout>
         </ProtectedRoute>
       } />
 

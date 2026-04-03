@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { listShifts, Shift, copyWeek, exportShifts, importShifts, downloadImportTemplate, ImportResult, approveWeekForEmployee } from '../../api/shifts';
 import { getLeaveBlocks, LeaveBlock } from '../../api/leave';
+import { getTransferBlocks, TransferAssignment } from '../../api/transfers';
 import { getStores } from '../../api/stores';
 import { Store } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
@@ -13,7 +14,6 @@ import DayCalendar from './DayCalendar';
 import ShiftDrawer from './ShiftDrawer';
 import ShiftTemplatesPanel from './ShiftTemplatesPanel';
 import AffluencePanel from './AffluencePanel';
-import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -127,7 +127,6 @@ function IconUpload() {
 export default function ShiftsPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const { isMobile } = useBreakpoint();
 
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState<Date>(getWeekStart(new Date()));
@@ -153,6 +152,7 @@ export default function ShiftsPage() {
   const fileInputRef                          = useRef<HTMLInputElement>(null);
   const [affluenceOpen, setAffluenceOpen] = useState(false);
   const [leaveBlocks, setLeaveBlocks] = useState<LeaveBlock[]>([]);
+  const [transferBlocks, setTransferBlocks] = useState<TransferAssignment[]>([]);
   const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
 
   const canEdit = user ? MANAGEMENT_ROLES.includes(user.role) : false;
@@ -177,7 +177,7 @@ export default function ShiftsPage() {
       const data = await listShifts(params);
       setShifts(data.shifts);
 
-      // Fetch leave blocks for all views
+      // Fetch leave blocks + transfer blocks for all views
       try {
         let dateFrom: string;
         let dateTo: string;
@@ -191,10 +191,30 @@ export default function ShiftsPage() {
           dateFrom = formatDateDisplay(weekStart);
           dateTo   = formatDateDisplay(addDays(weekStart, 6));
         }
-        const blocks = await getLeaveBlocks(dateFrom, dateTo);
-        setLeaveBlocks(blocks);
+        const [leaveRes, transferRes] = await Promise.allSettled([
+          getLeaveBlocks(dateFrom, dateTo),
+          getTransferBlocks({
+            date_from: dateFrom,
+            date_to: dateTo,
+            status: 'all',
+            ...(storeFilter ? { store_id: storeFilter } : {}),
+          }),
+        ]);
+
+        if (leaveRes.status === 'fulfilled') {
+          setLeaveBlocks(leaveRes.value);
+        } else {
+          setLeaveBlocks([]);
+        }
+
+        if (transferRes.status === 'fulfilled') {
+          setTransferBlocks(transferRes.value.blocks ?? []);
+        } else {
+          setTransferBlocks([]);
+        }
       } catch {
         setLeaveBlocks([]);
+        setTransferBlocks([]);
       }
     } catch (err: any) {
       const code: string | undefined = err?.response?.data?.code;
@@ -360,7 +380,7 @@ export default function ShiftsPage() {
   const targetWeek = formatIsoWeek(addWeeks(currentDate, 1));
 
   return (
-    <div className="page-enter" style={{ padding: isMobile ? '16px' : '24px 32px', maxWidth: '100%', boxSizing: 'border-box' }}>
+    <div className="page-enter" style={{ maxWidth: 1200, margin: '0 auto' }}>
       {/* ── Page header ────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -637,6 +657,7 @@ export default function ShiftsPage() {
               onSlotClick={handleCellClick}
               canEdit={canEdit}
               leaveBlocks={leaveBlocks}
+              transferBlocks={transferBlocks}
             />
           ) : viewMode === 'week' ? (
             <WeeklyCalendar
@@ -646,6 +667,7 @@ export default function ShiftsPage() {
               onCellClick={handleCellClick}
               canEdit={canEdit}
               leaveBlocks={leaveBlocks}
+              transferBlocks={transferBlocks}
               canApproveWeek={canApproveWeek}
               onApproveWeekForUser={handleApproveWeekForUser}
               approvingUserId={approvingUserId}
@@ -655,6 +677,7 @@ export default function ShiftsPage() {
               shifts={shifts}
               currentDate={currentDate}
               leaveBlocks={leaveBlocks}
+              transferBlocks={transferBlocks}
               onDayClick={(date) => {
                 setCurrentDate(new Date(date + 'T12:00:00'));
                 setViewMode('day');

@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { Shift, CreateShiftPayload, createShift, updateShift, deleteShift } from '../../api/shifts';
-import { getEmployees } from '../../api/employees';
+import { getEmployees, type EmployeeListParams } from '../../api/employees';
 import { getStores } from '../../api/stores';
+import { getEmployeeTransferSchedule, type TransferAssignment } from '../../api/transfers';
 import { Employee, Store } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { DatePicker } from '../../components/ui/DatePicker';
@@ -55,6 +56,17 @@ function toMins(t: string): number {
   return h * 60 + m;
 }
 
+function normalizeShiftDateForForm(raw: string): string {
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw.split('T')[0];
+  const y = parsed.getFullYear();
+  const m = String(parsed.getMonth() + 1).padStart(2, '0');
+  const d = String(parsed.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 const EMPTY_FORM: FormState = {
   user_id: '',
   store_id: '',
@@ -84,6 +96,48 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [activeTransferForDate, setActiveTransferForDate] = useState<TransferAssignment | null>(null);
+  const [storeTouchedManually, setStoreTouchedManually] = useState(false);
+
+  const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
+  const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
+  const expectedStoreId = activeTransferForDate?.targetStoreId ?? selectedEmployee?.storeId ?? null;
+  const expectedStoreName = activeTransferForDate?.targetStoreName
+    ?? selectedEmployee?.storeName
+    ?? (selectedEmployee?.storeId ? stores.find((s) => s.id === selectedEmployee.storeId)?.name : null)
+    ?? null;
+  const storeSelectionMismatch = expectedStoreId != null && selectedStoreIdNum != null && selectedStoreIdNum !== expectedStoreId;
+
+  async function loadEmployeesByPages(baseParams: Omit<EmployeeListParams, 'page' | 'limit'>): Promise<Employee[]> {
+    const limit = 100;
+    let page = 1;
+    let pages = 1;
+    const all: Employee[] = [];
+
+    do {
+      const res = await getEmployees({ ...baseParams, limit, page });
+      all.push(...res.employees);
+      pages = Math.max(1, res.pages || 1);
+      page += 1;
+    } while (page <= pages);
+
+    const unique = Array.from(new Map(all.map((emp) => [emp.id, emp])).values());
+    return unique.sort((a, b) => a.surname.localeCompare(b.surname));
+  }
+
+  async function loadAllShiftEmployees(): Promise<Employee[]> {
+    const [shiftPlanningEmployees, allActiveEmployees] = await Promise.all([
+      loadEmployeesByPages({ status: 'active', forShiftPlanning: true }),
+      loadEmployeesByPages({ status: 'active' }),
+    ]);
+
+    const merged = new Map<number, Employee>();
+    for (const emp of [...shiftPlanningEmployees, ...allActiveEmployees]) {
+      merged.set(emp.id, emp);
+    }
+
+    return Array.from(merged.values()).sort((a, b) => a.surname.localeCompare(b.surname));
+  }
 
   function validateForm(f: FormState): FormErrors {
     const errs: FormErrors = {};
@@ -151,14 +205,20 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
 
   useEffect(() => {
     if (!open) return;
+    let mounted = true;
+
     // Load employees and stores for dropdowns
-    Promise.all([
-      getEmployees({ limit: 200, status: 'active', forShiftPlanning: true }),
-      getStores(),
-    ]).then(([empData, storeData]) => {
-      setEmployees(empData.employees.sort((a, b) => a.surname.localeCompare(b.surname)));
-      setStores(storeData);
-    }).catch(() => {});
+    Promise.all([loadAllShiftEmployees(), getStores()])
+      .then(([allEmployees, storeData]) => {
+        if (!mounted) return;
+        setEmployees(allEmployees);
+        setStores(storeData);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setEmployees([]);
+        setStores([]);
+      });
 
     if (shift) {
       // API returns HH:MM:SS — slice to HH:MM so TimePicker and backend both accept it
@@ -166,7 +226,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
       setForm({
         user_id: String(shift.userId),
         store_id: String(shift.storeId),
-        date: shift.date.split('T')[0],
+        date: normalizeShiftDateForForm(shift.date),
         start_time: t5(shift.startTime),
         end_time: t5(shift.endTime),
         break_type: shift.breakType ?? 'fixed',
@@ -189,14 +249,60 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     setError(null);
     setOverlapConflict(false);
     setFormErrors({});
+    setStoreTouchedManually(false);
+    setActiveTransferForDate(null);
+
+    return () => { mounted = false; };
   }, [open, shift, prefillDate, prefillUserId, user?.role]);
+
+  useEffect(() => {
+    if (!open || shift || !form.user_id || !form.date) {
+      setActiveTransferForDate(null);
+      return;
+    }
+
+    let mounted = true;
+    getEmployeeTransferSchedule(Number(form.user_id), { date_from: form.date, date_to: form.date })
+      .then((data) => {
+        if (!mounted) return;
+        const active = data.assignments.find(
+          (assignment) => assignment.status === 'active' && form.date >= assignment.startDate && form.date <= assignment.endDate,
+        ) ?? null;
+        setActiveTransferForDate(active);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setActiveTransferForDate(null);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [open, shift, form.user_id, form.date]);
+
+  useEffect(() => {
+    if (!open || shift || storeTouchedManually || !form.user_id) return;
+    if (expectedStoreId == null) return;
+    const expectedStore = String(expectedStoreId);
+    if (form.store_id === expectedStore) return;
+    setForm((prev) => ({ ...prev, store_id: expectedStore }));
+  }, [open, shift, storeTouchedManually, form.user_id, form.store_id, expectedStoreId]);
 
   function set(field: keyof FormState) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const value = e.target.type === 'checkbox'
         ? (e.target as HTMLInputElement).checked
         : e.target.value;
-      setForm((prev) => ({ ...prev, [field]: value }));
+      if (field === 'user_id') {
+        setStoreTouchedManually(false);
+        setActiveTransferForDate(null);
+        setForm((prev) => ({ ...prev, user_id: String(value), store_id: '' }));
+      } else if (field === 'store_id') {
+        setStoreTouchedManually(true);
+        setForm((prev) => ({ ...prev, store_id: String(value) }));
+      } else {
+        setForm((prev) => ({ ...prev, [field]: value }));
+      }
       if (field in formErrors) {
         setFormErrors((prev) => { const next = { ...prev }; delete next[field as keyof FormErrors]; return next; });
       }
@@ -396,6 +502,48 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
                 </option>
               ))}
             </select>
+            {form.user_id && expectedStoreId != null && expectedStoreName && !storeSelectionMismatch && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>
+                {activeTransferForDate
+                  ? t('shifts.storeGuidanceTransfer', {
+                      store: expectedStoreName,
+                      startDate: activeTransferForDate.startDate,
+                      endDate: activeTransferForDate.endDate,
+                      defaultValue: 'Default store from active transfer: {{store}} ({{startDate}} - {{endDate}}).',
+                    })
+                  : t('shifts.storeGuidanceHome', {
+                      store: expectedStoreName,
+                      defaultValue: 'Default home store: {{store}}.',
+                    })}
+              </div>
+            )}
+            {form.user_id && selectedEmployee && selectedEmployee.storeId == null && !activeTransferForDate && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>
+                {t('shifts.storeGuidanceNoHome', 'This employee has no home store assigned, you can select any store.')}
+              </div>
+            )}
+            {storeSelectionMismatch && expectedStoreName && (
+              <div style={{
+                marginTop: 6,
+                fontSize: 11,
+                color: '#b45309',
+                background: 'rgba(217,119,6,0.08)',
+                border: '1px solid rgba(217,119,6,0.26)',
+                borderRadius: 6,
+                padding: '6px 8px',
+                lineHeight: 1.45,
+              }}>
+                {activeTransferForDate
+                  ? t('shifts.storeGuidanceTransferMismatch', {
+                      store: expectedStoreName,
+                      defaultValue: 'For this date the employee is transferred to {{store}}. If you save on another store, the backend will reject the shift.',
+                    })
+                  : t('shifts.storeGuidanceHomeMismatch', {
+                      store: expectedStoreName,
+                      defaultValue: 'This employee belongs to {{store}}. If you save on another store, an active transfer is required.',
+                    })}
+              </div>
+            )}
           </div>
 
           {/* ─── Date ───────────────────────── */}
@@ -403,7 +551,10 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
             <DatePicker
               label={t('shifts.form.date')}
               value={form.date}
-              onChange={(v) => setForm((p) => ({ ...p, date: v }))}
+              onChange={(v) => {
+                setStoreTouchedManually(false);
+                setForm((p) => ({ ...p, date: v }));
+              }}
             />
           </div>
 

@@ -21,6 +21,7 @@ interface EmployeeFormProps {
   employeeId?: number;
   onSuccess: () => void;
   onCancel: () => void;
+  onCreated?: (employee: Employee) => void;
 }
 
 interface FormData {
@@ -105,7 +106,7 @@ function SectionDivider({ label }: { label: string }) {
   );
 }
 
-export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel }: EmployeeFormProps) {
+export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onCreated }: EmployeeFormProps) {
   const isEditMode = employeeId !== undefined;
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -385,7 +386,8 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel }: E
         if (formData.companyId) {
           (createPayload as Record<string, unknown>).companyId = parseInt(formData.companyId, 10);
         }
-        await createEmployee(createPayload);
+        const createdEmployee = await createEmployee(createPayload);
+        onCreated?.(createdEmployee);
         // Show credentials card instead of closing immediately
         setCreatedCredentials({ name: `${formData.name} ${formData.surname}`, email: formData.email, password: tempPassword });
       }

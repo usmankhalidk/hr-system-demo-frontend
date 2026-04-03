@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Palmtree, Thermometer, Store } from 'lucide-react';
+import { ArrowLeftRight, Palmtree, Thermometer, Store } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
+import { TransferAssignment } from '../../api/transfers';
 
 const STATUS_META: Record<string, {
   bg: string; color: string; dot: string;
@@ -54,6 +55,7 @@ interface WeeklyCalendarProps {
   onCellClick: (userId: number, date: string) => void;
   canEdit: boolean;
   leaveBlocks?: LeaveBlock[];
+  transferBlocks?: TransferAssignment[];
   /** Admin / HR / Area manager: show weekly approve control per row */
   canApproveWeek?: boolean;
   onApproveWeekForUser?: (userId: number) => void;
@@ -83,6 +85,44 @@ function todayStr(): string {
   return formatDate(new Date());
 }
 
+function transferVisualMeta(status: TransferAssignment['status']): {
+  bg: string;
+  border: string;
+  color: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeColor: string;
+} {
+  if (status === 'completed') {
+    return {
+      bg: 'rgba(30,64,175,0.1)',
+      border: 'rgba(30,64,175,0.28)',
+      color: '#1e40af',
+      badgeBg: 'rgba(239,246,255,0.95)',
+      badgeBorder: 'rgba(30,64,175,0.34)',
+      badgeColor: '#1e3a8a',
+    };
+  }
+  if (status === 'cancelled') {
+    return {
+      bg: 'rgba(239,68,68,0.08)',
+      border: 'rgba(185,28,28,0.25)',
+      color: '#b91c1c',
+      badgeBg: 'rgba(254,242,242,0.95)',
+      badgeBorder: 'rgba(185,28,28,0.32)',
+      badgeColor: '#991b1b',
+    };
+  }
+  return {
+    bg: 'rgba(13,148,136,0.1)',
+    border: 'rgba(15,118,110,0.25)',
+    color: '#115e59',
+    badgeBg: 'rgba(240,253,250,0.95)',
+    badgeBorder: 'rgba(15,118,110,0.32)',
+    badgeColor: '#0f766e',
+  };
+}
+
 function hoursForShiftTotal(shift: Shift): number {
   if (shift.status === 'cancelled') return 0;
   const v = shift.shiftHours;
@@ -98,6 +138,7 @@ export default function WeeklyCalendar({
   onCellClick,
   canEdit,
   leaveBlocks,
+  transferBlocks,
   canApproveWeek = false,
   onApproveWeekForUser,
   approvingUserId = null,
@@ -122,8 +163,27 @@ export default function WeeklyCalendar({
     ) ?? null;
   }
 
+  function getTransferForUserDate(userId: number, dateStr: string): TransferAssignment | null {
+    if (!transferBlocks) return null;
+    const priority: Record<TransferAssignment['status'], number> = {
+      active: 0,
+      completed: 1,
+      cancelled: 2,
+    };
+    return transferBlocks
+      .filter((tb) => tb.userId === userId && dateStr >= tb.startDate && dateStr <= tb.endDate)
+      .sort((a, b) => {
+        if (priority[a.status] !== priority[b.status]) {
+          return priority[a.status] - priority[b.status];
+        }
+        return b.id - a.id;
+      })[0] ?? null;
+  }
+
   // Build 7 day columns
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekStartStr = formatDate(weekStart);
+  const weekEndStr = formatDate(addDays(weekStart, 6));
 
   // Group shifts by user then by date
   const userMap = new Map<number, { name: string; surname: string; shifts: Map<string, Shift[]>; storeNames: Set<string> }>();
@@ -143,6 +203,25 @@ export default function WeeklyCalendar({
     entry.shifts.set(dateKey, [...existing, shift]);
     if (shift.storeName) {
       entry.storeNames.add(shift.storeName);
+    }
+  }
+
+  // Ensure transfer-only users are visible even when they have no shifts in this week.
+  if (transferBlocks) {
+    for (const tb of transferBlocks) {
+      if (tb.startDate > weekEndStr || tb.endDate < weekStartStr) continue;
+      if (!userMap.has(tb.userId)) {
+        userMap.set(tb.userId, {
+          name: tb.userName,
+          surname: tb.userSurname,
+          shifts: new Map(),
+          storeNames: new Set(),
+        });
+      }
+      const entry = userMap.get(tb.userId)!;
+      if (tb.originStoreName) {
+        entry.storeNames.add(tb.originStoreName);
+      }
     }
   }
 
@@ -219,36 +298,74 @@ export default function WeeklyCalendar({
                 onMouseLeave={() => setHoveredRow(null)}
               >
                 <td style={{ padding: '8px 12px', fontWeight: 500, borderRight: '1px solid var(--border)' }}>
-                  <div>{userData.surname} {userData.name}</div>
-                  {rowStoreNames.length > 0 && (
-                    <div style={{
-                      marginTop: 4,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '2px 7px',
-                      borderRadius: 999,
-                      background: 'rgba(13,33,55,0.06)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text-muted)',
-                      fontSize: '0.65rem',
-                      fontWeight: 600,
-                      lineHeight: 1.2,
-                    }}>
-                      <Store size={10} />
-                      <span>
-                        {rowStoreNames.length === 1
-                          ? rowStoreNames[0]
-                          : `${rowStoreNames[0]} +${rowStoreNames.length - 1}`}
-                      </span>
-                    </div>
-                  )}
+                  {(() => {
+                    const rowTransfers = (transferBlocks ?? [])
+                      .filter((tb) => tb.userId === userId && tb.startDate <= weekEndStr && tb.endDate >= weekStartStr)
+                      .sort((a, b) => b.id - a.id);
+                    const homeStoreName = rowTransfers[0]?.originStoreName ?? rowStoreNames[0] ?? null;
+                    const transferTargets = Array.from(new Map(
+                      rowTransfers.map((tb) => [`${tb.targetStoreName}-${tb.status}`, tb]),
+                    ).values());
+
+                    return (
+                      <>
+                        <div>{userData.surname} {userData.name}</div>
+                        {(homeStoreName || transferTargets.length > 0) && (
+                          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {homeStoreName && (
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '2px 7px',
+                                borderRadius: 999,
+                                background: 'rgba(13,33,55,0.06)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-muted)',
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                lineHeight: 1.2,
+                                width: 'fit-content',
+                              }}>
+                                <Store size={10} />
+                                <span>{homeStoreName}</span>
+                              </div>
+                            )}
+                            {transferTargets.map((tb) => {
+                              const vm = transferVisualMeta(tb.status);
+                              return (
+                                <div key={`${tb.id}-${tb.status}`} style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  width: 'fit-content',
+                                }}>
+                                  <ArrowLeftRight size={10} color={vm.color} />
+                                  <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    padding: '2px 7px', borderRadius: 999,
+                                    background: vm.bg,
+                                    border: `1px solid ${vm.border}`,
+                                    color: vm.color,
+                                    fontSize: '0.65rem', fontWeight: 700, lineHeight: 1.2,
+                                  }}>
+                                    {tb.targetStoreName}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </td>
                 {days.map((day, colIdx) => {
                   const dateStr = formatDate(day);
                   const dayShifts = userData.shifts.get(dateStr) ?? [];
                   const isToday = dateStr === todayStr();
                   const leave = getLeaveForUserDate(userId, dateStr);
+                  const transfer = getTransferForUserDate(userId, dateStr);
                   const lvVacation = leave?.leaveType === 'vacation';
                   const lvPending = leave ? leave.status !== 'hr_approved' : false;
                   return (
@@ -363,6 +480,52 @@ export default function WeeklyCalendar({
                             }}>{t('leave.pending_short')}</span>
                           )}
                         </div>
+                      )}
+
+                      {transfer && (
+                        (() => {
+                          const vm = transferVisualMeta(transfer.status);
+                          return (
+                        <div style={{
+                          marginTop: (dayShifts.length > 0 || leave) ? 3 : 0,
+                          borderRadius: 4,
+                          padding: '4px 7px 4px 8px',
+                          background: vm.bg,
+                          borderLeft: `3px solid ${vm.color}`,
+                          borderTop: `1px solid ${vm.border}`,
+                          borderRight: `1px solid ${vm.border}`,
+                          borderBottom: `1px solid ${vm.border}`,
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          minHeight: 22,
+                          pointerEvents: 'none',
+                        }}>
+                          <span style={{ lineHeight: 1, flexShrink: 0, display: 'flex' }}>
+                            <ArrowLeftRight size={11} strokeWidth={2.5} />
+                          </span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                            color: vm.color,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                          }}>
+                            {transfer.targetStoreName}
+                          </span>
+                          <span style={{
+                            fontSize: 8.5,
+                            fontWeight: 800,
+                            color: vm.badgeColor,
+                            background: vm.badgeBg,
+                            border: `1px solid ${vm.badgeBorder}`,
+                            borderRadius: 999,
+                            padding: '1px 5px',
+                            lineHeight: 1.35,
+                            flexShrink: 0,
+                            textTransform: 'uppercase',
+                          }}>
+                            {t(`transfers.status.${transfer.status}`, transfer.status)}
+                          </span>
+                        </div>
+                          );
+                        })()
                       )}
                     </td>
                   );
