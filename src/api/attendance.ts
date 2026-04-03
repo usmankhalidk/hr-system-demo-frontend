@@ -39,6 +39,9 @@ export interface CheckinPayload {
   eventType: EventType;
   uniqueId?: string;   // Employee unique text ID (preferred)
   userId?: number;     // Legacy numeric ID (fallback)
+  // Device binding: fingerprint of the employee's current device.
+  // Will be sent as device_fingerprint to the backend.
+  deviceFingerprint?: string;
   notes?: string;
 }
 
@@ -86,6 +89,7 @@ export async function listAttendanceEvents(
 export async function listMyAttendanceEvents(params?: {
   dateFrom?: string;
   dateTo?: string;
+  deviceFingerprint?: string;
 }): Promise<AttendanceListResponse> {
   const { data } = await client.get('/attendance/my', { params });
   return data.data as AttendanceListResponse;

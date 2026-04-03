@@ -66,8 +66,9 @@ describe('PermissionsPanel company scope', () => {
       expect(mockGetPermissions).toHaveBeenCalledWith(1);
     });
 
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: '2' } });
+    // The panel renders company "tabs" as buttons (not a <select> dropdown).
+    const betaButton = screen.getByRole('button', { name: 'Beta' });
+    fireEvent.click(betaButton);
 
     await waitFor(() => {
       expect(mockGetPermissions).toHaveBeenCalledWith(2);
