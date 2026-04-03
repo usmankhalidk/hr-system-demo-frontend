@@ -46,6 +46,7 @@ export function EmployeeList() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [showNewForm, setShowNewForm] = useState(false);
+  const [newFormInstance, setNewFormInstance] = useState(0);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -382,10 +383,13 @@ export function EmployeeList() {
         onPageChange={(p) => updateParam('page', String(p))}
       />
 
-      {showNewForm && (
+      {isAdminOrHr && (
         <EmployeeForm
+          key={`new-employee-form-${newFormInstance}`}
+          open={showNewForm}
           onSuccess={() => {
             setShowNewForm(false);
+            setNewFormInstance((prev) => prev + 1);
             showToast(t('employees.createdSuccess'), 'success');
             updateParam('page', '1');
           }}

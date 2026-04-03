@@ -17,6 +17,7 @@ import { Spinner } from '../../components/ui/Spinner';
 import { DatePicker } from '../../components/ui/DatePicker';
 
 interface EmployeeFormProps {
+  open?: boolean;
   employeeId?: number;
   onSuccess: () => void;
   onCancel: () => void;
@@ -104,7 +105,7 @@ function SectionDivider({ label }: { label: string }) {
   );
 }
 
-export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormProps) {
+export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel }: EmployeeFormProps) {
   const isEditMode = employeeId !== undefined;
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -142,11 +143,17 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
 
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
 
+  const selectedCompanyId = formData.companyId ? parseInt(formData.companyId, 10) : NaN;
+  const effectiveCompanyId = Number.isNaN(selectedCompanyId)
+    ? (user?.companyId ?? null)
+    : selectedCompanyId;
+
   useEffect(() => {
-    getStores().then(setStores).catch(() => {
+    const targetCompanyId = effectiveCompanyId ?? undefined;
+    getStores(targetCompanyId ? { targetCompanyId } : undefined).then(setStores).catch(() => {
       setError(t('employees.errorLoadStores'));
     });
-  }, []);
+  }, [effectiveCompanyId, t]);
 
   // Load companies for admin/hr so grouped users can pick a target company
   useEffect(() => {
@@ -161,7 +168,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
   useEffect(() => {
     let mounted = true;
     setLoadingSupervisors(true);
-    getEmployees({ limit: 500 })
+    getEmployees({ limit: 500, targetCompanyId: effectiveCompanyId ?? undefined })
       .then((res) => {
         if (!mounted) return;
         const eligibleRoles: UserRole[] = ['admin', 'hr', 'area_manager', 'store_manager'];
@@ -180,7 +187,27 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
         setLoadingSupervisors(false);
       });
     return () => { mounted = false; };
-  }, [employeeId]);
+  }, [employeeId, effectiveCompanyId]);
+
+  // Keep selected store valid when target company changes.
+  useEffect(() => {
+    if (isEditMode) return;
+    if (!formData.storeId) return;
+    const exists = stores.some((s) => String(s.id) === formData.storeId);
+    if (!exists) {
+      setFormData((prev) => ({ ...prev, storeId: '' }));
+    }
+  }, [stores, formData.storeId, isEditMode]);
+
+  // Keep selected supervisor valid when target company changes.
+  useEffect(() => {
+    if (isEditMode) return;
+    if (!formData.supervisorId) return;
+    const exists = supervisors.some((s) => String(s.id) === formData.supervisorId);
+    if (!exists) {
+      setFormData((prev) => ({ ...prev, supervisorId: '' }));
+    }
+  }, [supervisors, formData.supervisorId, isEditMode]);
 
   // Auto-generate uniqueId and temp password for new employees only
   useEffect(() => {
@@ -370,6 +397,8 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
   };
 
   const drawerTitle = isEditMode ? t('employees.editEmployee') : t('employees.newEmployeeTitle');
+
+  if (!open) return null;
 
   return createPortal(
     <div

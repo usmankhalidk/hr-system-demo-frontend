@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Palmtree, Thermometer } from 'lucide-react';
+import { Palmtree, Thermometer, Store } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 
@@ -126,13 +126,14 @@ export default function WeeklyCalendar({
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   // Group shifts by user then by date
-  const userMap = new Map<number, { name: string; surname: string; shifts: Map<string, Shift[]> }>();
+  const userMap = new Map<number, { name: string; surname: string; shifts: Map<string, Shift[]>; storeNames: Set<string> }>();
   for (const shift of shifts) {
     if (!userMap.has(shift.userId)) {
       userMap.set(shift.userId, {
         name: shift.userName,
         surname: shift.userSurname,
         shifts: new Map(),
+        storeNames: new Set(),
       });
     }
     const entry = userMap.get(shift.userId)!;
@@ -140,6 +141,9 @@ export default function WeeklyCalendar({
     const dateKey = shift.date.split('T')[0];
     const existing = entry.shifts.get(dateKey) ?? [];
     entry.shifts.set(dateKey, [...existing, shift]);
+    if (shift.storeName) {
+      entry.storeNames.add(shift.storeName);
+    }
   }
 
   const users = Array.from(userMap.entries()).sort((a, b) =>
@@ -206,6 +210,7 @@ export default function WeeklyCalendar({
           ) : (
             users.map(([userId, userData], rowIdx) => {
               const { hours: weekHours, hasScheduled } = weeklyTotalsForUser(userId, userData.shifts);
+              const rowStoreNames = Array.from(userData.storeNames);
               return (
               <tr
                 key={userId}
@@ -214,7 +219,30 @@ export default function WeeklyCalendar({
                 onMouseLeave={() => setHoveredRow(null)}
               >
                 <td style={{ padding: '8px 12px', fontWeight: 500, borderRight: '1px solid var(--border)' }}>
-                  {userData.surname} {userData.name}
+                  <div>{userData.surname} {userData.name}</div>
+                  {rowStoreNames.length > 0 && (
+                    <div style={{
+                      marginTop: 4,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 7px',
+                      borderRadius: 999,
+                      background: 'rgba(13,33,55,0.06)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.65rem',
+                      fontWeight: 600,
+                      lineHeight: 1.2,
+                    }}>
+                      <Store size={10} />
+                      <span>
+                        {rowStoreNames.length === 1
+                          ? rowStoreNames[0]
+                          : `${rowStoreNames[0]} +${rowStoreNames.length - 1}`}
+                      </span>
+                    </div>
+                  )}
                 </td>
                 {days.map((day, colIdx) => {
                   const dateStr = formatDate(day);
