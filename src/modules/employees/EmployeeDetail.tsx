@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { getEmployee, deactivateEmployee, activateEmployee, uploadEmployeeAvatar } from '../../api/employees';
+import { getEmployee, deactivateEmployee, activateEmployee, uploadEmployeeAvatar, resetEmployeeDevice } from '../../api/employees';
 import { getAvatarUrl } from '../../api/client';
 import { getTrainings, getMedicals, createTraining, updateTraining, createMedical, updateMedical } from '../../api/trainings';
 import { translateApiError } from '../../utils/apiErrors';
@@ -14,6 +14,7 @@ import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { Modal } from '../../components/ui/Modal';
+import Toggle from '../../components/ui/Toggle';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { EmployeeForm } from './EmployeeForm';
 import { MessageBoard } from '../messages/MessageBoard';
@@ -189,6 +190,8 @@ export function EmployeeDetail() {
   const [activating, setActivating] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
 
+  const [deviceResetting, setDeviceResetting] = useState(false);
+
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [medicals, setMedicals] = useState<MedicalCheck[]>([]);
   const [trainingsLoading, setTrainingsLoading] = useState(false);
@@ -209,6 +212,7 @@ export function EmployeeDetail() {
   const isAdmin = user?.role === 'admin';
   const isOwnProfile = user?.id === employee?.id;
   const canViewSensitive = isAdminOrHr || isOwnProfile;
+  const canResetDevice = isAdminOrHr && employee?.role === 'employee';
 
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
 
@@ -287,6 +291,20 @@ export function EmployeeDetail() {
       setDeactivateError(translateApiError(err, t, t('employees.errorDeactivate')));
     } finally {
       setDeactivating(false);
+    }
+  };
+
+  const handleDeviceReset = async () => {
+    if (!employeeId) return;
+    setDeviceResetting(true);
+    try {
+      await resetEmployeeDevice(employeeId);
+      showToast(t('employees.deviceResetRequestedSuccess'), 'success');
+      loadEmployee();
+    } catch (err: unknown) {
+      showToast(translateApiError(err, t) ?? t('employees.deviceResetRequestedError'), 'error');
+    } finally {
+      setDeviceResetting(false);
     }
   };
 
@@ -517,6 +535,25 @@ export function EmployeeDetail() {
               {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
             </Badge>
           } />
+          <InfoRow
+            label={t('employees.deviceBindingField')}
+            value={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 auto' }}>
+                  {employee.deviceResetPending
+                    ? t('employees.deviceStatusResetPending')
+                    : employee.deviceRegistered
+                      ? t('employees.deviceStatusRegistered')
+                      : t('employees.deviceStatusNotRegistered')}
+                </span>
+                <Toggle
+                  checked={employee.deviceResetPending === true}
+                  disabled={!canResetDevice || deviceResetting || employee.deviceResetPending === true}
+                  onChange={handleDeviceReset}
+                />
+              </div>
+            }
+          />
           <InfoRow label={t('common.department')} value={employee.department ?? '—'} />
           <InfoRow label={t('common.store')} value={employee.storeName ?? '—'} />
           <InfoRow label={t('employees.supervisorField')} value={employee.supervisorName ?? '—'} last />

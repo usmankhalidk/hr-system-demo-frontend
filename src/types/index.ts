@@ -12,6 +12,11 @@ export interface User {
   status: 'active' | 'inactive';
   isSuperAdmin: boolean;
   avatarFilename?: string | null;
+
+  // Device binding (employee self-service only)
+  isDeviceRegistered?: boolean;
+  deviceResetPending?: boolean;
+  requiresDeviceRegistration?: boolean;
 }
 
 export interface Company {
@@ -73,6 +78,11 @@ export interface Employee {
   probationMonths?: number | null;
   terminationType?: string | null;
   avatarFilename?: string | null;
+
+  // Device binding (HR/admin view)
+  deviceResetPending?: boolean;
+  deviceRegistered?: boolean;
+  deviceRegisteredAt?: string | null;
 }
 
 export type TrainingType = 'product' | 'general' | 'low_risk_safety' | 'fire_safety';

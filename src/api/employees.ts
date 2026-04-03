@@ -58,6 +58,11 @@ export async function activateEmployee(id: number): Promise<Employee> {
   return data.data;
 }
 
+export async function resetEmployeeDevice(id: number): Promise<Employee> {
+  const { data } = await apiClient.patch(`/employees/${id}/device-reset`);
+  return data.data;
+}
+
 export async function uploadEmployeeAvatar(id: number, file: File): Promise<{ avatarUrl: string }> {
   const formData = new FormData();
   formData.append('avatar', file);

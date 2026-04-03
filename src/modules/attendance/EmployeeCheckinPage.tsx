@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listMyAttendanceEvents, type AttendanceEvent } from '../../api/attendance';
 import { Spinner } from '../../components/ui/Spinner';
+import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -35,6 +36,7 @@ export default function EmployeeCheckinPage() {
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fingerprintRef = useRef<string | null>(null);
 
   const initials = user
     ? `${user.name?.[0] ?? ''}${user.surname ? user.surname[0] : ''}`.toUpperCase()
@@ -45,10 +47,26 @@ export default function EmployeeCheckinPage() {
     setError(null);
     const days = parseInt(filter, 10);
     const dateFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    listMyAttendanceEvents({ dateFrom })
-      .then((res) => setEvents(res.events))
-      .catch(() => setError('Errore nel caricamento delle presenze'))
-      .finally(() => setLoading(false));
+    let alive = true;
+
+    async function load() {
+      try {
+        if (!fingerprintRef.current) {
+          const fp = await getDeviceFingerprint();
+          fingerprintRef.current = fp.fingerprint;
+        }
+        const deviceFingerprint = fingerprintRef.current ?? undefined;
+        const res = await listMyAttendanceEvents({ dateFrom, deviceFingerprint });
+        if (alive) setEvents(res.events);
+      } catch {
+        if (alive) setError('Errore nel caricamento delle presenze');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => { alive = false; };
   }, [filter]);
 
   // Group events by date

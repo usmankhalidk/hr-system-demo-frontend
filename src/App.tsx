@@ -25,7 +25,12 @@ import SettingsPage from './modules/settings/SettingsPage';
 import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
 import ScanPage from './modules/attendance/ScanPage';
 import HRChatPage from './modules/messages/HRChatPage';
+<<<<<<< HEAD
 import TransfersPage from './modules/transfers/TransfersPage';
+=======
+import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
+import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
+>>>>>>> 6945131e925a66527e972c96c698f27f084421d7
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -75,6 +80,12 @@ function AppRoutes() {
       <Route path="/dipendenti" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="dipendenti">
           <Layout title={t('nav.employees')}><EmployeeList /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/dipendenti/reset-device" element={
+        <ProtectedRoute roles={['admin', 'hr']} permissionKey="dipendenti">
+          <Layout title={t('deviceReset.title')}><HrDeviceResetPage /></Layout>
         </ProtectedRoute>
       } />
 
@@ -168,6 +179,12 @@ function AppRoutes() {
       <Route path="/presenze/scan" element={
         <ProtectedRoute roles={['employee']}>
           <ScanPage />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/device/register" element={
+        <ProtectedRoute roles={['employee']}>
+          <DeviceRegistrationPage />
         </ProtectedRoute>
       } />
 
