@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
@@ -40,6 +40,12 @@ const IconUsers = () => (
     <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
     <circle cx="9" cy="7" r="4"/>
     <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+  </svg>
+);
+const IconSmartphone = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="2" width="12" height="20" rx="2" />
+    <line x1="12" y1="18" x2="12.01" y2="18" />
   </svg>
 );
 const IconShield = () => (
@@ -109,6 +115,7 @@ const ROLE_ACCENT: Record<UserRole, string> = {
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose }) => {
   const { user, permissions, logout } = useAuth();
   const { t } = useTranslation();
+  const location = useLocation();
 
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [avatarImgError, setAvatarImgError] = useState(false);
@@ -132,6 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.companies',  path: '/aziende',               icon: <IconBuilding /> },
       { labelKey: 'nav.stores',     path: '/negozi',                icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.employees',  path: '/dipendenti',            icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.turni',      path: '/turni',                 icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.presenze',   path: '/presenze',              icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies',  path: '/anomalie',              icon: <IconAnomaly />, permissionKey: 'anomalie' },
@@ -144,6 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
       { labelKey: 'nav.companies', path: '/aziende',      icon: <IconBuilding /> },
       { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
@@ -204,6 +213,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
   };
 
   const { isMobile: isMobileView } = useBreakpoint();
+
+  const isNavItemActive = (path: string, pathname: string): boolean => {
+    if (path === '/') return pathname === '/';
+    if (path === '/dipendenti/reset-device') return pathname === '/dipendenti/reset-device';
+    if (path === '/dipendenti') return pathname === '/dipendenti' || /^\/dipendenti\/\d+$/.test(pathname);
+    if (path === '/impostazioni') return pathname === '/impostazioni';
+    return pathname === path || pathname.startsWith(`${path}/`);
+  };
 
   return (
     <aside style={isMobileView ? {
@@ -301,21 +318,23 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       </NavLink>
 
       {/* ── Navigation ── */}
-      <nav style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
+      <nav className="sidebar-scroll" style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
         {!collapsed && (
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.28)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 10px 4px', marginBottom: '2px' }}>
             {t('nav.navigation')}
           </div>
         )}
-        {navItems.map((item) => (
+        {navItems.map((item) => {
+          const isActive = isNavItemActive(item.path, location.pathname);
+          return (
           <NavLink
             key={item.path}
             to={item.path}
-            end={item.path === '/' || item.path === '/impostazioni'}
+            end
             className="sidebar-item"
             title={collapsed ? t(item.labelKey) : undefined}
             onClick={() => { if (isMobileView && onMobileClose) onMobileClose(); }}
-            style={({ isActive }) => ({
+            style={() => ({
               display: 'flex', alignItems: 'center',
               justifyContent: collapsed ? 'center' : 'flex-start',
               gap: '10px',
@@ -350,7 +369,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
               </span>
             )}
           </NavLink>
-        ))}
+        );
+      })}
       </nav>
 
       {/* ── Language switcher (full) + Logout ── */}

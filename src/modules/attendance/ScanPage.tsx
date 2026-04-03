@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { recordCheckin, EventType } from '../../api/attendance';
+import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 
 // ── Event definitions ────────────────────────────────────────────────────────
 const EVENTS: { type: EventType; labelKey: string; bg: string; shadow: string }[] = [
@@ -25,6 +26,7 @@ export default function ScanPage() {
   const [tappedType, setTappedType] = useState<EventType | null>(null);
   const [errorMsg, setErrorMsg]     = useState('');
   const [clock, setClock]           = useState(() => new Date());
+  const fingerprintRef = useRef<string | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 1000);
@@ -33,6 +35,16 @@ export default function ScanPage() {
 
   const token = params.get('token') ?? '';
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
+
+  useEffect(() => {
+    if (!user || user.role !== 'employee') return;
+    if (!token) return;
+    // Registration is required only after an employee scans QR and is not registered.
+    if (user.requiresDeviceRegistration === true) {
+      const next = encodeURIComponent('/presenze/scan' + (token ? `?token=${token}` : ''));
+      navigate(`/device/register?next=${next}`, { replace: true });
+    }
+  }, [user, token, navigate]);
 
   // ── Non-employee role guard ────────────────────────────────────────────────
   if (user && user.role !== 'employee') {
@@ -102,8 +114,15 @@ export default function ScanPage() {
     setStage('loading');
     setErrorMsg('');
     try {
-      await recordCheckin({ qrToken: token, eventType });
+      if (!fingerprintRef.current) {
+        const fp = await getDeviceFingerprint();
+        fingerprintRef.current = fp.fingerprint;
+      }
+      await recordCheckin({ qrToken: token, eventType, deviceFingerprint: fingerprintRef.current ?? undefined });
       setStage('success');
+      window.setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 1600);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string; code?: string } } };
       setStage('error');
@@ -146,7 +165,7 @@ export default function ScanPage() {
           {timeStr}
         </div>
         <button
-          onClick={() => { setStage('ready'); setTappedType(null); }}
+          onClick={() => navigate('/', { replace: true })}
           data-testid="scan-back-to-actions"
           style={{
             marginTop: 28,
@@ -159,7 +178,7 @@ export default function ScanPage() {
             letterSpacing: 0.3,
           }}
         >
-          {t('scan.backToScan')}
+          {t('common.backToHome')}
         </button>
       </div>
     );
