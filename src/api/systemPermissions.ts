@@ -12,6 +12,7 @@ export interface CompanyGrid {
   anomalie: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   negozi: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   dipendenti: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  trasferimenti: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   messaggi: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   impostazioni: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   gestione_accessi?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
@@ -38,6 +39,7 @@ export interface SystemPermissionUpdate {
     | 'saldi'
     | 'negozi'
     | 'dipendenti'
+    | 'trasferimenti'
     | 'messaggi'
     | 'impostazioni'
     | 'gestione_accessi';

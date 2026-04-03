@@ -1,8 +1,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, Palmtree, Thermometer, Coffee } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Palmtree, Thermometer, Coffee } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
+import { TransferAssignment } from '../../api/transfers';
 
 interface DayCalendarProps {
   shifts: Shift[];
@@ -11,6 +12,7 @@ interface DayCalendarProps {
   onSlotClick: (userId: number, date: string) => void;
   canEdit: boolean;
   leaveBlocks?: LeaveBlock[];
+  transferBlocks?: TransferAssignment[];
 }
 
 const START_HOUR = 7;   // 07:00
@@ -59,7 +61,45 @@ const STATUS_META: Record<string, {
   },
 };
 
-export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, canEdit, leaveBlocks }: DayCalendarProps) {
+function transferVisualMeta(status: TransferAssignment['status']): {
+  bg: string;
+  border: string;
+  color: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeColor: string;
+} {
+  if (status === 'completed') {
+    return {
+      bg: 'rgba(30,64,175,0.1)',
+      border: 'rgba(30,64,175,0.25)',
+      color: '#1e40af',
+      badgeBg: 'rgba(239,246,255,0.95)',
+      badgeBorder: 'rgba(30,64,175,0.34)',
+      badgeColor: '#1e3a8a',
+    };
+  }
+  if (status === 'cancelled') {
+    return {
+      bg: 'rgba(239,68,68,0.08)',
+      border: 'rgba(185,28,28,0.25)',
+      color: '#b91c1c',
+      badgeBg: 'rgba(254,242,242,0.95)',
+      badgeBorder: 'rgba(185,28,28,0.32)',
+      badgeColor: '#991b1b',
+    };
+  }
+  return {
+    bg: 'rgba(13,148,136,0.1)',
+    border: 'rgba(15,118,110,0.25)',
+    color: '#115e59',
+    badgeBg: 'rgba(240,253,250,0.95)',
+    badgeBorder: 'rgba(15,118,110,0.32)',
+    badgeColor: '#0f766e',
+  };
+}
+
+export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, canEdit, leaveBlocks, transferBlocks }: DayCalendarProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
   const dateStr = formatDate(date);
@@ -76,6 +116,17 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
     }
     userMap.get(s.userId)!.shifts.push(s);
   }
+
+  // Include transfer-only users for the selected day (no shifts required to render row).
+  if (transferBlocks) {
+    for (const tb of transferBlocks) {
+      if (tb.startDate > dateStr || tb.endDate < dateStr) continue;
+      if (!userMap.has(tb.userId)) {
+        userMap.set(tb.userId, { name: tb.userName, surname: tb.userSurname, shifts: [] });
+      }
+    }
+  }
+
   const users = Array.from(userMap.entries()).sort((a, b) => a[1].surname.localeCompare(b[1].surname));
 
   const nowMins = (() => {
@@ -148,6 +199,19 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
             const rowLeave = leaveBlocks?.find(
               (lb) => lb.userId === userId && dateStr >= lb.startDate && dateStr <= lb.endDate
             ) ?? null;
+            const transferPriority: Record<TransferAssignment['status'], number> = {
+              active: 0,
+              completed: 1,
+              cancelled: 2,
+            };
+            const rowTransfer = (transferBlocks ?? [])
+              .filter((tb) => tb.userId === userId && dateStr >= tb.startDate && dateStr <= tb.endDate)
+              .sort((a, b) => {
+                if (transferPriority[a.status] !== transferPriority[b.status]) {
+                  return transferPriority[a.status] - transferPriority[b.status];
+                }
+                return b.id - a.id;
+              })[0] ?? null;
             const isVacation = rowLeave?.leaveType === 'vacation';
             const isPending = rowLeave ? rowLeave.status !== 'hr_approved' : false;
 
@@ -201,6 +265,46 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                       }}>{t('leave.pending_short')}</span>
                     )}
                   </div>
+                )}
+                {rowTransfer && (
+                  (() => {
+                    const vm = transferVisualMeta(rowTransfer.status);
+                    return (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    marginTop: 5,
+                    padding: '3px 8px 3px 6px',
+                    borderRadius: 4,
+                    background: vm.bg,
+                    borderLeft: `3px solid ${vm.color}`,
+                    borderTop: `1px solid ${vm.border}`,
+                    borderRight: `1px solid ${vm.border}`,
+                    borderBottom: `1px solid ${vm.border}`,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: vm.color,
+                  }}>
+                    <ArrowLeftRight size={11} strokeWidth={2.4} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      {rowTransfer.targetStoreName}
+                    </span>
+                    <span style={{
+                      fontSize: 8.5,
+                      fontWeight: 800,
+                      color: vm.badgeColor,
+                      background: vm.badgeBg,
+                      border: `1px solid ${vm.badgeBorder}`,
+                      borderRadius: 999,
+                      padding: '1px 5px',
+                      lineHeight: 1.35,
+                      flexShrink: 0,
+                      textTransform: 'uppercase',
+                    }}>
+                      {t(`transfers.status.${rowTransfer.status}`, rowTransfer.status)}
+                    </span>
+                  </div>
+                    );
+                  })()
                 )}
               </div>
 

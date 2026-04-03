@@ -76,6 +76,18 @@ const IconCalendar = () => (
     <line x1="3" y1="10" x2="21" y2="10"/>
   </svg>
 );
+const IconTransfer = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3h4v4"/>
+    <path d="M21 3l-7 7"/>
+    <path d="M7 21H3v-4"/>
+    <path d="M3 21l7-7"/>
+    <path d="M21 14v7h-7"/>
+    <path d="M21 21l-7-7"/>
+    <path d="M3 10V3h7"/>
+    <path d="M3 3l7 7"/>
+  </svg>
+);
 const IconClock = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="9"/>
@@ -141,6 +153,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.employees',  path: '/dipendenti',            icon: <IconUsers />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.turni',      path: '/turni',                 icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti',      icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',   path: '/presenze',              icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies',  path: '/anomalie',              icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',   path: '/permessi',              icon: <IconUmbrella />, permissionKey: 'permessi' },
@@ -155,6 +168,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
@@ -168,6 +182,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
@@ -179,6 +194,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
       { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },

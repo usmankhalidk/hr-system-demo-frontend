@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeftRight } from 'lucide-react';
 import { getEmployees } from '../../api/employees';
 import apiClient, { getAvatarUrl } from '../../api/client';
+import { listTransfers, TransferAssignment } from '../../api/transfers';
 import { translateApiError } from '../../utils/apiErrors';
 import { getStores } from '../../api/stores';
 import { useAuth } from '../../context/AuthContext';
@@ -42,14 +44,17 @@ function getAvatarColor(name: string): string {
 export function EmployeeList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, allowedCompanyIds } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [showNewForm, setShowNewForm] = useState(false);
+  const [newFormInstance, setNewFormInstance] = useState(0);
+  const [listReloadTick, setListReloadTick] = useState(0);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [activeTransfersByUser, setActiveTransfersByUser] = useState<Record<number, TransferAssignment>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
@@ -116,7 +121,31 @@ export function EmployeeList() {
       .then((res) => { setEmployees(res.employees); setTotal(res.total); setPages(res.pages); })
       .catch((err) => { setError(translateApiError(err, t, t('employees.errorLoad'))); })
       .finally(() => setLoading(false));
-  }, [search, storeId, department, status, role, companyFilter, page]);
+  }, [search, storeId, department, status, role, companyFilter, page, listReloadTick]);
+
+  useEffect(() => {
+    let mounted = true;
+    listTransfers({ status: 'active' })
+      .then((res) => {
+        if (!mounted) return;
+        const byUser = new Map<number, TransferAssignment>();
+        for (const tr of res.transfers) {
+          const current = byUser.get(tr.userId);
+          if (!current || tr.startDate > current.startDate) {
+            byUser.set(tr.userId, tr);
+          }
+        }
+        setActiveTransfersByUser(Object.fromEntries(Array.from(byUser.entries())));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setActiveTransfersByUser({});
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [companyFilter, page, limit, allowedCompanyIds.join(',')]);
 
   // Show company column when admin/hr/super admin is viewing all companies (no specific company filter)
   const showCompanyColumn = (isAdminOrHr || isSuperAdmin) && !companyFilter;
@@ -188,11 +217,51 @@ export function EmployeeList() {
     {
       key: 'storeName',
       label: t('employees.colStore'),
-      render: (row) => (
-        <span style={{ fontSize: '13px', color: row.storeName ? 'var(--text-secondary)' : 'var(--text-disabled)' }}>
-          {row.storeName ?? '—'}
-        </span>
-      ),
+      render: (row) => {
+        const transfer = activeTransfersByUser[row.id];
+        if (transfer) {
+          return (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '2px 8px',
+                borderRadius: 999,
+                border: '1px solid var(--border)',
+                background: 'rgba(13,33,55,0.06)',
+                color: 'var(--text-muted)',
+                fontSize: 11,
+                fontWeight: 700,
+              }}>
+                {transfer.originStoreName}
+              </span>
+              <ArrowLeftRight size={11} strokeWidth={2.3} color="#0f766e" />
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '2px 8px',
+                borderRadius: 999,
+                border: '1px solid rgba(15,118,110,0.3)',
+                background: 'rgba(13,148,136,0.1)',
+                color: '#115e59',
+                fontSize: 11,
+                fontWeight: 700,
+              }}>
+                {transfer.targetStoreName}
+              </span>
+            </div>
+          );
+        }
+        return (
+          <span style={{ fontSize: '13px', color: row.storeName ? 'var(--text-secondary)' : 'var(--text-disabled)' }}>
+            {row.storeName ?? '—'}
+          </span>
+        );
+      },
     },
     {
       key: 'department',
@@ -382,10 +451,16 @@ export function EmployeeList() {
         onPageChange={(p) => updateParam('page', String(p))}
       />
 
-      {showNewForm && (
+      {isAdminOrHr && (
         <EmployeeForm
+          key={`new-employee-form-${newFormInstance}`}
+          open={showNewForm}
+          onCreated={() => {
+            setListReloadTick((prev) => prev + 1);
+          }}
           onSuccess={() => {
             setShowNewForm(false);
+            setNewFormInstance((prev) => prev + 1);
             showToast(t('employees.createdSuccess'), 'success');
             updateParam('page', '1');
           }}

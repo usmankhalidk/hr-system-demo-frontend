@@ -12,6 +12,7 @@ export type ManagedRoleKey = typeof MANAGED_ROLE_KEYS[number];
 export const MODULE_KEYS = [
   'dipendenti',
   'turni',
+  'trasferimenti',
   'presenze',
   'anomalie',
   'permessi',
@@ -39,6 +40,7 @@ export const ROLE_COLORS: Record<ManagedRoleKey, string> = {
 export const SYSTEM_MODULE_KEYS = [
   'dipendenti',
   'turni',
+  'trasferimenti',
   'presenze',
   'anomalie',
   'permessi',
@@ -54,6 +56,7 @@ export type SystemModuleKey = typeof SYSTEM_MODULE_KEYS[number];
 export const MODULE_ROLE_ELIGIBILITY: Record<ModuleKey, readonly ManagedRoleKey[]> = {
   dipendenti: ['admin', 'hr', 'area_manager', 'store_manager'],
   turni: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
+  trasferimenti: ['admin', 'hr', 'area_manager', 'store_manager'],
   presenze: ['admin', 'hr', 'area_manager', 'store_manager', 'employee', 'store_terminal'],
   anomalie: ['admin', 'hr', 'area_manager', 'store_manager'],
   permessi: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],

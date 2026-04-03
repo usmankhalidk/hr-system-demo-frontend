@@ -49,11 +49,20 @@ vi.mock('../context/ToastContext', () => ({
 
 // ── Mock EmployeeForm so portal / DatePicker internals don't execute ──────────
 vi.mock('../modules/employees/EmployeeForm', () => ({
-  EmployeeForm: ({ onCancel }: { onCancel: () => void; onSuccess: () => void; employeeId?: number }) => (
-    <div data-testid="employee-form">
-      <button onClick={onCancel}>Close Form</button>
-    </div>
-  ),
+  EmployeeForm: ({ open, onCancel }: { open?: boolean; onCancel: () => void; onSuccess: () => void; employeeId?: number }) => {
+    const [draft, setDraft] = React.useState('');
+    if (!open) return null;
+    return (
+      <div data-testid="employee-form">
+        <input
+          aria-label="Mock Draft"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <button onClick={onCancel}>Close Form</button>
+      </div>
+    );
+  },
 }));
 
 import { EmployeeList } from '../modules/employees/EmployeeList';
@@ -195,6 +204,29 @@ describe('EmployeeList', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /nuovo dipendente|new employee/i })).toBeInTheDocument();
     });
+  });
+
+  it('keeps new employee draft data after close and reopen', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, name: 'Admin', surname: 'User', role: 'admin', companyId: 1, isSuperAdmin: false },
+    });
+
+    mockGetEmployees.mockResolvedValue({ employees: [], total: 0, pages: 1 });
+
+    renderEmployeeList();
+
+    const newEmployeeButton = await screen.findByRole('button', { name: /nuovo dipendente|new employee/i });
+    fireEvent.click(newEmployeeButton);
+
+    const draftInput = screen.getByLabelText(/mock draft/i) as HTMLInputElement;
+    fireEvent.change(draftInput, { target: { value: 'Alexa' } });
+    expect(draftInput.value).toBe('Alexa');
+
+    fireEvent.click(screen.getByRole('button', { name: /close form/i }));
+    expect(screen.queryByLabelText(/mock draft/i)).not.toBeInTheDocument();
+
+    fireEvent.click(newEmployeeButton);
+    expect((screen.getByLabelText(/mock draft/i) as HTMLInputElement).value).toBe('Alexa');
   });
 
   it('"New Employee" button is NOT present for store_manager role', async () => {

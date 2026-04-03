@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Store as StoreIcon } from 'lucide-react';
 import {
   ShiftTemplate,
   listTemplates,
@@ -10,7 +11,7 @@ import {
 } from '../../api/shifts';
 import { getStores } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
-import { Store, Employee } from '../../types';
+import { Store as StoreType, Employee } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { WeekPicker } from '../../components/ui/WeekPicker';
 
@@ -45,6 +46,38 @@ const DEFAULT_DAY_CONFIG: DayConfig = {
   breakEnd: '',
 };
 
+function parseHmToMinutes(value: string): number | null {
+  const parts = value.split(':');
+  if (parts.length < 2) return null;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return (h * 60) + m;
+}
+
+function diffMinutes(startHm: string, endHm: string): number {
+  const start = parseHmToMinutes(startHm);
+  const end = parseHmToMinutes(endHm);
+  if (start == null || end == null) return 0;
+  let diff = end - start;
+  if (diff < 0) diff += 24 * 60;
+  return diff;
+}
+
+function calculatePatternMinutes(pattern: ShiftPattern): number {
+  const total = diffMinutes(pattern.startTime, pattern.endTime);
+  const breakMinutes = pattern.breakStart && pattern.breakEnd
+    ? diffMinutes(pattern.breakStart, pattern.breakEnd)
+    : 0;
+  return Math.max(0, total - breakMinutes);
+}
+
+function formatMinutesAsHours(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins === 0 ? `${hours}h` : `${hours}h ${String(mins).padStart(2, '0')}m`;
+}
+
 interface ShiftTemplatesPanelProps {
   open: boolean;
   onClose: () => void;
@@ -65,7 +98,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   ];
 
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
+  const [stores, setStores] = useState<StoreType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -825,17 +858,23 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
                       </button>
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontWeight: 700, fontFamily: 'var(--font-display)', fontSize: 13 }}>{tmpl.name}</span>
-                        <span style={{
-                          marginLeft: 8, fontSize: 11, color: 'var(--text-muted)',
-                          background: 'var(--border)', borderRadius: 4, padding: '1px 6px',
-                        }}>{storeName}</span>
-                        {patterns.length > 0 && (
-                          <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-                            {patterns.length} {t('shifts.patterns', 'pattern')}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontFamily: 'var(--font-display)', fontSize: 13 }}>{tmpl.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 11, color: 'var(--text-muted)',
+                            background: 'var(--border)', borderRadius: 999, padding: '2px 7px',
+                          }}>
+                            <StoreIcon size={11} />
+                            {storeName}
                           </span>
-                        )}
+                          {patterns.length > 0 && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {patterns.length} {t('shifts.patterns', 'pattern')}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <button
                         className="btn btn-primary"
@@ -863,6 +902,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                               <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableStart', 'Start')}</th>
                               <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableEnd', 'End')}</th>
                               <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableBreak', 'Break')}</th>
+                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('common.time', 'Time')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -873,6 +913,9 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 <td style={{ padding: '5px 6px' }}>{p.endTime}</td>
                                 <td style={{ padding: '5px 6px', color: 'var(--text-muted)' }}>
                                   {p.breakStart && p.breakEnd ? `${p.breakStart}–${p.breakEnd}` : '—'}
+                                </td>
+                                <td style={{ padding: '5px 6px', fontWeight: 600, color: 'var(--primary)' }}>
+                                  {formatMinutesAsHours(calculatePatternMinutes(p))}
                                 </td>
                               </tr>
                             ))}

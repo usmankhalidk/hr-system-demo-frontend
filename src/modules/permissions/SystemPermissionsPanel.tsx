@@ -14,6 +14,7 @@ import {
   Wallet,
   AlertTriangle,
   Shield,
+  ArrowLeftRight,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -32,6 +33,7 @@ import PermissionGridTable, { GridModuleDef } from './PermissionGridTable';
 const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'dipendenti',  implemented: true, icon: <Users size={15} /> },
   { key: 'turni',       implemented: true, icon: <Clock size={15} /> },
+  { key: 'trasferimenti', implemented: true, icon: <ArrowLeftRight size={15} /> },
   { key: 'presenze',    implemented: true, icon: <CalendarCheck size={15} /> },
   { key: 'anomalie',    implemented: true, icon: <AlertTriangle size={15} /> },
   { key: 'permessi',    implemented: true, icon: <CalendarOff size={15} /> },
