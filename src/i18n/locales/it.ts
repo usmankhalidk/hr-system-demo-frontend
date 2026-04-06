@@ -1027,6 +1027,7 @@ const it = {
     button: 'Registra il tuo account',
     backToDashboard: 'Torna alla dashboard',
     note: 'Per il reset del dispositivo, contatta HR. HR cancellerà il tuo dispositivo associato e dovrai registrarlo di nuovo sul nuovo dispositivo.',
+    success: 'Dispositivo registrato con successo',
     errorGeneric: 'Impossibile registrare il dispositivo. Riprova.',
   },
 

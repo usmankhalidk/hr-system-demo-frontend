@@ -6,6 +6,7 @@ import { translateApiError } from '../../utils/apiErrors';
 import { Employee } from '../../types';
 import { Spinner } from '../../components/ui/Spinner';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import { useSocket } from '../../context/SocketContext';
 
 export default function HrDeviceResetPage() {
   const { t } = useTranslation();
@@ -44,6 +45,42 @@ export default function HrDeviceResetPage() {
     }, 12000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeviceRegistered = (data: { userId: number }) => {
+      console.log('Real-time: device registered for user', data.userId);
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp.id === data.userId
+            ? { ...emp, deviceRegistered: true, deviceResetPending: false, deviceRegisteredAt: new Date().toISOString() }
+            : emp
+        )
+      );
+    };
+
+    const handleDeviceReset = (data: { userId: number }) => {
+      console.log('Real-time: device reset for user', data.userId);
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp.id === data.userId
+            ? { ...emp, deviceRegistered: false, deviceResetPending: false, deviceRegisteredAt: null }
+            : emp
+        )
+      );
+    };
+
+    socket.on('DEVICE_REGISTERED', handleDeviceRegistered);
+    socket.on('DEVICE_RESET', handleDeviceReset);
+
+    return () => {
+      socket.off('DEVICE_REGISTERED', handleDeviceRegistered);
+      socket.off('DEVICE_RESET', handleDeviceReset);
+    };
+  }, [socket]);
 
   const filteredEmployees = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -19,7 +19,8 @@
     "react-i18next": "^16.5.8",
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^6.20.1",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
