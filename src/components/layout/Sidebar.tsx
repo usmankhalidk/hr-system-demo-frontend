@@ -7,6 +7,7 @@ import { UserRole } from '../../types';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getUnreadCount } from '../../api/messages';
 import { getAvatarUrl } from '../../api/client';
+import fusaroLogoUrl from '../../assets/fusaro-logo.png';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -238,13 +239,16 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
         flexShrink: 0, overflow: 'hidden',
         justifyContent: collapsed ? 'center' : 'flex-start',
       }}>
-        <div style={{
-          width: collapsed ? 32 : 34, height: collapsed ? 32 : 34,
-          background: 'var(--accent)', borderRadius: collapsed ? 8 : 9,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'var(--font-display)', fontWeight: 800,
-          fontSize: '13px', color: '#0D2137', flexShrink: 0,
-        }}>HR</div>
+        <img
+          src={fusaroLogoUrl}
+          alt="Fusaro Antonio 1893"
+          style={{
+            width: collapsed ? 30 : 32,
+            height: collapsed ? 30 : 32,
+            objectFit: 'contain',
+            flexShrink: 0,
+          }}
+        />
         {!collapsed && (
           <div style={{ overflow: 'hidden' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px', color: '#FFFFFF', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
