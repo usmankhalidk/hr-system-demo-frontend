@@ -82,7 +82,7 @@ const it = {
     logout: 'Esci',
     navigation: 'Navigazione',
     appName: 'Gestione HR',
-    appVersion: 'Sistema HR v1',
+    appVersion: 'Sistema HR',
     turni: 'Turni',
     trasferimenti: 'Trasferimenti',
     presenze: 'Presenze',
