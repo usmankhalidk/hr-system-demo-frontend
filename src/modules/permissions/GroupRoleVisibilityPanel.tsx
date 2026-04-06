@@ -11,7 +11,7 @@ import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
 import { getCompanyGroups, createCompanyGroup, getGroupRoleVisibility, updateGroupRoleVisibility } from '../../api/companyGroups';
 
-import type { CompanyGroup, GroupRoleVisibility } from '../../api/companyGroups';
+import type { CompanyGroup, GroupRoleVisibility, GroupVisibilityCompany } from '../../api/companyGroups';
 
 const defaultVisibility: GroupRoleVisibility = { hr: false, areaManager: false };
 
@@ -25,6 +25,7 @@ export default function GroupRoleVisibilityPanel() {
 
   const [serverVisibility, setServerVisibility] = useState<GroupRoleVisibility>(defaultVisibility);
   const [localVisibility, setLocalVisibility] = useState<GroupRoleVisibility>(defaultVisibility);
+  const [groupCompanies, setGroupCompanies] = useState<GroupVisibilityCompany[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -58,8 +59,13 @@ export default function GroupRoleVisibilityPanel() {
       setErrorMsg(null);
       try {
         const v = await getGroupRoleVisibility(groupId);
-        setServerVisibility(v);
-        setLocalVisibility(v);
+        const nextVisibility: GroupRoleVisibility = {
+          hr: v.hr,
+          areaManager: v.areaManager,
+        };
+        setServerVisibility(nextVisibility);
+        setLocalVisibility(nextVisibility);
+        setGroupCompanies(v.companies ?? []);
       } catch (err) {
         setErrorMsg(translateApiError(err, t, t('permissions.groupVisibility.errorLoadVisibility')));
       }
@@ -248,9 +254,10 @@ export default function GroupRoleVisibilityPanel() {
                 padding: '14px 16px',
                 background: localVisibility[key] ? `${color}08` : 'var(--surface-warm)',
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 justifyContent: 'space-between',
                 gap: 12,
+                flexWrap: 'wrap',
                 transition: 'background 0.2s, border-color 0.2s',
               }}
             >
@@ -272,6 +279,17 @@ export default function GroupRoleVisibilityPanel() {
                 <div>
                   <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-display)' }}>{label}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{hint}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 3 }}>
+                    {(() => {
+                      const activeForRole = groupCompanies.filter((c) => key === 'hr' ? c.hasActiveHr : c.hasActiveAreaManager).length;
+                      return t('permissions.groupVisibility.coverageSummary', {
+                        active: activeForRole,
+                        total: groupCompanies.length,
+                        role: label,
+                        defaultValue: `${activeForRole}/${groupCompanies.length} companies have active ${label}`,
+                      });
+                    })()}
+                  </div>
                 </div>
               </div>
               <Toggle
@@ -279,6 +297,57 @@ export default function GroupRoleVisibilityPanel() {
                 onChange={() => setLocalVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
                 disabled={saving}
               />
+
+              <div style={{
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: '1px solid var(--border-light)',
+                display: 'flex',
+                gap: 6,
+                flexWrap: 'wrap',
+                width: '100%',
+              }}>
+                {groupCompanies.length === 0 ? (
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {t('permissions.groupVisibility.noCompaniesInGroup', { defaultValue: 'No companies linked to this group yet.' })}
+                  </span>
+                ) : groupCompanies.map((company) => {
+                  const roleActive = key === 'hr' ? company.hasActiveHr : company.hasActiveAreaManager;
+                  return (
+                    <span
+                      key={`${key}-${company.id}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 8px',
+                        borderRadius: 999,
+                        border: `1px solid ${roleActive ? '#15803D55' : 'var(--border)'}`,
+                        background: roleActive ? 'rgba(21,128,61,0.10)' : 'var(--surface)',
+                        color: roleActive ? '#166534' : 'var(--text-secondary)',
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span>{company.name}</span>
+                      {roleActive && (
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: '#166534',
+                          border: '1px solid #16A34A66',
+                          borderRadius: 999,
+                          padding: '0 5px',
+                          lineHeight: 1.5,
+                          background: 'rgba(34,197,94,0.14)',
+                        }}>
+                          {t('permissions.groupVisibility.activeTag', { defaultValue: 'Active' })}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>

@@ -13,7 +13,7 @@ export async function getUnreadCount(): Promise<number> {
 
 export interface SendMessagePayload {
   recipientId: number;
-  subject: string;
+  subject?: string;
   body: string;
 }
 

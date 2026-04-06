@@ -4,8 +4,9 @@ import { Building2, Users, Store, Plus, Pencil, PowerOff, Power, Trash2, Layers 
 import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useAuth } from '../../context/AuthContext';
-import { createCompany, getCompanies, updateCompany, deactivateCompany, activateCompany, deleteCompanyPermanent } from '../../api/companies';
+import { createCompany, getCompanies, updateCompany, deactivateCompany, activateCompany, deleteCompanyPermanent, uploadCompanyLogo } from '../../api/companies';
 import { getCompanyGroups } from '../../api/companyGroups';
+import { getCompanyLogoUrl } from '../../api/client';
 import { translateApiError } from '../../utils/apiErrors';
 import { Company } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -96,6 +97,8 @@ export default function SystemCompanyManagement() {
   const [formGroupId, setFormGroupId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSaving, setFormSaving] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
 
@@ -132,6 +135,7 @@ export default function SystemCompanyManagement() {
     setFormNameError(undefined);
     setFormGroupId(null);
     setFormError(null);
+    setLogoError(null);
     setModalOpen(true);
   };
 
@@ -142,6 +146,7 @@ export default function SystemCompanyManagement() {
     setFormNameError(undefined);
     setFormGroupId(company.groupId ?? null);
     setFormError(null);
+    setLogoError(null);
     setModalOpen(true);
   };
 
@@ -150,6 +155,26 @@ export default function SystemCompanyManagement() {
     setFormSaving(false);
     setFormError(null);
     setFormNameError(undefined);
+    setLogoUploading(false);
+    setLogoError(null);
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || editingCompanyId === null) return;
+
+    setLogoUploading(true);
+    setLogoError(null);
+    try {
+      await uploadCompanyLogo(editingCompanyId, file);
+      showToast(t('companies.logoUpdated'), 'success');
+      await load();
+    } catch (err: unknown) {
+      setLogoError(translateApiError(err, t, t('companies.logoError')) ?? t('companies.logoError'));
+    } finally {
+      setLogoUploading(false);
+      e.target.value = '';
+    }
   };
 
   const openConfirm = (mode: ConfirmMode, company: Company) => {
@@ -218,10 +243,11 @@ export default function SystemCompanyManagement() {
   const activeCount = companies.filter((c) => c.isActive).length;
   const totalStores = companies.reduce((s, c) => s + c.storeCount, 0);
   const totalEmployees = companies.reduce((s, c) => s + c.employeeCount, 0);
+  const editingCompany = editingCompanyId !== null ? companies.find((c) => c.id === editingCompanyId) ?? null : null;
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', maxWidth: '1040px', margin: '0 auto' }}>
+      <div className="page-enter" style={{ width: '100%' }}>
         {[1, 2].map((i) => (
           <div key={i} style={{ height: 160, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', opacity: 0.5, marginBottom: 14 }} />
         ))}
@@ -231,14 +257,14 @@ export default function SystemCompanyManagement() {
 
   if (error) {
     return (
-      <div style={{ padding: '24px', maxWidth: '1040px', margin: '0 auto' }}>
+      <div className="page-enter" style={{ width: '100%' }}>
         <Alert variant="danger" title={t('common.error')} onClose={() => setError(null)}>{error}</Alert>
       </div>
     );
   }
 
   return (
-    <div className="page-enter" style={{ padding: '24px', maxWidth: '1040px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="page-enter" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -314,6 +340,7 @@ export default function SystemCompanyManagement() {
             const initials = getInitials(c.name);
             const groupName = companyGroups.find((g) => g.id === c.groupId)?.name;
             const createdDate = new Date(c.createdAt).toLocaleDateString(locale, { year: 'numeric', month: 'long' });
+            const logoUrl = getCompanyLogoUrl(c.logoFilename);
 
             return (
               <div
@@ -337,7 +364,7 @@ export default function SystemCompanyManagement() {
                     width: 48,
                     height: 48,
                     borderRadius: 'var(--radius)',
-                    background: avatarColor,
+                    background: logoUrl ? 'transparent' : avatarColor,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -347,8 +374,11 @@ export default function SystemCompanyManagement() {
                     fontSize: 16,
                     flexShrink: 0,
                     letterSpacing: '0.02em',
+                    overflow: 'hidden',
                   }}>
-                    {initials}
+                    {logoUrl ? (
+                      <img src={logoUrl} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : initials}
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -521,6 +551,64 @@ export default function SystemCompanyManagement() {
             <option value="">{t('companies.optionStandalone')}</option>
             {companyGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </Select>
+
+          {modalMode === 'edit' && editingCompany && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {t('companies.logoField')}
+              </span>
+
+              {logoError && <Alert variant="danger" onClose={() => setLogoError(null)}>{logoError}</Alert>}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 'var(--radius-sm)',
+                  overflow: 'hidden',
+                  background: editingCompany.logoFilename ? 'transparent' : getAvatarColor(editingCompany.name),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: 13,
+                  flexShrink: 0,
+                }}>
+                  {editingCompany.logoFilename ? (
+                    <img src={getCompanyLogoUrl(editingCompany.logoFilename) ?? ''} alt={editingCompany.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : getInitials(editingCompany.name)}
+                </div>
+
+                <input
+                  id="company-logo-upload"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={handleLogoUpload}
+                  disabled={logoUploading || formSaving}
+                />
+                <label
+                  htmlFor="company-logo-upload"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface-warm)',
+                    cursor: logoUploading || formSaving ? 'not-allowed' : 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    opacity: logoUploading || formSaving ? 0.7 : 1,
+                  }}
+                >
+                  {logoUploading ? t('companies.logoUploading') : t('companies.uploadLogo')}
+                </label>
+              </div>
+
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('companies.logoHint')}</span>
+            </div>
+          )}
         </div>
       </Modal>
 

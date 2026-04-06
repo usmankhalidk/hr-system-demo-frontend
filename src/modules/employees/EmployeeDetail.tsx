@@ -2,13 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { getEmployee, deactivateEmployee, activateEmployee, uploadEmployeeAvatar, resetEmployeeDevice } from '../../api/employees';
+import {
+  getEmployee,
+  getEmployeeAssociations,
+  deactivateEmployee,
+  activateEmployee,
+  uploadEmployeeAvatar,
+  resetEmployeeDevice,
+} from '../../api/employees';
 import { getAvatarUrl } from '../../api/client';
 import { getTrainings, getMedicals, createTraining, updateTraining, createMedical, updateMedical } from '../../api/trainings';
 import { translateApiError } from '../../utils/apiErrors';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Employee, UserRole, Training, MedicalCheck, TrainingType } from '../../types';
+import { Employee, EmployeeAssociationEntry, EmployeeAssociationsResponse, UserRole, Training, MedicalCheck, TrainingType } from '../../types';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
@@ -203,6 +210,9 @@ export function EmployeeDetail() {
   const [medicalFormOpen, setMedicalFormOpen] = useState(false);
   const [medicalModalSaving, setMedicalModalSaving] = useState(false);
   const [medicalModalError, setMedicalModalError] = useState<string | null>(null);
+  const [associations, setAssociations] = useState<EmployeeAssociationsResponse | null>(null);
+  const [associationsLoading, setAssociationsLoading] = useState(false);
+  const [associationsError, setAssociationsError] = useState<string | null>(null);
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
@@ -224,8 +234,9 @@ export function EmployeeDetail() {
       await uploadEmployeeAvatar(employeeId, file);
       showToast(t('employees.avatarSuccess'), 'success');
       await loadEmployee();
-    } catch {
-      showToast(t('employees.avatarError'), 'error');
+    } catch (err: unknown) {
+      const message = translateApiError(err, t, t('employees.avatarError')) ?? t('employees.avatarError');
+      showToast(message, 'error');
     } finally {
       setAvatarUploading(false);
       const input = document.getElementById('avatar-upload') as HTMLInputElement;
@@ -245,12 +256,25 @@ export function EmployeeDetail() {
       .finally(() => setLoading(false));
   };
 
+  const loadAssociations = () => {
+    if (!employeeId) return;
+    setAssociationsLoading(true);
+    setAssociationsError(null);
+    getEmployeeAssociations(employeeId)
+      .then(setAssociations)
+      .catch((err) => {
+        setAssociationsError(translateApiError(err, t, t('employees.associationsLoadError')));
+      })
+      .finally(() => setAssociationsLoading(false));
+  };
+
   useEffect(() => {
     if (!id || isNaN(parseInt(id, 10))) {
       navigate('/dipendenti', { replace: true });
       return;
     }
     loadEmployee();
+    loadAssociations();
   }, [employeeId]);
 
   useEffect(() => {
@@ -271,6 +295,7 @@ export function EmployeeDetail() {
       setShowActivateModal(false);
       showToast(t('employees.activatedSuccess'), 'success');
       loadEmployee();
+      loadAssociations();
     } catch (err: unknown) {
       setActivateError(translateApiError(err, t, t('employees.errorActivate')));
     } finally {
@@ -287,6 +312,7 @@ export function EmployeeDetail() {
       setShowDeactivateModal(false);
       showToast(t('employees.deactivatedSuccess'), 'success');
       loadEmployee();
+      loadAssociations();
     } catch (err: unknown) {
       setDeactivateError(translateApiError(err, t, t('employees.errorDeactivate')));
     } finally {
@@ -301,6 +327,7 @@ export function EmployeeDetail() {
       await resetEmployeeDevice(employeeId);
       showToast(t('employees.deviceResetRequestedSuccess'), 'success');
       loadEmployee();
+      loadAssociations();
     } catch (err: unknown) {
       showToast(translateApiError(err, t) ?? t('employees.deviceResetRequestedError'), 'error');
     } finally {
@@ -335,6 +362,76 @@ export function EmployeeDetail() {
     : employee.workingType === 'part_time'
     ? t('employees.partTime')
     : '—';
+
+  const renderAssociationEmployee = (item: EmployeeAssociationEntry, keyPrefix: string) => {
+    const full = `${item.name} ${item.surname}`.trim();
+    const initialsLabel = `${item.name?.[0] ?? ''}${item.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+    const avatarUrl = getAvatarUrl(item.avatarFilename);
+    return (
+      <div
+        key={`${keyPrefix}-${item.id}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          padding: '8px 10px',
+          border: '1px solid var(--border-light)',
+          borderRadius: 'var(--radius-sm)',
+          background: 'var(--surface)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            overflow: 'hidden',
+            background: avatarUrl ? 'transparent' : getAvatarColor(full),
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            flexShrink: 0,
+          }}>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={full} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : initialsLabel}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {full}
+            </div>
+            <div style={{
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {item.email}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <Badge variant={ROLE_BADGE_VARIANT[item.role]}>{tRole(item.role)}</Badge>
+          <Badge variant={item.status === 'active' ? 'success' : 'danger'}>
+            {item.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
+          </Badge>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="page-enter" style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -555,6 +652,7 @@ export function EmployeeDetail() {
             }
           />
           <InfoRow label={t('common.department')} value={employee.department ?? '—'} />
+          <InfoRow label={t('employees.companyField')} value={employee.companyName ?? '—'} />
           <InfoRow label={t('common.store')} value={employee.storeName ?? '—'} />
           <InfoRow label={t('employees.supervisorField')} value={employee.supervisorName ?? '—'} last />
         </SectionPanel>
@@ -679,6 +777,147 @@ export function EmployeeDetail() {
           </SectionPanel>
         </div>
       )}
+
+      {/* Role associations tree */}
+      <div style={{ marginTop: 20 }}>
+        <SectionPanel title={t('employees.associationsSection')} icon={<IconUser />}>
+          {associationsLoading ? (
+            <div style={{ padding: '20px', textAlign: 'center' }}><Spinner size="sm" /></div>
+          ) : associationsError ? (
+            <div style={{ padding: '12px 0' }}>
+              <Alert variant="danger" title={t('common.error')}>
+                {associationsError}
+              </Alert>
+            </div>
+          ) : !associations || associations.companies.length === 0 ? (
+            <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              {t('employees.associationsEmpty')}
+            </div>
+          ) : (
+            <div style={{ padding: '8px 0 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 12px',
+                border: '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--surface-warm)',
+              }}>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}>
+                  {t('employees.associationsScopeLabel')}
+                </span>
+                <Badge variant="info">{t(`employees.associationScope_${associations.scope}`)}</Badge>
+                <Badge variant="neutral">{t('employees.associationsCompaniesCount', { count: associations.summary.companyCount })}</Badge>
+                <Badge variant="neutral">{t('employees.associationsStoresCount', { count: associations.summary.storeCount })}</Badge>
+                <Badge variant="neutral">{t('employees.associationsEmployeesCount', { count: associations.summary.employeeCount })}</Badge>
+              </div>
+
+              {associations.companies.map((company) => (
+                <div key={company.id} style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  background: 'var(--surface)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    padding: '10px 12px',
+                    borderBottom: '1px solid var(--border-light)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    flexWrap: 'wrap',
+                    background: 'linear-gradient(135deg, rgba(13,33,55,0.04) 0%, rgba(201,151,58,0.08) 100%)',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{company.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{company.slug}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Badge variant={company.isActive ? 'success' : 'danger'}>
+                        {company.isActive ? t('employees.statusActive') : t('employees.statusInactive')}
+                      </Badge>
+                      <Badge variant="neutral">{t('employees.associationsStoresCount', { count: company.stores.length })}</Badge>
+                      <Badge variant="neutral">{t('employees.associationsEmployeesCount', { count: company.employeeCount })}</Badge>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {company.stores.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {t('employees.associationsNoStores')}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+                        {company.stores.map((store) => (
+                          <div key={store.id} style={{
+                            border: '1px solid var(--border-light)',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '9px',
+                            background: 'var(--surface-warm)',
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                              marginBottom: 7,
+                            }}>
+                              <div>
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{store.name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{store.code}</div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Badge variant={store.isActive ? 'success' : 'danger'}>
+                                  {store.isActive ? t('employees.statusActive') : t('employees.statusInactive')}
+                                </Badge>
+                                <Badge variant="neutral">{t('employees.associationsEmployeesCount', { count: store.employees.length })}</Badge>
+                              </div>
+                            </div>
+                            {store.employees.length === 0 ? (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                {t('employees.associationsNoEmployees')}
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {store.employees.map((entry) => renderAssociationEmployee(entry, `store-${store.id}`))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {company.unassignedEmployees.length > 0 && (
+                      <div style={{
+                        border: '1px dashed var(--border)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: 10,
+                        background: 'rgba(13,33,55,0.03)',
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                          {t('employees.associationsUnassigned')}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {company.unassignedEmployees.map((entry) => renderAssociationEmployee(entry, `unassigned-${company.id}`))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionPanel>
+      </div>
 
       {/* Training Edit Modal */}
       <Modal
@@ -815,7 +1054,12 @@ export function EmployeeDetail() {
       {showEditForm && employeeId && (
         <EmployeeForm
           employeeId={employeeId}
-          onSuccess={() => { setShowEditForm(false); showToast(t('employees.updatedSuccess'), 'success'); loadEmployee(); }}
+          onSuccess={() => {
+            setShowEditForm(false);
+            showToast(t('employees.updatedSuccess'), 'success');
+            loadEmployee();
+            loadAssociations();
+          }}
           onCancel={() => setShowEditForm(false)}
         />
       )}

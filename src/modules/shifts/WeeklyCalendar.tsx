@@ -4,6 +4,7 @@ import { ArrowLeftRight, Palmtree, Thermometer, Store } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
+import { getAvatarUrl } from '../../api/client';
 
 const STATUS_META: Record<string, {
   bg: string; color: string; dot: string;
@@ -131,6 +132,11 @@ function hoursForShiftTotal(shift: Shift): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function truncateStoreName(name: string, max = 14): string {
+  if (name.length <= max) return name;
+  return `${name.slice(0, Math.max(0, max - 1))}…`;
+}
+
 export default function WeeklyCalendar({
   shifts,
   weekStart,
@@ -186,17 +192,27 @@ export default function WeeklyCalendar({
   const weekEndStr = formatDate(addDays(weekStart, 6));
 
   // Group shifts by user then by date
-  const userMap = new Map<number, { name: string; surname: string; shifts: Map<string, Shift[]>; storeNames: Set<string> }>();
+  const userMap = new Map<number, {
+    name: string;
+    surname: string;
+    avatarFilename: string | null;
+    shifts: Map<string, Shift[]>;
+    storeNames: Set<string>;
+  }>();
   for (const shift of shifts) {
     if (!userMap.has(shift.userId)) {
       userMap.set(shift.userId, {
         name: shift.userName,
         surname: shift.userSurname,
+        avatarFilename: shift.userAvatarFilename ?? null,
         shifts: new Map(),
         storeNames: new Set(),
       });
     }
     const entry = userMap.get(shift.userId)!;
+    if (!entry.avatarFilename && shift.userAvatarFilename) {
+      entry.avatarFilename = shift.userAvatarFilename;
+    }
     // Normalize date: API may return full ISO string or just 'YYYY-MM-DD'
     const dateKey = shift.date.split('T')[0];
     const existing = entry.shifts.get(dateKey) ?? [];
@@ -214,6 +230,7 @@ export default function WeeklyCalendar({
         userMap.set(tb.userId, {
           name: tb.userName,
           surname: tb.userSurname,
+          avatarFilename: tb.userAvatarFilename ?? null,
           shifts: new Map(),
           storeNames: new Set(),
         });
@@ -306,57 +323,92 @@ export default function WeeklyCalendar({
                     const transferTargets = Array.from(new Map(
                       rowTransfers.map((tb) => [`${tb.targetStoreName}-${tb.status}`, tb]),
                     ).values());
+                    const fullName = `${userData.surname} ${userData.name}`.trim();
+                    const initials = `${userData.name?.[0] ?? ''}${userData.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+                    const avatarUrl = getAvatarUrl(userData.avatarFilename);
+                    const identityRows = transferTargets.length > 0
+                      ? [
+                          {
+                            id: 'home',
+                            storeName: homeStoreName ?? t('transfers.table.origin', 'Origine'),
+                            isTransfer: false,
+                            status: undefined as TransferAssignment['status'] | undefined,
+                          },
+                          ...transferTargets.map((tb) => ({
+                            id: `${tb.id}-${tb.status}`,
+                            storeName: tb.targetStoreName,
+                            isTransfer: true,
+                            status: tb.status,
+                          })),
+                        ]
+                      : [
+                          {
+                            id: 'home',
+                            storeName: homeStoreName,
+                            isTransfer: false,
+                            status: undefined as TransferAssignment['status'] | undefined,
+                          },
+                        ];
 
                     return (
-                      <>
-                        <div>{userData.surname} {userData.name}</div>
-                        {(homeStoreName || transferTargets.length > 0) && (
-                          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {homeStoreName && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {identityRows.map((row) => {
+                          const vm = row.isTransfer ? transferVisualMeta(row.status ?? 'active') : null;
+                          return (
+                            <div key={row.id} style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 8,
+                              padding: '4px 0',
+                            }}>
                               <div style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                padding: '2px 7px',
-                                borderRadius: 999,
-                                background: 'rgba(13,33,55,0.06)',
-                                border: '1px solid var(--border)',
-                                color: 'var(--text-muted)',
-                                fontSize: '0.65rem',
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                overflow: 'hidden',
+                                background: 'rgba(13,33,55,0.14)',
+                                color: '#0D2137',
+                                fontSize: 9,
                                 fontWeight: 700,
-                                lineHeight: 1.2,
-                                width: 'fit-content',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
                               }}>
-                                <Store size={10} />
-                                <span>{homeStoreName}</span>
+                                {avatarUrl ? (
+                                  <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : initials}
                               </div>
-                            )}
-                            {transferTargets.map((tb) => {
-                              const vm = transferVisualMeta(tb.status);
-                              return (
-                                <div key={`${tb.id}-${tb.status}`} style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  width: 'fit-content',
-                                }}>
-                                  <ArrowLeftRight size={10} color={vm.color} />
-                                  <span style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                                    padding: '2px 7px', borderRadius: 999,
-                                    background: vm.bg,
-                                    border: `1px solid ${vm.border}`,
-                                    color: vm.color,
-                                    fontSize: '0.65rem', fontWeight: 700, lineHeight: 1.2,
-                                  }}>
-                                    {tb.targetStoreName}
-                                  </span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={fullName}>
+                                  {fullName}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </>
+                                {row.storeName && (
+                                  <span style={{
+                                    marginTop: 2,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '2px 7px',
+                                    borderRadius: 999,
+                                    background: row.isTransfer ? vm?.bg : 'rgba(13,33,55,0.08)',
+                                    border: row.isTransfer ? `1px solid ${vm?.border}` : '1px solid rgba(13,33,55,0.16)',
+                                    color: row.isTransfer ? vm?.color : 'var(--text-secondary)',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    lineHeight: 1.2,
+                                    maxWidth: '100%',
+                                  }}>
+                                    <Store size={10} />
+                                    <span title={row.storeName}>{truncateStoreName(row.storeName)}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     );
                   })()}
                 </td>
@@ -366,8 +418,74 @@ export default function WeeklyCalendar({
                   const isToday = dateStr === todayStr();
                   const leave = getLeaveForUserDate(userId, dateStr);
                   const transfer = getTransferForUserDate(userId, dateStr);
+                  const transferVm = transferVisualMeta(transfer?.status ?? 'active');
                   const lvVacation = leave?.leaveType === 'vacation';
                   const lvPending = leave ? leave.status !== 'hr_approved' : false;
+                  const transferTargetStoreId = transfer?.targetStoreId ?? null;
+                  const transferLaneShifts = transferTargetStoreId == null
+                    ? []
+                    : dayShifts.filter((shift) => shift.storeId === transferTargetStoreId || shift.assignmentId != null);
+                  const originLaneShifts = transferTargetStoreId == null
+                    ? dayShifts
+                    : dayShifts.filter((shift) => !(shift.storeId === transferTargetStoreId || shift.assignmentId != null));
+                  const showDualLane = transferTargetStoreId != null;
+
+                  const renderShiftBadge = (shift: Shift) => {
+                    const meta = STATUS_META[shift.status] ?? STATUS_META.scheduled;
+                    return (
+                      <div
+                        key={shift.id}
+                        onClick={(e) => { e.stopPropagation(); onShiftClick(shift); }}
+                        title={`${t(meta.labelKey, meta.labelFb)} — ${t(meta.descKey, meta.descFb)}`}
+                        style={{
+                          background: meta.bg,
+                          color: meta.color,
+                          borderRadius: 6,
+                          padding: '3px 6px 3px 5px',
+                          marginBottom: 3,
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          boxShadow: shift.status !== 'cancelled' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none',
+                          border: `1px solid ${meta.border}`,
+                          textDecoration: shift.status === 'cancelled' ? 'line-through' : 'none',
+                          transition: 'filter 0.15s, opacity 0.15s',
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          opacity: shift.status === 'cancelled' ? 0.6 : 1,
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = ''; }}
+                      >
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                          background: 'rgba(255,255,255,0.18)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.6rem', fontWeight: 800, lineHeight: 1,
+                          color: shift.status === 'cancelled' ? '#9ca3af' : 'rgba(255,255,255,0.9)',
+                        }}>
+                          {meta.abbr}
+                        </span>
+                        <span style={{ lineHeight: 1.3 }}>
+                          <span style={{ display: 'block' }}>
+                            {fmt(shift.startTime)}–{fmt(shift.endTime)}
+                            {shift.shiftHours && (
+                              <span style={{ marginLeft: 3, opacity: 0.75, fontSize: '0.65rem' }}>({shift.shiftHours}h)</span>
+                            )}
+                          </span>
+                          {shift.isSplit && shift.splitStart2 && shift.splitEnd2 && (
+                            <span style={{
+                              display: 'block', fontSize: '0.62rem', opacity: 0.82,
+                              borderTop: '1px dashed rgba(255,255,255,0.35)',
+                              marginTop: 2, paddingTop: 2,
+                            }}>
+                              ÷ {fmt(shift.splitStart2)}–{fmt(shift.splitEnd2)}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  };
+
                   return (
                     <td
                       key={colIdx}
@@ -386,62 +504,63 @@ export default function WeeklyCalendar({
                       }}
                       onClick={() => canEdit && dayShifts.length === 0 && onCellClick(userId, dateStr)}
                     >
-                      {dayShifts.map((shift) => {
-                        const meta = STATUS_META[shift.status] ?? STATUS_META.scheduled;
-                        return (
-                          <div
-                            key={shift.id}
-                            onClick={(e) => { e.stopPropagation(); onShiftClick(shift); }}
-                            title={`${t(meta.labelKey, meta.labelFb)} — ${t(meta.descKey, meta.descFb)}`}
-                            style={{
-                              background: meta.bg,
-                              color: meta.color,
-                              borderRadius: 6,
-                              padding: '3px 6px 3px 5px',
-                              marginBottom: 3,
-                              fontSize: '0.72rem',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              boxShadow: shift.status !== 'cancelled' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none',
-                              border: `1px solid ${meta.border}`,
-                              textDecoration: shift.status === 'cancelled' ? 'line-through' : 'none',
-                              transition: 'filter 0.15s, opacity 0.15s',
-                              display: 'flex', alignItems: 'center', gap: 4,
-                              opacity: shift.status === 'cancelled' ? 0.6 : 1,
-                            }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = ''; }}
-                          >
-                            {/* Status badge */}
-                            <span style={{
-                              width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                              background: 'rgba(255,255,255,0.18)',
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '0.6rem', fontWeight: 800, lineHeight: 1,
-                              color: shift.status === 'cancelled' ? '#9ca3af' : 'rgba(255,255,255,0.9)',
-                            }}>
-                              {meta.abbr}
-                            </span>
-                            <span style={{ lineHeight: 1.3 }}>
-                              <span style={{ display: 'block' }}>
-                                {fmt(shift.startTime)}–{fmt(shift.endTime)}
-                                {shift.shiftHours && (
-                                  <span style={{ marginLeft: 3, opacity: 0.75, fontSize: '0.65rem' }}>({shift.shiftHours}h)</span>
-                                )}
-                              </span>
-                              {shift.isSplit && shift.splitStart2 && shift.splitEnd2 && (
-                                <span style={{
-                                  display: 'block', fontSize: '0.62rem', opacity: 0.82,
-                                  borderTop: '1px dashed rgba(255,255,255,0.35)',
-                                  marginTop: 2, paddingTop: 2,
-                                }}>
-                                  ÷ {fmt(shift.splitStart2)}–{fmt(shift.splitEnd2)}
-                                </span>
-                              )}
-                            </span>
+                      {showDualLane ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{
+                            border: '1px dashed rgba(13,33,55,0.2)',
+                            borderRadius: 5,
+                            padding: '3px 4px 1px',
+                            background: 'rgba(13,33,55,0.03)',
+                          }}>
+                            {originLaneShifts.length === 0 ? (
+                              <div style={{ fontSize: 10, color: 'var(--text-disabled)', padding: '2px 2px 3px' }}>—</div>
+                            ) : (
+                              originLaneShifts.map(renderShiftBadge)
+                            )}
                           </div>
-                        );
-                      })}
+
+                          <div style={{
+                            border: `1px solid ${transferVm.border}`,
+                            borderRadius: 5,
+                            padding: '3px 4px 1px',
+                            background: transferVm.bg,
+                          }}>
+                            <div style={{
+                              borderRadius: 5,
+                              border: `1px solid ${transferVm.badgeBorder}`,
+                              background: transferVm.badgeBg,
+                              color: transferVm.badgeColor,
+                              padding: '3px 6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              maxWidth: '100%',
+                              fontSize: 9,
+                              fontWeight: 800,
+                              lineHeight: 1.2,
+                              textTransform: 'uppercase',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              marginBottom: 4,
+                            }}>
+                              <ArrowLeftRight size={10} strokeWidth={2.4} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={transfer?.targetStoreName ?? ''}>
+                                {truncateStoreName(transfer?.targetStoreName ?? t('transfers.table.target', 'Destinazione'), 10)}
+                              </span>
+                              <span>{t(`transfers.status.${transfer?.status ?? 'active'}`, transfer?.status ?? 'active')}</span>
+                            </div>
+
+                            {transferLaneShifts.length === 0 ? (
+                              <div style={{ fontSize: 10, color: 'var(--text-disabled)', padding: '2px 2px 3px' }}>—</div>
+                            ) : (
+                              transferLaneShifts.map(renderShiftBadge)
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        dayShifts.map(renderShiftBadge)
+                      )}
 
                       {/* Leave event block — Google-Calendar-style, sits below shifts */}
                       {leave && (
@@ -482,51 +601,6 @@ export default function WeeklyCalendar({
                         </div>
                       )}
 
-                      {transfer && (
-                        (() => {
-                          const vm = transferVisualMeta(transfer.status);
-                          return (
-                        <div style={{
-                          marginTop: (dayShifts.length > 0 || leave) ? 3 : 0,
-                          borderRadius: 4,
-                          padding: '4px 7px 4px 8px',
-                          background: vm.bg,
-                          borderLeft: `3px solid ${vm.color}`,
-                          borderTop: `1px solid ${vm.border}`,
-                          borderRight: `1px solid ${vm.border}`,
-                          borderBottom: `1px solid ${vm.border}`,
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          minHeight: 22,
-                          pointerEvents: 'none',
-                        }}>
-                          <span style={{ lineHeight: 1, flexShrink: 0, display: 'flex' }}>
-                            <ArrowLeftRight size={11} strokeWidth={2.5} />
-                          </span>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700, lineHeight: 1.2,
-                            color: vm.color,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-                          }}>
-                            {transfer.targetStoreName}
-                          </span>
-                          <span style={{
-                            fontSize: 8.5,
-                            fontWeight: 800,
-                            color: vm.badgeColor,
-                            background: vm.badgeBg,
-                            border: `1px solid ${vm.badgeBorder}`,
-                            borderRadius: 999,
-                            padding: '1px 5px',
-                            lineHeight: 1.35,
-                            flexShrink: 0,
-                            textTransform: 'uppercase',
-                          }}>
-                            {t(`transfers.status.${transfer.status}`, transfer.status)}
-                          </span>
-                        </div>
-                          );
-                        })()
-                      )}
                     </td>
                   );
                 })}

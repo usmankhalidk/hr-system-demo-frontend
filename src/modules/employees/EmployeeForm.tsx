@@ -144,14 +144,19 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
 
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
 
+  const canPickCompany = !isEditMode && (user?.role === 'admin' || user?.role === 'hr');
+
   const selectedCompanyId = formData.companyId ? parseInt(formData.companyId, 10) : NaN;
   const effectiveCompanyId = Number.isNaN(selectedCompanyId)
-    ? (user?.companyId ?? null)
+    ? (canPickCompany ? null : (user?.companyId ?? null))
     : selectedCompanyId;
 
   useEffect(() => {
-    const targetCompanyId = effectiveCompanyId ?? undefined;
-    getStores(targetCompanyId ? { targetCompanyId } : undefined).then(setStores).catch(() => {
+    if (effectiveCompanyId == null) {
+      setStores([]);
+      return;
+    }
+    getStores({ targetCompanyId: effectiveCompanyId }).then(setStores).catch(() => {
       setError(t('employees.errorLoadStores'));
     });
   }, [effectiveCompanyId, t]);
@@ -168,6 +173,11 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   // Load supervisor options (same company, filtered client-side)
   useEffect(() => {
     let mounted = true;
+    if (effectiveCompanyId == null) {
+      setSupervisors([]);
+      setLoadingSupervisors(false);
+      return () => { mounted = false; };
+    }
     setLoadingSupervisors(true);
     getEmployees({ limit: 500, targetCompanyId: effectiveCompanyId ?? undefined })
       .then((res) => {
@@ -280,6 +290,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
       errs.email = t('employees.emailInvalid');
     }
     if (!formData.role) errs.role = t('employees.fieldRequired');
+    if (canPickCompany && !formData.companyId) errs.companyId = t('employees.fieldRequired');
     if (!isEditMode && !formData.uniqueId.trim()) errs.uniqueId = t('employees.fieldRequired');
     setStep1Errors(errs);
     return Object.keys(errs).length === 0;
@@ -705,14 +716,15 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                     </div>
                   </div>
                   {/* Company selector: only shown when the user has access to multiple companies */}
-                  {!isEditMode && companies.length > 1 && (
+                  {canPickCompany && (
                     <div style={{ marginBottom: '14px' }}>
                       <Select
                         label={t('employees.companyField')}
                         value={formData.companyId}
                         onChange={(e) => set('companyId', e.target.value)}
+                        error={step1Errors.companyId}
                       >
-                        <option value="">{t('employees.sameCompany')}</option>
+                        <option value="">{t('employees.selectCompany', 'Select company')}</option>
                         {companies.map((c) => (
                           <option key={c.id} value={String(c.id)}>{c.name}</option>
                         ))}
@@ -743,8 +755,13 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       label={t('common.store')}
                       value={formData.storeId}
                       onChange={(e) => set('storeId', e.target.value)}
+                      disabled={canPickCompany && effectiveCompanyId == null}
                     >
-                      <option value="">{t('employees.noStore')}</option>
+                      <option value="">
+                        {canPickCompany && effectiveCompanyId == null
+                          ? t('employees.selectCompanyFirst', 'Select company first')
+                          : t('employees.noStore')}
+                      </option>
                       {stores.map((s) => (
                         <option key={s.id} value={String(s.id)}>{s.name}</option>
                       ))}
@@ -753,9 +770,13 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                     label={t('employees.supervisorField')}
                     value={formData.supervisorId}
                     onChange={(e) => set('supervisorId', e.target.value)}
-                    disabled={loadingSupervisors}
+                    disabled={loadingSupervisors || (canPickCompany && effectiveCompanyId == null)}
                   >
-                    <option value="">{t('employees.noSupervisor')}</option>
+                    <option value="">
+                      {canPickCompany && effectiveCompanyId == null
+                        ? t('employees.selectCompanyFirst', 'Select company first')
+                        : t('employees.noSupervisor')}
+                    </option>
                     {supervisors.map((s) => (
                       <option key={s.id} value={String(s.id)}>
                         {s.name} {s.surname} ({tRole(s.role)}){s.storeName ? ` — ${s.storeName}` : ''}

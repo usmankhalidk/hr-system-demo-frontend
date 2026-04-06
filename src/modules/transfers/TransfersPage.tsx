@@ -16,6 +16,7 @@ import {
   listTransfers,
   listTransferShifts,
   cancelTransfer,
+  deleteTransfer,
   completeTransfer,
 } from '../../api/transfers';
 import ConfirmModal from '../../components/ui/ConfirmModal';
@@ -83,6 +84,11 @@ function transferDaysInclusive(startDate: string, endDate: string): number | nul
   return Math.floor((endMs - startMs) / 86400000) + 1;
 }
 
+function truncateText(value: string, max = 16): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 1))}…`;
+}
+
 async function loadEmployeesByPages(baseParams: Omit<EmployeeListParams, 'page' | 'limit'>): Promise<Employee[]> {
   const limit = 100;
   let page = 1;
@@ -125,11 +131,25 @@ export default function TransfersPage() {
 
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const selectedEmployee = useMemo(
     () => employees.find((emp) => emp.id === Number(form.user_id)),
     [employees, form.user_id],
   );
+
+  const selectedEmployeeAvatarUrl = selectedEmployee?.avatarFilename
+    ? getAvatarUrl(selectedEmployee.avatarFilename)
+    : null;
+
+  const selectedEmployeeInitials = `${selectedEmployee?.name?.[0] ?? ''}${selectedEmployee?.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+  const selectedEmployeeFullName = selectedEmployee
+    ? `${selectedEmployee.surname} ${selectedEmployee.name}`
+    : t('transfers.form.employee', 'Dipendente');
+
+  const selectedEmployeeRoleLabel = selectedEmployee
+    ? t(`roles.${selectedEmployee.role}`, selectedEmployee.role)
+    : '';
 
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
@@ -302,8 +322,14 @@ export default function TransfersPage() {
     setConfirmCancelOpen(false);
     setError(null);
     try {
-      await cancelTransfer(editingTransfer.id);
-      setSuccess(t('transfers.cancelled', 'Trasferimento annullato'));
+      const result = await cancelTransfer(editingTransfer.id);
+      const cancelledCount = result.cancelledShifts ?? result.detachedShifts ?? 0;
+      setSuccess(
+        t('transfers.cancelledWithShiftCount', {
+          defaultValue: `Trasferimento annullato. ${cancelledCount} turni nel periodo trasferimento impostati su annullato.`,
+          count: cancelledCount,
+        }),
+      );
       closeDrawer();
       await fetchTransfers();
     } catch (err: any) {
@@ -327,8 +353,32 @@ export default function TransfersPage() {
     }
   }
 
+  async function doDeleteTransfer() {
+    if (!editingTransfer) return;
+    setConfirmDeleteOpen(false);
+    setError(null);
+    try {
+      await deleteTransfer(editingTransfer.id);
+      setSuccess(t('transfers.deleted', 'Trasferimento eliminato'));
+      closeDrawer();
+      await fetchTransfers();
+    } catch (err: any) {
+      const code = err?.response?.data?.code as string | undefined;
+      setError(code ? t(`errors.${code}`, t('errors.DEFAULT')) : t('errors.DEFAULT'));
+    }
+  }
+
+  function handleEmployeeSelect(employeeId: string) {
+    const employee = employees.find((emp) => emp.id === Number(employeeId));
+    setForm((prev) => ({
+      ...prev,
+      user_id: employeeId,
+      origin_store_id: employee?.storeId != null ? String(employee.storeId) : '',
+    }));
+  }
+
   return (
-    <div className="page-enter" style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div className="page-enter" style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>
@@ -454,24 +504,7 @@ export default function TransfersPage() {
                       <span style={{ ...chipStyle, borderColor: 'rgba(13,33,55,0.28)' }}><ArrowLeftRight size={11} />{transfer.targetStoreName}</span>
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span>{transfer.startDate} - {transfer.endDate}</span>
-                        {daysInPeriod != null && (
-                          <span style={{
-                            width: 'fit-content',
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            border: '1px solid rgba(13,33,55,0.2)',
-                            background: 'rgba(13,33,55,0.05)',
-                            color: 'var(--text-secondary)',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            display: 'inline-block',
-                          }}>
-                            {daysInPeriod} {t('transfers.table.daysShort', 'days')}
-                          </span>
-                        )}
-                      </div>
+                      <span>{transfer.startDate} - {transfer.endDate}</span>
                     </td>
                     <td style={tdStyle}>
                       {daysInPeriod != null ? (
@@ -540,18 +573,61 @@ export default function TransfersPage() {
                   <label style={labelStyle}>{t('transfers.form.employee', 'Dipendente')}</label>
                   <select
                     value={form.user_id}
-                    onChange={(e) => setForm((p) => ({ ...p, user_id: e.target.value }))}
+                    onChange={(e) => handleEmployeeSelect(e.target.value)}
                     style={inputStyle}
                     required
                     disabled={Boolean(editingTransfer)}
                   >
                     <option value="">{t('transfers.form.selectEmployee', 'Seleziona dipendente')}</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={String(emp.id)}>
-                        {emp.surname} {emp.name}
-                      </option>
-                    ))}
+                    {employees.map((emp) => {
+                      const roleLabel = t(`roles.${emp.role}`, emp.role);
+                      return (
+                        <option key={emp.id} value={String(emp.id)}>
+                          {emp.surname} {emp.name} · {roleLabel}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {selectedEmployee && (
+                    <div style={{
+                      marginTop: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface-warm)',
+                    }}>
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        overflow: 'hidden',
+                        background: 'rgba(13,33,55,0.14)',
+                        color: '#0D2137',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        {selectedEmployeeAvatarUrl ? (
+                          <img src={selectedEmployeeAvatarUrl} alt={selectedEmployeeFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : selectedEmployeeInitials}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {selectedEmployeeFullName}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedEmployeeRoleLabel}
+                          {selectedEmployee.storeName ? ` · ${selectedEmployee.storeName}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div style={helpTextStyle}>
                     {t('transfers.form.employeeRoleOnly', 'Vengono mostrati solo utenti con ruolo Employee.')}
                   </div>
@@ -642,6 +718,28 @@ export default function TransfersPage() {
                   }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 8 }}>
                       {t('transfers.linkedShiftsTitle', 'Linked shifts')}
+                      {(() => {
+                        const days = transferDaysInclusive(editingTransfer.startDate, editingTransfer.endDate);
+                        if (days == null) return null;
+                        return (
+                          <span style={{
+                            marginLeft: 8,
+                            width: 'fit-content',
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            border: '1px solid rgba(13,33,55,0.2)',
+                            background: 'rgba(13,33,55,0.05)',
+                            color: 'var(--text-secondary)',
+                            fontSize: 10,
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            display: 'inline-block',
+                            verticalAlign: 'middle',
+                          }}>
+                            {t('transfers.table.daysShort', 'days') ? `${days} ${t('transfers.table.daysShort', 'days')}` : `${days} days`}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     {linkedShiftsLoading ? (
@@ -667,13 +765,13 @@ export default function TransfersPage() {
                               borderRadius: 8,
                               padding: '7px 9px',
                             }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                                 <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 700 }}>
                                   {shift.date} · {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
                                   {shift.shiftHours != null && shift.shiftHours !== '' ? ` (${shift.shiftHours}h)` : ''}
                                 </div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                  {shift.storeName}
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={shift.storeName}>
+                                  {truncateText(shift.storeName, 28)}
                                 </div>
                               </div>
                               <span style={{
@@ -722,7 +820,20 @@ export default function TransfersPage() {
                 )}
               </div>
 
-              <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                <div>
+                  {editingTransfer && canWrite && (
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => setConfirmDeleteOpen(true)}
+                      disabled={saving}
+                    >
+                      {t('transfers.delete', 'Elimina trasferimento')}
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <button type="button" className="btn btn-secondary" onClick={closeDrawer} disabled={saving}>
                   {t('common.cancel', 'Annulla')}
                 </button>
@@ -731,6 +842,7 @@ export default function TransfersPage() {
                     {saving ? t('common.saving', 'Salvataggio...') : t('common.save', 'Salva')}
                   </button>
                 )}
+                </div>
               </div>
             </form>
           </div>
@@ -741,7 +853,7 @@ export default function TransfersPage() {
       <ConfirmModal
         open={confirmCancelOpen}
         title={t('transfers.cancelConfirmTitle', 'Conferma annullamento')}
-        message={t('transfers.cancelConfirmMessage', 'Vuoi annullare questo trasferimento? I turni futuri collegati verranno sganciati.')}
+        message={t('transfers.cancelConfirmMessage', 'Vuoi annullare questo trasferimento? I turni del periodo trasferimento verranno impostati su annullato.')}
         variant="warning"
         onCancel={() => setConfirmCancelOpen(false)}
         onConfirm={() => { void doCancelTransfer(); }}
@@ -754,6 +866,15 @@ export default function TransfersPage() {
         variant="primary"
         onCancel={() => setConfirmCompleteOpen(false)}
         onConfirm={() => { void doCompleteTransfer(); }}
+      />
+
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        title={t('transfers.deleteConfirmTitle', 'Conferma eliminazione')}
+        message={t('transfers.deleteConfirmMessage', 'Eliminare definitivamente questo trasferimento? I collegamenti ai turni verranno rimossi.')}
+        variant="danger"
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={() => { void doDeleteTransfer(); }}
       />
     </div>
   );

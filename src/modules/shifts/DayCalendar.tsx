@@ -1,9 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, CalendarDays, Palmtree, Thermometer, Coffee } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Palmtree, Thermometer, Coffee, Store as StoreIcon } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
+import { getAvatarUrl } from '../../api/client';
 
 interface DayCalendarProps {
   shifts: Shift[];
@@ -61,6 +62,11 @@ const STATUS_META: Record<string, {
   },
 };
 
+function truncateStoreName(name: string, max = 16): string {
+  if (name.length <= max) return name;
+  return `${name.slice(0, Math.max(0, max - 1))}…`;
+}
+
 function transferVisualMeta(status: TransferAssignment['status']): {
   bg: string;
   border: string;
@@ -72,7 +78,7 @@ function transferVisualMeta(status: TransferAssignment['status']): {
   if (status === 'completed') {
     return {
       bg: 'rgba(30,64,175,0.1)',
-      border: 'rgba(30,64,175,0.25)',
+      border: 'rgba(30,64,175,0.28)',
       color: '#1e40af',
       badgeBg: 'rgba(239,246,255,0.95)',
       badgeBorder: 'rgba(30,64,175,0.34)',
@@ -107,14 +113,23 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
   const isToday = dateStr === today;
 
   // Group shifts by user
-  const userMap = new Map<number, { name: string; surname: string; shifts: Shift[] }>();
+  const userMap = new Map<number, { name: string; surname: string; avatarFilename: string | null; shifts: Shift[] }>();
   for (const s of shifts) {
     const key = s.date.split('T')[0];
     if (key !== dateStr) continue;
     if (!userMap.has(s.userId)) {
-      userMap.set(s.userId, { name: s.userName, surname: s.userSurname, shifts: [] });
+      userMap.set(s.userId, {
+        name: s.userName,
+        surname: s.userSurname,
+        avatarFilename: s.userAvatarFilename ?? null,
+        shifts: [],
+      });
     }
-    userMap.get(s.userId)!.shifts.push(s);
+    const userEntry = userMap.get(s.userId)!;
+    if (!userEntry.avatarFilename && s.userAvatarFilename) {
+      userEntry.avatarFilename = s.userAvatarFilename;
+    }
+    userEntry.shifts.push(s);
   }
 
   // Include transfer-only users for the selected day (no shifts required to render row).
@@ -122,7 +137,12 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
     for (const tb of transferBlocks) {
       if (tb.startDate > dateStr || tb.endDate < dateStr) continue;
       if (!userMap.has(tb.userId)) {
-        userMap.set(tb.userId, { name: tb.userName, surname: tb.userSurname, shifts: [] });
+        userMap.set(tb.userId, {
+          name: tb.userName,
+          surname: tb.userSurname,
+          avatarFilename: tb.userAvatarFilename ?? null,
+          shifts: [],
+        });
       }
     }
   }
@@ -181,7 +201,7 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
       ) : (
         <div style={{ minWidth: 700 }}>
           {/* Hour ruler */}
-          <div style={{ display: 'flex', paddingLeft: 150, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', paddingLeft: 190, borderBottom: '1px solid var(--border)' }}>
             {HOUR_LABELS.map((h, i) => (
               <div key={h} style={{
                 flex: i === HOUR_LABELS.length - 1 ? '0 0 0' : 1,
@@ -214,6 +234,298 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
               })[0] ?? null;
             const isVacation = rowLeave?.leaveType === 'vacation';
             const isPending = rowLeave ? rowLeave.status !== 'hr_approved' : false;
+            const transferTargetStoreId = rowTransfer?.targetStoreId ?? null;
+            const transferLaneShifts = transferTargetStoreId == null
+              ? []
+              : userData.shifts.filter((shift) => shift.storeId === transferTargetStoreId || shift.assignmentId != null);
+            const originLaneShifts = transferTargetStoreId == null
+              ? userData.shifts
+              : userData.shifts.filter((shift) => !(shift.storeId === transferTargetStoreId || shift.assignmentId != null));
+            const showDualLane = transferTargetStoreId != null;
+            const avatarInitials = `${(userData.name || '').slice(0, 1)}${(userData.surname || '').slice(0, 1)}`.toUpperCase();
+            const avatarUrl = getAvatarUrl(userData.avatarFilename);
+            const fullName = `${userData.surname} ${userData.name}`.trim();
+            const rowStoreNames = Array.from(new Set(userData.shifts.map((s) => s.storeName).filter(Boolean))) as string[];
+            const originStoreName = rowTransfer?.originStoreName ?? rowStoreNames[0] ?? t('transfers.table.origin', 'Origine');
+            const targetStoreName = rowTransfer?.targetStoreName ?? t('transfers.table.target', 'Destinazione');
+            const transferVm = transferVisualMeta(rowTransfer?.status ?? 'active');
+
+            const renderIdentityRow = (opts: {
+              storeName: string;
+              isTransfer: boolean;
+              status?: TransferAssignment['status'];
+            }) => {
+              const isTransfer = opts.isTransfer;
+              const status = opts.status ?? 'active';
+              const statusVisual = isTransfer ? transferVisualMeta(status) : null;
+              return (
+                <div style={{
+                  minHeight: 56,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '5px 8px',
+                  background: isTransfer ? statusVisual?.bg : 'rgba(13,33,55,0.03)',
+                  borderTop: isTransfer ? `1px dashed ${statusVisual?.border}` : 'none',
+                }}>
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={fullName}
+                      style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg,var(--primary),var(--accent))',
+                      color: '#fff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}>
+                      {avatarInitials}
+                    </div>
+                  )}
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: 'var(--text-primary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }} title={fullName}>
+                      {fullName}
+                    </div>
+                    <div style={{
+                      marginTop: 3,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 7px',
+                      borderRadius: 999,
+                      background: isTransfer ? statusVisual?.bg : 'rgba(13,33,55,0.08)',
+                      border: `1px solid ${isTransfer ? statusVisual?.border : 'rgba(13,33,55,0.16)'}`,
+                      color: isTransfer ? statusVisual?.color : 'var(--text-secondary)',
+                      fontSize: 9,
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                      maxWidth: '100%',
+                    }}>
+                      <StoreIcon size={10} strokeWidth={2.3} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={opts.storeName}>
+                        {truncateStoreName(opts.storeName, 14)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
+            const renderShiftBlocks = (laneShifts: Shift[], laneKey: string) => laneShifts.map((shift) => {
+              const colors = STATUS_META[shift.status] ?? STATUS_META.scheduled;
+              const isCancelled = shift.status === 'cancelled';
+
+              const mainRange = `${shift.startTime.slice(0, 5)}–${shift.endTime.slice(0, 5)}`;
+              const breakInfo = shift.breakType === 'flexible' && shift.breakMinutes
+                ? ` · ${t('shifts.form.breakMinutes')}: ${shift.breakMinutes} min (${t('shifts.form.breakType_flexible')})`
+                : shift.breakStart && shift.breakEnd
+                ? ` · ${t('shifts.form.breakStart')}: ${shift.breakStart.slice(0, 5)}–${shift.breakEnd.slice(0, 5)}`
+                : '';
+              const splitInfo = shift.isSplit && shift.splitStart2 && shift.splitEnd2
+                ? ` · ${t('shifts.form.isSplit')}: ${shift.splitStart2.slice(0, 5)}–${shift.splitEnd2.slice(0, 5)}`
+                : '';
+              const hoursInfo = shift.shiftHours ? ` (${shift.shiftHours}h)` : '';
+              const shiftTitle = `${t(colors.labelKey, colors.labelFb)} — ${mainRange}${hoursInfo}${breakInfo}${splitInfo}`;
+
+              const renderBlock = (
+                blockStart: string,
+                blockEnd: string,
+                isSecondBlock: boolean,
+                withBreak: boolean,
+              ) => {
+                const sMins = timeToMins(blockStart);
+                const eMins = timeToMins(blockEnd);
+                const blockLeft = pct(sMins);
+                const blockDurMins = Math.max(1, eMins - sMins);
+                const blockWidth = `${Math.max(0.5, (blockDurMins / TOTAL_MINS) * 100).toFixed(3)}%`;
+
+                let hasBreakOverlay = false;
+                let breakOverlayLeft = '0%';
+                let breakOverlayWidth = '0%';
+                if (withBreak && shift.breakStart && shift.breakEnd) {
+                  const bsMins = timeToMins(shift.breakStart);
+                  const beMins = timeToMins(shift.breakEnd);
+                  if (bsMins >= sMins && beMins <= eMins) {
+                    hasBreakOverlay = true;
+                    breakOverlayLeft = `${(((bsMins - sMins) / blockDurMins) * 100).toFixed(2)}%`;
+                    breakOverlayWidth = `${(((beMins - bsMins) / blockDurMins) * 100).toFixed(2)}%`;
+                  }
+                }
+
+                const blockKey = `${shift.id}-${isSecondBlock ? 'b' : 'a'}-${laneKey}`;
+                const transferStatus = laneKey === 'transfer' && rowTransfer && !isSecondBlock
+                  ? rowTransfer.status
+                  : null;
+                const transferStatusVisual = transferStatus ? transferVisualMeta(transferStatus) : null;
+                const transferStatusStore = rowTransfer?.targetStoreName ?? targetStoreName;
+
+                return (
+                  <div
+                    key={blockKey}
+                    onClick={(e) => { e.stopPropagation(); onShiftClick(shift); }}
+                    title={shiftTitle}
+                    style={{
+                      position: 'absolute',
+                      left: blockLeft,
+                      width: blockWidth,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: 40,
+                      background: colors.bg,
+                      color: colors.text,
+                      borderRadius: 6,
+                      border: isSecondBlock ? `1.5px dashed ${colors.border}` : `1px solid ${colors.border}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '0 6px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: !isCancelled ? '0 1px 4px rgba(0,0,0,0.2)' : 'none',
+                      textDecoration: isCancelled ? 'line-through' : 'none',
+                      opacity: isCancelled ? 0.55 : isSecondBlock ? 0.88 : 1,
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      transition: 'opacity 0.15s, filter 0.15s',
+                      zIndex: 5,
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(1.12)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = ''; }}
+                  >
+                    {hasBreakOverlay && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: breakOverlayLeft,
+                          width: breakOverlayWidth,
+                          top: 0,
+                          bottom: 0,
+                          background: 'repeating-linear-gradient(45deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 3px, rgba(0,0,0,0.22) 3px, rgba(0,0,0,0.22) 4px)',
+                          borderLeft: '1px solid rgba(255,255,255,0.3)',
+                          borderRight: '1px solid rgba(255,255,255,0.3)',
+                          pointerEvents: 'none',
+                          zIndex: 1,
+                        }}
+                      />
+                    )}
+
+                    {transferStatus && transferStatusVisual && (
+                      <span style={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 3,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        padding: '1px 4px',
+                        borderRadius: 4,
+                        background: transferStatusVisual.badgeBg,
+                        border: `1px solid ${transferStatusVisual.badgeBorder}`,
+                        color: transferStatusVisual.badgeColor,
+                        fontSize: 8,
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                        textTransform: 'uppercase',
+                        zIndex: 3,
+                        maxWidth: 'calc(100% - 8px)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        <ArrowLeftRight size={9} strokeWidth={2.4} />
+                        <span title={transferStatusStore}>
+                          {truncateStoreName(transferStatusStore, 10)}
+                        </span>
+                        {t(`transfers.status.${transferStatus}`, transferStatus)}
+                      </span>
+                    )}
+
+                    <span style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 3,
+                      background: isSecondBlock ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.18)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      color: isCancelled ? '#9ca3af' : 'rgba(255,255,255,0.9)',
+                      position: 'relative',
+                      zIndex: 2,
+                      flexShrink: 0,
+                    }}>
+                      {isSecondBlock ? '2' : colors.abbr}
+                    </span>
+
+                    <span style={{ position: 'relative', zIndex: 2, lineHeight: 1.15, overflow: 'hidden' }}>
+                      {blockStart.slice(0, 5)}–{blockEnd.slice(0, 5)}
+                      {!isSecondBlock && shift.shiftHours && (
+                        <span style={{ marginLeft: 3, opacity: 0.75, fontSize: '0.65rem' }}>({shift.shiftHours}h)</span>
+                      )}
+                      {hasBreakOverlay && (
+                        <span style={{
+                          marginLeft: 5,
+                          opacity: 0.7,
+                          fontSize: 9,
+                          position: 'relative',
+                          zIndex: 2,
+                          background: 'rgba(255,255,255,0.12)',
+                          borderRadius: 3,
+                          padding: '1px 4px',
+                        }}>
+                          <Coffee size={9} strokeWidth={2.5} /> {shift.breakStart!.slice(0, 5)}
+                        </span>
+                      )}
+                      {!hasBreakOverlay && !isSecondBlock && shift.breakType === 'flexible' && shift.breakMinutes && (
+                        <span style={{
+                          marginLeft: 5,
+                          opacity: 0.7,
+                          fontSize: 9,
+                          position: 'relative',
+                          zIndex: 2,
+                          background: 'rgba(255,255,255,0.12)',
+                          borderRadius: 3,
+                          padding: '1px 4px',
+                        }}>
+                          <Coffee size={9} strokeWidth={2.5} /> {shift.breakMinutes}m flex
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              };
+
+              if (shift.isSplit && shift.splitStart2 && shift.splitEnd2) {
+                return (
+                  <React.Fragment key={`${shift.id}-${laneKey}`}>
+                    {renderBlock(shift.startTime, shift.endTime, false, true)}
+                    {renderBlock(shift.splitStart2, shift.splitEnd2, true, false)}
+                  </React.Fragment>
+                );
+              }
+
+              return renderBlock(shift.startTime, shift.endTime, false, true);
+            });
 
             return (
             <div
@@ -222,12 +534,14 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                 display: 'flex', alignItems: 'stretch',
                 borderBottom: '1px solid var(--border)',
                 background: rowIdx % 2 === 0 ? 'var(--surface)' : 'var(--background)',
-                minHeight: 52,
+                minHeight: showDualLane ? 114 : 60,
               }}
             >
               {/* Name */}
               <div style={{
-                width: 150, flexShrink: 0, padding: '8px 10px 8px 12px',
+                width: 190,
+                flexShrink: 0,
+                padding: 0,
                 fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
                 borderRight: '1px solid var(--border)', lineHeight: 1.3,
                 background: rowLeave
@@ -235,12 +549,18 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                   : undefined,
                 display: 'flex', flexDirection: 'column', justifyContent: 'center',
               }}>
-                <div>{userData.surname}</div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{userData.name}</span>
+                {showDualLane ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', minHeight: 112 }}>
+                    {renderIdentityRow({ storeName: originStoreName, isTransfer: false })}
+                    {renderIdentityRow({ storeName: targetStoreName, isTransfer: true, status: rowTransfer?.status })}
+                  </div>
+                ) : (
+                  renderIdentityRow({ storeName: rowStoreNames[0] ?? originStoreName, isTransfer: false })
+                )}
                 {rowLeave && (
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 4,
-                    marginTop: 5,
+                    margin: '5px 8px 6px',
                     padding: '3px 8px 3px 6px',
                     borderRadius: 4,
                     background: isVacation ? 'rgba(219,234,254,0.9)' : 'rgba(255,237,213,0.9)',
@@ -266,51 +586,16 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                     )}
                   </div>
                 )}
-                {rowTransfer && (
-                  (() => {
-                    const vm = transferVisualMeta(rowTransfer.status);
-                    return (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    marginTop: 5,
-                    padding: '3px 8px 3px 6px',
-                    borderRadius: 4,
-                    background: vm.bg,
-                    borderLeft: `3px solid ${vm.color}`,
-                    borderTop: `1px solid ${vm.border}`,
-                    borderRight: `1px solid ${vm.border}`,
-                    borderBottom: `1px solid ${vm.border}`,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: vm.color,
-                  }}>
-                    <ArrowLeftRight size={11} strokeWidth={2.4} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                      {rowTransfer.targetStoreName}
-                    </span>
-                    <span style={{
-                      fontSize: 8.5,
-                      fontWeight: 800,
-                      color: vm.badgeColor,
-                      background: vm.badgeBg,
-                      border: `1px solid ${vm.badgeBorder}`,
-                      borderRadius: 999,
-                      padding: '1px 5px',
-                      lineHeight: 1.35,
-                      flexShrink: 0,
-                      textTransform: 'uppercase',
-                    }}>
-                      {t(`transfers.status.${rowTransfer.status}`, rowTransfer.status)}
-                    </span>
-                  </div>
-                    );
-                  })()
-                )}
               </div>
 
               {/* Timeline */}
               <div
-                style={{ flex: 1, position: 'relative', minHeight: 52, cursor: canEdit ? 'pointer' : 'default' }}
+                style={{
+                  flex: 1,
+                  position: 'relative',
+                  minHeight: showDualLane ? 114 : 60,
+                  cursor: canEdit ? 'pointer' : 'default',
+                }}
                 onClick={() => canEdit && onSlotClick(userId, dateStr)}
               >
                 {/* Leave timeline overlay — clean gradient wash */}
@@ -326,178 +611,82 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                     opacity: isPending ? 0.65 : 1,
                   }} />
                 )}
-                {/* Hour grid lines */}
-                {HOUR_LABELS.slice(0, -1).map((_, i) => (
-                  <div key={i} style={{
-                    position: 'absolute', top: 0, bottom: 0,
-                    left: `${(i / (HOUR_LABELS.length - 1)) * 100}%`,
-                    borderLeft: '1px solid var(--border)',
-                    opacity: 0.5, pointerEvents: 'none',
-                  }} />
-                ))}
+                {showDualLane ? (
+                  <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 2, minHeight: 114 }}>
+                    <div style={{ position: 'relative', minHeight: 56, background: 'rgba(13,33,55,0.02)' }}>
+                      {HOUR_LABELS.slice(0, -1).map((_, i) => (
+                        <div key={`origin-grid-${i}`} style={{
+                          position: 'absolute', top: 0, bottom: 0,
+                          left: `${(i / (HOUR_LABELS.length - 1)) * 100}%`,
+                          borderLeft: '1px solid var(--border)',
+                          opacity: 0.5, pointerEvents: 'none',
+                        }} />
+                      ))}
+                      {showNowLine && (
+                        <div style={{
+                          position: 'absolute', top: 0, bottom: 0,
+                          left: pct(nowMins), width: 2, background: 'var(--accent)', zIndex: 10, pointerEvents: 'none',
+                        }} />
+                      )}
+                      {renderShiftBlocks(originLaneShifts, 'origin')}
+                      {originLaneShifts.length === 0 && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-disabled)' }}>
+                          —
+                        </div>
+                      )}
+                    </div>
 
-                {/* Now line */}
-                {showNowLine && (
-                  <div style={{
-                    position: 'absolute', top: 0, bottom: 0,
-                    left: pct(nowMins),
-                    width: 2,
-                    background: 'var(--accent)',
-                    zIndex: 10,
-                    pointerEvents: 'none',
-                  }} />
+                    <div style={{
+                      position: 'relative',
+                      minHeight: 56,
+                      borderTop: `1px dashed ${transferVm.border}`,
+                      background: transferVm.bg,
+                    }}>
+                      {HOUR_LABELS.slice(0, -1).map((_, i) => (
+                        <div key={`transfer-grid-${i}`} style={{
+                          position: 'absolute', top: 0, bottom: 0,
+                          left: `${(i / (HOUR_LABELS.length - 1)) * 100}%`,
+                          borderLeft: '1px solid var(--border)',
+                          opacity: 0.5, pointerEvents: 'none',
+                        }} />
+                      ))}
+                      {showNowLine && (
+                        <div style={{
+                          position: 'absolute', top: 0, bottom: 0,
+                          left: pct(nowMins), width: 2, background: 'var(--accent)', zIndex: 10, pointerEvents: 'none',
+                        }} />
+                      )}
+                      {renderShiftBlocks(transferLaneShifts, 'transfer')}
+                      {transferLaneShifts.length === 0 && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-disabled)' }}>
+                          —
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {HOUR_LABELS.slice(0, -1).map((_, i) => (
+                      <div key={i} style={{
+                        position: 'absolute', top: 0, bottom: 0,
+                        left: `${(i / (HOUR_LABELS.length - 1)) * 100}%`,
+                        borderLeft: '1px solid var(--border)',
+                        opacity: 0.5, pointerEvents: 'none',
+                      }} />
+                    ))}
+                    {showNowLine && (
+                      <div style={{
+                        position: 'absolute', top: 0, bottom: 0,
+                        left: pct(nowMins),
+                        width: 2,
+                        background: 'var(--accent)',
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                      }} />
+                    )}
+                    {renderShiftBlocks(originLaneShifts, 'single')}
+                  </>
                 )}
-
-                {/* Shift blocks */}
-                {userData.shifts.map((shift) => {
-                  const colors = STATUS_META[shift.status] ?? STATUS_META.scheduled;
-                  const isCancelled = shift.status === 'cancelled';
-
-                  // Build rich tooltip
-                  const mainRange = `${shift.startTime.slice(0, 5)}–${shift.endTime.slice(0, 5)}`;
-                  const breakInfo = shift.breakType === 'flexible' && shift.breakMinutes
-                    ? ` · ${t('shifts.form.breakMinutes')}: ${shift.breakMinutes} min (${t('shifts.form.breakType_flexible')})`
-                    : shift.breakStart && shift.breakEnd
-                    ? ` · ${t('shifts.form.breakStart')}: ${shift.breakStart.slice(0, 5)}–${shift.breakEnd.slice(0, 5)}`
-                    : '';
-                  const splitInfo = shift.isSplit && shift.splitStart2 && shift.splitEnd2
-                    ? ` · ${t('shifts.form.isSplit')}: ${shift.splitStart2.slice(0, 5)}–${shift.splitEnd2.slice(0, 5)}`
-                    : '';
-                  const hoursInfo = shift.shiftHours ? ` (${shift.shiftHours}h)` : '';
-                  const shiftTitle = `${t(colors.labelKey, colors.labelFb)} — ${mainRange}${hoursInfo}${breakInfo}${splitInfo}`;
-
-                  // Renders one positioned block on the timeline
-                  const renderBlock = (
-                    blockStart: string,
-                    blockEnd: string,
-                    isSecondBlock: boolean,
-                    withBreak: boolean,
-                  ) => {
-                    const sMins = timeToMins(blockStart);
-                    const eMins = timeToMins(blockEnd);
-                    const blockLeft = pct(sMins);
-                    const blockDurMins = Math.max(1, eMins - sMins);
-                    const blockWidth = `${Math.max(0.5, (blockDurMins / TOTAL_MINS) * 100).toFixed(3)}%`;
-
-                    // Break overlay: position relative to this block's width
-                    let hasBreakOverlay = false;
-                    let breakOverlayLeft = '0%';
-                    let breakOverlayWidth = '0%';
-                    if (withBreak && shift.breakStart && shift.breakEnd) {
-                      const bsMins = timeToMins(shift.breakStart);
-                      const beMins = timeToMins(shift.breakEnd);
-                      if (bsMins >= sMins && beMins <= eMins) {
-                        hasBreakOverlay = true;
-                        breakOverlayLeft = `${(((bsMins - sMins) / blockDurMins) * 100).toFixed(2)}%`;
-                        breakOverlayWidth = `${(((beMins - bsMins) / blockDurMins) * 100).toFixed(2)}%`;
-                      }
-                    }
-
-                    const blockKey = `${shift.id}-${isSecondBlock ? 'b' : 'a'}`;
-
-                    return (
-                      <div
-                        key={blockKey}
-                        onClick={(e) => { e.stopPropagation(); onShiftClick(shift); }}
-                        title={shiftTitle}
-                        style={{
-                          position: 'absolute',
-                          left: blockLeft, width: blockWidth,
-                          top: '50%', transform: 'translateY(-50%)', height: 40,
-                          background: colors.bg,
-                          color: colors.text,
-                          borderRadius: 6,
-                          border: isSecondBlock
-                            ? `1.5px dashed ${colors.border}`
-                            : `1px solid ${colors.border}`,
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          padding: '0 6px',
-                          fontSize: 11, fontWeight: 700,
-                          cursor: 'pointer',
-                          boxShadow: !isCancelled ? '0 1px 4px rgba(0,0,0,0.2)' : 'none',
-                          textDecoration: isCancelled ? 'line-through' : 'none',
-                          opacity: isCancelled ? 0.55 : isSecondBlock ? 0.88 : 1,
-                          overflow: 'hidden', whiteSpace: 'nowrap',
-                          transition: 'opacity 0.15s, filter 0.15s',
-                          zIndex: 5,
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(1.12)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = ''; }}
-                      >
-                        {/* Break: hatched overlay at exact break position */}
-                        {hasBreakOverlay && (
-                          <div
-                            style={{
-                              position: 'absolute',
-                              left: breakOverlayLeft,
-                              width: breakOverlayWidth,
-                              top: 0, bottom: 0,
-                              background: 'repeating-linear-gradient(45deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 3px, rgba(0,0,0,0.22) 3px, rgba(0,0,0,0.22) 4px)',
-                              borderLeft: '1px solid rgba(255,255,255,0.3)',
-                              borderRight: '1px solid rgba(255,255,255,0.3)',
-                              pointerEvents: 'none',
-                              zIndex: 1,
-                            }}
-                          />
-                        )}
-
-                        {/* Status / block badge */}
-                        <span style={{
-                          width: 14, height: 14, borderRadius: 3,
-                          background: isSecondBlock ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.18)',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.6rem', fontWeight: 800, lineHeight: 1,
-                          color: isCancelled ? '#9ca3af' : 'rgba(255,255,255,0.9)',
-                          position: 'relative', zIndex: 2, flexShrink: 0,
-                        }}>
-                          {isSecondBlock ? '2' : colors.abbr}
-                        </span>
-
-                        {/* Time label */}
-                        <span style={{ position: 'relative', zIndex: 2, lineHeight: 1.15, overflow: 'hidden' }}>
-                          {blockStart.slice(0, 5)}–{blockEnd.slice(0, 5)}
-                          {!isSecondBlock && shift.shiftHours && (
-                            <span style={{ marginLeft: 3, opacity: 0.75, fontSize: '0.65rem' }}>({shift.shiftHours}h)</span>
-                          )}
-                          {/* Break inline label */}
-                          {hasBreakOverlay && (
-                            <span style={{
-                              marginLeft: 5, opacity: 0.7, fontSize: 9,
-                              position: 'relative', zIndex: 2,
-                              background: 'rgba(255,255,255,0.12)',
-                              borderRadius: 3, padding: '1px 4px',
-                            }}>
-                              <Coffee size={9} strokeWidth={2.5} /> {shift.breakStart!.slice(0, 5)}
-                            </span>
-                          )}
-                          {!hasBreakOverlay && !isSecondBlock && shift.breakType === 'flexible' && shift.breakMinutes && (
-                            <span style={{
-                              marginLeft: 5, opacity: 0.7, fontSize: 9,
-                              position: 'relative', zIndex: 2,
-                              background: 'rgba(255,255,255,0.12)',
-                              borderRadius: 3, padding: '1px 4px',
-                            }}>
-                              <Coffee size={9} strokeWidth={2.5} /> {shift.breakMinutes}m flex
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    );
-                  };
-
-                  // Split shift: render two distinct timeline blocks
-                  if (shift.isSplit && shift.splitStart2 && shift.splitEnd2) {
-                    return (
-                      <React.Fragment key={shift.id}>
-                        {renderBlock(shift.startTime, shift.endTime, false, true)}
-                        {renderBlock(shift.splitStart2, shift.splitEnd2, true, false)}
-                      </React.Fragment>
-                    );
-                  }
-
-                  // Regular shift (with optional break overlay)
-                  return renderBlock(shift.startTime, shift.endTime, false, true);
-                })}
               </div>
             </div>
           ); })}
