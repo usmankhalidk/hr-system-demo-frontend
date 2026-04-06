@@ -82,7 +82,7 @@ const it = {
     logout: 'Esci',
     navigation: 'Navigazione',
     appName: 'Gestione HR',
-    appVersion: 'Sistema HR v1',
+    appVersion: 'Sistema HR',
     turni: 'Turni',
     trasferimenti: 'Trasferimenti',
     presenze: 'Presenze',
@@ -1064,6 +1064,7 @@ const it = {
     button: 'Registra il tuo account',
     backToDashboard: 'Torna alla dashboard',
     note: 'Per il reset del dispositivo, contatta HR. HR cancellerà il tuo dispositivo associato e dovrai registrarlo di nuovo sul nuovo dispositivo.',
+    success: 'Dispositivo registrato con successo',
     errorGeneric: 'Impossibile registrare il dispositivo. Riprova.',
   },
 

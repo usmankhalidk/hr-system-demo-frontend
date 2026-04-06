@@ -6,6 +6,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { translateApiError } from '../../utils/apiErrors';
+import fusaroLogoUrl from '../../assets/fusaro-logo.png';
 
 /* ─── self-contained language pill — zero CSS-var dependency ─── */
 function LangPill() {
@@ -194,7 +195,7 @@ const LoginPage: React.FC = () => {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0A1929' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-          <div style={{ width: 44, height: 44, background: '#C9973A', borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '15px', color: '#0A1929' }}>HR</div>
+          <img src={fusaroLogoUrl} alt="Fusaro Antonio 1893" style={{ width: 150, height: 48, objectFit: 'contain' }} />
           <Spinner size="md" color="#C9973A" />
         </div>
       </div>
@@ -229,13 +230,8 @@ const LoginPage: React.FC = () => {
 
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', padding: '48px 52px' }}>
           {/* Logo mark */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: 40, height: 40, background: '#C9973A', borderRadius: 10, flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '14px', color: '#0A1929',
-              boxShadow: '0 4px 20px rgba(201,151,58,0.4)',
-            }}>HR</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <img src={fusaroLogoUrl} alt="Fusaro Antonio 1893" style={{ width: 130, height: 40, objectFit: 'contain' }} />
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
               {t('nav.appVersion')}
             </span>
@@ -251,7 +247,7 @@ const LoginPage: React.FC = () => {
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', fontWeight: 300, lineHeight: 0.94, letterSpacing: '0.16em', color: '#C9973A', marginBottom: '32px' }}>
               UOMO
             </div>
-
+            
             <p style={{ fontSize: '13.5px', color: 'rgba(255,255,255,0.36)', lineHeight: 1.75, maxWidth: '280px', marginBottom: '48px' }}>
               {t('login.brandSubtitle')}
             </p>

@@ -82,7 +82,7 @@ const en = {
     logout: 'Logout',
     navigation: 'Navigation',
     appName: 'HR Management',
-    appVersion: 'HR System v1',
+    appVersion: 'HR System',
     turni: 'Shifts',
     trasferimenti: 'Transfers',
     presenze: 'Attendance',
@@ -1063,6 +1063,7 @@ const en = {
     button: 'Register Your Account',
     backToDashboard: 'Back to dashboard',
     note: 'For device reset, contact HR. HR will clear your current device binding and you will register again on the new device.',
+    success: 'Device registered successfully',
     errorGeneric: 'Unable to register this device. Please try again.',
   },
 
