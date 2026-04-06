@@ -82,7 +82,7 @@ const en = {
     logout: 'Logout',
     navigation: 'Navigation',
     appName: 'HR Management',
-    appVersion: 'HR System v1',
+    appVersion: 'HR System',
     turni: 'Shifts',
     presenze: 'Attendance',
     anomalies: 'Anomalies',
