@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { SocketProvider } from './context/SocketContext';
 import ToastContainer from './components/ui/ToastContainer';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/layout/Layout';
@@ -201,10 +202,12 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <ToastContainer />
-          <AppRoutes />
-        </BrowserRouter>
+        <SocketProvider>
+          <BrowserRouter>
+            <ToastContainer />
+            <AppRoutes />
+          </BrowserRouter>
+        </SocketProvider>
       </AuthProvider>
     </ToastProvider>
   );

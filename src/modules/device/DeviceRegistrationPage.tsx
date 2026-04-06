@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { registerDevice } from '../../api/device';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { translateApiError } from '../../utils/apiErrors';
@@ -26,6 +27,7 @@ export default function DeviceRegistrationPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, refreshUser } = useAuth();
+  const { showToast } = useToast();
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +55,14 @@ export default function DeviceRegistrationPage() {
       const fp = await getDeviceFingerprint();
       await registerDevice({ fingerprint: fp.fingerprint, metadata: fp.metadata });
       await refreshUser();
+      
+      showToast(t('deviceRegistration.success'), 'success');
+      
       const dest = safeNextPath(searchParams.get('next')) ?? '/';
-      navigate(dest, { replace: true });
+      // Short delay to let the user see the success toast before redirecting
+      setTimeout(() => {
+        navigate(dest, { replace: true });
+      }, 1500);
     } catch (err: unknown) {
       setError(translateApiError(err, t) ?? t('deviceRegistration.errorGeneric'));
     } finally {

@@ -1026,6 +1026,7 @@ const en = {
     button: 'Register Your Account',
     backToDashboard: 'Back to dashboard',
     note: 'For device reset, contact HR. HR will clear your current device binding and you will register again on the new device.',
+    success: 'Device registered successfully',
     errorGeneric: 'Unable to register this device. Please try again.',
   },
 
