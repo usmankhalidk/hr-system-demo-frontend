@@ -461,6 +461,7 @@ export function EmployeeList() {
           onSuccess={() => {
             setShowNewForm(false);
             setNewFormInstance((prev) => prev + 1);
+            setListReloadTick((prev) => prev + 1);
             showToast(t('employees.createdSuccess'), 'success');
             updateParam('page', '1');
           }}

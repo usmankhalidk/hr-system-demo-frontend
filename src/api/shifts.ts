@@ -28,6 +28,7 @@ export interface Shift {
   storeName: string;
   userName: string;
   userSurname: string;
+  userAvatarFilename?: string | null;
   shiftHours: string | number | null;
 }
 

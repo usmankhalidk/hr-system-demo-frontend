@@ -380,7 +380,7 @@ export default function ShiftsPage() {
   const targetWeek = formatIsoWeek(addWeeks(currentDate, 1));
 
   return (
-    <div className="page-enter" style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div className="page-enter" style={{ width: '100%' }}>
       {/* ── Page header ────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

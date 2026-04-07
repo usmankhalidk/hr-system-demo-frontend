@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { getCompanies, updateCompany } from '../../api/companies';
+import { getCompanies, updateCompany, uploadCompanyLogo } from '../../api/companies';
+import { getCompanyLogoUrl } from '../../api/client';
 import { translateApiError } from '../../utils/apiErrors';
 import { Company } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -71,6 +72,8 @@ export function CompanyList() {
   const [formNameError, setFormNameError] = useState<string | undefined>();
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -92,6 +95,7 @@ export function CompanyList() {
     setFormName(company.name);
     setFormNameError(undefined);
     setFormError(null);
+    setLogoError(null);
     setFormOpen(true);
   };
 
@@ -99,6 +103,26 @@ export function CompanyList() {
     setFormOpen(false);
     setFormError(null);
     setFormNameError(undefined);
+    setLogoError(null);
+    setLogoUploading(false);
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !company) return;
+
+    setLogoUploading(true);
+    setLogoError(null);
+    try {
+      await uploadCompanyLogo(company.id, file);
+      showToast(t('companies.logoUpdated'), 'success');
+      await load();
+    } catch (err: unknown) {
+      setLogoError(translateApiError(err, t, t('companies.logoError')) ?? t('companies.logoError'));
+    } finally {
+      setLogoUploading(false);
+      e.target.value = '';
+    }
   };
 
   const handleSave = async () => {
@@ -239,6 +263,9 @@ export function CompanyList() {
           {formError && (
             <Alert variant="danger" onClose={() => setFormError(null)}>{formError}</Alert>
           )}
+          {logoError && (
+            <Alert variant="danger" onClose={() => setLogoError(null)}>{logoError}</Alert>
+          )}
           <Input
             label={t('companies.fieldName')}
             value={formName}
@@ -247,6 +274,61 @@ export function CompanyList() {
             placeholder={t('companies.placeholderName')}
             disabled={formSaving}
           />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('companies.logoField')}
+            </span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 44,
+                height: 44,
+                borderRadius: 'var(--radius-sm)',
+                overflow: 'hidden',
+                background: 'var(--surface-warm)',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-muted)',
+                fontWeight: 700,
+                fontSize: 12,
+                flexShrink: 0,
+              }}>
+                {company.logoFilename ? (
+                  <img src={getCompanyLogoUrl(company.logoFilename) ?? ''} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : 'LOGO'}
+              </div>
+
+              <input
+                id="company-logo-upload-company-list"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }}
+                onChange={handleLogoUpload}
+                disabled={logoUploading || formSaving}
+              />
+              <label
+                htmlFor="company-logo-upload-company-list"
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-warm)',
+                  cursor: logoUploading || formSaving ? 'not-allowed' : 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  opacity: logoUploading || formSaving ? 0.7 : 1,
+                }}
+              >
+                {logoUploading ? t('companies.logoUploading') : t('companies.uploadLogo')}
+              </label>
+            </div>
+
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('companies.logoHint')}</span>
+          </div>
         </div>
       </Modal>
     </div>

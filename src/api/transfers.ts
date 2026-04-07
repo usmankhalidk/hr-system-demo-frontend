@@ -112,8 +112,16 @@ export async function updateTransfer(id: number, payload: TransferUpdatePayload)
   return res.data.data;
 }
 
-export async function cancelTransfer(id: number, reason?: string): Promise<{ transfer: TransferAssignment; detachedShifts: number }> {
+export async function cancelTransfer(
+  id: number,
+  reason?: string,
+): Promise<{ transfer: TransferAssignment; detachedShifts: number; cancelledShifts?: number }> {
   const res = await client.post(`/transfers/${id}/cancel`, { reason });
+  return res.data.data;
+}
+
+export async function deleteTransfer(id: number): Promise<{ id: number; detachedShifts: number }> {
+  const res = await client.delete(`/transfers/${id}`);
   return res.data.data;
 }
 

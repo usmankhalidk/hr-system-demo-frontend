@@ -21,6 +21,7 @@ import {
   LeaveType,
 } from '../../api/leave';
 import { getEmployees } from '../../api/employees';
+import { getAvatarUrl } from '../../api/client';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatLocalDate } from '../../utils/date';
 import { LeaveRequestDrawer } from './LeaveRequestDrawer';
@@ -752,6 +753,15 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
 
 type PanelTab = 'requests' | 'balances';
 
+type CreateEmployeeOption = {
+  id: number;
+  name: string;
+  surname: string;
+  role: string;
+  storeName?: string | null;
+  avatarFilename?: string | null;
+};
+
 export default function AdminLeavePanel() {
   const { t, i18n } = useTranslation();
   const { user, permissions } = useAuth();
@@ -777,14 +787,16 @@ export default function AdminLeavePanel() {
 
   // ── Create modal ───────────────────────────────────────────────────────────
   const [createOpen, setCreateOpen]     = useState(false);
-  const [empList, setEmpList]           = useState<Array<{ id: number; name: string; surname: string }>>([]);
+  const [empList, setEmpList]           = useState<CreateEmployeeOption[]>([]);
   const [cUserId,  setCUserId]          = useState('');
+  const [cEmployeeOpen, setCEmployeeOpen] = useState(false);
   const [cType,    setCType]            = useState('vacation');
   const [cStart,   setCStart]           = useState(today);
   const [cEnd,     setCEnd]             = useState(today);
   const [cNotes,   setCNotes]           = useState('');
   const [cSaving,  setCSaving]          = useState(false);
   const [cError,   setCError]           = useState<string | null>(null);
+  const cEmployeePickerRef = useRef<HTMLDivElement | null>(null);
 
   // ── Reject modal ───────────────────────────────────────────────────────────
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
@@ -827,6 +839,17 @@ export default function AdminLeavePanel() {
   }, [dateFrom, dateTo, filterStatus, filterType, t]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  useEffect(() => {
+    if (!cEmployeeOpen) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (!cEmployeePickerRef.current?.contains(event.target as Node)) {
+        setCEmployeeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [cEmployeeOpen]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const pendingCount  = requests.filter((r) => r.status === 'pending').length;
@@ -905,13 +928,21 @@ export default function AdminLeavePanel() {
   // ── Create ─────────────────────────────────────────────────────────────────
   function openCreate() {
     setCUserId(''); setCType('vacation'); setCStart(today); setCEnd(today); setCNotes(''); setCError(null);
+    setCEmployeeOpen(false);
     setCreateOpen(true);
     if (empList.length === 0) {
       getEmployees({ limit: 200, status: 'active', role: 'employee' })
         .then((r) => {
           const rows = r.employees
             .filter((e) => (user?.id ? e.id !== user.id : true))
-            .map((e) => ({ id: e.id, name: e.name, surname: e.surname }));
+            .map((e) => ({
+              id: e.id,
+              name: e.name,
+              surname: e.surname,
+              role: e.role,
+              storeName: e.storeName,
+              avatarFilename: e.avatarFilename ?? null,
+            }));
           setEmpList(rows);
         })
         .catch(() => {});
@@ -934,6 +965,7 @@ export default function AdminLeavePanel() {
       });
       showFlash(t('leave.admin_create_success'));
       setCreateOpen(false);
+      setCEmployeeOpen(false);
       fetchRequests();
     } catch (err: unknown) {
       setCError(translateApiError(err, t, t('common.error')) ?? t('common.error'));
@@ -955,6 +987,21 @@ export default function AdminLeavePanel() {
     color: 'var(--text-secondary)', marginBottom: 6,
     textTransform: 'uppercase' as const, letterSpacing: '0.8px',
   };
+
+  const selectedCreateEmployeeId = cUserId ? parseInt(cUserId, 10) : null;
+  const selectedCreateEmployee = selectedCreateEmployeeId == null
+    ? null
+    : empList.find((emp) => emp.id === selectedCreateEmployeeId) ?? null;
+  const selectedCreateEmployeeFullName = selectedCreateEmployee
+    ? `${selectedCreateEmployee.surname} ${selectedCreateEmployee.name}`.trim()
+    : '';
+  const selectedCreateEmployeeRoleLabel = selectedCreateEmployee
+    ? t(`roles.${selectedCreateEmployee.role}`, selectedCreateEmployee.role)
+    : '';
+  const selectedCreateEmployeeAvatarUrl = getAvatarUrl(selectedCreateEmployee?.avatarFilename);
+  const selectedCreateEmployeeInitials = selectedCreateEmployee
+    ? `${selectedCreateEmployee.name?.[0] ?? ''}${selectedCreateEmployee.surname?.[0] ?? ''}`.toUpperCase() || 'U'
+    : 'U';
 
   return (
     <div style={{ padding: 0, minHeight: '100%' }}>
@@ -1291,7 +1338,12 @@ export default function AdminLeavePanel() {
       {createOpen && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={(e) => { if (e.target === e.currentTarget && !cSaving) setCreateOpen(false); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !cSaving) {
+              setCreateOpen(false);
+              setCEmployeeOpen(false);
+            }
+          }}
         >
           <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 480, border: '1px solid var(--border)' }}>
             <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1303,7 +1355,7 @@ export default function AdminLeavePanel() {
                   {t('leave.admin_create_title')}
                 </h2>
               </div>
-              <button onClick={() => setCreateOpen(false)} disabled={cSaving} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              <button onClick={() => { setCreateOpen(false); setCEmployeeOpen(false); }} disabled={cSaving} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
             <div style={{ padding: '20px 24px' }}>
               {cError && (
@@ -1315,10 +1367,176 @@ export default function AdminLeavePanel() {
               {/* Employee */}
               <div style={{ marginBottom: 14 }}>
                 <label style={labelStyle}>{t('leave.select_employee')} *</label>
-                <select value={cUserId} onChange={(e) => setCUserId(e.target.value)} style={{ ...selectStyle, width: '100%' }}>
-                  <option value="">{t('leave.select_employee')}</option>
-                  {empList.map((e) => <option key={e.id} value={e.id}>{e.surname} {e.name}</option>)}
-                </select>
+                <div ref={cEmployeePickerRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCEmployeeOpen((prev) => !prev)}
+                    style={{
+                      ...selectStyle,
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    {selectedCreateEmployee ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          background: 'rgba(13,33,55,0.14)',
+                          color: '#0D2137',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          {selectedCreateEmployeeAvatarUrl ? (
+                            <img src={selectedCreateEmployeeAvatarUrl} alt={selectedCreateEmployeeFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : selectedCreateEmployeeInitials}
+                        </span>
+                        <span style={{ minWidth: 0, textAlign: 'left' }}>
+                          <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {selectedCreateEmployeeFullName}
+                          </span>
+                          <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {selectedCreateEmployeeRoleLabel}
+                            {selectedCreateEmployee.storeName ? ` · ${selectedCreateEmployee.storeName}` : ''}
+                          </span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('leave.select_employee')}</span>
+                    )}
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>{cEmployeeOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {cEmployeeOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      zIndex: 20,
+                      top: 'calc(100% + 6px)',
+                      left: 0,
+                      right: 0,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 10,
+                      boxShadow: '0 16px 30px rgba(0,0,0,0.18)',
+                      maxHeight: 230,
+                      overflowY: 'auto',
+                    }}>
+                      {empList.length === 0 ? (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                          {t('common.loading')}
+                        </div>
+                      ) : (
+                        empList.map((emp) => {
+                          const fullName = `${emp.surname} ${emp.name}`.trim();
+                          const roleLabel = t(`roles.${emp.role}`, emp.role);
+                          const avatarUrl = getAvatarUrl(emp.avatarFilename);
+                          const initials = `${emp.name?.[0] ?? ''}${emp.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+                          const selected = String(emp.id) === cUserId;
+                          return (
+                            <button
+                              key={emp.id}
+                              type="button"
+                              onClick={() => {
+                                setCUserId(String(emp.id));
+                                setCEmployeeOpen(false);
+                              }}
+                              style={{
+                                width: '100%',
+                                border: 'none',
+                                borderBottom: '1px solid var(--border)',
+                                background: selected ? 'var(--surface-warm)' : 'var(--surface)',
+                                padding: '8px 10px',
+                                textAlign: 'left',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                overflow: 'hidden',
+                                background: 'rgba(13,33,55,0.14)',
+                                color: '#0D2137',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}>
+                                {avatarUrl ? (
+                                  <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : initials}
+                              </span>
+                              <span style={{ minWidth: 0 }}>
+                                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {fullName}
+                                </span>
+                                <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {roleLabel}
+                                  {emp.storeName ? ` · ${emp.storeName}` : ''}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {selectedCreateEmployee && (
+                  <div style={{
+                    marginTop: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface-warm)',
+                  }}>
+                    <div style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      overflow: 'hidden',
+                      background: 'rgba(13,33,55,0.14)',
+                      color: '#0D2137',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      {selectedCreateEmployeeAvatarUrl ? (
+                        <img src={selectedCreateEmployeeAvatarUrl} alt={selectedCreateEmployeeFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : selectedCreateEmployeeInitials}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {selectedCreateEmployeeFullName}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedCreateEmployeeRoleLabel}
+                        {selectedCreateEmployee.storeName ? ` · ${selectedCreateEmployee.storeName}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Type */}
@@ -1360,7 +1578,7 @@ export default function AdminLeavePanel() {
               </div>
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setCreateOpen(false)} disabled={cSaving} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={() => { setCreateOpen(false); setCEmployeeOpen(false); }} disabled={cSaving} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                   {t('common.cancel')}
                 </button>
                 <button onClick={handleCreate} disabled={cSaving} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: cSaving ? 'not-allowed' : 'pointer', opacity: cSaving ? 0.7 : 1 }}>

@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { Employee, EmployeeListResponse } from '../types';
+import { Employee, EmployeeAssociationsResponse, EmployeeListResponse } from '../types';
 
 export interface EmployeeListParams {
   search?: string;
@@ -35,6 +35,11 @@ export async function getEmployees(params?: EmployeeListParams): Promise<Employe
 
 export async function getEmployee(id: number): Promise<Employee> {
   const { data } = await apiClient.get(`/employees/${id}`);
+  return data.data;
+}
+
+export async function getEmployeeAssociations(id: number): Promise<EmployeeAssociationsResponse> {
+  const { data } = await apiClient.get(`/employees/${id}/associations`);
   return data.data;
 }
 

@@ -5,6 +5,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useToast } from '../../context/ToastContext';
 import { getStores, createStore, updateStore, deactivateStore, activateStore, deleteStorePermanent } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
+import { getCompanyLogoUrl } from '../../api/client';
 import { translateApiError } from '../../utils/apiErrors';
 import { Company, Store } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
@@ -66,6 +67,24 @@ function generateStoreCode(name: string, existingCodes: string[]): string {
     .filter((n) => !isNaN(n));
   const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
   return `${prefix}-${String(next).padStart(2, '0')}`;
+}
+
+const COMPANY_AVATAR_PALETTE = ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'];
+
+function getCompanyAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return COMPANY_AVATAR_PALETTE[Math.abs(hash) % COMPANY_AVATAR_PALETTE.length];
+}
+
+function getCompanyInitials(name?: string): string {
+  if (!name) return '?';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
 export function StoreList() {
@@ -307,9 +326,44 @@ export function StoreList() {
       key: 'companyName' as keyof Store,
       label: t('stores.colCompany'),
       render: (row: Store) => (
-        <span style={{ fontSize: '13px', color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)' }}>
-          {row.companyName ?? '—'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            overflow: 'hidden',
+            background: row.companyName ? getCompanyAvatarColor(row.companyName) : 'var(--border)',
+            color: '#fff',
+            fontSize: 10,
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            {row.companyLogoFilename ? (
+              <img
+                src={getCompanyLogoUrl(row.companyLogoFilename) ?? ''}
+                alt={row.companyName ?? 'Company'}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              getCompanyInitials(row.companyName)
+            )}
+          </div>
+          <span
+            style={{
+              fontSize: '13px',
+              color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={row.companyName ?? undefined}
+          >
+            {row.companyName ?? '—'}
+          </span>
+        </div>
       ),
     }] : []),
     { key: 'name', label: t('stores.colName') },
@@ -363,7 +417,7 @@ export function StoreList() {
   ];
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="page-enter" style={{ width: '100%' }}>
       <div style={{
         display: 'flex',
         alignItems: isMobile ? 'flex-start' : 'center',

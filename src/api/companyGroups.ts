@@ -5,9 +5,18 @@ export interface CompanyGroup {
   name: string;
 }
 
+export interface GroupVisibilityCompany {
+  id: number;
+  name: string;
+  isActive: boolean;
+  hasActiveHr: boolean;
+  hasActiveAreaManager: boolean;
+}
+
 export interface GroupRoleVisibility {
   hr: boolean;
   areaManager: boolean;
+  companies?: GroupVisibilityCompany[];
 }
 
 export async function getCompanyGroups(): Promise<CompanyGroup[]> {

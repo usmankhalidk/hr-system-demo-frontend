@@ -13,6 +13,16 @@ const LEVEL_META = {
   high:   { color: '#dc2626', bg: 'rgba(220,38,38,0.12)',  dot: '#ef4444' },
 };
 
+const ISO_DAY_TO_LABEL: Record<number, string> = {
+  1: 'Mon',
+  2: 'Tue',
+  3: 'Wed',
+  4: 'Thu',
+  5: 'Fri',
+  6: 'Sat',
+  7: 'Sun',
+};
+
 export default function AffluencePanel({ storeId, week }: Props) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<StoreAffluence[]>([]);
@@ -69,7 +79,7 @@ export default function AffluencePanel({ storeId, week }: Props) {
 
       {/* Day filter pills */}
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {([null, 1, 2, 3, 4, 5, 6, 0] as (number | null)[]).map((d) => (
+        {([null, 1, 2, 3, 4, 5, 6, 7] as (number | null)[]).map((d) => (
           <button
             key={d ?? 'all'}
             onClick={() => setSelectedDay(d === selectedDay ? null : d)}
@@ -81,7 +91,7 @@ export default function AffluencePanel({ storeId, week }: Props) {
               transition: 'all 0.15s',
             }}
           >
-            {d === null ? t('common.all') : t(`shifts.day${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]}`)}
+            {d === null ? t('common.all') : t(`shifts.day${ISO_DAY_TO_LABEL[d]}`)}
           </button>
         ))}
       </div>
@@ -108,7 +118,7 @@ export default function AffluencePanel({ storeId, week }: Props) {
                   fontSize: 11, fontWeight: 800, color: 'var(--text-muted)',
                   textTransform: 'uppercase', letterSpacing: '1.5px',
                 }}>
-                  {t(`shifts.day${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day]}`)}
+                  {t(`shifts.day${ISO_DAY_TO_LABEL[day]}`)}
                 </div>
                 {slots.map((slot) => {
                   const meta = LEVEL_META[slot.level as keyof typeof LEVEL_META];

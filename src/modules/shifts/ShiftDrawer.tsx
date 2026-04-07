@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
@@ -6,10 +6,12 @@ import { Shift, CreateShiftPayload, createShift, updateShift, deleteShift } from
 import { getEmployees, type EmployeeListParams } from '../../api/employees';
 import { getStores } from '../../api/stores';
 import { getEmployeeTransferSchedule, type TransferAssignment } from '../../api/transfers';
-import { Employee, Store } from '../../types';
+import { getAvatarUrl } from '../../api/client';
+import { Employee, Store, UserRole } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
+import { Badge } from '../../components/ui/Badge';
 
 interface ShiftDrawerProps {
   open: boolean;
@@ -67,6 +69,29 @@ function normalizeShiftDateForForm(raw: string): string {
   return `${y}-${m}-${d}`;
 }
 
+const ROLE_BADGE_VARIANT: Record<UserRole, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
+  admin: 'accent',
+  hr: 'info',
+  area_manager: 'success',
+  store_manager: 'warning',
+  employee: 'neutral',
+  store_terminal: 'neutral',
+};
+
+const AVATAR_PALETTE = ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return (name.slice(0, 2) || 'U').toUpperCase();
+}
+
 const EMPTY_FORM: FormState = {
   user_id: '',
   store_id: '',
@@ -98,8 +123,12 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeTransferForDate, setActiveTransferForDate] = useState<TransferAssignment | null>(null);
   const [storeTouchedManually, setStoreTouchedManually] = useState(false);
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
+  const [employeeQuery, setEmployeeQuery] = useState('');
+  const employeePickerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
+  const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.surname} ${selectedEmployee.name}`.trim() : '';
   const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
   const expectedStoreId = activeTransferForDate?.targetStoreId ?? selectedEmployee?.storeId ?? null;
   const expectedStoreName = activeTransferForDate?.targetStoreName
@@ -107,6 +136,18 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     ?? (selectedEmployee?.storeId ? stores.find((s) => s.id === selectedEmployee.storeId)?.name : null)
     ?? null;
   const storeSelectionMismatch = expectedStoreId != null && selectedStoreIdNum != null && selectedStoreIdNum !== expectedStoreId;
+
+  const normalizedEmployeeQuery = employeeQuery.trim().toLowerCase();
+  const filteredEmployees = normalizedEmployeeQuery
+    ? employees.filter((emp) => {
+        const fullName = `${emp.surname} ${emp.name}`.toLowerCase();
+        return (
+          fullName.includes(normalizedEmployeeQuery)
+          || emp.email.toLowerCase().includes(normalizedEmployeeQuery)
+          || emp.role.toLowerCase().includes(normalizedEmployeeQuery)
+        );
+      })
+    : employees;
 
   async function loadEmployeesByPages(baseParams: Omit<EmployeeListParams, 'page' | 'limit'>): Promise<Employee[]> {
     const limit = 100;
@@ -261,6 +302,8 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     setFormErrors({});
     setStoreTouchedManually(false);
     setActiveTransferForDate(null);
+    setEmployeePickerOpen(false);
+    setEmployeeQuery('');
 
     return () => { mounted = false; };
   }, [open, shift, prefillDate, prefillUserId, user?.role]);
@@ -298,15 +341,40 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     setForm((prev) => ({ ...prev, store_id: expectedStore }));
   }, [open, shift, storeTouchedManually, form.user_id, form.store_id, expectedStoreId]);
 
+  useEffect(() => {
+    if (!employeePickerOpen) return;
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (employeePickerRef.current && !employeePickerRef.current.contains(target)) {
+        setEmployeePickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', onDocumentMouseDown);
+  }, [employeePickerOpen]);
+
+  function selectEmployee(employeeId: string) {
+    setStoreTouchedManually(false);
+    setActiveTransferForDate(null);
+    setForm((prev) => ({ ...prev, user_id: employeeId, store_id: '' }));
+    setEmployeePickerOpen(false);
+    setEmployeeQuery('');
+    if (formErrors.user_id) {
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next.user_id;
+        return next;
+      });
+    }
+  }
+
   function set(field: keyof FormState) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const value = e.target.type === 'checkbox'
         ? (e.target as HTMLInputElement).checked
         : e.target.value;
       if (field === 'user_id') {
-        setStoreTouchedManually(false);
-        setActiveTransferForDate(null);
-        setForm((prev) => ({ ...prev, user_id: String(value), store_id: '' }));
+        selectEmployee(String(value));
       } else if (field === 'store_id') {
         setStoreTouchedManually(true);
         setForm((prev) => ({ ...prev, store_id: String(value) }));
@@ -491,13 +559,188 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
           {/* ─── Employee ───────────────────── */}
           <div style={fieldRow}>
             <label style={fLabel}>{t('shifts.form.employee')}</label>
-            <select required value={form.user_id} onChange={set('user_id')} style={fInput}
-              onFocus={focusHandler} onBlur={blurHandler}>
-              <option value="">{t('shifts.form.selectEmployee')}</option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={String(emp.id)}>{emp.surname} {emp.name}</option>
-              ))}
-            </select>
+            <div ref={employeePickerRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setEmployeePickerOpen((openState) => !openState)}
+                style={{
+                  ...fInput,
+                  minHeight: 42,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                {selectedEmployee ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                    <div style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      overflow: 'hidden',
+                      background: selectedEmployee.avatarFilename ? 'transparent' : getAvatarColor(selectedEmployeeFullName),
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}>
+                      {selectedEmployee.avatarFilename ? (
+                        <img
+                          src={getAvatarUrl(selectedEmployee.avatarFilename) ?? ''}
+                          alt={selectedEmployeeFullName}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : getInitials(selectedEmployeeFullName)}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13,
+                        color: 'var(--text-primary)',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {selectedEmployeeFullName}
+                      </div>
+                      <div style={{
+                        fontSize: 11,
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {selectedEmployee.email}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.selectEmployee')}</span>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  {selectedEmployee && (
+                    <Badge variant={ROLE_BADGE_VARIANT[selectedEmployee.role]}>{t(`roles.${selectedEmployee.role}`)}</Badge>
+                  )}
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{employeePickerOpen ? '▲' : '▼'}</span>
+                </div>
+              </button>
+
+              {employeePickerOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  left: 0,
+                  right: 0,
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--surface)',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.14)',
+                  zIndex: 20,
+                  overflow: 'hidden',
+                }}>
+                  <div style={{ padding: 8, borderBottom: '1px solid var(--border-light)' }}>
+                    <input
+                      type="text"
+                      value={employeeQuery}
+                      onChange={(e) => setEmployeeQuery(e.target.value)}
+                      placeholder={t('shifts.form.searchEmployee')}
+                      style={{
+                        ...fInput,
+                        padding: '7px 10px',
+                        fontSize: 12,
+                        minHeight: 'auto',
+                      }}
+                    />
+                  </div>
+                  <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                    {filteredEmployees.length === 0 ? (
+                      <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                        {t('shifts.form.noEmployeeResults')}
+                      </div>
+                    ) : filteredEmployees.map((emp) => {
+                      const fullName = `${emp.surname} ${emp.name}`.trim();
+                      const isSelected = String(emp.id) === form.user_id;
+                      const avatarUrl = getAvatarUrl(emp.avatarFilename);
+                      return (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          onClick={() => selectEmployee(String(emp.id))}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderBottom: '1px solid var(--border-light)',
+                            background: isSelected ? 'var(--accent-light)' : 'transparent',
+                            padding: '8px 10px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                            <div style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
+                              overflow: 'hidden',
+                              background: avatarUrl ? 'transparent' : getAvatarColor(fullName),
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}>
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : getInitials(fullName)}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{
+                                fontSize: 13,
+                                color: 'var(--text-primary)',
+                                fontWeight: 600,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {fullName}
+                              </div>
+                              <div style={{
+                                fontSize: 11,
+                                color: 'var(--text-muted)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {emp.email}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                            <Badge variant={ROLE_BADGE_VARIANT[emp.role]}>{t(`roles.${emp.role}`)}</Badge>
+                            {isSelected && <span style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 700 }}>✓</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            {formErrors.user_id && (
+              <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.user_id}</div>
+            )}
           </div>
 
           {/* ─── Store ──────────────────────── */}
