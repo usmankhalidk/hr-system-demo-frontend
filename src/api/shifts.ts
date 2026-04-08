@@ -159,6 +159,15 @@ export async function createTemplate(payload: {
   return res.data.data;
 }
 
+export async function updateTemplate(id: number, payload: {
+  store_id: number;
+  name: string;
+  template_data: Record<string, unknown>;
+}): Promise<ShiftTemplate> {
+  const res = await client.put(`/shifts/templates/${id}`, payload);
+  return res.data.data;
+}
+
 export async function deleteTemplate(id: number): Promise<void> {
   await client.delete(`/shifts/templates/${id}`);
 }

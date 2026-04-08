@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { listAttendanceEvents, AttendanceEvent, EventType, AttendanceListParams } from '../../api/attendance';
 import { getEmployees } from '../../api/employees';
 import { getStores } from '../../api/stores';
-import client from '../../api/client';
+import client, { getAvatarUrl } from '../../api/client';
 import { formatLocalDate } from '../../utils/date';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
@@ -89,8 +89,41 @@ export default function AttendanceLogsPage() {
   const [createSaving, setCreateSaving]     = useState(false);
   const [createError, setCreateError]       = useState<string | null>(null);
   const [createSuccess, setCreateSuccess]   = useState(false);
-  const [empList, setEmpList]               = useState<Array<{ id: number; name: string; surname: string; storeId?: number | null }>>([]);
+  const [empList, setEmpList]               = useState<Array<{
+    id: number;
+    name: string;
+    surname: string;
+    role?: string;
+    storeId?: number | null;
+    storeName?: string;
+    avatarFilename?: string | null;
+  }>>([]);
   const [storeList, setStoreList]           = useState<Array<{ id: number; name: string; companyName?: string }>>([]);
+  const [createEmployeeOpen, setCreateEmployeeOpen] = useState(false);
+  const [createEmployeeSearch, setCreateEmployeeSearch] = useState('');
+  const createEmployeePickerRef = useRef<HTMLDivElement | null>(null);
+
+  const selectedCreateEmployee = useMemo(
+    () => empList.find((emp) => String(emp.id) === createUserId),
+    [empList, createUserId],
+  );
+
+  const selectedCreateEmployeeAvatarUrl = getAvatarUrl(selectedCreateEmployee?.avatarFilename);
+  const selectedCreateEmployeeInitials = `${selectedCreateEmployee?.name?.[0] ?? ''}${selectedCreateEmployee?.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+  const selectedCreateEmployeeFullName = selectedCreateEmployee
+    ? `${selectedCreateEmployee.name} ${selectedCreateEmployee.surname}`
+    : t('attendance.selectEmployee');
+
+  const filteredCreateEmployees = useMemo(() => {
+    const q = createEmployeeSearch.trim().toLowerCase();
+    if (!q) return empList;
+    return empList.filter((emp) => {
+      const full = `${emp.name} ${emp.surname}`.toLowerCase();
+      const role = t(`roles.${emp.role ?? 'employee'}`, emp.role ?? 'employee').toLowerCase();
+      const store = (emp.storeName ?? '').toLowerCase();
+      return full.includes(q) || role.includes(q) || store.includes(q);
+    });
+  }, [createEmployeeSearch, empList, t]);
 
   function openCreateModal() {
     setCreateOpen(true);
@@ -102,10 +135,20 @@ export default function AttendanceLogsPage() {
     setCreateNotes('');
     setCreateError(null);
     setCreateSuccess(false);
+    setCreateEmployeeOpen(false);
+    setCreateEmployeeSearch('');
     // Load dropdowns if not yet loaded
     if (empList.length === 0) {
       getEmployees({ limit: 200, status: 'active' }).then((res) =>
-        setEmpList(res.employees.map((e) => ({ id: e.id, name: e.name, surname: e.surname, storeId: e.storeId ?? null })))
+        setEmpList(res.employees.map((e) => ({
+          id: e.id,
+          name: e.name,
+          surname: e.surname,
+          role: e.role,
+          storeId: e.storeId ?? null,
+          storeName: e.storeName,
+          avatarFilename: e.avatarFilename ?? null,
+        })))
       ).catch(() => {});
     }
     if (storeList.length === 0) {
@@ -114,6 +157,17 @@ export default function AttendanceLogsPage() {
       ).catch(() => {});
     }
   }
+
+  useEffect(() => {
+    if (!createOpen || !createEmployeeOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (!createEmployeePickerRef.current?.contains(event.target as Node)) {
+        setCreateEmployeeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [createOpen, createEmployeeOpen]);
 
   async function handleCreateSave() {
     if (!createUserId || !createStoreId || !createTimeOnly) {
@@ -132,7 +186,12 @@ export default function AttendanceLogsPage() {
       });
       setCreateSuccess(true);
       await fetchEvents();
-      setTimeout(() => { setCreateOpen(false); setCreateSuccess(false); }, 1200);
+      setTimeout(() => {
+        setCreateOpen(false);
+        setCreateSuccess(false);
+        setCreateEmployeeOpen(false);
+        setCreateEmployeeSearch('');
+      }, 1200);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
       setCreateError(axiosErr?.response?.data?.error ?? t('common.error'));
@@ -568,7 +627,7 @@ export default function AttendanceLogsPage() {
             <option value="">{t('common.all')} {t('employees.colName').toLowerCase()}</option>
             {filterEmployees.map((e) => (
               <option key={e.id} value={String(e.id)}>
-                {e.surname} {e.name}
+                {e.name} {e.surname}
               </option>
             ))}
           </select>
@@ -722,7 +781,7 @@ export default function AttendanceLogsPage() {
                         {/* Row 1: name + source */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                            {ev.userSurname} {ev.userName}
+                            {ev.userName} {ev.userSurname}
                           </span>
                           <span style={{
                             padding: '2px 7px', borderRadius: 4,
@@ -876,7 +935,7 @@ export default function AttendanceLogsPage() {
                                   background: meta.dot, flexShrink: 0, marginRight: 16,
                                 }} />
                                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
-                                  {ev.userSurname} {ev.userName}
+                                  {ev.userName} {ev.userSurname}
                                 </div>
                               </div>
                             </td>
@@ -1060,7 +1119,7 @@ export default function AttendanceLogsPage() {
                   {t('employees.colName')}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                  {editingEvent.userSurname} {editingEvent.userName}
+                  {editingEvent.userName} {editingEvent.userSurname}
                 </div>
                 {editingEvent.storeName && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -1170,7 +1229,13 @@ export default function AttendanceLogsPage() {
             alignItems: 'center', justifyContent: 'center',
             padding: '16px',
           }}
-          onClick={(e) => { if (e.target === e.currentTarget && !createSaving) setCreateOpen(false); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !createSaving) {
+              setCreateOpen(false);
+              setCreateEmployeeOpen(false);
+              setCreateEmployeeSearch('');
+            }
+          }}
         >
           <div style={{
             background: 'var(--surface)', borderRadius: 16,
@@ -1193,7 +1258,11 @@ export default function AttendanceLogsPage() {
                 </h2>
               </div>
               <button
-                onClick={() => setCreateOpen(false)}
+                onClick={() => {
+                  setCreateOpen(false);
+                  setCreateEmployeeOpen(false);
+                  setCreateEmployeeSearch('');
+                }}
                 disabled={createSaving}
                 style={{
                   width: 32, height: 32, borderRadius: 8,
@@ -1235,27 +1304,158 @@ export default function AttendanceLogsPage() {
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
                   {t('attendance.selectEmployee')} *
                 </label>
-                <select
-                  value={createUserId}
-                  onChange={(e) => {
-                    const uid = e.target.value;
-                    setCreateUserId(uid);
-                    // Auto-populate store from the selected employee's store
-                    const emp = empList.find((em) => String(em.id) === uid);
-                    if (emp?.storeId) setCreateStoreId(String(emp.storeId));
-                    else setCreateStoreId('');
-                  }}
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 8,
-                    border: '1.5px solid var(--border)', background: 'var(--background)',
-                    color: 'var(--text)', fontSize: 14, outline: 'none', appearance: 'none',
-                  }}
-                >
-                  <option value="">{t('attendance.selectEmployee')}</option>
-                  {empList.map((e) => (
-                    <option key={e.id} value={e.id}>{e.surname} {e.name}</option>
-                  ))}
-                </select>
+                <div ref={createEmployeePickerRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCreateEmployeeOpen((prev) => !prev)}
+                    style={{
+                      width: '100%', padding: '9px 12px', borderRadius: 8,
+                      border: '1.5px solid var(--border)', background: 'var(--background)',
+                      color: 'var(--text)', fontSize: 14, outline: 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {selectedCreateEmployee ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          background: 'rgba(13,33,55,0.14)',
+                          color: '#0D2137',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          {selectedCreateEmployeeAvatarUrl ? (
+                            <img src={selectedCreateEmployeeAvatarUrl} alt={selectedCreateEmployeeFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : selectedCreateEmployeeInitials}
+                        </span>
+                        <span style={{ minWidth: 0, textAlign: 'left' }}>
+                          <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {selectedCreateEmployeeFullName}
+                          </span>
+                          <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t(`roles.${selectedCreateEmployee.role ?? 'employee'}`, selectedCreateEmployee.role ?? 'employee')}
+                            {selectedCreateEmployee.storeName ? ` · ${selectedCreateEmployee.storeName}` : ''}
+                          </span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('attendance.selectEmployee')}</span>
+                    )}
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{createEmployeeOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {createEmployeeOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      zIndex: 20,
+                      top: 'calc(100% + 6px)',
+                      left: 0,
+                      right: 0,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 10,
+                      boxShadow: '0 16px 30px rgba(0,0,0,0.18)',
+                      maxHeight: 260,
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}>
+                      <div style={{ padding: 8, borderBottom: '1px solid var(--border)' }}>
+                        <input
+                          value={createEmployeeSearch}
+                          onChange={(e) => setCreateEmployeeSearch(e.target.value)}
+                          placeholder={t('common.search', 'Cerca...')}
+                          style={{
+                            width: '100%',
+                            padding: '7px 9px',
+                            borderRadius: 8,
+                            border: '1.5px solid var(--border)',
+                            background: 'var(--background)',
+                            color: 'var(--text)',
+                            fontSize: 12,
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                      <div style={{ overflowY: 'auto', maxHeight: 204 }}>
+                        {filteredCreateEmployees.length === 0 ? (
+                          <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                            {t('common.noData', 'Nessun dato')}
+                          </div>
+                        ) : (
+                          filteredCreateEmployees.map((emp) => {
+                            const fullName = `${emp.name} ${emp.surname}`.trim();
+                            const avatarUrl = getAvatarUrl(emp.avatarFilename);
+                            const initials = `${emp.name?.[0] ?? ''}${emp.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+                            const selected = String(emp.id) === createUserId;
+                            return (
+                              <button
+                                key={emp.id}
+                                type="button"
+                                onClick={() => {
+                                  const uid = String(emp.id);
+                                  setCreateUserId(uid);
+                                  if (emp.storeId) setCreateStoreId(String(emp.storeId));
+                                  else setCreateStoreId('');
+                                  setCreateEmployeeOpen(false);
+                                  setCreateEmployeeSearch('');
+                                }}
+                                style={{
+                                  width: '100%',
+                                  border: 'none',
+                                  borderBottom: '1px solid var(--border)',
+                                  background: selected ? 'var(--surface-warm)' : 'var(--surface)',
+                                  padding: '8px 10px',
+                                  textAlign: 'left',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <span style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: '50%',
+                                  overflow: 'hidden',
+                                  background: 'rgba(13,33,55,0.14)',
+                                  color: '#0D2137',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}>
+                                  {avatarUrl ? (
+                                    <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : initials}
+                                </span>
+                                <span style={{ minWidth: 0 }}>
+                                  <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {fullName}
+                                  </span>
+                                  <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {t(`roles.${emp.role ?? 'employee'}`, emp.role ?? 'employee')}
+                                    {emp.storeName ? ` · ${emp.storeName}` : ''}
+                                  </span>
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Store select — pre-filled from employee's store, still overridable */}
@@ -1343,7 +1543,11 @@ export default function AttendanceLogsPage() {
               {/* Footer buttons */}
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
-                  onClick={() => setCreateOpen(false)}
+                  onClick={() => {
+                    setCreateOpen(false);
+                    setCreateEmployeeOpen(false);
+                    setCreateEmployeeSearch('');
+                  }}
                   disabled={createSaving}
                   style={{
                     flex: 1, padding: '10px 0', borderRadius: 8,
@@ -1406,7 +1610,7 @@ export default function AttendanceLogsPage() {
               {t('attendance.confirmDeleteMsg')}
             </p>
             <p style={{ margin: '0 0 24px', fontSize: 12, color: 'var(--text-muted)' }}>
-              {deletingEvent.userSurname} {deletingEvent.userName} — {formatDateTime(deletingEvent.eventTime).date} {formatDateTime(deletingEvent.eventTime).time}
+              {deletingEvent.userName} {deletingEvent.userSurname} — {formatDateTime(deletingEvent.eventTime).date} {formatDateTime(deletingEvent.eventTime).time}
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button

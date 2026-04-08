@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { Store } from '../types';
+import { Store, StoreOperatingHour } from '../types';
 
 export async function getStores(params?: { targetCompanyId?: number }): Promise<Store[]> {
   const { data } = await apiClient.get('/stores', {
@@ -35,4 +35,25 @@ export async function activateStore(id: number): Promise<Store> {
 
 export async function deleteStorePermanent(id: number): Promise<void> {
   await apiClient.delete(`/stores/${id}/permanent`);
+}
+
+export async function uploadStoreLogo(id: number, file: File): Promise<{ logoUrl: string }> {
+  const formData = new FormData();
+  formData.append('logo', file);
+  const { data } = await apiClient.post(`/stores/${id}/logo`, formData);
+  return data.data;
+}
+
+export async function deleteStoreLogo(id: number): Promise<void> {
+  await apiClient.delete(`/stores/${id}/logo`);
+}
+
+export async function getStoreOperatingHours(id: number): Promise<StoreOperatingHour[]> {
+  const { data } = await apiClient.get(`/stores/${id}/operating-hours`);
+  return data.data.hours;
+}
+
+export async function updateStoreOperatingHours(id: number, hours: StoreOperatingHour[]): Promise<StoreOperatingHour[]> {
+  const { data } = await apiClient.put(`/stores/${id}/operating-hours`, { hours });
+  return data.data.hours;
 }

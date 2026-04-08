@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, MapPin, Store } from 'lucide-react';
+import { ArrowLeftRight, Building2, CalendarClock, Clock3, MapPin, Sparkles, Store, UserRound, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getAvatarUrl } from '../../api/client';
+import { DatePicker } from '../../components/ui/DatePicker';
 import { Employee, Store as StoreType } from '../../types';
 import { getEmployees, EmployeeListParams } from '../../api/employees';
 import { getStores } from '../../api/stores';
@@ -29,8 +30,17 @@ interface TransferFormState {
   target_store_id: string;
   start_date: string;
   end_date: string;
+  cancel_origin_shifts: boolean;
   reason: string;
   notes: string;
+}
+
+interface SuccessNotice {
+  title: string;
+  details: Array<{
+    type: 'employee' | 'company' | 'period' | 'origin' | 'target' | 'time' | 'setting' | 'count' | 'note';
+    text: string;
+  }>;
 }
 
 const EMPTY_FORM: TransferFormState = {
@@ -39,6 +49,7 @@ const EMPTY_FORM: TransferFormState = {
   target_store_id: '',
   start_date: '',
   end_date: '',
+  cancel_origin_shifts: true,
   reason: '',
   notes: '',
 };
@@ -52,12 +63,12 @@ function toIsoDate(date: Date): string {
 
 function statusBadge(status: TransferStatus): { bg: string; color: string; label: string } {
   if (status === 'active') {
-    return { bg: 'rgba(21,128,61,0.12)', color: '#166534', label: 'Attivo' };
+    return { bg: 'rgba(21,128,61,0.12)', color: '#166534', label: 'Active' };
   }
   if (status === 'completed') {
-    return { bg: 'rgba(2,132,199,0.12)', color: '#0c4a6e', label: 'Completato' };
+    return { bg: 'rgba(2,132,199,0.12)', color: '#0c4a6e', label: 'Completed' };
   }
-  return { bg: 'rgba(107,114,128,0.14)', color: '#374151', label: 'Annullato' };
+  return { bg: 'rgba(107,114,128,0.14)', color: '#374151', label: 'Cancelled' };
 }
 
 function shiftStatusBadge(status: TransferLinkedShift['status']): { bg: string; color: string } {
@@ -84,9 +95,26 @@ function transferDaysInclusive(startDate: string, endDate: string): number | nul
   return Math.floor((endMs - startMs) / 86400000) + 1;
 }
 
-function truncateText(value: string, max = 16): string {
-  if (value.length <= max) return value;
-  return `${value.slice(0, Math.max(0, max - 1))}…`;
+function formatTransferDateTime(value: string | null | undefined, locale: string): string {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString(locale);
+}
+
+function transferCompanyGroupLabel(transfer: TransferAssignment): string {
+  if (!transfer.groupName) return transfer.companyName;
+  return `${transfer.companyName} / ${transfer.groupName}`;
+}
+
+function successDetailIcon(type: SuccessNotice['details'][number]['type']) {
+  if (type === 'employee') return <UserRound size={12} />;
+  if (type === 'company') return <Building2 size={12} />;
+  if (type === 'period') return <CalendarClock size={12} />;
+  if (type === 'origin' || type === 'target') return <Store size={12} />;
+  if (type === 'time') return <Clock3 size={12} />;
+  if (type === 'setting' || type === 'count') return <ArrowLeftRight size={12} />;
+  return <Sparkles size={12} />;
 }
 
 async function loadEmployeesByPages(baseParams: Omit<EmployeeListParams, 'page' | 'limit'>): Promise<Employee[]> {
@@ -104,12 +132,13 @@ async function loadEmployeesByPages(baseParams: Omit<EmployeeListParams, 'page' 
 
   return Array.from(new Map(all.map((emp) => [emp.id, emp])).values())
     .filter((emp) => emp.role === 'employee' && emp.status === 'active')
-    .sort((a, b) => a.surname.localeCompare(b.surname));
+    .sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`));
 }
 
 export default function TransfersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const dateLocale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
 
   const canWrite = Boolean(user && WRITE_ROLES.includes(user.role as (typeof WRITE_ROLES)[number]));
 
@@ -117,7 +146,7 @@ export default function TransfersPage() {
   const [transfers, setTransfers] = useState<TransferAssignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useState<SuccessNotice | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingTransfer, setEditingTransfer] = useState<TransferAssignment | null>(null);
@@ -128,8 +157,12 @@ export default function TransfersPage() {
   const [stores, setStores] = useState<StoreType[]>([]);
   const [linkedShifts, setLinkedShifts] = useState<TransferLinkedShift[]>([]);
   const [linkedShiftsLoading, setLinkedShiftsLoading] = useState(false);
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const employeePickerRef = useRef<HTMLDivElement | null>(null);
 
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [cancelRestoreOriginalShifts, setCancelRestoreOriginalShifts] = useState(true);
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -138,18 +171,54 @@ export default function TransfersPage() {
     [employees, form.user_id],
   );
 
+  const filteredEmployees = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter((emp) => {
+      const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
+      const roleLabel = t(`roles.${emp.role}`, emp.role).toLowerCase();
+      const storeLabel = (emp.storeName ?? '').toLowerCase();
+      return fullName.includes(q) || roleLabel.includes(q) || storeLabel.includes(q) || emp.email.toLowerCase().includes(q);
+    });
+  }, [employeeSearch, employees, t]);
+
   const selectedEmployeeAvatarUrl = selectedEmployee?.avatarFilename
     ? getAvatarUrl(selectedEmployee.avatarFilename)
     : null;
 
   const selectedEmployeeInitials = `${selectedEmployee?.name?.[0] ?? ''}${selectedEmployee?.surname?.[0] ?? ''}`.toUpperCase() || 'U';
   const selectedEmployeeFullName = selectedEmployee
-    ? `${selectedEmployee.surname} ${selectedEmployee.name}`
+    ? `${selectedEmployee.name} ${selectedEmployee.surname}`
     : t('transfers.form.employee', 'Dipendente');
 
   const selectedEmployeeRoleLabel = selectedEmployee
     ? t(`roles.${selectedEmployee.role}`, selectedEmployee.role)
     : '';
+
+  const linkedShiftBuckets = useMemo(() => {
+    if (!editingTransfer) {
+      return {
+        origin: [] as TransferLinkedShift[],
+        transferred: [] as TransferLinkedShift[],
+        other: [] as TransferLinkedShift[],
+      };
+    }
+    const origin: TransferLinkedShift[] = [];
+    const transferred: TransferLinkedShift[] = [];
+    const other: TransferLinkedShift[] = [];
+    for (const shift of linkedShifts) {
+      if (shift.storeId === editingTransfer.originStoreId) {
+        origin.push(shift);
+        continue;
+      }
+      if (shift.storeId === editingTransfer.targetStoreId || shift.assignmentId === editingTransfer.id) {
+        transferred.push(shift);
+        continue;
+      }
+      other.push(shift);
+    }
+    return { origin, transferred, other };
+  }, [linkedShifts, editingTransfer]);
 
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
@@ -168,6 +237,17 @@ export default function TransfersPage() {
   useEffect(() => {
     void fetchTransfers();
   }, [fetchTransfers]);
+
+  useEffect(() => {
+    if (!employeePickerOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (!employeePickerRef.current?.contains(event.target as Node)) {
+        setEmployeePickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [employeePickerOpen]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -227,7 +307,9 @@ export default function TransfersPage() {
     setEditingTransfer(null);
     setLinkedShifts([]);
     setLinkedShiftsLoading(false);
-    setForm({ ...EMPTY_FORM, start_date: today, end_date: today });
+    setForm({ ...EMPTY_FORM, start_date: today, end_date: today, cancel_origin_shifts: true });
+    setEmployeePickerOpen(false);
+    setEmployeeSearch('');
     setDrawerOpen(true);
   }
 
@@ -241,9 +323,12 @@ export default function TransfersPage() {
       target_store_id: String(transfer.targetStoreId),
       start_date: transfer.startDate,
       end_date: transfer.endDate,
+      cancel_origin_shifts: transfer.cancelOriginShifts !== false,
       reason: transfer.reason ?? '',
       notes: transfer.notes ?? '',
     });
+    setEmployeePickerOpen(false);
+    setEmployeeSearch('');
     setDrawerOpen(true);
   }
 
@@ -254,6 +339,8 @@ export default function TransfersPage() {
     setForm(EMPTY_FORM);
     setLinkedShifts([]);
     setLinkedShiftsLoading(false);
+    setEmployeePickerOpen(false);
+    setEmployeeSearch('');
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -277,6 +364,7 @@ export default function TransfersPage() {
       target_store_id: Number(form.target_store_id),
       start_date: form.start_date,
       end_date: form.end_date,
+      cancel_origin_shifts: form.cancel_origin_shifts,
       reason: form.reason.trim() || null,
       notes: form.notes.trim() || null,
     };
@@ -286,25 +374,62 @@ export default function TransfersPage() {
       if (editingTransfer) {
         const updated = await updateTransfer(editingTransfer.id, payload);
         const warn = updated.warnings?.existingShifts ?? 0;
-        setSuccess(
-          warn > 0
-            ? t('transfers.updatedWithWarnings', {
-                defaultValue: `Trasferimento aggiornato. ${warn} turni esistenti nel periodo da verificare.`,
+        const transfer = updated.transfer;
+        const detailLines: SuccessNotice['details'] = [
+          { type: 'employee' as const, text: `${t('transfers.table.employee', 'Dipendente')}: ${transfer.userName} ${transfer.userSurname}` },
+          { type: 'company' as const, text: `${t('transfers.table.company', 'Azienda')}: ${transferCompanyGroupLabel(transfer)}` },
+          { type: 'period' as const, text: `${t('transfers.table.period', 'Periodo')}: ${transfer.startDate} - ${transfer.endDate}` },
+          { type: 'origin' as const, text: `${t('transfers.table.origin', 'Origine')}: ${transfer.originStoreName}` },
+          { type: 'target' as const, text: `${t('transfers.table.target', 'Destinazione')}: ${transfer.targetStoreName}` },
+          { type: 'time' as const, text: `${t('transfers.createdAt', 'Creato il')}: ${formatTransferDateTime(transfer.createdAt, dateLocale)}` },
+          { type: 'setting' as const, text: `${t('transfers.form.cancelOriginShifts', 'Annulla turni nel negozio di origine')}: ${transfer.cancelOriginShifts ? t('common.yes', 'Sì') : t('common.no', 'No')}` },
+          { type: 'count' as const, text: `${t('transfers.originShiftsCancelled', 'Turni origine annullati')}: ${updated.originShiftsCancelled ?? 0}` },
+          { type: 'count' as const, text: `${t('transfers.originShiftsRestored', 'Turni origine ripristinati')}: ${updated.originShiftsRestored ?? 0}` },
+        ];
+        if (warn > 0) {
+          detailLines.push(
+            {
+              type: 'note' as const,
+              text: t('transfers.updatedWithWarnings', {
+                defaultValue: `${warn} turni esistenti nel periodo da verificare.`,
                 count: warn,
-              })
-            : t('transfers.updated', 'Trasferimento aggiornato'),
-        );
+              }),
+            },
+          );
+        }
+        setSuccess({
+          title: t('transfers.updated', 'Trasferimento aggiornato'),
+          details: detailLines,
+        });
       } else {
         const created = await createTransfer(payload);
         const warn = created.warnings?.existingShifts ?? 0;
-        setSuccess(
-          warn > 0
-            ? t('transfers.createdWithWarnings', {
-                defaultValue: `Trasferimento creato. ${warn} turni esistenti nel periodo da verificare.`,
+        const transfer = created.transfer;
+        const detailLines: SuccessNotice['details'] = [
+          { type: 'employee' as const, text: `${t('transfers.table.employee', 'Dipendente')}: ${transfer.userName} ${transfer.userSurname}` },
+          { type: 'company' as const, text: `${t('transfers.table.company', 'Azienda')}: ${transferCompanyGroupLabel(transfer)}` },
+          { type: 'period' as const, text: `${t('transfers.table.period', 'Periodo')}: ${transfer.startDate} - ${transfer.endDate}` },
+          { type: 'origin' as const, text: `${t('transfers.table.origin', 'Origine')}: ${transfer.originStoreName}` },
+          { type: 'target' as const, text: `${t('transfers.table.target', 'Destinazione')}: ${transfer.targetStoreName}` },
+          { type: 'time' as const, text: `${t('transfers.createdAt', 'Creato il')}: ${formatTransferDateTime(transfer.createdAt, dateLocale)}` },
+          { type: 'setting' as const, text: `${t('transfers.form.cancelOriginShifts', 'Annulla turni nel negozio di origine')}: ${transfer.cancelOriginShifts ? t('common.yes', 'Sì') : t('common.no', 'No')}` },
+          { type: 'count' as const, text: `${t('transfers.originShiftsCancelled', 'Turni origine annullati')}: ${created.originShiftsCancelled ?? 0}` },
+        ];
+        if (warn > 0) {
+          detailLines.push(
+            {
+              type: 'note' as const,
+              text: t('transfers.createdWithWarnings', {
+                defaultValue: `${warn} turni esistenti nel periodo da verificare.`,
                 count: warn,
-              })
-            : t('transfers.created', 'Trasferimento creato'),
-        );
+              }),
+            },
+          );
+        }
+        setSuccess({
+          title: t('transfers.created', 'Trasferimento creato'),
+          details: detailLines,
+        });
       }
 
       closeDrawer();
@@ -322,14 +447,31 @@ export default function TransfersPage() {
     setConfirmCancelOpen(false);
     setError(null);
     try {
-      const result = await cancelTransfer(editingTransfer.id);
-      const cancelledCount = result.cancelledShifts ?? result.detachedShifts ?? 0;
-      setSuccess(
-        t('transfers.cancelledWithShiftCount', {
-          defaultValue: `Trasferimento annullato. ${cancelledCount} turni nel periodo trasferimento impostati su annullato.`,
-          count: cancelledCount,
-        }),
-      );
+      const result = await cancelTransfer(editingTransfer.id, undefined, { restore_origin_shifts: cancelRestoreOriginalShifts });
+      const cancelledTransfer = result.transfer;
+      const cancelledCount = result.cancelledTargetShifts ?? result.cancelledShifts ?? result.detachedShifts ?? 0;
+      const restoredCount = result.restoredOriginShifts ?? 0;
+      const restoreEnabled = result.restoreOriginalShiftsEnabled ?? cancelRestoreOriginalShifts;
+      setSuccess({
+        title: t('transfers.cancel', 'Trasferimento annullato'),
+        details: [
+          { type: 'employee', text: `${t('transfers.table.employee', 'Dipendente')}: ${cancelledTransfer.userName} ${cancelledTransfer.userSurname}` },
+          { type: 'company', text: `${t('transfers.table.company', 'Azienda')}: ${transferCompanyGroupLabel(cancelledTransfer)}` },
+          { type: 'period', text: `${t('transfers.table.period', 'Periodo')}: ${cancelledTransfer.startDate} - ${cancelledTransfer.endDate}` },
+          { type: 'time', text: `${t('transfers.cancelledAt', 'Data annullamento')}: ${formatTransferDateTime(cancelledTransfer.cancelledAt, dateLocale)}` },
+          { type: 'count', text: `${t('transfers.cancelledTargetShifts', 'Turni destinazione annullati')}: ${cancelledCount}` },
+          {
+            type: 'setting',
+            text: `${t('transfers.restoreOriginalShifts', 'Ripristina turni originali')}: ${restoreEnabled ? t('common.yes', 'Sì') : t('common.no', 'No')}`,
+          },
+          {
+            type: 'count',
+            text: restoreEnabled
+              ? `${t('transfers.restoredOriginShifts', 'Turni origine ripristinati')}: ${restoredCount}`
+              : t('transfers.restoreOriginalShiftsSkipped', 'Ripristino turni originali disattivato.'),
+          },
+        ],
+      });
       closeDrawer();
       await fetchTransfers();
     } catch (err: any) {
@@ -343,8 +485,16 @@ export default function TransfersPage() {
     setConfirmCompleteOpen(false);
     setError(null);
     try {
-      await completeTransfer(editingTransfer.id);
-      setSuccess(t('transfers.completed', 'Trasferimento completato'));
+      const completedTransfer = await completeTransfer(editingTransfer.id);
+      setSuccess({
+        title: t('transfers.completed', 'Trasferimento completato'),
+        details: [
+          { type: 'employee', text: `${t('transfers.table.employee', 'Dipendente')}: ${completedTransfer.userName} ${completedTransfer.userSurname}` },
+          { type: 'company', text: `${t('transfers.table.company', 'Azienda')}: ${transferCompanyGroupLabel(completedTransfer)}` },
+          { type: 'period', text: `${t('transfers.table.period', 'Periodo')}: ${completedTransfer.startDate} - ${completedTransfer.endDate}` },
+          { type: 'time', text: `${t('transfers.completedAt', 'Completato il')}: ${formatTransferDateTime(completedTransfer.updatedAt, dateLocale)}` },
+        ],
+      });
       closeDrawer();
       await fetchTransfers();
     } catch (err: any) {
@@ -358,8 +508,19 @@ export default function TransfersPage() {
     setConfirmDeleteOpen(false);
     setError(null);
     try {
-      await deleteTransfer(editingTransfer.id);
-      setSuccess(t('transfers.deleted', 'Trasferimento eliminato'));
+      const result = await deleteTransfer(editingTransfer.id);
+      const deletedTargetCount = result.deletedTargetShifts ?? result.detachedShifts ?? 0;
+      const restoredOriginCount = result.restoredOriginShifts ?? 0;
+      setSuccess({
+        title: t('transfers.deleted', 'Trasferimento eliminato'),
+        details: [
+          { type: 'employee', text: `${t('transfers.table.employee', 'Dipendente')}: ${editingTransfer.userName} ${editingTransfer.userSurname}` },
+          { type: 'company', text: `${t('transfers.table.company', 'Azienda')}: ${transferCompanyGroupLabel(editingTransfer)}` },
+          { type: 'period', text: `${t('transfers.table.period', 'Periodo')}: ${editingTransfer.startDate} - ${editingTransfer.endDate}` },
+          { type: 'count', text: `${t('transfers.deletedTargetShifts', 'Turni destinazione eliminati')}: ${deletedTargetCount}` },
+          { type: 'count', text: `${t('transfers.restoredOriginShifts', 'Turni origine ripristinati')}: ${restoredOriginCount}` },
+        ],
+      });
       closeDrawer();
       await fetchTransfers();
     } catch (err: any) {
@@ -375,6 +536,7 @@ export default function TransfersPage() {
       user_id: employeeId,
       origin_store_id: employee?.storeId != null ? String(employee.storeId) : '',
     }));
+    setEmployeeSearch('');
   }
 
   return (
@@ -421,8 +583,75 @@ export default function TransfersPage() {
       </div>
 
       {success && (
-        <div style={{ marginBottom: 12, borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(22,163,74,0.3)', background: 'rgba(22,163,74,0.08)', color: '#166534', fontSize: 13 }}>
-          {success}
+        <div style={{
+          marginBottom: 12,
+          borderRadius: 12,
+          border: '1px solid rgba(13,33,55,0.26)',
+          background: 'linear-gradient(135deg, rgba(13,33,55,0.1) 0%, rgba(201,151,58,0.1) 100%)',
+          boxShadow: '0 8px 20px rgba(15,23,42,0.08)',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '12px 14px',
+            borderBottom: '1px solid rgba(13,33,55,0.16)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <span style={{
+                width: 26,
+                height: 26,
+                borderRadius: '50%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(13,33,55,0.12)',
+                color: 'var(--primary)',
+                flexShrink: 0,
+              }}>
+                <ArrowLeftRight size={16} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--primary)' }}>{success.title}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                  {t('transfers.successCardSubtitle', 'Transfer operation completed successfully')}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccess(null)}
+              aria-label={t('common.close', 'Close')}
+              style={{
+                border: '1px solid rgba(13,33,55,0.2)',
+                borderRadius: 8,
+                background: 'rgba(255,255,255,0.64)',
+                color: 'var(--primary)',
+                width: 28,
+                height: 28,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <div style={{ padding: '10px 14px', display: 'grid', gap: 5 }}>
+            {success.details.map((line, idx) => (
+              <div key={`${line.type}-${idx}-${line.text}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                <span style={{ marginTop: 1, color: 'var(--accent)', opacity: 0.95 }}>
+                  {successDetailIcon(line.type)}
+                </span>
+                <div style={{ fontSize: 12, lineHeight: 1.35, color: 'var(--text-primary)' }}>{line.text}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -462,7 +691,7 @@ export default function TransfersPage() {
                 </tr>
               ) : transfers.map((transfer) => {
                 const badge = statusBadge(transfer.status);
-                const fullName = `${transfer.userSurname} ${transfer.userName}`.trim();
+                const fullName = `${transfer.userName} ${transfer.userSurname}`.trim();
                 const initials = `${transfer.userName?.[0] ?? ''}${transfer.userSurname?.[0] ?? ''}`.toUpperCase() || 'U';
                 const avatarUrl = getAvatarUrl(transfer.userAvatarFilename);
                 const daysInPeriod = transferDaysInclusive(transfer.startDate, transfer.endDate);
@@ -571,23 +800,153 @@ export default function TransfersPage() {
               <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
                 <div style={fieldRowStyle}>
                   <label style={labelStyle}>{t('transfers.form.employee', 'Dipendente')}</label>
-                  <select
-                    value={form.user_id}
-                    onChange={(e) => handleEmployeeSelect(e.target.value)}
-                    style={inputStyle}
-                    required
-                    disabled={Boolean(editingTransfer)}
-                  >
-                    <option value="">{t('transfers.form.selectEmployee', 'Seleziona dipendente')}</option>
-                    {employees.map((emp) => {
-                      const roleLabel = t(`roles.${emp.role}`, emp.role);
-                      return (
-                        <option key={emp.id} value={String(emp.id)}>
-                          {emp.surname} {emp.name} · {roleLabel}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  <div ref={employeePickerRef} style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      disabled={Boolean(editingTransfer)}
+                      onClick={() => {
+                        if (editingTransfer) return;
+                        setEmployeePickerOpen((prev) => !prev);
+                      }}
+                      style={{
+                        ...inputStyle,
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        cursor: editingTransfer ? 'not-allowed' : 'pointer',
+                        opacity: editingTransfer ? 0.75 : 1,
+                      }}
+                    >
+                      {selectedEmployee ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            background: 'rgba(13,33,55,0.14)',
+                            color: '#0D2137',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            {selectedEmployeeAvatarUrl ? (
+                              <img src={selectedEmployeeAvatarUrl} alt={selectedEmployeeFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : selectedEmployeeInitials}
+                          </span>
+                          <span style={{ minWidth: 0, textAlign: 'left' }}>
+                            <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {selectedEmployeeFullName}
+                            </span>
+                            <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {selectedEmployeeRoleLabel}
+                              {selectedEmployee.storeName ? ` · ${selectedEmployee.storeName}` : ''}
+                            </span>
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('transfers.form.selectEmployee', 'Seleziona dipendente')}</span>
+                      )}
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{employeePickerOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {employeePickerOpen && !editingTransfer && (
+                      <div style={{
+                        position: 'absolute',
+                        zIndex: 20,
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        boxShadow: '0 16px 30px rgba(0,0,0,0.18)',
+                        maxHeight: 260,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                      }}>
+                        <div style={{ padding: 8, borderBottom: '1px solid var(--border)' }}>
+                          <input
+                            value={employeeSearch}
+                            onChange={(e) => setEmployeeSearch(e.target.value)}
+                            placeholder={t('common.search', 'Cerca...')}
+                            style={{ ...inputStyle, width: '100%', padding: '7px 9px', fontSize: 12 }}
+                          />
+                        </div>
+                        <div style={{ overflowY: 'auto', maxHeight: 204 }}>
+                          {filteredEmployees.length === 0 ? (
+                            <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                              {t('common.noData', 'Nessun dato')}
+                            </div>
+                          ) : (
+                            filteredEmployees.map((emp) => {
+                              const fullName = `${emp.name} ${emp.surname}`.trim();
+                              const roleLabel = t(`roles.${emp.role}`, emp.role);
+                              const avatarUrl = getAvatarUrl(emp.avatarFilename);
+                              const initials = `${emp.name?.[0] ?? ''}${emp.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+                              const selected = String(emp.id) === form.user_id;
+                              return (
+                                <button
+                                  key={emp.id}
+                                  type="button"
+                                  onClick={() => {
+                                    handleEmployeeSelect(String(emp.id));
+                                    setEmployeePickerOpen(false);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    border: 'none',
+                                    borderBottom: '1px solid var(--border)',
+                                    background: selected ? 'var(--surface-warm)' : 'var(--surface)',
+                                    padding: '8px 10px',
+                                    textAlign: 'left',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <span style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    background: 'rgba(13,33,55,0.14)',
+                                    color: '#0D2137',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}>
+                                    {avatarUrl ? (
+                                      <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : initials}
+                                  </span>
+                                  <span style={{ minWidth: 0 }}>
+                                    <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {fullName}
+                                    </span>
+                                    <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {roleLabel}
+                                      {emp.storeName ? ` · ${emp.storeName}` : ''}
+                                    </span>
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {selectedEmployee && (
                     <div style={{
                       marginTop: 8,
@@ -677,13 +1036,44 @@ export default function TransfersPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                   <div style={fieldRowStyle}>
-                    <label style={labelStyle}>{t('transfers.form.startDate', 'Data inizio')}</label>
-                    <input type="date" value={form.start_date} onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))} style={inputStyle} required />
+                    <DatePicker
+                      label={t('transfers.form.startDate', 'Data inizio')}
+                      value={form.start_date}
+                      onChange={(value) => setForm((p) => ({ ...p, start_date: value }))}
+                    />
                   </div>
                   <div style={fieldRowStyle}>
-                    <label style={labelStyle}>{t('transfers.form.endDate', 'Data fine')}</label>
-                    <input type="date" value={form.end_date} onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))} style={inputStyle} required />
+                    <DatePicker
+                      label={t('transfers.form.endDate', 'Data fine')}
+                      value={form.end_date}
+                      onChange={(value) => setForm((p) => ({ ...p, end_date: value }))}
+                    />
                   </div>
+                </div>
+
+                <div style={{
+                  marginTop: 10,
+                  padding: '9px 10px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  background: 'var(--surface-warm)',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                }}>
+                  <input
+                    id="cancel-origin-shifts"
+                    type="checkbox"
+                    checked={form.cancel_origin_shifts}
+                    onChange={(e) => setForm((prev) => ({ ...prev, cancel_origin_shifts: e.target.checked }))}
+                    style={{ marginTop: 2 }}
+                  />
+                  <label htmlFor="cancel-origin-shifts" style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.35, cursor: 'pointer' }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.form.cancelOriginShifts', 'Annulla turni negozio origine nel periodo')}</strong>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {t('transfers.form.cancelOriginShiftsHint', 'Se attivo, i turni del negozio di origine verranno annullati durante il trasferimento e ripristinati in caso di annullamento del trasferimento.')}
+                    </div>
+                  </label>
                 </div>
 
                 <div style={{ ...fieldRowStyle, marginTop: 8 }}>
@@ -709,89 +1099,181 @@ export default function TransfersPage() {
                 </div>
 
                 {editingTransfer && (
-                  <div style={{
-                    marginTop: 14,
-                    border: '1px solid var(--border)',
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    background: 'rgba(13,33,55,0.03)',
-                  }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                      {t('transfers.linkedShiftsTitle', 'Linked shifts')}
-                      {(() => {
-                        const days = transferDaysInclusive(editingTransfer.startDate, editingTransfer.endDate);
-                        if (days == null) return null;
-                        return (
-                          <span style={{
-                            marginLeft: 8,
-                            width: 'fit-content',
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            border: '1px solid rgba(13,33,55,0.2)',
-                            background: 'rgba(13,33,55,0.05)',
-                            color: 'var(--text-secondary)',
-                            fontSize: 10,
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            display: 'inline-block',
-                            verticalAlign: 'middle',
-                          }}>
-                            {t('transfers.table.daysShort', 'days') ? `${days} ${t('transfers.table.daysShort', 'days')}` : `${days} days`}
-                          </span>
-                        );
-                      })()}
+                  <>
+                    <div style={{
+                      marginTop: 14,
+                      border: '1px solid var(--border)',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                      background: 'rgba(13,33,55,0.03)',
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                        {t('transfers.metaTitle', 'Dettagli trasferimento')}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.transferredBy', 'Trasferito da')}:</strong>{' '}
+                          {editingTransfer.createdByName ? `${editingTransfer.createdByName} ${editingTransfer.createdBySurname ?? ''}`.trim() : '—'}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.table.company', 'Azienda')}:</strong>{' '}
+                          {transferCompanyGroupLabel(editingTransfer)}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.transferredAt', 'Data trasferimento')}:</strong>{' '}
+                          {formatTransferDateTime(editingTransfer.createdAt, dateLocale)}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.form.cancelOriginShifts', 'Annulla turni origine')}:</strong>{' '}
+                          {editingTransfer.cancelOriginShifts ? t('common.yes', 'Sì') : t('common.no', 'No')}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.statusLabel', 'Stato')}:</strong>{' '}
+                          {t(`transfers.status.${editingTransfer.status}`, editingTransfer.status)}
+                        </div>
+                        {editingTransfer.status === 'completed' && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.completedAt', 'Completato il')}:</strong>{' '}
+                            {formatTransferDateTime(editingTransfer.updatedAt, dateLocale)}
+                          </div>
+                        )}
+                        {editingTransfer.cancelledAt && (
+                          <>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.cancelledBy', 'Annullato da')}:</strong>{' '}
+                              {editingTransfer.cancelledByName ? `${editingTransfer.cancelledByName} ${editingTransfer.cancelledBySurname ?? ''}`.trim() : '—'}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.cancelledAt', 'Data annullamento')}:</strong>{' '}
+                              {formatTransferDateTime(editingTransfer.cancelledAt, dateLocale)}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
 
-                    {linkedShiftsLoading ? (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {t('common.loading', 'Caricamento...')}
-                      </div>
-                    ) : linkedShifts.length === 0 ? (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {t('transfers.linkedShiftsEmpty', 'No linked shifts found for this transfer.')}
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {linkedShifts.map((shift) => {
-                          const sb = shiftStatusBadge(shift.status);
+                    <div style={{
+                      marginTop: 12,
+                      border: '1px solid var(--border)',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                      background: 'rgba(13,33,55,0.03)',
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                        {t('transfers.linkedShiftsTitle', 'Linked shifts')}
+                        {(() => {
+                          const days = transferDaysInclusive(editingTransfer.startDate, editingTransfer.endDate);
+                          if (days == null) return null;
                           return (
-                            <div key={shift.id} style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 10,
-                              background: 'var(--surface)',
-                              border: '1px solid var(--border)',
-                              borderRadius: 8,
-                              padding: '7px 9px',
+                            <span style={{
+                              marginLeft: 8,
+                              width: 'fit-content',
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                              border: '1px solid rgba(13,33,55,0.2)',
+                              background: 'rgba(13,33,55,0.05)',
+                              color: 'var(--text-secondary)',
+                              fontSize: 10,
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              display: 'inline-block',
+                              verticalAlign: 'middle',
                             }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 700 }}>
-                                  {shift.date} · {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
-                                  {shift.shiftHours != null && shift.shiftHours !== '' ? ` (${shift.shiftHours}h)` : ''}
-                                </div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={shift.storeName}>
-                                  {truncateText(shift.storeName, 28)}
-                                </div>
-                              </div>
-                              <span style={{
-                                background: sb.bg,
-                                color: sb.color,
-                                borderRadius: 999,
-                                padding: '3px 8px',
-                                fontSize: 10,
-                                fontWeight: 800,
-                                textTransform: 'uppercase',
-                                whiteSpace: 'nowrap',
-                              }}>
-                                {t(`shifts.status.${shift.status}`, shift.status)}
-                              </span>
-                            </div>
+                              {t('transfers.table.daysShort', 'days') ? `${days} ${t('transfers.table.daysShort', 'days')}` : `${days} days`}
+                            </span>
                           );
-                        })}
+                        })()}
                       </div>
-                    )}
-                  </div>
+
+                      {linkedShiftsLoading ? (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {t('common.loading', 'Caricamento...')}
+                        </div>
+                      ) : linkedShifts.length === 0 ? (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {t('transfers.linkedShiftsEmpty', 'No linked shifts found for this transfer.')}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {[
+                            {
+                              key: 'transferred',
+                              title: t('transfers.linkedTransferredStore', 'Turni negozio destinazione'),
+                              shifts: linkedShiftBuckets.transferred,
+                              accent: 'rgba(13,148,136,0.35)',
+                            },
+                            {
+                              key: 'origin',
+                              title: t('transfers.linkedOriginStore', 'Turni negozio origine'),
+                              shifts: linkedShiftBuckets.origin,
+                              accent: 'rgba(30,64,175,0.35)',
+                            },
+                            {
+                              key: 'other',
+                              title: t('transfers.linkedOtherStore', 'Altri turni correlati'),
+                              shifts: linkedShiftBuckets.other,
+                              accent: 'rgba(107,114,128,0.28)',
+                            },
+                          ].map((section) => (
+                            <div key={section.key} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                              <div style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                color: 'var(--text-secondary)',
+                                padding: '7px 9px',
+                                borderBottom: '1px solid var(--border)',
+                                background: 'var(--surface-warm)',
+                                borderLeft: `3px solid ${section.accent}`,
+                              }}>
+                                {section.title} ({section.shifts.length})
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8 }}>
+                                {section.shifts.length === 0 ? (
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 2px' }}>—</div>
+                                ) : section.shifts.map((shift) => {
+                                  const sb = shiftStatusBadge(shift.status);
+                                  return (
+                                    <div key={shift.id} style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: 10,
+                                      background: 'var(--surface)',
+                                      border: '1px solid var(--border)',
+                                      borderRadius: 8,
+                                      padding: '7px 9px',
+                                    }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                                        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 700 }}>
+                                          {shift.date} · {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
+                                          {shift.shiftHours != null && shift.shiftHours !== '' ? ` (${shift.shiftHours}h)` : ''}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={shift.storeName}>
+                                          {shift.storeName}
+                                        </div>
+                                      </div>
+                                      <span style={{
+                                        background: sb.bg,
+                                        color: sb.color,
+                                        borderRadius: 999,
+                                        padding: '3px 8px',
+                                        fontSize: 10,
+                                        fontWeight: 800,
+                                        textTransform: 'uppercase',
+                                        whiteSpace: 'nowrap',
+                                      }}>
+                                        {t(`shifts.status.${shift.status}`, shift.status)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 {editingTransfer && (
@@ -809,7 +1291,10 @@ export default function TransfersPage() {
                           <button
                             type="button"
                             className="btn btn-danger"
-                            onClick={() => setConfirmCancelOpen(true)}
+                            onClick={() => {
+                              setCancelRestoreOriginalShifts(true);
+                              setConfirmCancelOpen(true);
+                            }}
                           >
                             {t('transfers.cancel', 'Annulla trasferimento')}
                           </button>
@@ -853,11 +1338,26 @@ export default function TransfersPage() {
       <ConfirmModal
         open={confirmCancelOpen}
         title={t('transfers.cancelConfirmTitle', 'Conferma annullamento')}
-        message={t('transfers.cancelConfirmMessage', 'Vuoi annullare questo trasferimento? I turni del periodo trasferimento verranno impostati su annullato.')}
+        message={t('transfers.cancelConfirmMessage', 'Vuoi annullare questo trasferimento? I turni del negozio destinazione verranno annullati e quelli del negozio origine verranno ripristinati quando possibile.')}
         variant="warning"
         onCancel={() => setConfirmCancelOpen(false)}
         onConfirm={() => { void doCancelTransfer(); }}
-      />
+      >
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+          <input
+            type="checkbox"
+            checked={cancelRestoreOriginalShifts}
+            onChange={(event) => setCancelRestoreOriginalShifts(event.target.checked)}
+            style={{ marginTop: 2 }}
+          />
+          <span>
+            <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.restoreOriginalShifts', 'Ripristina turni originali')}</strong>
+            <span style={{ display: 'block', marginTop: 2, color: 'var(--text-muted)' }}>
+              {t('transfers.restoreOriginalShiftsHint', 'Se attivo, i turni annullati del negozio di origine vengono riportati a schedulati.')}
+            </span>
+          </span>
+        </label>
+      </ConfirmModal>
 
       <ConfirmModal
         open={confirmCompleteOpen}

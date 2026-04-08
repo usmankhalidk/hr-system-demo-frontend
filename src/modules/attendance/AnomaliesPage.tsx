@@ -197,7 +197,7 @@ export default function AnomaliesPage() {
         >
           <option value="">{t('common.all')} {t('employees.colName', 'employee').toLowerCase()}</option>
           {filterEmployees.map((e) => (
-            <option key={e.id} value={String(e.id)}>{e.surname} {e.name}</option>
+            <option key={e.id} value={String(e.id)}>{e.name} {e.surname}</option>
           ))}
         </select>
 

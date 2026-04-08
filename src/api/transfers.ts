@@ -10,6 +10,7 @@ export interface TransferAssignment {
   targetStoreId: number;
   startDate: string;
   endDate: string;
+  cancelOriginShifts: boolean;
   status: TransferStatus;
   reason: string | null;
   notes: string | null;
@@ -24,8 +25,15 @@ export interface TransferAssignment {
   userEmail: string;
   userAvatarFilename: string | null;
   companyName: string;
+  groupName?: string | null;
   originStoreName: string;
   targetStoreName: string;
+  createdByName?: string | null;
+  createdBySurname?: string | null;
+  createdByAvatarFilename?: string | null;
+  cancelledByName?: string | null;
+  cancelledBySurname?: string | null;
+  cancelledByAvatarFilename?: string | null;
 }
 
 export interface TransferLinkedShift {
@@ -55,6 +63,7 @@ export interface TransferCreatePayload {
   origin_store_id?: number | null;
   start_date: string;
   end_date: string;
+  cancel_origin_shifts?: boolean;
   reason?: string | null;
   notes?: string | null;
   target_company_id?: number | null;
@@ -65,6 +74,7 @@ export interface TransferUpdatePayload {
   origin_store_id?: number | null;
   start_date?: string;
   end_date?: string;
+  cancel_origin_shifts?: boolean;
   reason?: string | null;
   notes?: string | null;
   target_company_id?: number | null;
@@ -102,12 +112,12 @@ export async function listTransferShifts(id: number): Promise<{ transferId: numb
   return res.data.data;
 }
 
-export async function createTransfer(payload: TransferCreatePayload): Promise<{ transfer: TransferAssignment; warnings: TransferWarnings }> {
+export async function createTransfer(payload: TransferCreatePayload): Promise<{ transfer: TransferAssignment; warnings: TransferWarnings; originShiftsCancelled?: number }> {
   const res = await client.post('/transfers', payload);
   return res.data.data;
 }
 
-export async function updateTransfer(id: number, payload: TransferUpdatePayload): Promise<{ transfer: TransferAssignment; warnings: TransferWarnings }> {
+export async function updateTransfer(id: number, payload: TransferUpdatePayload): Promise<{ transfer: TransferAssignment; warnings: TransferWarnings; originShiftsCancelled?: number; originShiftsRestored?: number }> {
   const res = await client.put(`/transfers/${id}`, payload);
   return res.data.data;
 }
@@ -115,12 +125,16 @@ export async function updateTransfer(id: number, payload: TransferUpdatePayload)
 export async function cancelTransfer(
   id: number,
   reason?: string,
-): Promise<{ transfer: TransferAssignment; detachedShifts: number; cancelledShifts?: number }> {
-  const res = await client.post(`/transfers/${id}/cancel`, { reason });
+  options?: { restore_origin_shifts?: boolean },
+): Promise<{ transfer: TransferAssignment; detachedShifts: number; cancelledShifts?: number; cancelledTargetShifts?: number; restoredOriginShifts?: number; restoreOriginalShiftsEnabled?: boolean }> {
+  const res = await client.post(`/transfers/${id}/cancel`, {
+    reason,
+    restore_origin_shifts: options?.restore_origin_shifts,
+  });
   return res.data.data;
 }
 
-export async function deleteTransfer(id: number): Promise<{ id: number; detachedShifts: number }> {
+export async function deleteTransfer(id: number): Promise<{ id: number; detachedShifts: number; deletedTargetShifts?: number; restoredOriginShifts?: number }> {
   const res = await client.delete(`/transfers/${id}`);
   return res.data.data;
 }

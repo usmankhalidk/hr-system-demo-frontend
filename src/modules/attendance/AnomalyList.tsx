@@ -300,12 +300,12 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                     overflow: 'hidden',
                   }}>
                     {a.userAvatarFilename ? (
-                      <img src={getAvatarUrl(a.userAvatarFilename) ?? ''} alt={`${a.userSurname} ${a.userName}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={getAvatarUrl(a.userAvatarFilename) ?? ''} alt={`${a.userName} ${a.userSurname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : initials}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
-                      {a.userSurname} {a.userName}
+                      {a.userName} {a.userSurname}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
                       {a.storeName} · {dateShort}
@@ -414,15 +414,12 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                             fontFamily: 'var(--font-display)', overflow: 'hidden',
                           }}>
                             {a.userAvatarFilename ? (
-                              <img src={getAvatarUrl(a.userAvatarFilename) ?? ''} alt={`${a.userSurname} ${a.userName}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <img src={getAvatarUrl(a.userAvatarFilename) ?? ''} alt={`${a.userName} ${a.userSurname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : initials}
                           </div>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
-                              {a.userSurname}
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-                              {a.userName}
+                              {a.userName} {a.userSurname}
                             </div>
                           </div>
                         </div>
