@@ -741,6 +741,7 @@ const en = {
     DEVICE_NOT_REGISTERED: 'Device not registered. Please register your device first.',
     DEVICE_MISMATCH: 'Your device is different; you cannot check in, check out, or start or end a break from this device.',
     DEVICE_REGISTRATION_NOT_REQUIRED: 'Device registration is not required for your account right now.',
+    DEVICE_ALREADY_REGISTERED: 'You cannot register your account on that device, Other employee account been already register on that device',
     ON_HOLIDAY: 'You cannot register attendance on an approved leave day.',
     BEFORE_SHIFT_START: 'Action not allowed before shift start.',
     AFTER_SHIFT_END: 'Action not allowed after shift end.',
