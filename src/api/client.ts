@@ -91,4 +91,11 @@ export function getAvatarUrl(filename: string | null | undefined): string | null
   return `${base}/uploads/avatars/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 }
 
+export function getCompanyLogoUrl(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+  const base = apiBase;
+  return `${base}/uploads/company-logos/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+}
+
 export default client;

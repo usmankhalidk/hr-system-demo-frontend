@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
@@ -7,6 +7,7 @@ import { UserRole } from '../../types';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getUnreadCount } from '../../api/messages';
 import { getAvatarUrl } from '../../api/client';
+import fusaroLogoUrl from '../../assets/fusaro-logo.png';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -42,6 +43,12 @@ const IconUsers = () => (
     <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
   </svg>
 );
+const IconSmartphone = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="2" width="12" height="20" rx="2" />
+    <line x1="12" y1="18" x2="12.01" y2="18" />
+  </svg>
+);
 const IconShield = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -68,6 +75,18 @@ const IconCalendar = () => (
     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
     <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
     <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+const IconTransfer = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3h4v4"/>
+    <path d="M21 3l-7 7"/>
+    <path d="M7 21H3v-4"/>
+    <path d="M3 21l7-7"/>
+    <path d="M21 14v7h-7"/>
+    <path d="M21 21l-7-7"/>
+    <path d="M3 10V3h7"/>
+    <path d="M3 3l7 7"/>
   </svg>
 );
 const IconClock = () => (
@@ -130,6 +149,7 @@ const ROLE_ACCENT: Record<UserRole, string> = {
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose }) => {
   const { user, permissions, logout } = useAuth();
   const { t } = useTranslation();
+  const location = useLocation();
 
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [avatarImgError, setAvatarImgError] = useState(false);
@@ -156,28 +176,32 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.ats',        path: '/ats',                   icon: <IconBriefcase />, permissionKey: 'ats' },
       { labelKey: 'nav.onboarding', path: '/onboarding',            icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti',  path: '/documenti',             icon: <IconDoc />, permissionKey: 'documenti' },
+      { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.turni',      path: '/turni',                 icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti',      icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',   path: '/presenze',              icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies',  path: '/anomalie',              icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',   path: '/permessi',              icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi',   path: '/hr-chat',               icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.permissions',path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'impostazioni' },
+      { labelKey: 'nav.permissions',path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings',   path: '/impostazioni',          icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     hr: [
       { labelKey: 'nav.dashboard',  path: '/',             icon: <IconDashboard /> },
       { labelKey: 'nav.companies',  path: '/aziende',      icon: <IconBuilding /> },
       { labelKey: 'nav.employees',  path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.stores',     path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.ats',        path: '/ats',          icon: <IconBriefcase />, permissionKey: 'ats' },
       { labelKey: 'nav.onboarding', path: '/onboarding',   icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti',  path: '/documenti',    icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.turni',      path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',   path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies',  path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',   path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi',   path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield /> },
+      { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings',   path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     area_manager: [
@@ -189,11 +213,12 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.onboarding', path: '/onboarding',   icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti',  path: '/documenti',    icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.turni',      path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',   path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies',  path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',   path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi',   path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield /> },
+      { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings',   path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     store_manager: [
@@ -203,9 +228,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.onboarding', path: '/onboarding',   icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti',  path: '/documenti',    icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.turni',      path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',   path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies',  path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi',   path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.stores',     path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.messaggi',   path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.settings',   path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -240,6 +267,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
   const { isMobile: isMobileView } = useBreakpoint();
 
+  const isNavItemActive = (path: string, pathname: string): boolean => {
+    if (path === '/') return pathname === '/';
+    if (path === '/dipendenti/reset-device') return pathname === '/dipendenti/reset-device';
+    if (path === '/dipendenti') return pathname === '/dipendenti' || /^\/dipendenti\/\d+$/.test(pathname);
+    if (path === '/impostazioni') return pathname === '/impostazioni';
+    return pathname === path || pathname.startsWith(`${path}/`);
+  };
+
   return (
     <aside style={isMobileView ? {
       position: 'fixed',
@@ -273,13 +308,16 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
         flexShrink: 0, overflow: 'hidden',
         justifyContent: collapsed ? 'center' : 'flex-start',
       }}>
-        <div style={{
-          width: collapsed ? 32 : 34, height: collapsed ? 32 : 34,
-          background: 'var(--accent)', borderRadius: collapsed ? 8 : 9,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'var(--font-display)', fontWeight: 800,
-          fontSize: '13px', color: '#0D2137', flexShrink: 0,
-        }}>HR</div>
+        <img
+          src={fusaroLogoUrl}
+          alt="Fusaro Antonio 1893"
+          style={{
+            width: collapsed ? 30 : 32,
+            height: collapsed ? 30 : 32,
+            objectFit: 'contain',
+            flexShrink: 0,
+          }}
+        />
         {!collapsed && (
           <div style={{ overflow: 'hidden' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px', color: '#FFFFFF', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
@@ -336,21 +374,23 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       </NavLink>
 
       {/* ── Navigation ── */}
-      <nav style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
+      <nav className="sidebar-scroll" style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
         {!collapsed && (
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.28)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 10px 4px', marginBottom: '2px' }}>
             {t('nav.navigation')}
           </div>
         )}
-        {navItems.map((item) => (
+        {navItems.map((item) => {
+          const isActive = isNavItemActive(item.path, location.pathname);
+          return (
           <NavLink
             key={item.path}
             to={item.path}
-            end={item.path === '/' || item.path === '/impostazioni'}
+            end
             className="sidebar-item"
             title={collapsed ? t(item.labelKey) : undefined}
             onClick={() => { if (isMobileView && onMobileClose) onMobileClose(); }}
-            style={({ isActive }) => ({
+            style={() => ({
               display: 'flex', alignItems: 'center',
               justifyContent: collapsed ? 'center' : 'flex-start',
               gap: '10px',
@@ -385,7 +425,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
               </span>
             )}
           </NavLink>
-        ))}
+        );
+      })}
       </nav>
 
       {/* ── Language switcher (full) + Logout ── */}

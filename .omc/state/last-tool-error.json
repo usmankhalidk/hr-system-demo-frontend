@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /Users/user/hr-software/hr-system-demo-backend && npx tsc --noEmit 2>&1 && echo \\\"BACKEND OK\\\"\",\"timeout\":60000}",
+  "error": "Exit code 2\nsrc/config/socket.ts(1,24): error TS2307: Cannot find module 'socket.io' or its corresponding type declarations.\nsrc/config/socket.ts(14,24): error TS7006: Parameter 'socket' implicitly has an 'any' type.",
+  "timestamp": "2026-04-08T10:22:37.871Z",
+  "retry_count": 2
+}

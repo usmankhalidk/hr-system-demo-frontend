@@ -30,3 +30,14 @@ export async function deleteCompanyPermanent(id: number): Promise<{ id: number }
   const { data } = await apiClient.delete(`/companies/${id}`);
   return data.data;
 }
+
+export async function uploadCompanyLogo(id: number, file: File): Promise<{ logoUrl: string }> {
+  const formData = new FormData();
+  formData.append('logo', file);
+  const { data } = await apiClient.post(`/companies/${id}/logo`, formData);
+  return data.data;
+}
+
+export async function deleteCompanyLogo(id: number): Promise<void> {
+  await apiClient.delete(`/companies/${id}/logo`);
+}

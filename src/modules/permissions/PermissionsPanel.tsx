@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare,
-  FileText, Briefcase, BarChart2, Settings, AlertTriangle,
+  FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield, ArrowLeftRight,
 } from 'lucide-react';
 import { getPermissions, updatePermissions } from '../../api/permissions';
 import { getCompanies } from '../../api/companies';
@@ -18,15 +18,18 @@ import PermissionGridTable, { GridModuleDef } from './PermissionGridTable';
 const MODULE_KEYS: GridModuleDef[] = [
   { key: 'dipendenti',   implemented: true,  icon: <Users size={15} /> },
   { key: 'turni',        implemented: true,  icon: <Clock size={15} /> },
+  { key: 'trasferimenti',implemented: true,  icon: <ArrowLeftRight size={15} /> },
   { key: 'presenze',     implemented: true,  icon: <CalendarCheck size={15} /> },
   { key: 'anomalie',     implemented: true,  icon: <AlertTriangle size={15} /> },
   { key: 'permessi',     implemented: true,  icon: <CalendarOff size={15} /> },
+  { key: 'saldi',        implemented: true,  icon: <Wallet size={15} /> },
   { key: 'negozi',       implemented: true,  icon: <Store size={15} /> },
   { key: 'messaggi',     implemented: true,  icon: <MessageSquare size={15} /> },
   { key: 'impostazioni', implemented: true,  icon: <Settings size={15} /> },
   { key: 'documenti',    implemented: true,  icon: <FileText size={15} /> },
   { key: 'ats',          implemented: true,  icon: <Briefcase size={15} /> },
   { key: 'report',       implemented: false, icon: <BarChart2 size={15} /> },
+  { key: 'gestione_accessi', implemented: true, icon: <Shield size={15} /> },
 ];
 
 type LocalGrid = Record<string, Record<string, boolean>>;
@@ -35,15 +38,19 @@ type CompanyOption = { id: number; name: string };
 
 const snakeToCamel = (s: string) => s.replace(/_([a-z0-9])/g, (_, l) => l.toUpperCase());
 
+// Axios camelizes ALL response keys including module names.
+// 'gestione_accessi' in the backend becomes 'gestioneAccessi' after transformation.
+// We must use the camelized key to look up values in data.grid.
 function buildLocalGrid(data: PermissionGrid): LocalGrid {
   const result: LocalGrid = {};
   for (const mod of MODULE_KEYS) {
     if (!mod.implemented) continue;
+    const camelModKey = snakeToCamel(mod.key); // e.g. 'gestione_accessi' → 'gestioneAccessi'
     result[mod.key] = {};
     for (const roleKey of MANAGED_ROLE_KEYS) {
-      const camelKey = snakeToCamel(roleKey);
+      const camelKey = snakeToCamel(roleKey); // e.g. 'area_manager' → 'areaManager'
       const eligible = isRoleEligibleForModule(roleKey, mod.key as ModuleKey);
-      result[mod.key][roleKey] = eligible ? (data.grid?.[mod.key]?.[camelKey] ?? false) : false;
+      result[mod.key][roleKey] = eligible ? (data.grid?.[camelModKey]?.[camelKey] ?? false) : false;
     }
   }
   return result;

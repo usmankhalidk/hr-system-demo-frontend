@@ -144,8 +144,8 @@
   "hotPaths": [
     {
       "path": "src/modules/employees/EmployeeDetail.tsx",
-      "accessCount": 9,
-      "lastAccessed": 1775643244539,
+      "accessCount": 11,
+      "lastAccessed": 1775643542836,
       "type": "file"
     },
     {

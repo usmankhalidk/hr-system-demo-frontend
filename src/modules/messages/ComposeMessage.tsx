@@ -8,6 +8,8 @@ import { Spinner } from '../../components/ui/Spinner';
 import { sendMessage } from '../../api/messages';
 import { getEmployees } from '../../api/employees';
 import { translateApiError } from '../../utils/apiErrors';
+import { useAuth } from '../../context/AuthContext';
+import { getAvatarUrl } from '../../api/client';
 
 interface Props {
   /** Pre-set recipient (reply mode or employee→HR). If omitted, show picker. */
@@ -20,7 +22,28 @@ interface Props {
   onSent?: () => void;
 }
 
-interface PickableEmployee { id: number; name: string; surname: string; role: string }
+interface PickableEmployee {
+  id: number;
+  name: string;
+  surname: string;
+  role: string;
+  email: string;
+  avatarFilename?: string | null;
+}
+
+const AVATAR_COLORS = ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return (name.slice(0, 2) || 'U').toUpperCase();
+}
 
 const LABEL_STYLE: React.CSSProperties = {
   fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)',
@@ -30,6 +53,7 @@ const LABEL_STYLE: React.CSSProperties = {
 
 export function ComposeMessage({ recipientId, recipientName, defaultSubject, defaultBody, onClose, onSent }: Props) {
   const { t } = useTranslation();
+  const { user } = useAuth();
 
   const showPicker = recipientId === undefined;
 
@@ -56,11 +80,16 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
 
   const filtered = employees.filter(e => {
     const q = search.toLowerCase();
+    if (user?.id === e.id) return false;
     return (
       e.name.toLowerCase().includes(q) ||
-      e.surname.toLowerCase().includes(q)
+      e.surname.toLowerCase().includes(q) ||
+      e.email.toLowerCase().includes(q)
     );
   });
+
+  const selfDisplayName = `${user?.name ?? ''} ${user?.surname ?? ''}`.trim() || (user?.email ?? '—');
+  const selfAvatarUrl = getAvatarUrl(user?.avatarFilename);
 
   const effectiveRecipientId = showPicker ? pickedId : recipientId;
   const effectiveRecipientName = showPicker ? pickedName : (recipientName ?? '');
@@ -70,14 +99,14 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
       setError(t('messages.errorPickRecipient'));
       return;
     }
-    if (!subject.trim() || !body.trim()) {
-      setError(t('messages.errorSend'));
+    if (!body.trim()) {
+      setError(t('messages.errorBodyRequired'));
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      await sendMessage({ recipientId: effectiveRecipientId, subject: subject.trim(), body: body.trim() });
+      await sendMessage({ recipientId: effectiveRecipientId, subject: subject.trim() || undefined, body: body.trim() });
       onSent?.();
       onClose();
     } catch (err: unknown) {
@@ -112,6 +141,56 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
 
           {showPicker ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {!!user && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-warm)',
+                }}>
+                  <div style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    background: selfAvatarUrl ? 'transparent' : getAvatarColor(selfDisplayName),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    flexShrink: 0,
+                  }}>
+                    {selfAvatarUrl ? (
+                      <img src={selfAvatarUrl} alt={selfDisplayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : getInitials(selfDisplayName)}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{selfDisplayName}</span>
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: 'var(--accent)',
+                        border: '1px solid var(--accent)',
+                        borderRadius: 999,
+                        padding: '1px 6px',
+                        lineHeight: 1.4,
+                      }}>
+                        {t('messages.meTag')}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user.email}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Search input */}
               <div style={{ position: 'relative' }}>
                 <Search
@@ -155,6 +234,7 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
                   ) : filtered.map(emp => {
                     const fullName = `${emp.name} ${emp.surname}`;
                     const isPicked = pickedId === emp.id;
+                    const avatarUrl = getAvatarUrl(emp.avatarFilename);
                     return (
                       <button
                         key={emp.id}
@@ -167,13 +247,38 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
                           fontWeight: isPicked ? 700 : 400,
                           fontSize: 13, fontFamily: 'var(--font-body)',
                           borderBottom: '1px solid var(--border-light)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
                           transition: 'background 0.1s',
                         }}
                         onMouseEnter={e => { if (!isPicked) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-warm)'; }}
                         onMouseLeave={e => { if (!isPicked) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                       >
-                        <span>{fullName}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                          <div style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            background: avatarUrl ? 'transparent' : getAvatarColor(fullName),
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}>
+                            {avatarUrl ? (
+                              <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : getInitials(fullName)}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {emp.email}
+                            </div>
+                          </div>
+                        </div>
                         {isPicked && <span style={{ fontSize: 11 }}>✓</span>}
                       </button>
                     );
@@ -205,7 +310,7 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
 
         {/* Subject */}
         <div>
-          <label style={LABEL_STYLE}>{t('messages.subject')}</label>
+          <label style={LABEL_STYLE}>{t('messages.subjectOptional')}</label>
           <input
             type="text"
             value={subject}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, AlertTriangle } from 'lucide-react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 interface StoreInfo {
@@ -25,6 +25,8 @@ export interface StoreManagerHomeData {
   employeeCount: number;
   todayShifts?: TodayShift[];
   todayAttendance?: Record<string, number>;
+  upcomingWeekShiftsPlanned?: boolean;
+  upcomingWeekNumber?: number;
 }
 
 interface StoreManagerHomeProps {
@@ -122,6 +124,9 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
   const EVENT_META = getEventMeta(t);
 
   const available = store.maxStaff ? Math.max(0, store.maxStaff - employeeCount) : null;
+  const currentDay = new Date().getDay();
+  const isWarningDay = currentDay === 0 || currentDay === 5 || currentDay === 6; // Sunday, Friday, Saturday
+  const showUnplannedWarning = isWarningDay && data.upcomingWeekShiftsPlanned === false;
 
   return (
     <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -151,6 +156,32 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
           {t('common.systemActive')}
         </div>
       </div>
+
+      {showUnplannedWarning && (
+        <div style={{
+          background: 'rgba(220, 38, 38, 0.08)',
+          border: '1px solid rgba(220, 38, 38, 0.3)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '16px 20px',
+          display: 'flex', alignItems: 'center', gap: '14px',
+          color: 'var(--danger)',
+        }}>
+          <div style={{
+            background: 'var(--danger)', color: '#fff', borderRadius: '50%',
+            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <AlertTriangle size={18} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '2px' }}>
+              {t('home.storeManager.unplannedTitle', 'Weekly Schedule Not Planned')}
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--danger)', opacity: 0.9 }}>
+              {t('home.storeManager.unplannedMessage', { week: data.upcomingWeekNumber, defaultValue: `You have not planned the shifts for week ${data.upcomingWeekNumber}.` })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', alignItems: 'start' }}>
 

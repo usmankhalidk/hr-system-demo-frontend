@@ -9,6 +9,7 @@ export interface Shift {
   companyId: number;
   storeId: number;
   userId: number;
+  assignmentId?: number | null;
   date: string;          // may be 'YYYY-MM-DD' or full ISO — use .split('T')[0] to normalize
   startTime: string;     // 'HH:MM:SS'
   endTime: string;       // 'HH:MM:SS'
@@ -27,7 +28,28 @@ export interface Shift {
   storeName: string;
   userName: string;
   userSurname: string;
+  userAvatarFilename?: string | null;
   shiftHours: string | number | null;
+}
+
+function normalizeDateOnly(value: string): string {
+  if (!value) return value;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value.split('T')[0];
+  }
+  const y = parsed.getFullYear();
+  const m = String(parsed.getMonth() + 1).padStart(2, '0');
+  const d = String(parsed.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function normalizeShift(shift: Shift): Shift {
+  return {
+    ...shift,
+    date: normalizeDateOnly(shift.date),
+  };
 }
 
 export interface ShiftTemplate {
@@ -81,17 +103,20 @@ export async function listShifts(params: {
   user_id?: number;
 }): Promise<{ shifts: Shift[] }> {
   const res = await client.get('/shifts', { params });
-  return res.data.data;
+  return {
+    ...res.data.data,
+    shifts: (res.data.data.shifts as Shift[]).map(normalizeShift),
+  };
 }
 
 export async function createShift(payload: CreateShiftPayload): Promise<Shift> {
   const res = await client.post('/shifts', payload);
-  return res.data.data;
+  return normalizeShift(res.data.data as Shift);
 }
 
 export async function updateShift(id: number, payload: UpdateShiftPayload): Promise<Shift> {
   const res = await client.put(`/shifts/${id}`, payload);
-  return res.data.data;
+  return normalizeShift(res.data.data as Shift);
 }
 
 export async function deleteShift(id: number): Promise<void> {
@@ -104,7 +129,10 @@ export async function copyWeek(payload: {
   target_week: string;
 }): Promise<{ copied: number; shifts: Shift[] }> {
   const res = await client.post('/shifts/copy-week', payload);
-  return res.data.data;
+  return {
+    ...res.data.data,
+    shifts: (res.data.data.shifts as Shift[]).map(normalizeShift),
+  };
 }
 
 /** Confirm all scheduled shifts for an employee in the given ISO week (admin / hr / area_manager). */

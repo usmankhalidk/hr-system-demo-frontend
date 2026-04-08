@@ -8,11 +8,14 @@ export interface CompanyGrid {
   turni: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   permessi: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   presenze: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  saldi: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   anomalie: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   negozi: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   dipendenti: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  trasferimenti: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   messaggi: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   impostazioni: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  gestione_accessi?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
 }
 
 export interface CompanyPermissions {
@@ -28,7 +31,18 @@ export async function getCompaniesPermissions(): Promise<{ companies: CompanyPer
 
 export interface SystemPermissionUpdate {
   role: 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal';
-  module: 'turni' | 'permessi' | 'presenze' | 'anomalie' | 'negozi' | 'dipendenti' | 'messaggi' | 'impostazioni';
+  module:
+    | 'turni'
+    | 'permessi'
+    | 'presenze'
+    | 'anomalie'
+    | 'saldi'
+    | 'negozi'
+    | 'dipendenti'
+    | 'trasferimenti'
+    | 'messaggi'
+    | 'impostazioni'
+    | 'gestione_accessi';
   enabled: boolean;
 }
 

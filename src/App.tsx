@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { SocketProvider } from './context/SocketContext';
 import ToastContainer from './components/ui/ToastContainer';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/layout/Layout';
@@ -28,6 +29,9 @@ import HRChatPage from './modules/messages/HRChatPage';
 import ATSPage from './modules/ats/ATSPage';
 import OnboardingPage from './modules/onboarding/OnboardingPage';
 import DocumentsPage from './modules/documents/DocumentsPage';
+import TransfersPage from './modules/transfers/TransfersPage';
+import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
+import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -80,6 +84,12 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/dipendenti/reset-device" element={
+        <ProtectedRoute roles={['admin', 'hr']} permissionKey="dipendenti">
+          <Layout title={t('deviceReset.title')}><HrDeviceResetPage /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/dipendenti/:id" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="dipendenti">
           <Layout title={t('employees.colName')}><EmployeeDetail /></Layout>
@@ -99,7 +109,7 @@ function AppRoutes() {
       } />
 
       <Route path="/impostazioni/permessi" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']} permissionKey="gestione_accessi">
           <Layout title={t('nav.permissions')}>
             {user?.isSuperAdmin ? <SystemPermissionsPanel /> : <PermissionsPanel />}
           </Layout>
@@ -107,7 +117,7 @@ function AppRoutes() {
       } />
 
       <Route path="/impostazioni" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager']} permissionKey="impostazioni">
+        <ProtectedRoute roles={['admin']} permissionKey="impostazioni">
           <Layout title={t('settings.title')}><SettingsPage /></Layout>
         </ProtectedRoute>
       } />
@@ -127,6 +137,12 @@ function AppRoutes() {
       <Route path="/turni" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="turni">
           <Layout title={t('nav.turni')}><ShiftsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/trasferimenti" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="trasferimenti">
+          <Layout title={t('nav.trasferimenti', 'Trasferimenti')}><TransfersPage /></Layout>
         </ProtectedRoute>
       } />
 
@@ -155,15 +171,21 @@ function AppRoutes() {
       } />
 
       <Route path="/presenze/checkin" element={
-        <ProtectedRoute roles={['employee']} permissionKey="presenze">
+        <ProtectedRoute roles={['employee']}>
           <Layout title={t('checkin.title')}><EmployeeCheckinPage /></Layout>
         </ProtectedRoute>
       } />
 
       {/* QR scan landing page — opened by scanning the store terminal QR code */}
       <Route path="/presenze/scan" element={
-        <ProtectedRoute roles={['employee']} permissionKey="presenze">
+        <ProtectedRoute roles={['employee']}>
           <ScanPage />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/device/register" element={
+        <ProtectedRoute roles={['employee']}>
+          <DeviceRegistrationPage />
         </ProtectedRoute>
       } />
 
@@ -201,10 +223,12 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <ToastContainer />
-          <AppRoutes />
-        </BrowserRouter>
+        <SocketProvider>
+          <BrowserRouter>
+            <ToastContainer />
+            <AppRoutes />
+          </BrowserRouter>
+        </SocketProvider>
       </AuthProvider>
     </ToastProvider>
   );

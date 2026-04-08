@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -72,33 +73,41 @@ const HR_ROLES = ['admin', 'hr', 'area_manager', 'store_manager'];
 
 // ── Shared modal wrapper ────────────────────────────────────────────────────
 
-const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; children: React.ReactNode }> = ({ onClose, width = 440, children }) => (
-  <div
-    style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-    onClick={onClose}
-  >
+const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; children: React.ReactNode }> = ({ onClose, width = 440, children }) => {
+  return createPortal(
     <div
-      style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: '100%', maxWidth: width, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', animation: 'popIn 0.2s cubic-bezier(0.16,1,0.3,1)', margin: '0 16px' }}
-      onClick={(e) => e.stopPropagation()}
+      style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(13,33,55,0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
     >
-      {children}
-    </div>
-  </div>
-);
+      <div
+        style={{ background: 'var(--surface)', borderRadius: 16, padding: 32, width: '100%', maxWidth: width, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(13,33,55,0.24)', animation: 'popIn 0.22s cubic-bezier(0.16,1,0.3,1)', margin: '0 16px' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 const ModalHeader: React.FC<{ title: string; onClose: () => void }> = ({ title, onClose }) => (
-  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-    <div style={{ fontWeight: 700, fontSize: 16, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{title}</div>
-    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 20, lineHeight: 1, padding: '0 2px' }}>×</button>
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--border-light)' }}>
+    <div style={{ fontWeight: 700, fontSize: 17, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{title}</div>
+    <button onClick={onClose} style={{ background: 'var(--background)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1, padding: '5px 8px', borderRadius: 6, transition: 'background 0.12s' }}>✕</button>
   </div>
 );
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '9px 11px', borderRadius: 7,
-  border: '1px solid var(--border)', background: 'var(--background)',
+  width: '100%', padding: '10px 13px', borderRadius: 8,
+  border: '1.5px solid var(--border)', background: 'var(--surface)',
   color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box',
+  transition: 'border-color 0.15s, box-shadow 0.15s',
+  outline: 'none',
 };
-const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 };
+const labelStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)',
+  display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em'
+};
 
 // ── Upload Document Modal ──────────────────────────────────────────────────
 
@@ -360,10 +369,12 @@ const DocumentsTable: React.FC<{ docs: EmployeeDocument[]; categories: DocumentC
 
   if (docs.length === 0) {
     return (
-      <div style={{ padding: '56px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 36, marginBottom: 14 }}>📂</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{t('documents.noDocuments')}</div>
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('documents.noDocumentsHint')}</div>
+      <div style={{ padding: '56px 24px', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', padding: '36px 48px', background: 'var(--background)', border: '1.5px dashed var(--border)', borderRadius: 16, maxWidth: 360 }}>
+          <div style={{ fontSize: 40, marginBottom: 14, opacity: 0.6 }}>📂</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, letterSpacing: '-0.01em' }}>{t('documents.noDocuments')}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>{t('documents.noDocumentsHint')}</div>
+        </div>
       </div>
     );
   }
@@ -436,23 +447,26 @@ const DocumentsTable: React.FC<{ docs: EmployeeDocument[]; categories: DocumentC
     {signingDoc && (
       <ModalBackdrop onClose={() => !signing && setSigningDoc(null)} width={440}>
         <ModalHeader title={t('documents.signTitle', 'Firma documento')} onClose={() => !signing && setSigningDoc(null)} />
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', padding: '8px 12px', background: 'var(--background)', borderRadius: 7, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', padding: '9px 13px', background: 'var(--background)', borderRadius: 8, marginBottom: 16, border: '1px solid var(--border)' }}>
           {signingDoc.fileName}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, padding: '12px 14px', background: 'rgba(201,151,58,0.06)', border: '1px solid rgba(201,151,58,0.2)', borderRadius: 8, marginBottom: 18 }}>
-          {t('documents.signLegalText', 'Firmando questo documento dichiari di averne preso visione e di acconsentire alla firma digitale. La firma sarà registrata insieme alla data, all\'ora e al tuo indirizzo IP come prova legale di consenso.')}
+        <div style={{ display: 'flex', gap: 10, padding: '12px 14px', background: 'rgba(201,151,58,0.08)', border: '1.5px solid rgba(201,151,58,0.28)', borderRadius: 10, marginBottom: 20 }}>
+          <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.4 }}>⚠️</span>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+            {t('documents.signLegalText', 'Firmando questo documento dichiari di averne preso visione e di acconsentire alla firma digitale. La firma sarà registrata insieme alla data, all\'ora e al tuo indirizzo IP come prova legale di consenso.')}
+          </p>
         </div>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 22 }}>
-          <input type="checkbox" checked={signConsent} onChange={(e) => setSignConsent(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginBottom: 24, padding: '12px 14px', background: 'var(--background)', borderRadius: 8, border: `1.5px solid ${signConsent ? 'var(--primary)' : 'var(--border)'}`, transition: 'border-color 0.15s' }}>
+          <input type="checkbox" checked={signConsent} onChange={(e) => setSignConsent(e.target.checked)} style={{ marginTop: 2, flexShrink: 0, width: 16, height: 16, accentColor: 'var(--primary)', cursor: 'pointer' }} />
+          <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5, fontWeight: signConsent ? 600 : 400 }}>
             {t('documents.signConsentLabel', 'Ho letto il documento e acconsento alla firma digitale')}
           </span>
         </label>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={() => setSigningDoc(null)} disabled={signing} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: signing ? 'not-allowed' : 'pointer', fontSize: 13 }}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
+          <button onClick={() => setSigningDoc(null)} disabled={signing} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: signing ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 500 }}>
             {t('common.cancel')}
           </button>
-          <button onClick={handleSignConfirm} disabled={!signConsent || signing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--primary)', color: '#fff', cursor: !signConsent || signing ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, opacity: !signConsent || signing ? 0.6 : 1 }}>
+          <button onClick={handleSignConfirm} disabled={!signConsent || signing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: !signConsent || signing ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, opacity: !signConsent || signing ? 0.55 : 1, transition: 'opacity 0.15s' }}>
             <IconPen /> {signing ? t('documents.signing', 'Firma in corso...') : t('documents.sign')}
           </button>
         </div>

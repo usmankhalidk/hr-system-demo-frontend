@@ -203,3 +203,38 @@ export async function getLeaveBlocks(dateFrom: string, dateTo: string): Promise<
       status:      r.status,
     }));
 }
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+  total: number;
+}
+
+/** Export balances as an Excel blob */
+export async function exportLeaveBalances(year: number): Promise<Blob> {
+  const { data } = await apiClient.get('/leave/balance/export', {
+    params: { year },
+    responseType: 'blob',
+  });
+  return data as Blob;
+}
+
+/** Download empty balances import template */
+export async function downloadLeaveBalanceTemplate(): Promise<Blob> {
+  const { data } = await apiClient.get('/leave/balance/import-template', {
+    responseType: 'blob',
+  });
+  return data as Blob;
+}
+
+/** Upload an Excel/CSV file to bulk import balances */
+export async function importLeaveBalances(file: File): Promise<ImportResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post('/leave/balance/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data.data as ImportResult;
+}

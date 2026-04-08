@@ -200,8 +200,9 @@ export function ProfilePage() {
 
       const input = document.getElementById('profile-avatar-upload') as HTMLInputElement | null;
       if (input) input.value = '';
-    } catch {
-      showToast(t('employees.avatarError'), 'error');
+    } catch (err: unknown) {
+      const message = translateApiError(err, t, t('employees.avatarError')) ?? t('employees.avatarError');
+      showToast(message, 'error');
     } finally {
       setAvatarUploading(false);
     }
@@ -217,8 +218,9 @@ export function ProfilePage() {
       showToast(t('employees.avatarSuccess'), 'success');
       const [refreshed] = await Promise.all([getEmployee(user.id), refreshUser()]);
       setEmployee(refreshed);
-    } catch {
-      showToast(t('employees.avatarError'), 'error');
+    } catch (err: unknown) {
+      const message = translateApiError(err, t, t('employees.avatarError')) ?? t('employees.avatarError');
+      showToast(message, 'error');
     } finally {
       setAvatarUploading(false);
     }

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeftRight, Store as StoreIcon } from 'lucide-react';
 import {
   ShiftTemplate,
   listTemplates,
@@ -10,9 +11,11 @@ import {
 } from '../../api/shifts';
 import { getStores } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
-import { Store, Employee } from '../../types';
+import { getTransferBlocks, TransferAssignment } from '../../api/transfers';
+import { getAvatarUrl } from '../../api/client';
+import { Store as StoreType, Employee } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import { WeekPicker } from '../../components/ui/WeekPicker';
+import { DatePicker } from '../../components/ui/DatePicker';
 
 // Shape of shift patterns stored in template_data
 interface ShiftPattern {
@@ -27,6 +30,11 @@ interface ShiftPattern {
 interface TemplateData {
   shifts: ShiftPattern[];
 }
+
+type ApplyEmployeeItem = Employee & {
+  isTransferredForApply?: boolean;
+  transferForApply?: TransferAssignment | null;
+};
 
 // Per-day config used inside the create wizard
 interface DayConfig {
@@ -44,6 +52,95 @@ const DEFAULT_DAY_CONFIG: DayConfig = {
   breakStart: '',
   breakEnd: '',
 };
+
+function parseHmToMinutes(value: string): number | null {
+  const parts = value.split(':');
+  if (parts.length < 2) return null;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return (h * 60) + m;
+}
+
+function diffMinutes(startHm: string, endHm: string): number {
+  const start = parseHmToMinutes(startHm);
+  const end = parseHmToMinutes(endHm);
+  if (start == null || end == null) return 0;
+  let diff = end - start;
+  if (diff < 0) diff += 24 * 60;
+  return diff;
+}
+
+function calculatePatternMinutes(pattern: ShiftPattern): number {
+  const total = diffMinutes(pattern.startTime, pattern.endTime);
+  const breakMinutes = pattern.breakStart && pattern.breakEnd
+    ? diffMinutes(pattern.breakStart, pattern.breakEnd)
+    : 0;
+  return Math.max(0, total - breakMinutes);
+}
+
+function formatMinutesAsHours(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins === 0 ? `${hours}h` : `${hours}h ${String(mins).padStart(2, '0')}m`;
+}
+
+function toIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseIsoDate(dateStr: string): Date | null {
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function dayOfWeekMonBased(date: Date): number {
+  return (date.getDay() + 6) % 7;
+}
+
+function enumerateDatesForPattern(patternDay: number, startDate: string, endDate: string): string[] {
+  const start = parseIsoDate(startDate);
+  const end = parseIsoDate(endDate);
+  if (!start || !end || start > end) return [];
+  const out: string[] = [];
+  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    if (dayOfWeekMonBased(cursor) === patternDay) {
+      out.push(toIsoDate(cursor));
+    }
+  }
+  return out;
+}
+
+function validateShiftPatternTiming(pattern: ShiftPattern, t: (k: string, o?: any) => string, dayLabel: string): string | null {
+  const startMinutes = parseHmToMinutes(pattern.startTime);
+  const endMinutes = parseHmToMinutes(pattern.endTime);
+  if (startMinutes == null || endMinutes == null || endMinutes <= startMinutes) {
+    return t('shifts.validation.endAfterStart', "L'orario di fine deve essere successivo all'inizio") + ` (${dayLabel})`;
+  }
+
+  const hasBreakStart = Boolean(pattern.breakStart);
+  const hasBreakEnd = Boolean(pattern.breakEnd);
+  if (hasBreakStart !== hasBreakEnd) {
+    return t('shifts.validation.breakBothRequired', 'Se si inserisce una pausa, entrambi gli orari sono obbligatori') + ` (${dayLabel})`;
+  }
+
+  if (hasBreakStart && hasBreakEnd) {
+    const breakStartMinutes = parseHmToMinutes(pattern.breakStart!);
+    const breakEndMinutes = parseHmToMinutes(pattern.breakEnd!);
+    if (breakStartMinutes == null || breakEndMinutes == null || breakEndMinutes <= breakStartMinutes) {
+      return t('shifts.validation.breakEndAfterStart', "L'orario di fine pausa deve essere successivo all'inizio") + ` (${dayLabel})`;
+    }
+    if (breakStartMinutes < startMinutes || breakEndMinutes > endMinutes) {
+      return t('shifts.validation.breakWithinShift', 'La pausa deve rientrare nella finestra del turno') + ` (${dayLabel})`;
+    }
+  }
+
+  return null;
+}
 
 interface ShiftTemplatesPanelProps {
   open: boolean;
@@ -65,7 +162,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   ];
 
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
+  const [stores, setStores] = useState<StoreType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -76,10 +173,84 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
   // Apply template state
   const [applyTemplate, setApplyTemplate] = useState<ShiftTemplate | null>(null);
-  const [applyWeek, setApplyWeek] = useState('');
+  const [applyStartDate, setApplyStartDate] = useState('');
+  const [applyEndDate, setApplyEndDate] = useState('');
   const [applyEmployeeIds, setApplyEmployeeIds] = useState<number[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [applyTransfers, setApplyTransfers] = useState<TransferAssignment[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
   const [applying, setApplying] = useState(false);
+
+  const applyEmployees = useMemo<ApplyEmployeeItem[]>(() => {
+    const byId = new Map<number, ApplyEmployeeItem>();
+    for (const emp of employees) {
+      byId.set(emp.id, { ...emp, isTransferredForApply: false, transferForApply: null });
+    }
+
+    if (!applyTemplate) {
+      return Array.from(byId.values()).sort((a, b) => a.surname.localeCompare(b.surname) || a.name.localeCompare(b.name));
+    }
+
+    const transferPriority: Record<TransferAssignment['status'], number> = {
+      active: 0,
+      completed: 1,
+      cancelled: 2,
+    };
+
+    const transferByUser = new Map<number, TransferAssignment>();
+    for (const tb of applyTransfers
+      .filter((tb) => tb.targetStoreId === applyTemplate.storeId && tb.status !== 'cancelled')
+      .sort((a, b) => {
+        if (transferPriority[a.status] !== transferPriority[b.status]) {
+          return transferPriority[a.status] - transferPriority[b.status];
+        }
+        return b.id - a.id;
+      })) {
+      if (!transferByUser.has(tb.userId)) {
+        transferByUser.set(tb.userId, tb);
+      }
+    }
+
+    for (const transfer of transferByUser.values()) {
+      const existing = byId.get(transfer.userId);
+      if (existing) {
+        byId.set(transfer.userId, {
+          ...existing,
+          isTransferredForApply: true,
+          transferForApply: transfer,
+        });
+        continue;
+      }
+
+      byId.set(transfer.userId, {
+        id: transfer.userId,
+        companyId: transfer.companyId,
+        storeId: transfer.targetStoreId,
+        supervisorId: null,
+        name: transfer.userName,
+        surname: transfer.userSurname,
+        email: transfer.userEmail,
+        role: 'employee',
+        uniqueId: null,
+        department: null,
+        hireDate: null,
+        contractEndDate: null,
+        terminationDate: null,
+        workingType: null,
+        weeklyHours: null,
+        status: 'active',
+        firstAidFlag: false,
+        maritalStatus: null,
+        storeName: transfer.targetStoreName,
+        companyName: transfer.companyName,
+        avatarFilename: transfer.userAvatarFilename,
+        isTransferredForApply: true,
+        transferForApply: transfer,
+      });
+    }
+
+    return Array.from(byId.values()).sort((a, b) => a.surname.localeCompare(b.surname) || a.name.localeCompare(b.name));
+  }, [employees, applyTransfers, applyTemplate]);
 
   // Confirm delete
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -159,6 +330,22 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
         setError(`Please set shift start and end time for ${DAY_LABELS_FULL[d.dayOfWeek]}.`);
         return;
       }
+
+      const timingError = validateShiftPatternTiming(
+        {
+          dayOfWeek: d.dayOfWeek,
+          startTime: d.startTime,
+          endTime: d.endTime,
+          breakStart: d.breakStart || undefined,
+          breakEnd: d.breakEnd || undefined,
+        },
+        t as (k: string, o?: any) => string,
+        DAY_LABELS_FULL[d.dayOfWeek],
+      );
+      if (timingError) {
+        setError(timingError);
+        return;
+      }
     }
 
     setSaving(true);
@@ -201,79 +388,131 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   }
 
   function openApply(tmpl: ShiftTemplate) {
+    const today = toIsoDate(new Date());
     setApplyTemplate(tmpl);
-    setApplyWeek('');
+    setApplyStartDate(today);
+    setApplyEndDate(today);
     setApplyEmployeeIds([]);
     setEmployees([]);
+    setApplyTransfers([]);
+    setEmployeesLoading(true);
     getEmployees({ storeId: tmpl.storeId, status: 'active', limit: 100 })
       .then((d) => setEmployees(d.employees.sort((a, b) => a.surname.localeCompare(b.surname))))
-      .catch(() => { });
+      .catch(() => { setEmployees([]); })
+      .finally(() => setEmployeesLoading(false));
   }
 
-  function getIsoMondayFromWeek(isoWeek: string): Date | null {
-    const m = isoWeek.match(/^(\d{4})-W(\d{1,2})$/);
-    if (!m) return null;
-    const year = parseInt(m[1]);
-    const week = parseInt(m[2]);
-    const jan4 = new Date(year, 0, 4);
-    const jan4Day = jan4.getDay() || 7;
-    const monday = new Date(jan4);
-    monday.setDate(jan4.getDate() - (jan4Day - 1) + (week - 1) * 7);
-    return monday;
-  }
+  useEffect(() => {
+    if (!applyTemplate || !applyStartDate || !applyEndDate || applyStartDate > applyEndDate) {
+      setApplyTransfers([]);
+      return;
+    }
+
+    let mounted = true;
+    getTransferBlocks({
+      date_from: applyStartDate,
+      date_to: applyEndDate,
+      status: 'all',
+      store_id: applyTemplate.storeId,
+    })
+      .then((res) => {
+        if (!mounted) return;
+        setApplyTransfers(res.blocks ?? []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setApplyTransfers([]);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [applyTemplate, applyStartDate, applyEndDate]);
+
+  useEffect(() => {
+    setApplyEmployeeIds((prev) => prev.filter((id) => applyEmployees.some((emp) => emp.id === id)));
+  }, [applyEmployees]);
 
   async function handleApply(e: React.FormEvent) {
     e.preventDefault();
-    if (!applyTemplate || !applyWeek || applyEmployeeIds.length === 0) return;
-    const monday = getIsoMondayFromWeek(applyWeek);
-    if (!monday) return;
+    if (!applyTemplate || !applyStartDate || !applyEndDate || applyEmployeeIds.length === 0) return;
+    if (applyStartDate > applyEndDate) {
+      setError(t('errors.INVALID_DATE_RANGE', t('errors.DEFAULT')));
+      return;
+    }
 
     setApplying(true);
     setError(null);
     let created = 0;
     let skipped = 0;
     let failed = 0;
+    const failureMessages: string[] = [];
 
     const patterns: ShiftPattern[] =
       ((applyTemplate.templateData as unknown as TemplateData)?.shifts) ?? [];
 
+    for (const pattern of patterns) {
+      const timingError = validateShiftPatternTiming(
+        pattern,
+        t as (k: string, o?: any) => string,
+        DAY_LABELS_FULL[pattern.dayOfWeek] ?? `#${pattern.dayOfWeek}`,
+      );
+      if (timingError) {
+        setApplying(false);
+        setError(timingError);
+        return;
+      }
+    }
+
+    const patternDates = patterns.map((pattern) => ({
+      pattern,
+      dates: enumerateDatesForPattern(pattern.dayOfWeek, applyStartDate, applyEndDate),
+    }));
+
     for (const emp of applyEmployeeIds) {
-      for (const pattern of patterns) {
-        const shiftDate = new Date(monday);
-        shiftDate.setDate(monday.getDate() + pattern.dayOfWeek);
-        const y = shiftDate.getFullYear();
-        const mo = String(shiftDate.getMonth() + 1).padStart(2, '0');
-        const da = String(shiftDate.getDate()).padStart(2, '0');
-        const dateStr = `${y}-${mo}-${da}`;
-        try {
-          await createShift({
-            user_id: emp,
-            store_id: applyTemplate.storeId,
-            date: dateStr,
-            start_time: pattern.startTime,
-            end_time: pattern.endTime,
-            break_start: pattern.breakStart ?? null,
-            break_end: pattern.breakEnd ?? null,
-            status: 'scheduled',
-          });
-          created++;
-        } catch (err: any) {
-          if (err?.response?.data?.code === 'OVERLAP_CONFLICT') {
-            skipped++;
-          } else {
-            failed++;
+      for (const item of patternDates) {
+        for (const dateStr of item.dates) {
+          try {
+            await createShift({
+              user_id: emp,
+              store_id: applyTemplate.storeId,
+              date: dateStr,
+              start_time: item.pattern.startTime,
+              end_time: item.pattern.endTime,
+              break_start: item.pattern.breakStart ?? null,
+              break_end: item.pattern.breakEnd ?? null,
+              status: 'scheduled',
+            });
+            created++;
+          } catch (err: any) {
+            if (err?.response?.data?.code === 'OVERLAP_CONFLICT') {
+              skipped++;
+            } else {
+              failed++;
+              const backendMessage: string | undefined = err?.response?.data?.error ?? err?.message;
+              if (backendMessage) {
+                failureMessages.push(`${dateStr}: ${backendMessage}`);
+              }
+            }
           }
         }
       }
     }
 
     setApplying(false);
-    setApplyTemplate(null);
     const parts: string[] = [`✓ ${t('shifts.shiftsCreated', { count: created })}`];
     if (skipped > 0) parts.push(t('shifts.shiftsSkipped', { count: skipped }));
     if (failed > 0) parts.push(t('shifts.shiftsFailed', { count: failed }));
     setSuccessMsg(parts.join(' · '));
     setTimeout(() => setSuccessMsg(null), 4000);
+
+    if (failureMessages.length > 0) {
+      const uniqueMessages = Array.from(new Set(failureMessages));
+      setError(uniqueMessages.slice(0, 3).join(' | '));
+      return;
+    }
+
+    setApplyTemplate(null);
   }
 
   function toggleEmployee(id: number) {
@@ -650,51 +889,168 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
           <form onSubmit={handleApply} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px' }}>
-              <div style={{ marginBottom: 16 }}>
-                <WeekPicker
-                  label={t('shifts.applyWeek', 'Target Week')}
-                  value={applyWeek}
-                  onChange={setApplyWeek}
-                  placeholder={t('shifts.weekPickerHint', 'Choose a week')}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                <DatePicker
+                  label={t('transfers.form.startDate', 'Start date')}
+                  value={applyStartDate}
+                  onChange={setApplyStartDate}
+                />
+                <DatePicker
+                  label={t('transfers.form.endDate', 'End date')}
+                  value={applyEndDate}
+                  onChange={setApplyEndDate}
                 />
               </div>
+              {applyStartDate && applyEndDate && applyStartDate > applyEndDate && (
+                <div style={{
+                  marginBottom: 12,
+                  background: 'var(--danger-bg)',
+                  border: '1px solid var(--danger-border)',
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  color: 'var(--danger)',
+                  fontSize: 12,
+                }}>
+                  {t('errors.INVALID_DATE_RANGE', t('errors.DEFAULT'))}
+                </div>
+              )}
 
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
                   {t('shifts.applyEmployees', 'Employees')}
-                  {employees.length > 0 && (
+                  {applyEmployees.length > 0 && (
                     <button type="button" onClick={() =>
-                      setApplyEmployeeIds(applyEmployeeIds.length === employees.length ? [] : employees.map(e => e.id))
+                      setApplyEmployeeIds(applyEmployeeIds.length === applyEmployees.length ? [] : applyEmployees.map(e => e.id))
                     } style={{
                       marginLeft: 10, fontSize: 11, background: 'none', border: 'none',
                       color: 'var(--accent)', cursor: 'pointer', fontWeight: 600,
                     }}>
-                      {applyEmployeeIds.length === employees.length ? t('common.none', 'None') : t('common.all', 'All')}
+                      {applyEmployeeIds.length === applyEmployees.length ? t('common.none', 'None') : t('common.all', 'All')}
                     </button>
                   )}
                 </div>
-                {employees.length === 0 ? (
+                {employeesLoading ? (
                   <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Loading...')}</p>
+                ) : applyEmployees.length === 0 ? (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.noData', 'No data available')}</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {employees.map((emp) => (
-                      <label key={emp.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '7px 10px', borderRadius: 8,
-                        border: `1.5px solid ${applyEmployeeIds.includes(emp.id) ? 'var(--accent)' : 'var(--border)'}`,
-                        background: applyEmployeeIds.includes(emp.id) ? 'rgba(201,151,58,0.06)' : 'var(--surface-warm)',
-                        cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                        transition: 'all 0.12s',
-                      }}>
-                        <input
-                          type="checkbox"
-                          checked={applyEmployeeIds.includes(emp.id)}
-                          onChange={() => toggleEmployee(emp.id)}
-                          style={{ accentColor: 'var(--accent)', width: 14, height: 14 }}
-                        />
-                        {emp.surname} {emp.name}
-                      </label>
-                    ))}
+                    {applyEmployees.map((emp) => {
+                      const selected = applyEmployeeIds.includes(emp.id);
+                      const fullName = `${emp.surname} ${emp.name}`.trim();
+                      const initials = `${emp.name?.[0] ?? ''}${emp.surname?.[0] ?? ''}`.toUpperCase() || 'U';
+                      const avatarUrl = getAvatarUrl(emp.avatarFilename);
+                      const transfer = emp.transferForApply ?? null;
+                      const isTransferred = Boolean(emp.isTransferredForApply);
+                      const homeStoreName = transfer?.originStoreName ?? emp.storeName;
+                      return (
+                        <label key={emp.id} style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 8,
+                          padding: '8px 10px', borderRadius: 8,
+                          border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                          background: selected ? 'rgba(201,151,58,0.06)' : 'var(--surface-warm)',
+                          cursor: 'pointer',
+                          transition: 'all 0.12s',
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleEmployee(emp.id)}
+                            style={{ accentColor: 'var(--accent)', width: 14, height: 14, marginTop: 6 }}
+                          />
+                          <div style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            background: 'rgba(13,33,55,0.14)',
+                            color: '#0D2137',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            {avatarUrl ? (
+                              <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : initials}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {fullName}
+                                </div>
+                                {isTransferred && (
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '1px 6px',
+                                    borderRadius: 999,
+                                    border: '1px solid rgba(15,118,110,0.32)',
+                                    background: 'rgba(13,148,136,0.08)',
+                                    color: '#0f766e',
+                                    fontSize: 9,
+                                    fontWeight: 800,
+                                    flexShrink: 0,
+                                    textTransform: 'uppercase',
+                                    lineHeight: 1.3,
+                                  }}>
+                                    <ArrowLeftRight size={10} />
+                                    {t('shifts.transferredEmployee', 'Transferred')}
+                                  </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                                {homeStoreName && (
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '2px 7px',
+                                  borderRadius: 999,
+                                  background: 'rgba(13,33,55,0.06)',
+                                  border: '1px solid var(--border)',
+                                  color: 'var(--text-muted)',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  lineHeight: 1.2,
+                                }}>
+                                  <StoreIcon size={10} />
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }} title={homeStoreName}>
+                                    {homeStoreName}
+                                  </span>
+                                </span>
+                              )}
+                              {transfer && (
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '2px 7px',
+                                  borderRadius: 999,
+                                  background: transfer.status === 'cancelled' ? 'rgba(239,68,68,0.08)' : 'rgba(13,148,136,0.1)',
+                                  border: `1px solid ${transfer.status === 'cancelled' ? 'rgba(185,28,28,0.32)' : 'rgba(15,118,110,0.32)'}`,
+                                  color: transfer.status === 'cancelled' ? '#991b1b' : '#0f766e',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  lineHeight: 1.2,
+                                }}>
+                                  <ArrowLeftRight size={10} />
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }} title={transfer.targetStoreName}>
+                                    {transfer.targetStoreName}
+                                  </span>
+                                  <span style={{ textTransform: 'uppercase', fontSize: 9 }}>
+                                    {t(`transfers.status.${transfer.status}`, transfer.status)}
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -708,7 +1064,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                 type="submit"
                 className="btn btn-primary"
                 style={{ flex: 1 }}
-                disabled={applying || !applyWeek || applyEmployeeIds.length === 0}
+                disabled={applying || !applyStartDate || !applyEndDate || applyStartDate > applyEndDate || applyEmployeeIds.length === 0}
               >
                 {applying ? t('common.saving', '...') : t('shifts.applyBtn', 'Apply')}
               </button>
@@ -825,17 +1181,23 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
                       </button>
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontWeight: 700, fontFamily: 'var(--font-display)', fontSize: 13 }}>{tmpl.name}</span>
-                        <span style={{
-                          marginLeft: 8, fontSize: 11, color: 'var(--text-muted)',
-                          background: 'var(--border)', borderRadius: 4, padding: '1px 6px',
-                        }}>{storeName}</span>
-                        {patterns.length > 0 && (
-                          <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-                            {patterns.length} {t('shifts.patterns', 'pattern')}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontFamily: 'var(--font-display)', fontSize: 13 }}>{tmpl.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 11, color: 'var(--text-muted)',
+                            background: 'var(--border)', borderRadius: 999, padding: '2px 7px',
+                          }}>
+                            <StoreIcon size={11} />
+                            {storeName}
                           </span>
-                        )}
+                          {patterns.length > 0 && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {patterns.length} {t('shifts.patterns', 'pattern')}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <button
                         className="btn btn-primary"
@@ -863,6 +1225,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                               <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableStart', 'Start')}</th>
                               <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableEnd', 'End')}</th>
                               <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('shifts.tableBreak', 'Break')}</th>
+                              <th style={{ textAlign: 'left', padding: '4px 6px' }}>{t('common.time', 'Time')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -873,6 +1236,9 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 <td style={{ padding: '5px 6px' }}>{p.endTime}</td>
                                 <td style={{ padding: '5px 6px', color: 'var(--text-muted)' }}>
                                   {p.breakStart && p.breakEnd ? `${p.breakStart}–${p.breakEnd}` : '—'}
+                                </td>
+                                <td style={{ padding: '5px 6px', fontWeight: 600, color: 'var(--primary)' }}>
+                                  {formatMinutesAsHours(calculatePatternMinutes(p))}
                                 </td>
                               </tr>
                             ))}

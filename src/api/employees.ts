@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { Employee, EmployeeListResponse } from '../types';
+import { Employee, EmployeeAssociationsResponse, EmployeeListResponse } from '../types';
 
 export interface EmployeeListParams {
   search?: string;
@@ -38,6 +38,11 @@ export async function getEmployee(id: number): Promise<Employee> {
   return data.data;
 }
 
+export async function getEmployeeAssociations(id: number): Promise<EmployeeAssociationsResponse> {
+  const { data } = await apiClient.get(`/employees/${id}/associations`);
+  return data.data;
+}
+
 export async function createEmployee(payload: Partial<Employee> & { email: string; name: string; surname: string; role: string; password?: string }): Promise<Employee> {
   const { data } = await apiClient.post('/employees', payload);
   return data.data;
@@ -55,6 +60,11 @@ export async function deactivateEmployee(id: number): Promise<Employee> {
 
 export async function activateEmployee(id: number): Promise<Employee> {
   const { data } = await apiClient.patch(`/employees/${id}/activate`);
+  return data.data;
+}
+
+export async function resetEmployeeDevice(id: number): Promise<Employee> {
+  const { data } = await apiClient.patch(`/employees/${id}/device-reset`);
   return data.data;
 }
 

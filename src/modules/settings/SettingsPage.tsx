@@ -14,20 +14,20 @@ import {
 
 const IconSettings = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
 
 const IconBalances = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+    <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
   </svg>
 );
 
 const IconEye = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
   </svg>
 );
 
@@ -52,6 +52,16 @@ const ALL_EVENT_KEYS = [
   'onboarding.welcome', 'onboarding.reminder', 'ats.candidate_received',
   'ats.interview_invite', 'ats.bottleneck', 'shift.published', 'anomaly.detected',
   'manager.daily_alert',
+];
+
+const EVENT_CATEGORIES: { label: string; keys: string[] }[] = [
+  { label: 'Dipendenti', keys: ['employee.created', 'employee.updated'] },
+  { label: 'Permessi', keys: ['leave.submitted', 'leave.approved', 'leave.rejected'] },
+  { label: 'Documenti', keys: ['document.uploaded', 'document.expiring', 'document.signed'] },
+  { label: 'Onboarding', keys: ['onboarding.welcome', 'onboarding.reminder'] },
+  { label: 'ATS', keys: ['ats.candidate_received', 'ats.interview_invite', 'ats.bottleneck'] },
+  { label: 'Turni & Presenze', keys: ['shift.published', 'anomaly.detected'] },
+  { label: 'Manager', keys: ['manager.daily_alert'] },
 ];
 
 function eventLabel(key: string): string {
@@ -113,16 +123,20 @@ const NotificationSettingsPanel: React.FC = () => {
     return s ? s.enabled : true; // default true
   };
 
+  const enabledCount = ALL_EVENT_KEYS.filter(k => isEnabled(k)).length;
+  const totalCount = ALL_EVENT_KEYS.length;
+  const progressPct = Math.round((enabledCount / totalCount) * 100);
+
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
-      borderLeft: '4px solid #7C3AED',
+      borderLeft: '4px solid var(--accent)',
       borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
       boxShadow: 'var(--shadow-sm)',
     }}>
       <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: '#7C3AED' }}><IconBell /></span>
+          <span style={{ color: 'var(--accent)' }}><IconBell /></span>
           <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
             {t('documents.settingsNotifications')}
           </h3>
@@ -130,53 +144,82 @@ const NotificationSettingsPanel: React.FC = () => {
         <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
           {t('documents.settingsNotificationsDesc')}
         </p>
+        {/* Summary bar */}
+        {!loading && (
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border-light)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 2,
+                background: 'var(--accent)',
+                width: `${progressPct}%`,
+                transition: 'width 0.3s',
+              }} />
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              {enabledCount} / {totalCount} attivi
+            </span>
+          </div>
+        )}
       </div>
-      <div style={{ padding: '12px 20px' }}>
+      <div style={{ padding: '8px 20px 16px' }}>
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
             {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 36, borderRadius: 6 }} />)}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {ALL_EVENT_KEYS.map(key => {
-              const enabled = isEnabled(key);
-              const isToggling = toggling === key;
-              return (
-                <div key={key} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '8px 10px', borderRadius: 6,
-                  background: 'transparent',
-                  transition: 'background 0.12s',
-                }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <span style={{ fontSize: 13, color: enabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    {eventLabel(key)}
-                  </span>
-                  <button
-                    disabled={isToggling}
-                    onClick={() => handleToggle(key, enabled)}
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
-                  >
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center',
-                      width: 40, height: 22, borderRadius: 11,
-                      background: enabled ? '#7C3AED' : '#9ca3af',
-                      transition: 'background 0.2s', position: 'relative',
-                    }}>
-                      <span style={{
-                        position: 'absolute', top: 2, width: 18, height: 18,
-                        left: enabled ? 20 : 2,
-                        borderRadius: '50%', background: '#fff',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                        transition: 'left 0.2s',
-                      }} />
-                    </span>
-                  </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {EVENT_CATEGORIES.map((cat, catIdx) => (
+              <div key={cat.label} style={{ marginTop: catIdx === 0 ? 8 : 16 }}>
+                {/* Category header */}
+                <div style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--text-muted)',
+                  padding: '0 10px', marginBottom: 4,
+                }}>
+                  {cat.label}
                 </div>
-              );
-            })}
+                {/* Event rows */}
+                {cat.keys.map(key => {
+                  const enabled = isEnabled(key);
+                  const isToggling = toggling === key;
+                  return (
+                    <div key={key} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '7px 10px', borderRadius: 6,
+                      background: 'transparent',
+                      transition: 'background 0.12s',
+                    }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <span style={{ fontSize: 13, color: enabled ? 'var(--text-primary)' : 'var(--text-muted)', transition: 'color 0.2s' }}>
+                        {eventLabel(key)}
+                      </span>
+                      <button
+                        disabled={isToggling}
+                        onClick={() => handleToggle(key, enabled)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
+                      >
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          width: 40, height: 22, borderRadius: 11,
+                          background: enabled ? 'var(--accent)' : '#9ca3af',
+                          transition: 'background 0.2s', position: 'relative',
+                        }}>
+                          <span style={{
+                            position: 'absolute', top: 2, width: 18, height: 18,
+                            left: enabled ? 20 : 2,
+                            borderRadius: '50%', background: '#fff',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                            transition: 'left 0.2s',
+                          }} />
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -194,6 +237,18 @@ const JOB_LABELS: Record<string, string> = {
   ats_bottleneck: 'Alert collo di bottiglia ATS (ogni 6 ore)',
   manager_alert: 'Alert giornaliero manager (ogni giorno 07:00)',
 };
+
+function jobName(jobKey: string): string {
+  const label = JOB_LABELS[jobKey] ?? jobKey;
+  const parenIdx = label.indexOf(' (');
+  return parenIdx !== -1 ? label.slice(0, parenIdx) : label;
+}
+
+function jobSchedule(jobKey: string): string {
+  const label = JOB_LABELS[jobKey] ?? '';
+  const match = label.match(/\(([^)]+)\)/);
+  return match ? match[1] : '';
+}
 
 const AutomationSettingsPanel: React.FC = () => {
   const { t } = useTranslation();
@@ -226,13 +281,13 @@ const AutomationSettingsPanel: React.FC = () => {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
-      borderLeft: '4px solid #C9973A',
+      borderLeft: '4px solid var(--accent)',
       borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
       boxShadow: 'var(--shadow-sm)',
     }}>
       <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: '#C9973A' }}><IconClock /></span>
+          <span style={{ color: 'var(--accent)' }}><IconClock /></span>
           <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
             {t('documents.settingsAutomation')}
           </h3>
@@ -241,51 +296,70 @@ const AutomationSettingsPanel: React.FC = () => {
           {t('documents.settingsAutomationDesc')}
         </p>
       </div>
-      <div style={{ padding: '12px 20px' }}>
+      <div style={{ padding: '16px 20px' }}>
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 40, borderRadius: 6 }} />)}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 96, borderRadius: 10 }} />)}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: 12,
+          }}>
             {settings.map(s => {
               const isToggling = toggling === s.jobKey;
+              const schedule = jobSchedule(s.jobKey);
               return (
                 <div key={s.jobKey} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 10px', borderRadius: 6, transition: 'background 0.12s',
-                }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: s.enabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {JOB_LABELS[s.jobKey] ?? s.jobKey}
+                  background: s.enabled ? 'var(--surface)' : 'var(--background)',
+                  border: `1.5px solid ${s.enabled ? 'var(--border)' : 'var(--border-light)'}`,
+                  borderRadius: 10, padding: '14px 16px',
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                  opacity: s.enabled ? 1 : 0.65,
+                  transition: 'all 0.2s',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3, lineHeight: 1.35 }}>
+                        {jobName(s.jobKey)}
+                      </div>
+                      {schedule && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {schedule}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {s.enabled ? t('documents.eventEnabled') : t('documents.eventDisabled')}
-                    </div>
-                  </div>
-                  <button
-                    disabled={isToggling}
-                    onClick={() => handleToggle(s.jobKey, s.enabled)}
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
-                  >
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center',
-                      width: 40, height: 22, borderRadius: 11,
-                      background: s.enabled ? '#C9973A' : '#9ca3af',
-                      transition: 'background 0.2s', position: 'relative',
-                    }}>
+                    <button
+                      disabled={isToggling}
+                      onClick={() => handleToggle(s.jobKey, s.enabled)}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1, flexShrink: 0 }}
+                    >
                       <span style={{
-                        position: 'absolute', top: 2, width: 18, height: 18,
-                        left: s.enabled ? 20 : 2,
-                        borderRadius: '50%', background: '#fff',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                        transition: 'left 0.2s',
-                      }} />
-                    </span>
-                  </button>
+                        display: 'inline-flex', alignItems: 'center',
+                        width: 40, height: 22, borderRadius: 11,
+                        background: s.enabled ? 'var(--accent)' : '#9ca3af',
+                        transition: 'background 0.2s', position: 'relative',
+                      }}>
+                        <span style={{
+                          position: 'absolute', top: 2, width: 18, height: 18,
+                          left: s.enabled ? 20 : 2,
+                          borderRadius: '50%', background: '#fff',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                          transition: 'left 0.2s',
+                        }} />
+                      </span>
+                    </button>
+                  </div>
+                  <div style={{
+                    fontSize: 11, padding: '3px 8px', borderRadius: 5,
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    background: s.enabled ? 'rgba(21,128,61,0.08)' : 'rgba(107,114,128,0.08)',
+                    color: s.enabled ? '#15803D' : 'var(--text-muted)',
+                    width: 'fit-content',
+                  }}>
+                    {s.enabled ? '● Attivo' : '○ Disattivo'}
+                  </div>
                 </div>
               );
             })}
@@ -311,7 +385,7 @@ const SettingsPage: React.FC = () => {
     if (!isAdmin) { setLoading(false); return; }
     apiClient.get('/companies/settings')
       .then(r => setShowLeaveBalance(r.data?.data?.showLeaveBalanceToEmployee ?? true))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [isAdmin]);
 
@@ -323,6 +397,7 @@ const SettingsPage: React.FC = () => {
       const newVal = !showLeaveBalance;
       await apiClient.patch('/companies/settings', { showLeaveBalanceToEmployee: newVal });
       setShowLeaveBalance(newVal);
+
       setSaveMsg(t('settings.savedSuccess'));
     } catch {
       setSaveMsg(t('settings.saveError'));
