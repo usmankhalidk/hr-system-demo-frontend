@@ -100,6 +100,27 @@ const IconAnomaly = () => (
     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
   </svg>
 );
+const IconDoc = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
+  </svg>
+);
+const IconBriefcase = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2"/>
+    <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+    <line x1="12" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="16" y2="12"/>
+  </svg>
+);
+const IconClipboard = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+    <rect x="9" y="3" width="6" height="4" rx="1"/>
+    <line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>
+  </svg>
+);
 
 const ROLE_ACCENT: Record<UserRole, string> = {
   admin: '#C9973A', hr: '#0284C7', area_manager: '#15803D',
@@ -132,6 +153,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.companies',  path: '/aziende',               icon: <IconBuilding /> },
       { labelKey: 'nav.stores',     path: '/negozi',                icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.employees',  path: '/dipendenti',            icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.ats',        path: '/ats',                   icon: <IconBriefcase />, permissionKey: 'ats' },
+      { labelKey: 'nav.onboarding', path: '/onboarding',            icon: <IconClipboard />, permissionKey: 'onboarding' },
+      { labelKey: 'nav.documenti',  path: '/documenti',             icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.turni',      path: '/turni',                 icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.presenze',   path: '/presenze',              icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies',  path: '/anomalie',              icon: <IconAnomaly />, permissionKey: 'anomalie' },
@@ -141,48 +165,59 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.settings',   path: '/impostazioni',          icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     hr: [
-      { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
-      { labelKey: 'nav.companies', path: '/aziende',      icon: <IconBuilding /> },
-      { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
-      { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
-      { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
-      { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
-      { labelKey: 'nav.anomalies', path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
-      { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
-      { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.dashboard',  path: '/',             icon: <IconDashboard /> },
+      { labelKey: 'nav.companies',  path: '/aziende',      icon: <IconBuilding /> },
+      { labelKey: 'nav.employees',  path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.stores',     path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
+      { labelKey: 'nav.ats',        path: '/ats',          icon: <IconBriefcase />, permissionKey: 'ats' },
+      { labelKey: 'nav.onboarding', path: '/onboarding',   icon: <IconClipboard />, permissionKey: 'onboarding' },
+      { labelKey: 'nav.documenti',  path: '/documenti',    icon: <IconDoc />, permissionKey: 'documenti' },
+      { labelKey: 'nav.turni',      path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',   path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.anomalies',  path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
+      { labelKey: 'nav.permessi',   path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.messaggi',   path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield /> },
-      { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
+      { labelKey: 'nav.settings',   path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     area_manager: [
-      { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
-      { labelKey: 'nav.companies', path: '/aziende',      icon: <IconBuilding /> },
-      { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
-      { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
-      { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
-      { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
-      { labelKey: 'nav.anomalies', path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
-      { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
-      { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.dashboard',  path: '/',             icon: <IconDashboard /> },
+      { labelKey: 'nav.companies',  path: '/aziende',      icon: <IconBuilding /> },
+      { labelKey: 'nav.stores',     path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
+      { labelKey: 'nav.employees',  path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.ats',        path: '/ats',          icon: <IconBriefcase />, permissionKey: 'ats' },
+      { labelKey: 'nav.onboarding', path: '/onboarding',   icon: <IconClipboard />, permissionKey: 'onboarding' },
+      { labelKey: 'nav.documenti',  path: '/documenti',    icon: <IconDoc />, permissionKey: 'documenti' },
+      { labelKey: 'nav.turni',      path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',   path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.anomalies',  path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
+      { labelKey: 'nav.permessi',   path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.messaggi',   path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield /> },
-      { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
+      { labelKey: 'nav.settings',   path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     store_manager: [
-      { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
-      { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
-      { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
-      { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
-      { labelKey: 'nav.anomalies', path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
-      { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
-      { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.settings',  path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
+      { labelKey: 'nav.dashboard',  path: '/',             icon: <IconDashboard /> },
+      { labelKey: 'nav.employees',  path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.ats',        path: '/ats',          icon: <IconBriefcase />, permissionKey: 'ats' },
+      { labelKey: 'nav.onboarding', path: '/onboarding',   icon: <IconClipboard />, permissionKey: 'onboarding' },
+      { labelKey: 'nav.documenti',  path: '/documenti',    icon: <IconDoc />, permissionKey: 'documenti' },
+      { labelKey: 'nav.turni',      path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',   path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.anomalies',  path: '/anomalie',     icon: <IconAnomaly />, permissionKey: 'anomalie' },
+      { labelKey: 'nav.permessi',   path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.messaggi',   path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.settings',   path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     employee: [
-      { labelKey: 'nav.dashboard', path: '/',                  icon: <IconDashboard /> },
-      { labelKey: 'nav.myProfile', path: '/profilo',           icon: <IconPerson /> },
-      { labelKey: 'nav.messaggi',  path: '/hr-chat',           icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.turni',     path: '/turni',             icon: <IconCalendar />, permissionKey: 'turni' },
-      { labelKey: 'nav.presenze',  path: '/presenze/checkin',  icon: <IconClock />, permissionKey: 'presenze' },
-      { labelKey: 'nav.permessi',  path: '/permessi',          icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.dashboard',  path: '/',                  icon: <IconDashboard /> },
+      { labelKey: 'nav.myProfile',  path: '/profilo',           icon: <IconPerson /> },
+      { labelKey: 'nav.onboarding', path: '/onboarding',        icon: <IconClipboard /> },
+      { labelKey: 'nav.documenti',  path: '/documenti',         icon: <IconDoc />, permissionKey: 'documenti' },
+      { labelKey: 'nav.messaggi',   path: '/hr-chat',           icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.turni',      path: '/turni',             icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.presenze',   path: '/presenze/checkin',  icon: <IconClock />, permissionKey: 'presenze' },
+      { labelKey: 'nav.permessi',   path: '/permessi',          icon: <IconUmbrella />, permissionKey: 'permessi' },
     ],
     store_terminal: [],
   };

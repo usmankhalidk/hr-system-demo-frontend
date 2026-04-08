@@ -1,8 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../api/client';
 import { BalancesTab } from '../leave/AdminLeavePanel';
+import {
+  getNotificationSettings,
+  updateNotificationSetting,
+  getAutomationSettings,
+  updateAutomationSetting,
+  NotificationSetting,
+  AutomationSetting,
+} from '../../api/documents';
 
 const IconSettings = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -22,6 +30,271 @@ const IconEye = () => (
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
   </svg>
 );
+
+const IconBell = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 01-3.46 0"/>
+  </svg>
+);
+
+const IconClock = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
+  </svg>
+);
+
+// ── Notification Settings Panel ────────────────────────────────────────────
+
+const ALL_EVENT_KEYS = [
+  'employee.created', 'employee.updated', 'leave.submitted', 'leave.approved',
+  'leave.rejected', 'document.uploaded', 'document.expiring', 'document.signed',
+  'onboarding.welcome', 'onboarding.reminder', 'ats.candidate_received',
+  'ats.interview_invite', 'ats.bottleneck', 'shift.published', 'anomaly.detected',
+  'manager.daily_alert',
+];
+
+function eventLabel(key: string): string {
+  const map: Record<string, string> = {
+    'employee.created': 'Nuovo dipendente creato',
+    'employee.updated': 'Dipendente aggiornato',
+    'leave.submitted': 'Richiesta permesso inviata',
+    'leave.approved': 'Permesso approvato',
+    'leave.rejected': 'Permesso rifiutato',
+    'document.uploaded': 'Documento caricato',
+    'document.expiring': 'Documento in scadenza',
+    'document.signed': 'Documento firmato',
+    'onboarding.welcome': 'Benvenuto onboarding',
+    'onboarding.reminder': 'Promemoria onboarding',
+    'ats.candidate_received': 'Nuovo candidato ATS',
+    'ats.interview_invite': 'Invito colloquio ATS',
+    'ats.bottleneck': 'Alert collo di bottiglia ATS',
+    'shift.published': 'Turni pubblicati',
+    'anomaly.detected': 'Anomalia rilevata',
+    'manager.daily_alert': 'Alert giornaliero manager',
+  };
+  return map[key] ?? key;
+}
+
+const NotificationSettingsPanel: React.FC = () => {
+  const { t } = useTranslation();
+  const [settings, setSettings] = useState<NotificationSetting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const s = await getNotificationSettings();
+      setSettings(s);
+    } catch { /* ignore */ } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleToggle = async (eventKey: string, currentEnabled: boolean) => {
+    setToggling(eventKey);
+    try {
+      const updated = await updateNotificationSetting(eventKey, !currentEnabled);
+      setSettings(prev => {
+        const exists = prev.find(s => s.eventKey === eventKey);
+        if (exists) return prev.map(s => s.eventKey === eventKey ? updated : s);
+        return [...prev, updated];
+      });
+    } catch { /* ignore */ } finally {
+      setToggling(null);
+    }
+  };
+
+  const isEnabled = (key: string): boolean => {
+    const s = settings.find(s => s.eventKey === key);
+    return s ? s.enabled : true; // default true
+  };
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderLeft: '4px solid #7C3AED',
+      borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
+      boxShadow: 'var(--shadow-sm)',
+    }}>
+      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+          <span style={{ color: '#7C3AED' }}><IconBell /></span>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            {t('documents.settingsNotifications')}
+          </h3>
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+          {t('documents.settingsNotificationsDesc')}
+        </p>
+      </div>
+      <div style={{ padding: '12px 20px' }}>
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 36, borderRadius: 6 }} />)}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {ALL_EVENT_KEYS.map(key => {
+              const enabled = isEnabled(key);
+              const isToggling = toggling === key;
+              return (
+                <div key={key} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '8px 10px', borderRadius: 6,
+                  background: 'transparent',
+                  transition: 'background 0.12s',
+                }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span style={{ fontSize: 13, color: enabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                    {eventLabel(key)}
+                  </span>
+                  <button
+                    disabled={isToggling}
+                    onClick={() => handleToggle(key, enabled)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
+                  >
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center',
+                      width: 40, height: 22, borderRadius: 11,
+                      background: enabled ? '#7C3AED' : '#9ca3af',
+                      transition: 'background 0.2s', position: 'relative',
+                    }}>
+                      <span style={{
+                        position: 'absolute', top: 2, width: 18, height: 18,
+                        left: enabled ? 20 : 2,
+                        borderRadius: '50%', background: '#fff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        transition: 'left 0.2s',
+                      }} />
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Automation Settings Panel ──────────────────────────────────────────────
+
+const JOB_LABELS: Record<string, string> = {
+  welcome_email: 'Email di benvenuto nuovi assunti',
+  onboarding_reminder: 'Promemoria attività onboarding (ogni giorno 09:00)',
+  document_expiry: 'Avviso scadenza documenti (ogni giorno 08:00)',
+  signature_reminder: 'Promemoria firma documenti (ogni giorno 09:30)',
+  ats_bottleneck: 'Alert collo di bottiglia ATS (ogni 6 ore)',
+  manager_alert: 'Alert giornaliero manager (ogni giorno 07:00)',
+};
+
+const AutomationSettingsPanel: React.FC = () => {
+  const { t } = useTranslation();
+  const [settings, setSettings] = useState<AutomationSetting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const s = await getAutomationSettings();
+      setSettings(s);
+    } catch { /* ignore */ } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleToggle = async (jobKey: string, currentEnabled: boolean) => {
+    setToggling(jobKey);
+    try {
+      await updateAutomationSetting(jobKey, !currentEnabled);
+      setSettings(prev => prev.map(s => s.jobKey === jobKey ? { ...s, enabled: !currentEnabled } : s));
+    } catch { /* ignore */ } finally {
+      setToggling(null);
+    }
+  };
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderLeft: '4px solid #C9973A',
+      borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
+      boxShadow: 'var(--shadow-sm)',
+    }}>
+      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+          <span style={{ color: '#C9973A' }}><IconClock /></span>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            {t('documents.settingsAutomation')}
+          </h3>
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+          {t('documents.settingsAutomationDesc')}
+        </p>
+      </div>
+      <div style={{ padding: '12px 20px' }}>
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 40, borderRadius: 6 }} />)}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {settings.map(s => {
+              const isToggling = toggling === s.jobKey;
+              return (
+                <div key={s.jobKey} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 10px', borderRadius: 6, transition: 'background 0.12s',
+                }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: s.enabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                      {JOB_LABELS[s.jobKey] ?? s.jobKey}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {s.enabled ? t('documents.eventEnabled') : t('documents.eventDisabled')}
+                    </div>
+                  </div>
+                  <button
+                    disabled={isToggling}
+                    onClick={() => handleToggle(s.jobKey, s.enabled)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
+                  >
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center',
+                      width: 40, height: 22, borderRadius: 11,
+                      background: s.enabled ? '#C9973A' : '#9ca3af',
+                      transition: 'background 0.2s', position: 'relative',
+                    }}>
+                      <span style={{
+                        position: 'absolute', top: 2, width: 18, height: 18,
+                        left: s.enabled ? 20 : 2,
+                        borderRadius: '50%', background: '#fff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        transition: 'left 0.2s',
+                      }} />
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const SettingsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -174,6 +447,12 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Notification Settings (admin only) */}
+      {isAdmin && <NotificationSettingsPanel />}
+
+      {/* Automation Settings (admin only) */}
+      {isAdmin && <AutomationSettingsPanel />}
 
       {/* Flash snackbar */}
       {saveMsg && (

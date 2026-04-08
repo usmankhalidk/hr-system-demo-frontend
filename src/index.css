@@ -235,6 +235,27 @@ input, select, textarea {
   transform: translateY(-1px);
 }
 
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, var(--border-light) 50%, var(--border) 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 6px;
+}
+
+/* ── Kanban card hover ── */
+.kanban-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10) !important;
+}
+
 /* ── Login panel ── */
 .login-brand-panel {
   background: linear-gradient(150deg, #0D2137 0%, #102942 50%, #0A1D2E 100%);
