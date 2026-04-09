@@ -35,6 +35,20 @@ const PHASE_META: Record<Phase, { icon: string; color: string; bg: string; borde
   ongoing: { icon: '⭐', color: '#15803D', bg: 'rgba(21,128,61,0.08)',  border: 'rgba(21,128,61,0.2)',  labelKey: 'onboarding.phaseOngoingLabel', subKey: 'onboarding.phaseOngoingSub' },
 };
 
+const CATEGORY_ICONS: Record<string, string> = {
+  hr_docs: '📄',
+  it_setup: '💻',
+  training: '🎓',
+  meeting: '🤝',
+  other: '📌',
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  high: '#DC2626',
+  medium: '#D97706',
+  low: '#6B7280',
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function initials(name: string, surname: string) {
@@ -172,6 +186,140 @@ const SideDrawer: React.FC<{ open: boolean; onClose: () => void; children: React
   </div>,
   document.body,
 );
+
+// ─── Assign Modal ─────────────────────────────────────────────────────────────
+
+const AssignModal: React.FC<{
+  employeeName: string;
+  templates: OnboardingTemplate[];
+  assignedTemplateIds: number[];
+  onClose: () => void;
+  onConfirm: (selectedIds: number[]) => Promise<void>;
+}> = ({ employeeName, templates, assignedTemplateIds, onClose, onConfirm }) => {
+  const { t } = useTranslation();
+  const [selected, setSelected] = useState<Set<number>>(
+    new Set(templates.filter((tmpl) => !assignedTemplateIds.includes(tmpl.id)).map((tmpl) => tmpl.id)),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const allUnassigned = templates.filter((tmpl) => !assignedTemplateIds.includes(tmpl.id));
+  const allSelected = allUnassigned.length > 0 && allUnassigned.every((tmpl) => selected.has(tmpl.id));
+
+  const toggle = (id: number) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allUnassigned.map((tmpl) => tmpl.id)));
+    }
+  };
+
+  const handleConfirm = async () => {
+    setSaving(true);
+    try { await onConfirm([...selected]); onClose(); }
+    finally { setSaving(false); }
+  };
+
+  const grouped = PHASE_ORDER.reduce((acc, phase) => {
+    acc[phase] = templates.filter((tmpl) => getPhase(tmpl.sortOrder) === phase);
+    return acc;
+  }, {} as Record<Phase, OnboardingTemplate[]>);
+
+  return (
+    <ModalBackdrop onClose={onClose} width={560}>
+      <div style={{ padding: '24px 28px' }}>
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            {t('onboarding.assignModalTitle', 'Assign Onboarding Tasks')}
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+            {t('onboarding.assignModalSubtitle', 'Select tasks to assign to {{name}}', { name: employeeName })}
+          </p>
+        </div>
+
+        <button
+          onClick={toggleAll}
+          style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, fontWeight: 600 }}
+        >
+          {allSelected ? t('onboarding.assignDeselectAll', 'Deselect all') : t('onboarding.assignSelectAll', 'Select all')}
+        </button>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxHeight: '50vh', overflowY: 'auto' }}>
+          {PHASE_ORDER.map((phase) => {
+            const phaseTasks = grouped[phase];
+            if (phaseTasks.length === 0) return null;
+            const meta = PHASE_META[phase];
+            return (
+              <div key={phase}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  {meta.icon} {t(meta.labelKey)}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {phaseTasks.map((tmpl) => {
+                    const isAssigned = assignedTemplateIds.includes(tmpl.id);
+                    const isChecked = selected.has(tmpl.id);
+                    return (
+                      <label
+                        key={tmpl.id}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                          borderRadius: 10, border: `1.5px solid ${isChecked && !isAssigned ? 'var(--accent)' : 'var(--border)'}`,
+                          background: isAssigned ? 'var(--background)' : isChecked ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
+                          cursor: isAssigned ? 'default' : 'pointer', opacity: isAssigned ? 0.5 : 1,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isAssigned || isChecked}
+                          disabled={isAssigned}
+                          onChange={() => !isAssigned && toggle(tmpl.id)}
+                          style={{ width: 16, height: 16, accentColor: 'var(--accent)', flexShrink: 0 }}
+                        />
+                        <span style={{ fontSize: 18 }}>{CATEGORY_ICONS[tmpl.category] ?? '📌'}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {tmpl.name}
+                            {isAssigned && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>✓ {t('onboarding.assignAlreadyAssigned', 'Already assigned')}</span>}
+                          </div>
+                          {tmpl.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{tmpl.description}</div>}
+                        </div>
+                        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[tmpl.priority] ?? '#6B7280', textTransform: 'uppercase' }}>
+                            {t(`onboarding.priority${tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1)}` as any, tmpl.priority)}
+                          </span>
+                          {tmpl.dueDays != null && (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Day {tmpl.dueDays}</span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {t('onboarding.assignSummary', 'Assigning {{count}} tasks', { count: selected.size })}
+          </span>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button onClick={handleConfirm} disabled={selected.size === 0 || saving}>
+              {saving ? '...' : t('onboarding.assignConfirm', 'Assign')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+};
 
 // ─── Templates Panel ──────────────────────────────────────────────────────────
 
@@ -625,6 +773,12 @@ const EmployeeDrawer: React.FC<{
   const [reminding, setReminding] = useState(false);
   const [completing, setCompleting] = useState<number | null>(null);
   const [uncompleting, setUncompleting] = useState<number | null>(null);
+  const [templates, setTemplates] = useState<OnboardingTemplate[]>([]);
+  const [assignModal, setAssignModal] = useState<{ employeeId: number; name: string; assignedIds: number[] } | null>(null);
+
+  useEffect(() => {
+    getTemplates(false).then(setTemplates).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!employee) return;
@@ -752,7 +906,7 @@ const EmployeeDrawer: React.FC<{
           {isAdmin && (
             <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!employee.hasTasksAssigned && (
-                <Button variant="accent" size="sm" loading={assigning} onClick={handleAssign}>
+                <Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: [] })}>
                   📋 {t('onboarding.assignTasks')}
                 </Button>
               )}
@@ -782,7 +936,7 @@ const EmployeeDrawer: React.FC<{
               <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
                 {t('onboarding.noTasksAssigned', 'No tasks assigned yet')}
-                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="accent" size="sm" loading={assigning} onClick={handleAssign}>{t('onboarding.assignNow')}</Button></div>}
+                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: [] })}>{t('onboarding.assignNow')}</Button></div>}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -862,6 +1016,21 @@ const EmployeeDrawer: React.FC<{
               </div>
             )}
           </div>
+          {assignModal && (
+            <AssignModal
+              employeeName={assignModal.name}
+              templates={templates}
+              assignedTemplateIds={assignModal.assignedIds}
+              onClose={() => setAssignModal(null)}
+              onConfirm={async (ids) => {
+                const result = await assignTasks(assignModal.employeeId, ids);
+                showToast(`${result.assigned} ${t('onboarding.tasksAssigned', 'tasks assigned')}`, 'success');
+                const prog = await getEmployeeTasks(assignModal.employeeId);
+                setProgress(prog);
+                onRefresh();
+              }}
+            />
+          )}
         </>
       )}
     </SideDrawer>
