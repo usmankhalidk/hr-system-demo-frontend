@@ -6,18 +6,20 @@ import { Shift, CreateShiftPayload, createShift, updateShift, deleteShift } from
 import { getEmployees, type EmployeeListParams } from '../../api/employees';
 import { getStores } from '../../api/stores';
 import { getEmployeeTransferSchedule, type TransferAssignment } from '../../api/transfers';
-import { getAvatarUrl } from '../../api/client';
+import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 import { Employee, Store, UserRole } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
 import { Badge } from '../../components/ui/Badge';
+import { Store as StoreIcon } from 'lucide-react';
 
 interface ShiftDrawerProps {
   open: boolean;
   shift: Shift | null;
   prefillDate?: string;
   prefillUserId?: number;
+  employeeOffDaysById?: Record<number, number[] | undefined>;
   onClose: (refreshNeeded: boolean) => void;
 }
 
@@ -92,6 +94,23 @@ function getInitials(name: string): string {
   return (name.slice(0, 2) || 'U').toUpperCase();
 }
 
+function normalizeOffDays(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [5, 6];
+  const normalized = Array.from(new Set(
+    raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
+  )).sort((a, b) => a - b);
+  return normalized.length > 0 ? normalized : [5, 6];
+}
+
+function isDateOnOffDay(dateStr: string, offDays: number[]): boolean {
+  const parsed = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const monBasedDay = (parsed.getDay() + 6) % 7;
+  return offDays.includes(monBasedDay);
+}
+
 const EMPTY_FORM: FormState = {
   user_id: '',
   store_id: '',
@@ -109,7 +128,14 @@ const EMPTY_FORM: FormState = {
   status: 'scheduled',
 };
 
-export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, onClose }: ShiftDrawerProps) {
+export default function ShiftDrawer({
+  open,
+  shift,
+  prefillDate,
+  prefillUserId,
+  employeeOffDaysById = {},
+  onClose,
+}: ShiftDrawerProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -125,11 +151,29 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
   const [storeTouchedManually, setStoreTouchedManually] = useState(false);
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [employeeQuery, setEmployeeQuery] = useState('');
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
   const employeePickerRef = useRef<HTMLDivElement | null>(null);
+  const storePickerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
   const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.surname}`.trim() : '';
+  const selectedEmployeeOffDays = normalizeOffDays(
+    selectedEmployee?.offDays ?? (form.user_id ? employeeOffDaysById[Number(form.user_id)] : undefined),
+  );
+  const selectedDateIsOffDay = Boolean(form.date && isDateOnOffDay(form.date, selectedEmployeeOffDays));
+  const statusLockedForOffDay = Boolean(shift && selectedDateIsOffDay);
+  const dayShortLabels = [
+    t('shifts.dayMon', 'Mon'),
+    t('shifts.dayTue', 'Tue'),
+    t('shifts.dayWed', 'Wed'),
+    t('shifts.dayThu', 'Thu'),
+    t('shifts.dayFri', 'Fri'),
+    t('shifts.daySat', 'Sat'),
+    t('shifts.daySun', 'Sun'),
+  ];
+  const selectedEmployeeOffDaysLabel = selectedEmployeeOffDays.map((day) => dayShortLabels[day] ?? `#${day}`).join(', ');
   const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
+  const selectedStore = stores.find((store) => String(store.id) === form.store_id) ?? null;
   const expectedStoreId = activeTransferForDate?.targetStoreId ?? selectedEmployee?.storeId ?? null;
   const expectedStoreName = activeTransferForDate?.targetStoreName
     ?? selectedEmployee?.storeName
@@ -305,6 +349,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     setActiveTransferForDate(null);
     setEmployeePickerOpen(false);
     setEmployeeQuery('');
+    setStorePickerOpen(false);
 
     return () => { mounted = false; };
   }, [open, shift, prefillDate, prefillUserId, user?.role]);
@@ -343,16 +388,19 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
   }, [open, shift, storeTouchedManually, form.user_id, form.store_id, expectedStoreId]);
 
   useEffect(() => {
-    if (!employeePickerOpen) return;
+    if (!employeePickerOpen && !storePickerOpen) return;
     const onDocumentMouseDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (employeePickerRef.current && !employeePickerRef.current.contains(target)) {
+      if (employeePickerOpen && employeePickerRef.current && !employeePickerRef.current.contains(target)) {
         setEmployeePickerOpen(false);
+      }
+      if (storePickerOpen && storePickerRef.current && !storePickerRef.current.contains(target)) {
+        setStorePickerOpen(false);
       }
     };
     document.addEventListener('mousedown', onDocumentMouseDown);
     return () => document.removeEventListener('mousedown', onDocumentMouseDown);
-  }, [employeePickerOpen]);
+  }, [employeePickerOpen, storePickerOpen]);
 
   function selectEmployee(employeeId: string) {
     setStoreTouchedManually(false);
@@ -364,6 +412,19 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
       setFormErrors((prev) => {
         const next = { ...prev };
         delete next.user_id;
+        return next;
+      });
+    }
+  }
+
+  function selectStore(storeId: string) {
+    setStoreTouchedManually(true);
+    setForm((prev) => ({ ...prev, store_id: storeId }));
+    setStorePickerOpen(false);
+    if (formErrors.store_id) {
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next.store_id;
         return next;
       });
     }
@@ -400,6 +461,17 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
       setFormErrors(errs);
       return;
     }
+
+    if (selectedDateIsOffDay && !shift) {
+      setError(t('errors.OFF_DAY_SHIFT_BLOCKED', 'This employee is off on the selected day.'));
+      return;
+    }
+
+    if (statusLockedForOffDay && shift && form.status !== shift.status) {
+      setError(t('errors.OFF_DAY_STATUS_LOCKED', 'Shift status cannot be changed on an off day.'));
+      return;
+    }
+
     setFormErrors({});
     setOverlapConflict(false);
     setSaving(true);
@@ -747,15 +819,157 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
           {/* ─── Store ──────────────────────── */}
           <div style={fieldRow}>
             <label style={fLabel}>{t('shifts.form.store')}</label>
-            <select required value={form.store_id} onChange={set('store_id')} style={fInput}
-              onFocus={focusHandler} onBlur={blurHandler}>
-              <option value="">{t('shifts.form.selectStore')}</option>
-              {stores.map((store) => (
-                <option key={store.id} value={String(store.id)}>
-                  {store.companyName ? `${store.name} (${store.companyName})` : store.name}
-                </option>
-              ))}
-            </select>
+            <div ref={storePickerRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmployeePickerOpen(false);
+                  setStorePickerOpen((prev) => !prev);
+                }}
+                style={{
+                  ...fInput,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  padding: selectedStore ? '6px 10px' : '0 12px',
+                  textAlign: 'left',
+                  cursor: stores.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: stores.length === 0 ? 0.68 : 1,
+                }}
+                disabled={stores.length === 0}
+              >
+                {selectedStore ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                    <span style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      overflow: 'hidden',
+                      background: 'var(--surface-elevated)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      color: 'var(--text-muted)',
+                    }}>
+                      {getStoreLogoUrl(selectedStore.logoFilename ?? selectedStore.companyLogoFilename) ? (
+                        <img
+                          src={getStoreLogoUrl(selectedStore.logoFilename ?? selectedStore.companyLogoFilename) ?? ''}
+                          alt={selectedStore.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <StoreIcon size={14} />
+                      )}
+                    </span>
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span style={{
+                        display: 'block',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: 'var(--text-primary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {selectedStore.name}
+                      </span>
+                      <span style={{
+                        display: 'block',
+                        fontSize: 10.5,
+                        color: 'var(--text-muted)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {selectedStore.companyName ?? selectedStore.code}
+                      </span>
+                    </span>
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.selectStore')}</span>
+                )}
+                <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>▼</span>
+              </button>
+
+              {storePickerOpen && stores.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 'calc(100% + 6px)',
+                  zIndex: 30,
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--surface)',
+                  boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{ maxHeight: 270, overflowY: 'auto' }}>
+                    {stores.map((store) => {
+                      const selected = form.store_id === String(store.id);
+                      const logoUrl = getStoreLogoUrl(store.logoFilename ?? store.companyLogoFilename);
+                      return (
+                        <button
+                          key={store.id}
+                          type="button"
+                          onClick={() => selectStore(String(store.id))}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderBottom: '1px solid var(--border-light)',
+                            background: selected ? 'var(--surface-warm)' : 'var(--surface)',
+                            padding: '9px 10px',
+                            textAlign: 'left',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 8,
+                            border: '1px solid var(--border)',
+                            overflow: 'hidden',
+                            background: 'var(--surface-elevated)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            color: 'var(--text-muted)',
+                          }}>
+                            {logoUrl ? (
+                              <img src={logoUrl} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <StoreIcon size={13} />
+                            )}
+                          </span>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {store.name}
+                            </span>
+                            <span style={{
+                              display: 'block',
+                              fontSize: 10.5,
+                              color: 'var(--text-muted)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {store.companyName ?? store.code}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
             {form.user_id && expectedStoreId != null && expectedStoreName && !storeSelectionMismatch && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>
                 {activeTransferForDate
@@ -810,6 +1024,28 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
                 setForm((p) => ({ ...p, date: v }));
               }}
             />
+            {form.user_id && selectedDateIsOffDay && (
+              <div style={{
+                marginTop: 8,
+                fontSize: 12,
+                lineHeight: 1.45,
+                color: '#92400e',
+                background: 'rgba(251,191,36,0.14)',
+                border: '1px solid rgba(217,119,6,0.3)',
+                borderRadius: 8,
+                padding: '7px 9px',
+              }}>
+                {shift
+                  ? t('shifts.offDayStatusLockedHint', {
+                      days: selectedEmployeeOffDaysLabel,
+                      defaultValue: 'This date falls on an off-day ({{days}}). You can update details, but status changes are locked.',
+                    })
+                  : t('shifts.offDayCreateBlockedHint', {
+                      days: selectedEmployeeOffDaysLabel,
+                      defaultValue: 'This date falls on an off-day ({{days}}). Shift creation is blocked.',
+                    })}
+              </div>
+            )}
           </div>
 
           {/* ─── Section: Orario ────────────── */}
@@ -1008,16 +1244,19 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
                 const active = form.status === s;
                 const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
                 const bg    = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                const disabled = statusLockedForOffDay && s !== shift?.status;
                 return (
                   <button
                     key={s} type="button"
-                    onClick={() => setForm((p) => ({ ...p, status: s }))}
+                    onClick={() => !disabled && setForm((p) => ({ ...p, status: s }))}
+                    disabled={disabled}
                     style={{
                       flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                      fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                      fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', transition: 'all 0.12s',
                       border: `1.5px solid ${active ? color : 'var(--border)'}`,
                       background: active ? bg : 'transparent',
                       color: active ? color : 'var(--text-muted)',
+                      opacity: disabled ? 0.55 : 1,
                       fontFamily: 'var(--font-body)',
                     }}
                   >
@@ -1032,16 +1271,19 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
                 const active = form.status === s;
                 const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
                 const bg    = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                const disabled = statusLockedForOffDay && s !== shift?.status;
                 return (
                   <button
                     key={s} type="button"
-                    onClick={() => setForm((p) => ({ ...p, status: s }))}
+                    onClick={() => !disabled && setForm((p) => ({ ...p, status: s }))}
+                    disabled={disabled}
                     style={{
                       flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                      fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                      fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', transition: 'all 0.12s',
                       border: `1.5px solid ${active ? color : 'var(--border)'}`,
                       background: active ? bg : 'transparent',
                       color: active ? color : 'var(--text-muted)',
+                      opacity: disabled ? 0.55 : 1,
                       fontFamily: 'var(--font-body)',
                     }}
                   >
@@ -1049,6 +1291,17 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
                   </button>
                 );
               })}
+            </div>
+          )}
+          {statusLockedForOffDay && shift && (
+            <div style={{
+              marginTop: -14,
+              marginBottom: 14,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              lineHeight: 1.4,
+            }}>
+              {t('shifts.offDayStatusLockedHintCompact', 'Status changes are locked because this shift is on an off-day.')}
             </div>
           )}
 
