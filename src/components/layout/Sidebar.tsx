@@ -119,6 +119,11 @@ const IconAnomaly = () => (
     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
   </svg>
 );
+const IconTerminal = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+  </svg>
+);
 
 const ROLE_ACCENT: Record<UserRole, string> = {
   admin: '#C9973A', hr: '#0284C7', area_manager: '#15803D',
@@ -153,6 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.stores',     path: '/negozi',                icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.employees',  path: '/dipendenti',            icon: <IconUsers />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
+      { labelKey: 'nav.terminals',  path: '/terminali',             icon: <IconTerminal />,  permissionKey: 'terminali' },
       { labelKey: 'nav.turni',      path: '/turni',                 icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.trasferimenti', path: '/trasferimenti',      icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',   path: '/presenze',              icon: <IconClock />, permissionKey: 'presenze' },
@@ -168,6 +174,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
+      { labelKey: 'nav.terminals', path: '/terminali',    icon: <IconTerminal />, permissionKey: 'terminali' },
       { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze',  path: '/presenze',     icon: <IconClock />, permissionKey: 'presenze' },
@@ -181,6 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.dashboard', path: '/',             icon: <IconDashboard /> },
       { labelKey: 'nav.companies', path: '/aziende',      icon: <IconBuilding /> },
       { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
+      { labelKey: 'nav.terminals', path: '/terminali',    icon: <IconTerminal />, permissionKey: 'terminali' },
       { labelKey: 'nav.employees', path: '/dipendenti',   icon: <IconUsers />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.turni',     path: '/turni',        icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
@@ -201,6 +209,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi',  path: '/permessi',     icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.stores',    path: '/negozi',       icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.messaggi',  path: '/hr-chat',      icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.terminals', path: '/terminali',    icon: <IconTerminal />, permissionKey: 'terminali' },
     ],
     employee: [
       { labelKey: 'nav.dashboard', path: '/',                  icon: <IconDashboard /> },
@@ -209,6 +218,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.turni',     path: '/turni',             icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.presenze',  path: '/presenze/checkin',  icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.permessi',  path: '/permessi',          icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.terminals', path: '/terminali',         icon: <IconTerminal />, permissionKey: 'terminali' },
     ],
     store_terminal: [],
   };

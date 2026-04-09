@@ -92,6 +92,7 @@ const it = {
     settings: 'Impostazioni',
     checkin: 'Check-In',
     deviceReset: 'Reset dispositivo',
+    terminals: 'Terminale',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -410,6 +411,25 @@ const it = {
     associationsNoStores: 'Nessun negozio in questo ambito.',
     associationsNoEmployees: 'Nessun dipendente per questo ambito.',
     associationsUnassigned: 'Dipendenti senza assegnazione negozio',
+    errorTerminalAccessDeny: 'Accesso non consentito per i terminali in questo modulo',
+  },
+
+  // ─── Terminals ────────────────────────────────────────────────────────────
+  terminals: {
+    title: 'Terminali di Negozio',
+    subtitle: 'Gestione e monitoraggio dei terminali QR fissi',
+    colName: 'Terminale',
+    colRole: 'Ruolo',
+    colCompany: 'Azienda',
+    colStore: 'Negozio',
+    colStatus: 'Stato',
+    colActions: 'Azioni',
+    searchPlaceholder: 'Cerca terminale o email...',
+    allStatuses: 'Tutti gli stati',
+    statusActive: 'Attivo',
+    statusInactive: 'Inattivo',
+    noTerminals: 'Nessun terminale trovato.',
+    readOnlyNotice: 'I terminali vengono creati e configurati automaticamente durante la creazione del negozio.',
   },
 
   // ─── Stores ───────────────────────────────────────────────────────────────
@@ -651,6 +671,7 @@ const it = {
       report: 'Report',
       impostazioni: 'Impostazioni',
       negozi: 'Negozi',
+      terminali: 'Terminale',
       gestione_accessi: 'Gestione Accessi',
     },
   },
