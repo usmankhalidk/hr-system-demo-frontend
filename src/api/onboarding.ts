@@ -34,15 +34,28 @@ export interface OnboardingProgress {
   tasks: OnboardingTask[];
 }
 
+export interface EmployeeOnboardingOverview {
+  employeeId: number;
+  name: string;
+  surname: string;
+  email: string;
+  storeName: string | null;
+  avatarFilename: string | null;
+  total: number;
+  completed: number;
+  percentage: number;
+  hasTasksAssigned: boolean;
+}
+
 // ---------------------------------------------------------------------------
-// API functions
+// Templates
 // ---------------------------------------------------------------------------
 
 export async function getTemplates(includeInactive = false): Promise<OnboardingTemplate[]> {
   const { data } = await apiClient.get('/onboarding/templates', {
-    params: includeInactive ? { include_inactive: 'true' } : undefined,
+    params: includeInactive ? { include_inactive: true } : undefined,
   });
-  return (data.data.templates ?? []) as OnboardingTemplate[];
+  return data.data.templates as OnboardingTemplate[];
 }
 
 export async function createTemplate(payload: {
@@ -50,7 +63,11 @@ export async function createTemplate(payload: {
   description?: string;
   sortOrder?: number;
 }): Promise<OnboardingTemplate> {
-  const { data } = await apiClient.post('/onboarding/templates', payload);
+  const { data } = await apiClient.post('/onboarding/templates', {
+    name: payload.name,
+    description: payload.description ?? null,
+    sort_order: payload.sortOrder ?? 0,
+  });
   return data.data.template as OnboardingTemplate;
 }
 
@@ -58,9 +75,23 @@ export async function updateTemplate(
   id: number,
   payload: { name?: string; description?: string; sortOrder?: number; isActive?: boolean },
 ): Promise<OnboardingTemplate> {
-  const { data } = await apiClient.patch(`/onboarding/templates/${id}`, payload);
+  const body: Record<string, unknown> = {};
+  if (payload.name !== undefined) body.name = payload.name;
+  if (payload.description !== undefined) body.description = payload.description;
+  if (payload.sortOrder !== undefined) body.sort_order = payload.sortOrder;
+  if (payload.isActive !== undefined) body.is_active = payload.isActive;
+  const { data } = await apiClient.patch(`/onboarding/templates/${id}`, body);
   return data.data.template as OnboardingTemplate;
 }
+
+export async function deleteTemplate(id: number): Promise<{ deleted: boolean; deactivated: boolean }> {
+  const { data } = await apiClient.delete(`/onboarding/templates/${id}`);
+  return data.data as { deleted: boolean; deactivated: boolean };
+}
+
+// ---------------------------------------------------------------------------
+// Employee Tasks
+// ---------------------------------------------------------------------------
 
 export async function getEmployeeTasks(employeeId: number): Promise<OnboardingProgress> {
   const { data } = await apiClient.get(`/onboarding/employees/${employeeId}/tasks`);
@@ -75,4 +106,41 @@ export async function assignTasks(employeeId: number): Promise<{ assigned: numbe
 export async function completeTask(taskId: number): Promise<OnboardingTask> {
   const { data } = await apiClient.patch(`/onboarding/tasks/${taskId}/complete`);
   return data.data.task as OnboardingTask;
+}
+
+// ---------------------------------------------------------------------------
+// Overview (admin)
+// ---------------------------------------------------------------------------
+
+export async function getOnboardingOverview(): Promise<EmployeeOnboardingOverview[]> {
+  const { data } = await apiClient.get('/onboarding/overview');
+  return data.data.overview as EmployeeOnboardingOverview[];
+}
+
+export interface OnboardingStats {
+  totalEmployees: number;
+  notStarted: number;
+  inProgress: number;
+  complete: number;
+  avgPercentage: number;
+}
+
+export async function getOnboardingStats(): Promise<OnboardingStats> {
+  const { data } = await apiClient.get('/onboarding/stats');
+  return data.data.stats as OnboardingStats;
+}
+
+export async function uncompleteTask(taskId: number): Promise<OnboardingTask> {
+  const { data } = await apiClient.patch(`/onboarding/tasks/${taskId}/uncomplete`);
+  return data.data.task as OnboardingTask;
+}
+
+export async function bulkAssignAll(): Promise<{ employees: number; tasks: number }> {
+  const { data } = await apiClient.post('/onboarding/bulk-assign');
+  return data.data as { employees: number; tasks: number };
+}
+
+export async function sendReminder(employeeId: number): Promise<{ sent: boolean }> {
+  const { data } = await apiClient.post(`/onboarding/employees/${employeeId}/remind`);
+  return data.data as { sent: boolean };
 }

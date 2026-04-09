@@ -54,36 +54,19 @@ const ALL_EVENT_KEYS = [
   'manager.daily_alert',
 ];
 
-const EVENT_CATEGORIES: { label: string; keys: string[] }[] = [
-  { label: 'Dipendenti', keys: ['employee.created', 'employee.updated'] },
-  { label: 'Permessi', keys: ['leave.submitted', 'leave.approved', 'leave.rejected'] },
-  { label: 'Documenti', keys: ['document.uploaded', 'document.expiring', 'document.signed'] },
-  { label: 'Onboarding', keys: ['onboarding.welcome', 'onboarding.reminder'] },
-  { label: 'ATS', keys: ['ats.candidate_received', 'ats.interview_invite', 'ats.bottleneck'] },
-  { label: 'Turni & Presenze', keys: ['shift.published', 'anomaly.detected'] },
-  { label: 'Manager', keys: ['manager.daily_alert'] },
+const EVENT_CATEGORY_DEFS: { labelKey: string; keys: string[] }[] = [
+  { labelKey: 'documents.eventCategories.employees', keys: ['employee.created', 'employee.updated'] },
+  { labelKey: 'documents.eventCategories.leave', keys: ['leave.submitted', 'leave.approved', 'leave.rejected'] },
+  { labelKey: 'documents.eventCategories.documents', keys: ['document.uploaded', 'document.expiring', 'document.signed'] },
+  { labelKey: 'documents.eventCategories.onboarding', keys: ['onboarding.welcome', 'onboarding.reminder'] },
+  { labelKey: 'documents.eventCategories.ats', keys: ['ats.candidate_received', 'ats.interview_invite', 'ats.bottleneck'] },
+  { labelKey: 'documents.eventCategories.shifts', keys: ['shift.published', 'anomaly.detected'] },
+  { labelKey: 'documents.eventCategories.manager', keys: ['manager.daily_alert'] },
 ];
 
-function eventLabel(key: string): string {
-  const map: Record<string, string> = {
-    'employee.created': 'Nuovo dipendente creato',
-    'employee.updated': 'Dipendente aggiornato',
-    'leave.submitted': 'Richiesta permesso inviata',
-    'leave.approved': 'Permesso approvato',
-    'leave.rejected': 'Permesso rifiutato',
-    'document.uploaded': 'Documento caricato',
-    'document.expiring': 'Documento in scadenza',
-    'document.signed': 'Documento firmato',
-    'onboarding.welcome': 'Benvenuto onboarding',
-    'onboarding.reminder': 'Promemoria onboarding',
-    'ats.candidate_received': 'Nuovo candidato ATS',
-    'ats.interview_invite': 'Invito colloquio ATS',
-    'ats.bottleneck': 'Alert collo di bottiglia ATS',
-    'shift.published': 'Turni pubblicati',
-    'anomaly.detected': 'Anomalia rilevata',
-    'manager.daily_alert': 'Alert giornaliero manager',
-  };
-  return map[key] ?? key;
+function eventLabel(key: string, t: (k: string, fallback: string) => string): string {
+  const tKey = `documents.eventLabels.${key.replace('.', '_')}`;
+  return t(tKey, key);
 }
 
 const NotificationSettingsPanel: React.FC = () => {
@@ -156,7 +139,7 @@ const NotificationSettingsPanel: React.FC = () => {
               }} />
             </div>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-              {enabledCount} / {totalCount} attivi
+              {t('documents.notifSummary', { enabled: enabledCount, total: totalCount })}
             </span>
           </div>
         )}
@@ -168,15 +151,15 @@ const NotificationSettingsPanel: React.FC = () => {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {EVENT_CATEGORIES.map((cat, catIdx) => (
-              <div key={cat.label} style={{ marginTop: catIdx === 0 ? 8 : 16 }}>
+            {EVENT_CATEGORY_DEFS.map((cat, catIdx) => (
+              <div key={cat.labelKey} style={{ marginTop: catIdx === 0 ? 8 : 16 }}>
                 {/* Category header */}
                 <div style={{
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
                   textTransform: 'uppercase', color: 'var(--text-muted)',
                   padding: '0 10px', marginBottom: 4,
                 }}>
-                  {cat.label}
+                  {t(cat.labelKey)}
                 </div>
                 {/* Event rows */}
                 {cat.keys.map(key => {
@@ -193,7 +176,7 @@ const NotificationSettingsPanel: React.FC = () => {
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
                       <span style={{ fontSize: 13, color: enabled ? 'var(--text-primary)' : 'var(--text-muted)', transition: 'color 0.2s' }}>
-                        {eventLabel(key)}
+                        {eventLabel(key, t)}
                       </span>
                       <button
                         disabled={isToggling}
@@ -229,25 +212,12 @@ const NotificationSettingsPanel: React.FC = () => {
 
 // ── Automation Settings Panel ──────────────────────────────────────────────
 
-const JOB_LABELS: Record<string, string> = {
-  welcome_email: 'Email di benvenuto nuovi assunti',
-  onboarding_reminder: 'Promemoria attività onboarding (ogni giorno 09:00)',
-  document_expiry: 'Avviso scadenza documenti (ogni giorno 08:00)',
-  signature_reminder: 'Promemoria firma documenti (ogni giorno 09:30)',
-  ats_bottleneck: 'Alert collo di bottiglia ATS (ogni 6 ore)',
-  manager_alert: 'Alert giornaliero manager (ogni giorno 07:00)',
-};
-
-function jobName(jobKey: string): string {
-  const label = JOB_LABELS[jobKey] ?? jobKey;
-  const parenIdx = label.indexOf(' (');
-  return parenIdx !== -1 ? label.slice(0, parenIdx) : label;
+function jobName(jobKey: string, t: (k: string, fallback: string) => string): string {
+  return t(`documents.jobLabels.${jobKey}`, jobKey);
 }
 
-function jobSchedule(jobKey: string): string {
-  const label = JOB_LABELS[jobKey] ?? '';
-  const match = label.match(/\(([^)]+)\)/);
-  return match ? match[1] : '';
+function jobSchedule(jobKey: string, t: (k: string, fallback: string) => string): string {
+  return t(`documents.jobSchedules.${jobKey}`, '');
 }
 
 const AutomationSettingsPanel: React.FC = () => {
@@ -309,7 +279,6 @@ const AutomationSettingsPanel: React.FC = () => {
           }}>
             {settings.map(s => {
               const isToggling = toggling === s.jobKey;
-              const schedule = jobSchedule(s.jobKey);
               return (
                 <div key={s.jobKey} style={{
                   background: s.enabled ? 'var(--surface)' : 'var(--background)',
@@ -322,11 +291,11 @@ const AutomationSettingsPanel: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3, lineHeight: 1.35 }}>
-                        {jobName(s.jobKey)}
+                        {jobName(s.jobKey, t)}
                       </div>
-                      {schedule && (
+                      {jobSchedule(s.jobKey, t) && (
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {schedule}
+                          {jobSchedule(s.jobKey, t)}
                         </div>
                       )}
                     </div>
@@ -358,7 +327,7 @@ const AutomationSettingsPanel: React.FC = () => {
                     color: s.enabled ? '#15803D' : 'var(--text-muted)',
                     width: 'fit-content',
                   }}>
-                    {s.enabled ? '● Attivo' : '○ Disattivo'}
+                    {s.enabled ? `● ${t('documents.jobActive')}` : `○ ${t('documents.jobInactive')}`}
                   </div>
                 </div>
               );
@@ -466,7 +435,7 @@ const SettingsPage: React.FC = () => {
           background: 'var(--surface)', border: '1px solid var(--border)',
           borderLeft: '4px solid #15803D',
           borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-          boxShadow: 'var(--shadow-sm)',
+          boxShadow: 'var(--shadow-sm)', marginBottom: 24,
         }}>
           <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
