@@ -7,6 +7,7 @@ import { Message } from '../../types';
 import {
   getMessages, markMessageAsRead, getHrRecipient,
 } from '../../api/messages';
+import { getAvatarUrl } from '../../api/client';
 import { translateApiError } from '../../utils/apiErrors';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
@@ -56,8 +57,9 @@ function initials(name: string): string {
 
 /* ─── sub-components ─────────────────────────────────────────────────────── */
 
-const Avatar: React.FC<{ name: string; size?: number }> = ({ name, size = 36 }) => {
+const Avatar: React.FC<{ name: string; avatarFilename?: string | null; size?: number }> = ({ name, avatarFilename, size = 36 }) => {
   const color = avatarColor(name);
+  const avatarUrl = getAvatarUrl(avatarFilename);
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
@@ -65,8 +67,11 @@ const Avatar: React.FC<{ name: string; size?: number }> = ({ name, size = 36 }) 
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       color, fontWeight: 800, fontSize: size * 0.36,
       fontFamily: 'var(--font-display)', flexShrink: 0,
+      overflow: 'hidden',
     }}>
-      {initials(name)}
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : initials(name)}
     </div>
   );
 };
@@ -83,6 +88,9 @@ const MessageRow: React.FC<MessageRowProps> = ({ msg, isSelected, lang, onClick 
   const senderName = msg.direction === 'sent'
     ? (msg.recipientName ?? msg.senderName ?? '—')
     : (msg.senderName ?? '—');
+  const senderAvatarFilename = msg.direction === 'sent'
+    ? (msg.recipientAvatarFilename ?? null)
+    : (msg.senderAvatarFilename ?? null);
   return (
     <button
       onClick={onClick}
@@ -105,7 +113,7 @@ const MessageRow: React.FC<MessageRowProps> = ({ msg, isSelected, lang, onClick 
           msg.isRead ? 'transparent' : 'rgba(201,151,58,0.04)';
       }}
     >
-      <Avatar name={senderName} size={36} />
+      <Avatar name={senderName} avatarFilename={senderAvatarFilename} size={36} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span style={{
@@ -146,7 +154,7 @@ interface DetailPaneProps {
   msg: Message;
   lang: string;
   onReply: (msg: Message) => void;
-  t: (key: string) => string;
+  t: (key: string, defaultValue?: string) => string;
 }
 
 const DetailPane: React.FC<DetailPaneProps> = ({ msg, lang, onReply, t }) => {
@@ -154,6 +162,13 @@ const DetailPane: React.FC<DetailPaneProps> = ({ msg, lang, onReply, t }) => {
   const senderName = msg.direction === 'sent'
     ? (msg.recipientName ?? msg.senderName ?? '—')
     : (msg.senderName ?? '—');
+  const senderRole = msg.direction === 'sent'
+    ? (msg.recipientRole ?? null)
+    : (msg.senderRole ?? null);
+  const senderAvatarFilename = msg.direction === 'sent'
+    ? (msg.recipientAvatarFilename ?? null)
+    : (msg.senderAvatarFilename ?? null);
+  const senderRoleLabel = senderRole ? t(`roles.${senderRole}`) : t('messages.roleUnknown', 'Role');
   const color = avatarColor(senderName);
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -164,10 +179,13 @@ const DetailPane: React.FC<DetailPaneProps> = ({ msg, lang, onReply, t }) => {
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Avatar name={senderName} size={42} />
+            <Avatar name={senderName} avatarFilename={senderAvatarFilename} size={42} />
             <div>
               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
                 {senderName}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                {senderRoleLabel}
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
                 {formatFullDate(msg.createdAt, lang)}
@@ -490,7 +508,7 @@ export default function HRChatPage() {
                 msg={selected}
                 lang={i18n.language}
                 onReply={handleReply}
-                t={t as (k: string) => string}
+                t={t as (k: string, defaultValue?: string) => string}
               />
             ) : (
               <EmptyDetail t={t as (k: string) => string} />

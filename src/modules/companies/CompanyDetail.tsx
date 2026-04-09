@@ -139,7 +139,6 @@ export default function CompanyDetail() {
   const { slug } = useParams<{ slug: string }>();
   const companyId = useMemo(() => parseCompanyIdFromSlug(slug), [slug]);
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
-  const canEdit = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager';
   const canManageStatus = user?.isSuperAdmin === true;
 
   const [company, setCompany] = useState<Company | null>(null);
@@ -176,6 +175,8 @@ export default function CompanyDetail() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const canEdit = user?.role === 'admin' || (company?.ownerUserId != null && user?.id === company.ownerUserId);
 
   const storeManagersByStoreId = useMemo(() => {
     const map = new Map<number, Employee>();
