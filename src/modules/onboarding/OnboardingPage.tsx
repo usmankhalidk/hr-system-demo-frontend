@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { translateApiError } from '../../utils/apiErrors';
@@ -27,11 +28,11 @@ function getPhase(sortOrder: number): Phase {
   return 'ongoing';
 }
 
-const PHASE_META: Record<Phase, { icon: string; color: string; bg: string; border: string; label: string; sub: string }> = {
-  day1:    { icon: '🚀', color: '#0284C7', bg: 'rgba(2,132,199,0.08)',   border: 'rgba(2,132,199,0.2)',   label: 'Day 1 Essentials', sub: 'Critical first-day tasks' },
-  week1:   { icon: '📚', color: '#7C3AED', bg: 'rgba(124,58,237,0.08)', border: 'rgba(124,58,237,0.2)', label: 'First Week',        sub: 'Get up to speed' },
-  month1:  { icon: '🎯', color: '#C9973A', bg: 'rgba(201,151,58,0.10)', border: 'rgba(201,151,58,0.2)', label: 'First Month',       sub: 'Build foundations' },
-  ongoing: { icon: '⭐', color: '#15803D', bg: 'rgba(21,128,61,0.08)',  border: 'rgba(21,128,61,0.2)',  label: 'Ongoing',           sub: 'Continuous growth' },
+const PHASE_META: Record<Phase, { icon: string; color: string; bg: string; border: string; labelKey: string; subKey: string }> = {
+  day1:    { icon: '🚀', color: '#0284C7', bg: 'rgba(2,132,199,0.08)',   border: 'rgba(2,132,199,0.2)',   labelKey: 'onboarding.phaseDay1Label',    subKey: 'onboarding.phaseDay1Sub' },
+  week1:   { icon: '📚', color: '#7C3AED', bg: 'rgba(124,58,237,0.08)', border: 'rgba(124,58,237,0.2)', labelKey: 'onboarding.phaseWeek1Label',   subKey: 'onboarding.phaseWeek1Sub' },
+  month1:  { icon: '🎯', color: '#C9973A', bg: 'rgba(201,151,58,0.10)', border: 'rgba(201,151,58,0.2)', labelKey: 'onboarding.phaseMonth1Label',  subKey: 'onboarding.phaseMonth1Sub' },
+  ongoing: { icon: '⭐', color: '#15803D', bg: 'rgba(21,128,61,0.08)',  border: 'rgba(21,128,61,0.2)',  labelKey: 'onboarding.phaseOngoingLabel', subKey: 'onboarding.phaseOngoingSub' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -45,14 +46,14 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function fmtRelative(iso: string) {
+function fmtRelative(iso: string, t: TFunction) {
   const diff = Date.now() - new Date(iso).getTime();
   const days = Math.floor(diff / 86400000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7)  return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
+  if (days === 0) return t('onboarding.relToday', 'Today');
+  if (days === 1) return t('onboarding.relYesterday', 'Yesterday');
+  if (days < 7)  return t('onboarding.relDaysAgo', { count: days, defaultValue: '{{count}}d ago' });
+  if (days < 30) return t('onboarding.relWeeksAgo', { count: Math.floor(days / 7), defaultValue: '{{count}}w ago' });
+  return t('onboarding.relMonthsAgo', { count: Math.floor(days / 30), defaultValue: '{{count}}mo ago' });
 }
 
 const ADMIN_HR    = ['admin', 'hr'];
@@ -185,7 +186,15 @@ const TemplatesPanel: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OnboardingTemplate | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', sortOrder: '1' });
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    sortOrder: '1',
+    category: 'other' as OnboardingTemplate['category'],
+    dueDays: '',
+    linkUrl: '',
+    priority: 'medium' as OnboardingTemplate['priority'],
+  });
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -201,13 +210,21 @@ const TemplatesPanel: React.FC = () => {
   const openCreate = () => {
     setEditing(null);
     const nextOrder = templates.length > 0 ? Math.max(...templates.map((t) => t.sortOrder)) + 1 : 1;
-    setForm({ name: '', description: '', sortOrder: String(nextOrder) });
+    setForm({ name: '', description: '', sortOrder: String(nextOrder), category: 'other', dueDays: '', linkUrl: '', priority: 'medium' });
     setModalOpen(true);
   };
 
   const openEdit = (tmpl: OnboardingTemplate) => {
     setEditing(tmpl);
-    setForm({ name: tmpl.name, description: tmpl.description ?? '', sortOrder: String(tmpl.sortOrder) });
+    setForm({
+      name: tmpl.name,
+      description: tmpl.description ?? '',
+      sortOrder: String(tmpl.sortOrder),
+      category: tmpl.category,
+      dueDays: tmpl.dueDays != null ? String(tmpl.dueDays) : '',
+      linkUrl: tmpl.linkUrl ?? '',
+      priority: tmpl.priority,
+    });
     setModalOpen(true);
   };
 
@@ -220,6 +237,10 @@ const TemplatesPanel: React.FC = () => {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         sortOrder: parseInt(form.sortOrder, 10) || 1,
+        category: form.category,
+        dueDays: form.dueDays ? parseInt(form.dueDays, 10) : null,
+        linkUrl: form.linkUrl.trim() || null,
+        priority: form.priority,
       };
       if (editing) {
         const updated = await updateTemplate(editing.id, payload);
@@ -335,7 +356,7 @@ const TemplatesPanel: React.FC = () => {
               fontWeight: count > 0 ? 600 : 400,
             }}>
               <span>{m.icon}</span>
-              <span>{m.label}</span>
+              <span>{t(m.labelKey)}</span>
               <span style={{ opacity: 0.7, fontWeight: 700 }}>{count}</span>
             </div>
           );
@@ -375,8 +396,8 @@ const TemplatesPanel: React.FC = () => {
                     {meta.icon}
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: meta.color, fontFamily: 'var(--font-display)' }}>{meta.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{meta.sub}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: meta.color, fontFamily: 'var(--font-display)' }}>{t(meta.labelKey)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t(meta.subKey)}</div>
                   </div>
                   <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 8px' }}>{list.length}</span>
                 </div>
@@ -472,7 +493,7 @@ const TemplatesPanel: React.FC = () => {
                 {editing ? t('onboarding.editTemplate', 'Edit Task') : t('onboarding.newTemplate', 'New Task')}
               </h3>
               <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                {editing ? 'Update task name, description and position' : 'Add a new onboarding task for new employees'}
+                {editing ? t('onboarding.modalSubtitleEdit') : t('onboarding.modalSubtitleCreate')}
               </p>
             </div>
             <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1, padding: '2px 6px' }}>×</button>
@@ -497,6 +518,67 @@ const TemplatesPanel: React.FC = () => {
                 style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '8px 12px', fontSize: 13.5, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', color: 'var(--text-primary)', background: 'var(--background)' }}
               />
             </div>
+            {/* Category */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                Category
+              </label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as OnboardingTemplate['category'] }))}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}
+              >
+                <option value="hr_docs">{t('onboarding.categoryHrDocs', 'HR Documents')}</option>
+                <option value="it_setup">{t('onboarding.categoryItSetup', 'IT Setup')}</option>
+                <option value="training">{t('onboarding.categoryTraining', 'Training')}</option>
+                <option value="meeting">{t('onboarding.categoryMeeting', 'Meeting')}</option>
+                <option value="other">{t('onboarding.categoryOther', 'Other')}</option>
+              </select>
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                Priority
+              </label>
+              <select
+                value={form.priority}
+                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as OnboardingTemplate['priority'] }))}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}
+              >
+                <option value="high">{t('onboarding.priorityHigh', 'High')}</option>
+                <option value="medium">{t('onboarding.priorityMedium', 'Medium')}</option>
+                <option value="low">{t('onboarding.priorityLow', 'Low')}</option>
+              </select>
+            </div>
+
+            {/* Due Days */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                Due Days After Hire
+              </label>
+              <Input
+                type="number"
+                min={1}
+                placeholder={t('onboarding.noDueDate', 'No deadline (leave empty)')}
+                value={form.dueDays}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, dueDays: e.target.value }))}
+              />
+            </div>
+
+            {/* Link URL */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                Link URL (optional)
+              </label>
+              <Input
+                type="url"
+                placeholder="https://..."
+                value={form.linkUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, linkUrl: e.target.value }))}
+              />
+            </div>
+
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
               <div style={{ flex: '0 0 100px' }}>
                 <Input
@@ -510,7 +592,7 @@ const TemplatesPanel: React.FC = () => {
                 <span style={{ color: 'var(--text-muted)' }}>Phase: </span>
                 <span style={{ color: PHASE_META[getPhase(parseInt(form.sortOrder, 10) || 1)].color, fontWeight: 700 }}>
                   {PHASE_META[getPhase(parseInt(form.sortOrder, 10) || 1)].icon}&nbsp;
-                  {PHASE_META[getPhase(parseInt(form.sortOrder, 10) || 1)].label}
+                  {t(PHASE_META[getPhase(parseInt(form.sortOrder, 10) || 1)].labelKey)}
                 </span>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>1–3 Day 1 · 4–7 Week 1 · 8–14 Month 1 · 15+ Ongoing</div>
               </div>
@@ -559,7 +641,7 @@ const EmployeeDrawer: React.FC<{
     setAssigning(true);
     try {
       const res = await assignTasks(employee.employeeId);
-      showToast(`${res.assigned} ${t('onboarding.assignedTasks', 'tasks assigned')}`, 'success');
+      showToast(t('onboarding.assignedTasks', { n: res.assigned }), 'success');
       const prog = await getEmployeeTasks(employee.employeeId);
       setProgress(prog);
       onRefresh();
@@ -671,15 +753,15 @@ const EmployeeDrawer: React.FC<{
             <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!employee.hasTasksAssigned && (
                 <Button variant="accent" size="sm" loading={assigning} onClick={handleAssign}>
-                  📋 {t('onboarding.assignTasks', 'Assign Tasks')}
+                  📋 {t('onboarding.assignTasks')}
                 </Button>
               )}
               <Button variant="secondary" size="sm" loading={reminding} onClick={handleRemind}>
-                🔔 {t('onboarding.sendReminder', 'Send Reminder')}
+                🔔 {t('onboarding.sendReminder')}
               </Button>
               {employee.hasTasksAssigned && (
                 <Button variant="secondary" size="sm" loading={assigning} onClick={handleAssign}>
-                  ↻ {t('onboarding.reassignMissing', 'Assign Missing')}
+                  ↻ {t('onboarding.reassignMissing')}
                 </Button>
               )}
             </div>
@@ -700,7 +782,7 @@ const EmployeeDrawer: React.FC<{
               <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
                 {t('onboarding.noTasksAssigned', 'No tasks assigned yet')}
-                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="accent" size="sm" loading={assigning} onClick={handleAssign}>Assign Now</Button></div>}
+                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="accent" size="sm" loading={assigning} onClick={handleAssign}>{t('onboarding.assignNow')}</Button></div>}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -713,7 +795,7 @@ const EmployeeDrawer: React.FC<{
                     <div key={phase}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                         <span style={{ fontSize: 13 }}>{meta.icon}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{meta.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t(meta.labelKey)}</span>
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{phaseCompleted}/{tasks.length}</span>
                         <div style={{ width: 48, height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${tasks.length > 0 ? (phaseCompleted / tasks.length) * 100 : 0}%`, background: meta.color, borderRadius: 99 }} />
@@ -835,21 +917,21 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   }), [overview]);
 
   const handleBulkAssign = async () => {
-    if (!confirm(`Assign onboarding tasks to all ${counts.not_started} employees without tasks?`)) return;
+    if (!confirm(t('onboarding.confirmBulkAssign', { count: counts.not_started }))) return;
     setBulkAssigning(true);
     try {
       const res = await bulkAssignAll();
-      showToast(`Tasks assigned to ${res.employees} employees`, 'success');
+      showToast(t('onboarding.bulkAssignDone', { count: res.employees }), 'success');
       void load();
     } catch (err) { showToast(translateApiError(err, t, 'Error') ?? '', 'error'); }
     finally { setBulkAssigning(false); }
   };
 
   const statusOpts: Array<{ key: StatusFilter; label: string; color: string }> = [
-    { key: 'all',         label: `All (${counts.all})`,                    color: 'var(--primary)' },
-    { key: 'not_started', label: `Not Started (${counts.not_started})`,    color: '#6B7280' },
-    { key: 'in_progress', label: `In Progress (${counts.in_progress})`,    color: '#C9973A' },
-    { key: 'complete',    label: `Complete (${counts.complete})`,          color: '#15803D' },
+    { key: 'all',         label: t('onboarding.filterAll', { count: counts.all }),               color: 'var(--primary)' },
+    { key: 'not_started', label: t('onboarding.filterNotStarted', { count: counts.not_started }), color: '#6B7280' },
+    { key: 'in_progress', label: t('onboarding.filterInProgress', { count: counts.in_progress }), color: '#C9973A' },
+    { key: 'complete',    label: t('onboarding.filterComplete', { count: counts.complete }),       color: '#15803D' },
   ];
 
   const avatarColor = (pct: number) => {
@@ -863,10 +945,10 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     <div>
       {/* Stats row */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <StatCard label="Total Employees" value={counts.all}        icon="👥" color="var(--primary)"  bg="rgba(13,33,55,0.06)" onClick={() => setStatusFilter('all')} active={statusFilter === 'all'} />
-        <StatCard label="Not Started"     value={counts.not_started} icon="⏳" color="#6B7280" bg="rgba(107,114,128,0.08)" onClick={() => setStatusFilter('not_started')} active={statusFilter === 'not_started'} />
-        <StatCard label="In Progress"     value={counts.in_progress} icon="🔄" color="#C9973A" bg="rgba(201,151,58,0.08)" onClick={() => setStatusFilter('in_progress')} active={statusFilter === 'in_progress'} />
-        <StatCard label="Complete"        value={counts.complete}    icon="✅" color="#15803D" bg="rgba(21,128,61,0.08)" onClick={() => setStatusFilter('complete')} active={statusFilter === 'complete'} />
+        <StatCard label={t('onboarding.statTotalEmployees')} value={counts.all}        icon="👥" color="var(--primary)"  bg="rgba(13,33,55,0.06)" onClick={() => setStatusFilter('all')} active={statusFilter === 'all'} />
+        <StatCard label={t('onboarding.statNotStarted')}     value={counts.not_started} icon="⏳" color="#6B7280" bg="rgba(107,114,128,0.08)" onClick={() => setStatusFilter('not_started')} active={statusFilter === 'not_started'} />
+        <StatCard label={t('onboarding.statInProgress')}     value={counts.in_progress} icon="🔄" color="#C9973A" bg="rgba(201,151,58,0.08)" onClick={() => setStatusFilter('in_progress')} active={statusFilter === 'in_progress'} />
+        <StatCard label={t('onboarding.statComplete')}       value={counts.complete}    icon="✅" color="#15803D" bg="rgba(21,128,61,0.08)" onClick={() => setStatusFilter('complete')} active={statusFilter === 'complete'} />
       </div>
 
       {/* Filter bar */}
@@ -900,7 +982,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         </div>
         {isAdmin && counts.not_started > 0 && (
           <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={handleBulkAssign} style={{ marginLeft: 'auto' }}>
-            📋 Assign All Unassigned ({counts.not_started})
+            📋 {t('onboarding.bulkAssignBtn', { count: counts.not_started })}
           </Button>
         )}
       </div>
@@ -921,8 +1003,8 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px 24px', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-          <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>No employees found</div>
-          <div style={{ fontSize: 13 }}>Try adjusting your filters</div>
+          <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>{t('onboarding.noEmployeesFound')}</div>
+          <div style={{ fontSize: 13 }}>{t('onboarding.noEmployeesHint')}</div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
@@ -976,7 +1058,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     <div style={{ marginTop: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                          {emp.hasTasksAssigned ? `${emp.completed}/${emp.total} tasks` : 'Not started'}
+                          {emp.hasTasksAssigned ? `${emp.completed}/${emp.total} ${t('onboarding.tasksLabel')}` : t('onboarding.notStartedLabel')}
                         </span>
                         <span style={{ fontSize: 10, fontWeight: 700, color: ac }}>{pct}%</span>
                       </div>
@@ -998,9 +1080,9 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     color: !emp.hasTasksAssigned ? '#6B7280' : pct === 100 ? '#15803D' : '#92600a',
                     textTransform: 'uppercase', letterSpacing: '0.05em',
                   }}>
-                    {!emp.hasTasksAssigned ? 'Not Started' : pct === 100 ? '✓ Complete' : 'In Progress'}
+                    {!emp.hasTasksAssigned ? t('onboarding.statusNotStarted') : pct === 100 ? t('onboarding.statusComplete') : t('onboarding.statusInProgress')}
                   </span>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>View →</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('onboarding.viewLink')}</span>
                 </div>
               </div>
             );
@@ -1132,7 +1214,7 @@ const MyTasksPanel: React.FC = () => {
               {t('onboarding.progressTitle', 'Your Onboarding Progress')}
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              {progress.completed} of {progress.total} tasks completed
+              {t('onboarding.myProgressSubtitle', { completed: progress.completed, total: progress.total })}
             </div>
           </div>
         </div>
@@ -1159,7 +1241,7 @@ const MyTasksPanel: React.FC = () => {
                   {complete ? '✓' : meta.icon}
                 </div>
                 <div style={{ fontSize: 9, color: complete ? meta.color : 'var(--text-muted)', fontWeight: complete ? 700 : 400, textAlign: 'center', lineHeight: 1.2 }}>
-                  {meta.label}
+                  {t(meta.labelKey)}
                 </div>
                 <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>{done}/{tasks.length}</div>
               </div>
@@ -1183,11 +1265,11 @@ const MyTasksPanel: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '8px 12px', background: allDone ? `${meta.bg}` : 'var(--background)', borderRadius: 10, border: `1px solid ${allDone ? meta.border : 'var(--border)'}` }}>
                 <span style={{ fontSize: 16 }}>{meta.icon}</span>
                 <div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: allDone ? meta.color : 'var(--text-primary)' }}>{meta.label}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{meta.sub}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: allDone ? meta.color : 'var(--text-primary)' }}>{t(meta.labelKey)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{t(meta.subKey)}</span>
                 </div>
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {allDone && <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.bg, padding: '2px 7px', borderRadius: 99, border: `1px solid ${meta.border}` }}>DONE</span>}
+                  {allDone && <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.bg, padding: '2px 7px', borderRadius: 99, border: `1px solid ${meta.border}` }}>{t('onboarding.phaseDone')}</span>}
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{doneCount}/{tasks.length}</span>
                 </div>
               </div>
@@ -1229,7 +1311,7 @@ const MyTasksPanel: React.FC = () => {
                       {task.completedAt && (
                         <div style={{ fontSize: 11, color: '#15803D', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
                           <span>✓</span>
-                          <span>Completed {fmtRelative(task.completedAt)}</span>
+                          <span>{t('onboarding.completedRelative', { time: fmtRelative(task.completedAt, t) })}</span>
                         </div>
                       )}
                     </div>
@@ -1242,7 +1324,7 @@ const MyTasksPanel: React.FC = () => {
                         onClick={() => handleComplete(task.id)}
                         style={{ flexShrink: 0 }}
                       >
-                        Mark Done
+                        {t('onboarding.markDone')}
                       </Button>
                     )}
                     {task.completed && (
@@ -1318,9 +1400,9 @@ export default function OnboardingPage() {
             {stats && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {[
-                  { label: 'In Progress', value: stats.inProgress, color: 'rgba(201,151,58,0.8)' },
-                  { label: 'Complete',    value: stats.complete,    color: 'rgba(74,222,128,0.8)' },
-                  { label: 'Avg',         value: `${stats.avgPercentage}%`, color: 'rgba(255,255,255,0.6)' },
+                  { label: t('onboarding.heroInProgress'), value: stats.inProgress, color: 'rgba(201,151,58,0.8)' },
+                  { label: t('onboarding.heroComplete'),    value: stats.complete,    color: 'rgba(74,222,128,0.8)' },
+                  { label: t('onboarding.heroAvg'),         value: `${stats.avgPercentage}%`, color: 'rgba(255,255,255,0.6)' },
                 ].map((s) => (
                   <div key={s.label} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 99, padding: '5px 12px', backdropFilter: 'blur(8px)' }}>
                     <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>{s.label} </span>
