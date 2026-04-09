@@ -11,13 +11,16 @@ import { translateApiError } from '../../utils/apiErrors';
 // ---------------------------------------------------------------------------
 
 const STATUS_COLORS: Record<LeaveStatus, { bg: string; color: string }> = {
-  pending:               { bg: 'rgba(107,114,128,0.12)', color: 'var(--text-muted)' },
-  supervisor_approved:   { bg: 'var(--info-bg)',          color: 'var(--info)' },
-  area_manager_approved: { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6' },
-  hr_approved:           { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6' },
-  admin_approved:        { bg: 'var(--accent-light)',     color: 'var(--accent)' },
-  rejected:              { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
-  cancelled:             { bg: 'rgba(0,0,0,0.05)',        color: 'var(--text-muted)' },
+  pending:                         { bg: 'rgba(107,114,128,0.12)', color: 'var(--text-muted)' },
+  'store manager approved':        { bg: 'var(--info-bg)',          color: 'var(--info)' },
+  'store manager rejected':        { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  'area manager approved':         { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6' },
+  'area manager rejected':         { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  'HR approved':                   { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6' },
+  'HR rejected':                   { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  approved:                        { bg: 'var(--accent-light)',     color: 'var(--accent)' },
+  rejected:                        { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  cancelled:                       { bg: 'rgba(0,0,0,0.05)',        color: 'var(--text-muted)' },
 };
 
 function StatusBadge({ status }: { status: LeaveStatus }) {
@@ -29,7 +32,7 @@ function StatusBadge({ status }: { status: LeaveStatus }) {
       fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
       background: bg, color, textTransform: 'uppercase',
     }}>
-      {t(`leave.status_${status}`)}
+      {t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`)}
     </span>
   );
 }
@@ -66,22 +69,21 @@ function ApprovalStepper({ req }: { req: LeaveRequest }) {
     const skipped = skippedApprovers || [];
     if (skipped.includes(stepRole)) return 'skipped';
     
-    if (status === 'admin_approved') return 'completed';
-    if (isEmergencyOverride && status !== 'rejected') return 'completed'; // Emergency override completes all steps visually
-    if (isRejected) return 'pending';
+    if (status === 'approved') return 'completed';
+    if (isEmergencyOverride && !status.includes('rejected')) return 'completed'; // Emergency override completes all steps visually
+    if (isRejected || status.includes('rejected')) return 'current';
     
+    // Status-based completion logic
+    if (status === 'store manager approved' && stepRole === 'store_manager') return 'completed';
+    if (status === 'area manager approved') {
+       if (stepRole === 'store_manager' || stepRole === 'area_manager') return 'completed';
+    }
+    if (status === 'HR approved') {
+       if (stepRole === 'store_manager' || stepRole === 'area_manager' || stepRole === 'hr') return 'completed';
+    }
+
     const currentIdx = currentApproverRole ? CHAIN_STEPS.indexOf(currentApproverRole as ChainStep) : -1;
     const stepIdx    = CHAIN_STEPS.indexOf(stepRole);
-
-    // Special case for hr_approved status (means it's at admin stage or admin approved)
-    // Wait, if status is hr_approved, it means HR approved and it's now current for Admin.
-    if (status === 'hr_approved') {
-       if (stepRole === 'hr') return 'completed';
-       if (stepRole === 'admin') return 'current';
-       const hrIdx = CHAIN_STEPS.indexOf('hr');
-       if (stepIdx < hrIdx) return 'completed';
-       return 'pending';
-    }
 
     if (currentIdx === -1) return 'pending';
     if (stepIdx < currentIdx) return 'completed';
@@ -98,7 +100,8 @@ function ApprovalStepper({ req }: { req: LeaveRequest }) {
           color: 'var(--danger)', letterSpacing: 0.3, textTransform: 'uppercase',
         }}>
           <XIcon />
-          {t('leave.status_rejected')}
+          <XIcon />
+          {status.includes('rejected') ? t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`) : t('leave.status_rejected')}
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 0, opacity: isRejected ? 0.45 : 1, transition: 'opacity 0.2s' }}>
@@ -582,10 +585,10 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
 
                 {/* Action buttons — approvers */}
                 {showActions &&
-                  req.status !== 'admin_approved' &&
-                  req.status !== 'rejected' &&
+                  req.status !== 'approved' &&
+                  !req.status.includes('rejected') &&
                   req.status !== 'cancelled' &&
-                  req.currentApproverRole === effectiveApproverRole && (
+                  (user?.role === 'admin' || (user?.role === 'hr' && req.status !== 'HR approved') || req.currentApproverRole === effectiveApproverRole) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button
                       onClick={() => handleApprove(req.id)}
