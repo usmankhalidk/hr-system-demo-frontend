@@ -8,10 +8,13 @@ export type LeaveType = 'vacation' | 'sick';
 
 export type LeaveStatus =
   | 'pending'
-  | 'supervisor_approved'
-  | 'area_manager_approved'
-  | 'hr_approved'
-  | 'admin_approved'
+  | 'store manager approved'
+  | 'store manager rejected'
+  | 'area manager approved'
+  | 'area manager rejected'
+  | 'HR approved'
+  | 'HR rejected'
+  | 'approved'
   | 'rejected'
   | 'cancelled';
 
