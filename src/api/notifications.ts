@@ -11,6 +11,8 @@ export interface Notification {
   isRead: boolean;
   readAt: string | null;
   createdAt: string;
+  /** Locale in which title/message were stored (e.g. 'it', 'en'). */
+  locale?: string;
 }
 
 export interface NotificationsPage {
@@ -43,3 +45,13 @@ export async function markAllNotificationsRead(): Promise<number> {
   const { data } = await apiClient.patch('/notifications/read-all');
   return data.data.count as number;
 }
+
+/**
+ * Persists the user's chosen locale to the database.
+ * Called whenever the language switcher changes the active language.
+ * This ensures background jobs (cron-based notifications) use the correct language.
+ */
+export async function updateUserLocale(locale: 'it' | 'en'): Promise<void> {
+  await apiClient.patch('/auth/locale', { locale });
+}
+

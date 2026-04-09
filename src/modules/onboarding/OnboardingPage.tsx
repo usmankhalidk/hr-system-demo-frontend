@@ -7,6 +7,7 @@ import { useToast } from '../../context/ToastContext';
 import { translateApiError } from '../../utils/apiErrors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 import { getAvatarUrl } from '../../api/client';
 import {
   getTemplates, createTemplate, updateTemplate, deleteTemplate,
@@ -354,6 +355,7 @@ const TemplatesPanel: React.FC = () => {
   });
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<OnboardingTemplate | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -425,8 +427,13 @@ const TemplatesPanel: React.FC = () => {
     } finally { setTogglingId(null); }
   };
 
-  const handleDelete = async (tmpl: OnboardingTemplate) => {
-    if (!confirm(t('onboarding.confirmDeleteTemplate', 'Delete this task? If employees have it assigned it will be deactivated instead.'))) return;
+  const handleDelete = (tmpl: OnboardingTemplate) => {
+    setDeleteConfirm(tmpl);
+  };
+  const handleDeleteConfirmed = async () => {
+    if (!deleteConfirm) return;
+    const tmpl = deleteConfirm;
+    setDeleteConfirm(null);
     setDeletingId(tmpl.id);
     try {
       const result = await deleteTemplate(tmpl.id);
@@ -761,6 +768,15 @@ const TemplatesPanel: React.FC = () => {
           </form>
         </ModalBackdrop>
       )}
+      <ConfirmModal
+        open={deleteConfirm !== null}
+        title={t('onboarding.deleteConfirm', 'Delete Task')}
+        message={t('onboarding.confirmDeleteTemplate', 'Delete this task? If employees have it assigned it will be deactivated instead.')}
+        confirmLabel={t('onboarding.deleteConfirm', 'Delete')}
+        variant="danger"
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => setDeleteConfirm(null)}
+      />
     </div>
   );
 };
@@ -1061,6 +1077,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOnboardingOverview | null>(null);
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1095,14 +1112,15 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   }), [overview]);
 
   const handleBulkAssign = async () => {
-    if (!confirm(t('onboarding.confirmBulkAssign', { count: counts.not_started }))) return;
+    setBulkConfirmOpen(false);
     setBulkAssigning(true);
     try {
-      const res = await bulkAssignAll();
-      showToast(t('onboarding.bulkAssignDone', { count: res.employees }), 'success');
+      const result = await bulkAssignAll();
+      showToast(t('onboarding.bulkAssignDone', 'Tasks assigned to {{count}} employees', { count: result.employees }), 'success');
       void load();
-    } catch (err) { showToast(translateApiError(err, t, 'Error') ?? '', 'error'); }
-    finally { setBulkAssigning(false); }
+    } catch (err) {
+      showToast(translateApiError(err, t, 'Error') ?? '', 'error');
+    } finally { setBulkAssigning(false); }
   };
 
   const statusOpts: Array<{ key: StatusFilter; label: string; color: string }> = [
@@ -1159,7 +1177,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
           ))}
         </div>
         {isAdmin && counts.not_started > 0 && (
-          <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={handleBulkAssign} style={{ marginLeft: 'auto' }}>
+          <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={() => setBulkConfirmOpen(true)} style={{ marginLeft: 'auto' }}>
             📋 {t('onboarding.bulkAssignBtn', { count: counts.not_started })}
           </Button>
         )}
@@ -1273,6 +1291,15 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         isAdmin={isAdmin}
         onClose={() => setSelectedEmployee(null)}
         onRefresh={load}
+      />
+      <ConfirmModal
+        open={bulkConfirmOpen}
+        title={t('onboarding.assignModalTitle', 'Bulk Assign Tasks')}
+        message={t('onboarding.confirmBulkAssign', 'Assign onboarding tasks to all {{count}} employees without tasks?', { count: counts?.not_started ?? 0 })}
+        confirmLabel={t('onboarding.assignConfirm', 'Assign')}
+        variant="warning"
+        onConfirm={handleBulkAssign}
+        onCancel={() => setBulkConfirmOpen(false)}
       />
     </div>
   );

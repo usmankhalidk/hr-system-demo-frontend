@@ -60,6 +60,14 @@ function timeAgo(iso: string, t: (k: string, opts?: any) => string): string {
   return t('notifications.daysAgo', { count: days });
 }
 
+/** Convert a dot-notation event type (e.g. 'leave.approved') to its i18n key. */
+function typeLabel(type: string, t: (k: string) => string): string {
+  const key = 'notifications.type_' + type.replace(/\./g, '_');
+  const label = t(key);
+  // If i18next couldn't find the key it returns the key itself — fall back gracefully
+  return label === key ? type : label;
+}
+
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -309,8 +317,32 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>
                           {n.message}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {timeAgo(n.createdAt, t)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {timeAgo(n.createdAt, t)}
+                          </div>
+                          <span style={{
+                            fontSize: 10, fontWeight: 600,
+                            color: PRIORITY_COLOR[n.priority] ?? '#C9973A',
+                            background: `${PRIORITY_COLOR[n.priority] ?? '#C9973A'}15`,
+                            borderRadius: 4,
+                            padding: '1px 5px',
+                            fontFamily: 'var(--font-display)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.03em',
+                          }}>
+                            {t(`notifications.priority_${n.priority}`)}
+                          </span>
+                          <span style={{
+                            fontSize: 10,
+                            color: 'var(--text-muted)',
+                            background: 'var(--background)',
+                            borderRadius: 4,
+                            padding: '1px 5px',
+                            fontFamily: 'var(--font-display)',
+                          }}>
+                            {typeLabel(n.type, t)}
+                          </span>
                         </div>
                       </div>
                     </div>
