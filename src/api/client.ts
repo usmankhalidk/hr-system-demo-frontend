@@ -10,6 +10,11 @@ if (apiBase && !apiBase.startsWith('http://') && !apiBase.startsWith('https://')
 }
 const BASE_URL = apiBase ? `${apiBase}/api` : '/api';
 
+/** Absolute API base URL — usable in feed URLs shared with external services. */
+export function getApiBaseUrl(): string {
+  return apiBase ? `${apiBase}/api` : `${window.location.origin}/api`;
+}
+
 // ── Key transformers ──────────────────────────────────────────────────────────
 
 function toCamel(s: string): string {
