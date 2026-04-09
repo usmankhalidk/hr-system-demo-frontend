@@ -34,8 +34,8 @@ function LangPill() {
             }}
           >
             {lang === 'it'
-              ? <svg width="16" height="12" viewBox="0 0 18 13" fill="none" style={{ borderRadius: 2 }}><rect width="6" height="13" fill="#009246"/><rect x="6" width="6" height="13" fill="#FFF"/><rect x="12" width="6" height="13" fill="#CE2B37"/></svg>
-              : <svg width="16" height="12" viewBox="0 0 18 13" fill="none" style={{ borderRadius: 2 }}><rect width="18" height="13" fill="#012169"/><path d="M0 0L18 13M18 0L0 13" stroke="white" strokeWidth="2.5"/><path d="M0 0L18 13M18 0L0 13" stroke="#C8102E" strokeWidth="1.5"/><path d="M9 0V13M0 6.5H18" stroke="white" strokeWidth="3.5"/><path d="M9 0V13M0 6.5H18" stroke="#C8102E" strokeWidth="2"/></svg>
+              ? <svg width="16" height="12" viewBox="0 0 18 13" fill="none" style={{ borderRadius: 2 }}><rect width="6" height="13" fill="#009246" /><rect x="6" width="6" height="13" fill="#FFF" /><rect x="12" width="6" height="13" fill="#CE2B37" /></svg>
+              : <svg width="16" height="12" viewBox="0 0 18 13" fill="none" style={{ borderRadius: 2 }}><rect width="18" height="13" fill="#012169" /><path d="M0 0L18 13M18 0L0 13" stroke="white" strokeWidth="2.5" /><path d="M0 0L18 13M18 0L0 13" stroke="#C8102E" strokeWidth="1.5" /><path d="M9 0V13M0 6.5H18" stroke="white" strokeWidth="3.5" /><path d="M9 0V13M0 6.5H18" stroke="#C8102E" strokeWidth="2" /></svg>
             }
             {lang.toUpperCase()}
           </button>
@@ -231,8 +231,8 @@ const LoginPage: React.FC = () => {
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', padding: '48px 52px' }}>
           {/* Logo mark */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-            <img src={fusaroLogoUrl} alt="Fusaro Antonio 1893" style={{ width: 130, height: 40, objectFit: 'contain' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+            <img src={fusaroLogoUrl} alt="Fusaro Antonio 1893" style={{ width: 100, height: 100, objectFit: 'contain' }} />
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#C9973A', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
               {t('nav.appVersion')}
             </span>
           </div>
@@ -247,7 +247,7 @@ const LoginPage: React.FC = () => {
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', fontWeight: 300, lineHeight: 0.94, letterSpacing: '0.16em', color: '#C9973A', marginBottom: '32px' }}>
               UOMO
             </div>
-            
+
             <p style={{ fontSize: '13.5px', color: 'rgba(255,255,255,0.36)', lineHeight: 1.75, maxWidth: '280px', marginBottom: '48px' }}>
               {t('login.brandSubtitle')}
             </p>
@@ -286,7 +286,7 @@ const LoginPage: React.FC = () => {
 
         {/* Centered form */}
         <div style={{ minHeight: '100%', display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? '40px 16px' : '80px 48px 60px' }}>
-          <div style={{ width: isMobile ? '100%' : '420px', maxWidth: '100%', padding: isMobile ? '28px 20px' : '40px 36px', animation: 'fadeSlideUp 0.35s ease forwards' }}>
+          <div style={{ width: isMobile ? '100%' : '420px', maxWidth: '100%', padding: isMobile ? '28px 20px' : '0px 0px', animation: 'fadeSlideUp 0.35s ease forwards' }}>
 
             {/* Editorial number */}
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '110px', fontWeight: 800, color: 'rgba(13,33,55,0.05)', lineHeight: 1, marginBottom: '-28px', marginLeft: '-5px', userSelect: 'none', letterSpacing: '-0.06em' }}>
@@ -387,6 +387,19 @@ const LoginPage: React.FC = () => {
                 </button>
               </div>
             </form>
+
+            {/* 🔥 MOCKUP LOGO PLACEMENT: Centered prominently at the bottom */}{!isMobile ? <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <img
+                src={fusaroLogoUrl}
+                alt="Fusaro Antonio 1893"
+                style={{
+                  height: 150, // Sized perfectly to match the prominence in your mockup
+                  width: 'auto',
+                  objectFit: 'contain'
+                }}
+              />
+            </div> : null}
+
 
           </div>
         </div>
