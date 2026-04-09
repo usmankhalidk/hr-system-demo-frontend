@@ -5,14 +5,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '../i18n/config';
 
-// ── Mock auth context used by ShiftDrawer ─────────────────────────────────────
+// Mock auth context used by ShiftDrawer
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
     user: { role: 'admin' },
   }),
 }));
 
-// ── Make createPortal render inline (not into document.body separately) ───────
+// Make createPortal render inline (not into document.body separately)
 vi.mock('react-dom', async () => {
   const actual = await vi.importActual<typeof import('react-dom')>('react-dom');
   return {
@@ -21,7 +21,7 @@ vi.mock('react-dom', async () => {
   };
 });
 
-// ── Stub custom pickers with plain inputs so tests can drive values ────────────
+// Stub custom pickers with plain inputs so tests can drive values
 vi.mock('../components/ui/TimePicker', () => ({
   TimePicker: ({ label, value, onChange, error }: {
     label?: string; value: string; onChange: (v: string) => void; error?: string;
@@ -57,12 +57,12 @@ vi.mock('../components/ui/DatePicker', () => ({
   ),
 }));
 
-// ── Mock ConfirmModal to avoid portal issues ──────────────────────────────────
+// Mock ConfirmModal to avoid portal issues
 vi.mock('../components/ui/ConfirmModal', () => ({
   default: () => null,
 }));
 
-// ── Mock shift API functions ──────────────────────────────────────────────────
+// Mock shift API functions
 const mockCreateShift = vi.fn();
 const mockUpdateShift = vi.fn();
 const mockDeleteShift = vi.fn();
@@ -74,7 +74,7 @@ vi.mock('../api/shifts', () => ({
   getShifts: vi.fn().mockResolvedValue([]),
 }));
 
-// ── Mock employee + store lookups ─────────────────────────────────────────────
+// Mock employee + store lookups
 vi.mock('../api/employees', () => ({
   getEmployees: vi.fn().mockResolvedValue({ employees: [], total: 0, pages: 1 }),
 }));
@@ -85,9 +85,10 @@ vi.mock('../api/stores', () => ({
 }));
 
 import ShiftDrawer from '../modules/shifts/ShiftDrawer';
+import { getStores } from '../api/stores';
 import type { Shift } from '../api/shifts';
 
-// ── Render helper ─────────────────────────────────────────────────────────────
+// Render helper
 function renderDrawer(props: Partial<React.ComponentProps<typeof ShiftDrawer>> = {}) {
   const defaults = {
     open: true,
@@ -105,7 +106,7 @@ function renderDrawer(props: Partial<React.ComponentProps<typeof ShiftDrawer>> =
   );
 }
 
-// ── Minimal Shift fixture ─────────────────────────────────────────────────────
+// Minimal Shift fixture
 function makeShift(overrides: Partial<Shift> = {}): Shift {
   return {
     id: 42,
@@ -134,8 +135,6 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
     ...overrides,
   };
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('ShiftDrawer — create mode', () => {
   beforeEach(() => {
@@ -200,7 +199,20 @@ describe('ShiftDrawer — create mode', () => {
     const onClose = vi.fn();
     mockCreateShift.mockResolvedValueOnce({ id: 99 });
 
-    renderDrawer({ shift: null, onClose });
+    // Provide a real store option so the select can be set in JSDOM
+    vi.mocked(getStores).mockResolvedValueOnce([
+      { id: 2, name: 'Roma Store', companyId: 1, companyName: null } as any,
+    ]);
+
+    // prefillUserId pre-fills user_id='5' in form state before async loads
+    renderDrawer({ shift: null, onClose, prefillUserId: 5 });
+
+    // Wait for the store option to render, then select it
+    await screen.findByRole('option', { name: 'Roma Store' });
+    const storeSelect = screen.getAllByRole('combobox').find(
+      (el) => (el as HTMLSelectElement).querySelector('option[value="2"]') !== null,
+    ) as HTMLSelectElement;
+    fireEvent.change(storeSelect, { target: { value: '2' } });
 
     // Fill start_time and end_time via TimePicker stubs
     const timeInputs = screen.getAllByRole('textbox');
