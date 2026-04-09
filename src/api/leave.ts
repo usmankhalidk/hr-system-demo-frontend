@@ -8,10 +8,15 @@ export type LeaveType = 'vacation' | 'sick';
 
 export type LeaveStatus =
   | 'pending'
-  | 'supervisor_approved'
-  | 'area_manager_approved'
-  | 'hr_approved'
-  | 'rejected';
+  | 'store manager approved'
+  | 'store manager rejected'
+  | 'area manager approved'
+  | 'area manager rejected'
+  | 'HR approved'
+  | 'HR rejected'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled';
 
 export interface LeaveRequest {
   id: number;
@@ -30,6 +35,9 @@ export interface LeaveRequest {
   userSurname?: string;
   userAvatarFilename?: string | null;
   medicalCertificateName?: string | null;
+  skippedApprovers?: string[];
+  escalated?: boolean;
+  isEmergencyOverride?: boolean;
 }
 
 export interface LeaveBalance {
@@ -238,3 +246,7 @@ export async function importLeaveBalances(file: File): Promise<ImportResult> {
   });
   return data.data as ImportResult;
 }
+
+export const cancelLeaveRequest = async (id: number): Promise<LeaveRequest> => {
+  return apiClient.put(`/leave/${id}/cancel`).then((res) => res.data.data);
+};

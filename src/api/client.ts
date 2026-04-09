@@ -103,4 +103,18 @@ export function getCompanyLogoUrl(filename: string | null | undefined): string |
   return `${base}/uploads/company-logos/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 }
 
+export function getCompanyBannerUrl(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+  const base = apiBase;
+  return `${base}/uploads/company-banners/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+}
+
+export function getStoreLogoUrl(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+  const base = apiBase;
+  return `${base}/uploads/store-logos/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+}
+
 export default client;

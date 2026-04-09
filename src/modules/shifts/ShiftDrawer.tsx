@@ -128,7 +128,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
   const employeePickerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
-  const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.surname} ${selectedEmployee.name}`.trim() : '';
+  const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.surname}`.trim() : '';
   const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
   const expectedStoreId = activeTransferForDate?.targetStoreId ?? selectedEmployee?.storeId ?? null;
   const expectedStoreName = activeTransferForDate?.targetStoreName
@@ -140,9 +140,10 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
   const normalizedEmployeeQuery = employeeQuery.trim().toLowerCase();
   const filteredEmployees = normalizedEmployeeQuery
     ? employees.filter((emp) => {
-        const fullName = `${emp.surname} ${emp.name}`.toLowerCase();
+        const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
         return (
           fullName.includes(normalizedEmployeeQuery)
+          || `${emp.surname} ${emp.name}`.toLowerCase().includes(normalizedEmployeeQuery)
           || emp.email.toLowerCase().includes(normalizedEmployeeQuery)
           || emp.role.toLowerCase().includes(normalizedEmployeeQuery)
         );
@@ -163,7 +164,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
     } while (page <= pages);
 
     const unique = Array.from(new Map(all.map((emp) => [emp.id, emp])).values());
-    return unique.sort((a, b) => a.surname.localeCompare(b.surname));
+    return unique.sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`));
   }
 
   async function loadAllShiftEmployees(): Promise<Employee[]> {
@@ -177,7 +178,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
       merged.set(emp.id, emp);
     }
 
-    return Array.from(merged.values()).sort((a, b) => a.surname.localeCompare(b.surname));
+    return Array.from(merged.values()).sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`));
   }
 
   function validateForm(f: FormState): FormErrors {
@@ -664,7 +665,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
                         {t('shifts.form.noEmployeeResults')}
                       </div>
                     ) : filteredEmployees.map((emp) => {
-                      const fullName = `${emp.surname} ${emp.name}`.trim();
+                      const fullName = `${emp.name} ${emp.surname}`.trim();
                       const isSelected = String(emp.id) === form.user_id;
                       const avatarUrl = getAvatarUrl(emp.avatarFilename);
                       return (
@@ -1069,7 +1070,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
             display: 'flex', gap: 8, justifyContent: 'flex-end',
             flexShrink: 0,
           }}>
-            {shift && shift.status !== 'cancelled' && (
+            {shift && (
               <button
                 type="button"
                 className="btn btn-danger"
@@ -1077,7 +1078,7 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
                 disabled={deleting}
                 style={{ marginRight: 'auto' }}
               >
-                {deleting ? t('common.loading') : t('shifts.cancel')}
+                {deleting ? t('common.loading') : t('shifts.deleteShift', t('common.delete'))}
               </button>
             )}
             <button type="button" className="btn btn-secondary" onClick={() => onClose(false)}>
@@ -1097,9 +1098,9 @@ export default function ShiftDrawer({ open, shift, prefillDate, prefillUserId, o
       {createPortal(panel, document.body)}
       <ConfirmModal
         open={confirmOpen}
-        title={t('shifts.cancelShiftTitle')}
-        message={t('shifts.cancelShiftMsg')}
-        confirmLabel={t('shifts.cancel')}
+        title={t('shifts.deleteShiftTitle', 'Delete shift')}
+        message={t('shifts.deleteShiftMsg', 'Are you sure you want to permanently delete this shift? This action cannot be undone.')}
+        confirmLabel={t('shifts.deleteShift', t('common.delete'))}
         cancelLabel={t('common.close')}
         variant="danger"
         onConfirm={doDelete}

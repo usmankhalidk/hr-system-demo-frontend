@@ -1,12 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Building2, Users, Store, Plus, Pencil, PowerOff, Power, Trash2, Layers } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Building2, Users, Store, Plus, Layers } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useAuth } from '../../context/AuthContext';
-import { createCompany, getCompanies, updateCompany, deactivateCompany, activateCompany, deleteCompanyPermanent, uploadCompanyLogo } from '../../api/companies';
+import {
+  createCompany,
+  getCompanies,
+  updateCompany,
+  deactivateCompany,
+  activateCompany,
+  deleteCompanyPermanent,
+  uploadCompanyLogo,
+  uploadCompanyBanner,
+  deleteCompanyBanner,
+  transferCompanyOwnership,
+} from '../../api/companies';
 import { getCompanyGroups } from '../../api/companyGroups';
-import { getCompanyLogoUrl } from '../../api/client';
+import { getEmployees } from '../../api/employees';
+import { getCompanyLogoUrl, getCompanyBannerUrl } from '../../api/client';
 import { translateApiError } from '../../utils/apiErrors';
 import { Company } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -31,6 +44,79 @@ function getInitials(name: string): string {
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
     .join('');
+}
+
+function toCompanySlug(company: Company): string {
+  const base = company.name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `${company.id}-${base || 'company'}`;
+}
+
+type CompanyProfileForm = {
+  registrationNumber: string;
+  companyEmail: string;
+  companyPhoneNumbers: string;
+  officesLocations: string;
+  country: string;
+  city: string;
+  state: string;
+  address: string;
+  timezones: string;
+  currency: string;
+};
+
+const EMPTY_COMPANY_PROFILE_FORM: CompanyProfileForm = {
+  registrationNumber: '',
+  companyEmail: '',
+  companyPhoneNumbers: '',
+  officesLocations: '',
+  country: '',
+  city: '',
+  state: '',
+  address: '',
+  timezones: '',
+  currency: '',
+};
+
+function profileFromCompany(company: Company | null): CompanyProfileForm {
+  if (!company) return { ...EMPTY_COMPANY_PROFILE_FORM };
+  return {
+    registrationNumber: company.registrationNumber ?? '',
+    companyEmail: company.companyEmail ?? '',
+    companyPhoneNumbers: company.companyPhoneNumbers ?? '',
+    officesLocations: company.officesLocations ?? '',
+    country: company.country ?? '',
+    city: company.city ?? '',
+    state: company.state ?? '',
+    address: company.address ?? '',
+    timezones: company.timezones ?? '',
+    currency: company.currency ?? '',
+  };
+}
+
+function normalizeProfileValue(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function payloadFromProfileForm(profile: CompanyProfileForm) {
+  return {
+    registrationNumber: normalizeProfileValue(profile.registrationNumber),
+    companyEmail: normalizeProfileValue(profile.companyEmail),
+    companyPhoneNumbers: normalizeProfileValue(profile.companyPhoneNumbers),
+    officesLocations: normalizeProfileValue(profile.officesLocations),
+    country: normalizeProfileValue(profile.country),
+    city: normalizeProfileValue(profile.city),
+    state: normalizeProfileValue(profile.state),
+    address: normalizeProfileValue(profile.address),
+    timezones: normalizeProfileValue(profile.timezones),
+    currency: normalizeProfileValue(profile.currency),
+  };
 }
 
 function StatBox({ value, label, icon }: { value: number; label: string; icon: React.ReactNode }) {
@@ -71,6 +157,7 @@ function StatBox({ value, label, icon }: { value: number; label: string; icon: R
 }
 
 export default function SystemCompanyManagement() {
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
@@ -95,10 +182,16 @@ export default function SystemCompanyManagement() {
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState<string | undefined>();
   const [formGroupId, setFormGroupId] = useState<number | null>(null);
+  const [formOwnerUserId, setFormOwnerUserId] = useState<number | null>(null);
+  const [formProfile, setFormProfile] = useState<CompanyProfileForm>({ ...EMPTY_COMPANY_PROFILE_FORM });
   const [formError, setFormError] = useState<string | null>(null);
   const [formSaving, setFormSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerError, setBannerError] = useState<string | null>(null);
+  const [ownerCandidates, setOwnerCandidates] = useState<Array<{ id: number; name: string; surname: string }>>([]);
+  const [ownerCandidatesLoading, setOwnerCandidatesLoading] = useState(false);
 
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
 
@@ -134,8 +227,12 @@ export default function SystemCompanyManagement() {
     setFormName('');
     setFormNameError(undefined);
     setFormGroupId(null);
+    setFormOwnerUserId(null);
+    setFormProfile({ ...EMPTY_COMPANY_PROFILE_FORM });
     setFormError(null);
     setLogoError(null);
+    setBannerError(null);
+    setOwnerCandidates([]);
     setModalOpen(true);
   };
 
@@ -145,8 +242,11 @@ export default function SystemCompanyManagement() {
     setFormName(company.name);
     setFormNameError(undefined);
     setFormGroupId(company.groupId ?? null);
+    setFormOwnerUserId(company.ownerUserId ?? null);
+    setFormProfile(profileFromCompany(company));
     setFormError(null);
     setLogoError(null);
+    setBannerError(null);
     setModalOpen(true);
   };
 
@@ -157,7 +257,40 @@ export default function SystemCompanyManagement() {
     setFormNameError(undefined);
     setLogoUploading(false);
     setLogoError(null);
+    setFormProfile({ ...EMPTY_COMPANY_PROFILE_FORM });
+    setBannerUploading(false);
+    setBannerError(null);
+    setOwnerCandidates([]);
+    setOwnerCandidatesLoading(false);
   };
+
+  useEffect(() => {
+    if (!modalOpen || modalMode !== 'edit' || editingCompanyId == null) {
+      return;
+    }
+    let mounted = true;
+    setOwnerCandidatesLoading(true);
+    getEmployees({ role: 'admin', status: 'active', limit: 200, targetCompanyId: editingCompanyId })
+      .then((res) => {
+        if (!mounted) return;
+        setOwnerCandidates(
+          res.employees.map((emp) => ({ id: emp.id, name: emp.name, surname: emp.surname }))
+            .sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`)),
+        );
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setOwnerCandidates([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setOwnerCandidatesLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [modalOpen, modalMode, editingCompanyId]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,6 +307,39 @@ export default function SystemCompanyManagement() {
     } finally {
       setLogoUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || editingCompanyId === null) return;
+
+    setBannerUploading(true);
+    setBannerError(null);
+    try {
+      await uploadCompanyBanner(editingCompanyId, file);
+      showToast(t('companies.bannerUpdated', 'Banner aziendale aggiornato'), 'success');
+      await load();
+    } catch (err: unknown) {
+      setBannerError(translateApiError(err, t, t('companies.bannerError', 'Errore durante aggiornamento banner')) ?? t('companies.bannerError', 'Errore durante aggiornamento banner'));
+    } finally {
+      setBannerUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleBannerDelete = async () => {
+    if (editingCompanyId === null) return;
+    setBannerUploading(true);
+    setBannerError(null);
+    try {
+      await deleteCompanyBanner(editingCompanyId);
+      showToast(t('companies.bannerRemoved', 'Banner aziendale rimosso'), 'success');
+      await load();
+    } catch (err: unknown) {
+      setBannerError(translateApiError(err, t, t('companies.bannerDeleteError', 'Errore durante rimozione banner')) ?? t('companies.bannerDeleteError', 'Errore durante rimozione banner'));
+    } finally {
+      setBannerUploading(false);
     }
   };
 
@@ -224,11 +390,23 @@ export default function SystemCompanyManagement() {
     setFormError(null);
     try {
       if (modalMode === 'create') {
-        await createCompany({ name: formName.trim(), groupId: formGroupId });
+        await createCompany({
+          name: formName.trim(),
+          groupId: formGroupId,
+          ...payloadFromProfileForm(formProfile),
+        });
         showToast(t('companies.createdSuccess'), 'success');
       } else {
         if (editingCompanyId === null) throw new Error('Missing company id');
-        await updateCompany(editingCompanyId, { name: formName.trim(), groupId: formGroupId });
+        await updateCompany(editingCompanyId, {
+          name: formName.trim(),
+          groupId: formGroupId,
+          ...payloadFromProfileForm(formProfile),
+        });
+        const current = companies.find((company) => company.id === editingCompanyId);
+        if (formOwnerUserId != null && formOwnerUserId !== (current?.ownerUserId ?? null)) {
+          await transferCompanyOwnership(editingCompanyId, formOwnerUserId);
+        }
         showToast(t('companies.updatedSuccess'), 'success');
       }
       closeModal();
@@ -341,6 +519,8 @@ export default function SystemCompanyManagement() {
             const groupName = companyGroups.find((g) => g.id === c.groupId)?.name;
             const createdDate = new Date(c.createdAt).toLocaleDateString(locale, { year: 'numeric', month: 'long' });
             const logoUrl = getCompanyLogoUrl(c.logoFilename);
+            const bannerUrl = getCompanyBannerUrl(c.bannerFilename);
+            const ownerLabel = c.ownerName ? `${c.ownerName} ${c.ownerSurname ?? ''}`.trim() : null;
 
             return (
               <div
@@ -357,6 +537,17 @@ export default function SystemCompanyManagement() {
                   borderTop: `3px solid ${c.isActive ? 'var(--accent)' : 'var(--border)'}`,
                 }}
               >
+                {bannerUrl && (
+                  <div
+                    style={{
+                      height: 72,
+                      backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.18) 100%), url(${bannerUrl})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                  />
+                )}
+
                 {/* Card header */}
                 <div style={{ padding: '18px 20px 14px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                   {/* Avatar */}
@@ -386,11 +577,6 @@ export default function SystemCompanyManagement() {
                       {c.name}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
-                      {c.isActive ? (
-                        <Badge variant="success">{t('common.active')}</Badge>
-                      ) : (
-                        <Badge variant="danger">{t('common.inactive')}</Badge>
-                      )}
                       {groupName && (
                         <span style={{
                           display: 'inline-flex',
@@ -408,17 +594,29 @@ export default function SystemCompanyManagement() {
                           {groupName}
                         </span>
                       )}
+                      {c.isActive ? (
+                        <Badge variant="success">{t('common.active')}</Badge>
+                      ) : (
+                        <Badge variant="danger">{t('common.inactive')}</Badge>
+                      )}
                       <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>{createdDate}</span>
                     </div>
+                    {ownerLabel && (
+                      <div style={{ marginTop: 5, fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Users size={10} />
+                        {ownerLabel}
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button
-                      onClick={() => openEdit(c)}
-                      title={t('common.edit')}
+                      onClick={() => navigate(`/aziende/${toCompanySlug(c)}`)}
+                      title={t('common.open')}
                       style={{
-                        width: 32, height: 32,
+                        height: 32,
+                        padding: '0 10px',
                         borderRadius: 'var(--radius-sm)',
                         border: '1px solid var(--border)',
                         background: 'var(--surface)',
@@ -426,81 +624,17 @@ export default function SystemCompanyManagement() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        gap: 6,
                         color: 'var(--text-secondary)',
+                        fontSize: 11,
+                        fontWeight: 700,
                         transition: 'background 0.15s, border-color 0.15s',
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-warm)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; }}
                     >
-                      <Pencil size={14} />
+                      {t('common.open')} <ArrowRight size={12} />
                     </button>
-                    {user?.isSuperAdmin && (
-                      <>
-                        {c.isActive ? (
-                          <button
-                            onClick={() => openConfirm('deactivate', c)}
-                            title={t('common.deactivate')}
-                            style={{
-                              width: 32, height: 32,
-                              borderRadius: 'var(--radius-sm)',
-                              border: '1px solid var(--border)',
-                              background: 'var(--surface)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'var(--warning)',
-                              transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(180,83,9,0.08)'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)'; }}
-                          >
-                            <PowerOff size={14} />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => openConfirm('activate', c)}
-                            title={t('common.activate')}
-                            style={{
-                              width: 32, height: 32,
-                              borderRadius: 'var(--radius-sm)',
-                              border: '1px solid var(--border)',
-                              background: 'var(--surface)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'var(--success)',
-                              transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(21,128,61,0.08)'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)'; }}
-                          >
-                            <Power size={14} />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => openConfirm('delete', c)}
-                          title={t('common.delete')}
-                          style={{
-                            width: 32, height: 32,
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--border)',
-                            background: 'var(--surface)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--danger)',
-                            transition: 'background 0.15s',
-                          }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(220,38,38,0.08)'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)'; }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </>
-                    )}
                   </div>
                 </div>
 
@@ -552,62 +686,208 @@ export default function SystemCompanyManagement() {
             {companyGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </Select>
 
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+            <Input
+              label={t('companies.registrationNumber', 'Registration Number')}
+              value={formProfile.registrationNumber}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, registrationNumber: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.companyEmail', 'Company Email')}
+              value={formProfile.companyEmail}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, companyEmail: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.companyPhoneNumbers', 'Company Phone Numbers')}
+              value={formProfile.companyPhoneNumbers}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, companyPhoneNumbers: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.officesLocations', 'Offices Locations')}
+              value={formProfile.officesLocations}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, officesLocations: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.country', 'Country')}
+              value={formProfile.country}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, country: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.city', 'City')}
+              value={formProfile.city}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, city: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.state', 'State')}
+              value={formProfile.state}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, state: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.currency', 'Currency')}
+              value={formProfile.currency}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, currency: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.timezones', 'Timezones')}
+              value={formProfile.timezones}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, timezones: e.target.value }))}
+              disabled={formSaving}
+            />
+            <Input
+              label={t('companies.address', 'Address')}
+              value={formProfile.address}
+              onChange={(e) => setFormProfile((prev) => ({ ...prev, address: e.target.value }))}
+              disabled={formSaving}
+            />
+          </div>
+
+          {modalMode === 'edit' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Select
+                label={t('companies.ownerField', 'Proprietario azienda')}
+                value={formOwnerUserId ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setFormOwnerUserId(raw === '' ? null : parseInt(raw, 10));
+                }}
+                disabled={formSaving || ownerCandidatesLoading}
+              >
+                <option value="">{t('companies.ownerUnchanged', 'Nessuna modifica')}</option>
+                {ownerCandidates.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>{candidate.name} {candidate.surname}</option>
+                ))}
+              </Select>
+              {ownerCandidatesLoading && (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('companies.ownerLoading', 'Caricamento amministratori in corso...')}
+                </span>
+              )}
+            </div>
+          )}
+
           {modalMode === 'edit' && editingCompany && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {t('companies.logoField')}
-              </span>
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {t('companies.logoField')}
+                </span>
 
-              {logoError && <Alert variant="danger" onClose={() => setLogoError(null)}>{logoError}</Alert>}
+                {logoError && <Alert variant="danger" onClose={() => setLogoError(null)}>{logoError}</Alert>}
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 'var(--radius-sm)',
-                  overflow: 'hidden',
-                  background: editingCompany.logoFilename ? 'transparent' : getAvatarColor(editingCompany.name),
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontWeight: 800,
-                  fontSize: 13,
-                  flexShrink: 0,
-                }}>
-                  {editingCompany.logoFilename ? (
-                    <img src={getCompanyLogoUrl(editingCompany.logoFilename) ?? ''} alt={editingCompany.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : getInitials(editingCompany.name)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 'var(--radius-sm)',
+                    overflow: 'hidden',
+                    background: editingCompany.logoFilename ? 'transparent' : getAvatarColor(editingCompany.name),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: 13,
+                    flexShrink: 0,
+                  }}>
+                    {editingCompany.logoFilename ? (
+                      <img src={getCompanyLogoUrl(editingCompany.logoFilename) ?? ''} alt={editingCompany.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : getInitials(editingCompany.name)}
+                  </div>
+
+                  <input
+                    id="company-logo-upload"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={handleLogoUpload}
+                    disabled={logoUploading || formSaving}
+                  />
+                  <label
+                    htmlFor="company-logo-upload"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface-warm)',
+                      cursor: logoUploading || formSaving ? 'not-allowed' : 'pointer',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      opacity: logoUploading || formSaving ? 0.7 : 1,
+                    }}
+                  >
+                    {logoUploading ? t('companies.logoUploading') : t('companies.uploadLogo')}
+                  </label>
                 </div>
 
-                <input
-                  id="company-logo-upload"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  style={{ display: 'none' }}
-                  onChange={handleLogoUpload}
-                  disabled={logoUploading || formSaving}
-                />
-                <label
-                  htmlFor="company-logo-upload"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface-warm)',
-                    cursor: logoUploading || formSaving ? 'not-allowed' : 'pointer',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: 'var(--text-primary)',
-                    opacity: logoUploading || formSaving ? 0.7 : 1,
-                  }}
-                >
-                  {logoUploading ? t('companies.logoUploading') : t('companies.uploadLogo')}
-                </label>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('companies.logoHint')}</span>
               </div>
 
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('companies.logoHint')}</span>
-            </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {t('companies.bannerField', 'Banner aziendale')}
+                </span>
+
+                {bannerError && <Alert variant="danger" onClose={() => setBannerError(null)}>{bannerError}</Alert>}
+
+                {editingCompany.bannerFilename ? (
+                  <img
+                    src={getCompanyBannerUrl(editingCompany.bannerFilename) ?? ''}
+                    alt={editingCompany.name}
+                    style={{ width: '100%', maxHeight: 130, objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}
+                  />
+                ) : (
+                  <div style={{ padding: '10px 12px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('companies.bannerEmpty', 'Nessun banner impostato')}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    id="company-banner-upload"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={handleBannerUpload}
+                    disabled={bannerUploading || formSaving}
+                  />
+                  <label
+                    htmlFor="company-banner-upload"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface-warm)',
+                      cursor: bannerUploading || formSaving ? 'not-allowed' : 'pointer',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      opacity: bannerUploading || formSaving ? 0.7 : 1,
+                    }}
+                  >
+                    {bannerUploading ? t('companies.bannerUploading', 'Caricamento banner...') : t('companies.uploadBanner', 'Carica banner')}
+                  </label>
+
+                  {editingCompany.bannerFilename && (
+                    <Button variant="danger" onClick={handleBannerDelete} disabled={bannerUploading || formSaving}>
+                      {t('companies.removeBanner', 'Rimuovi banner')}
+                    </Button>
+                  )}
+                </div>
+
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('companies.bannerHint', 'Consigliato formato panoramico; massimo 4MB')}
+                </span>
+              </div>
+            </>
           )}
         </div>
       </Modal>

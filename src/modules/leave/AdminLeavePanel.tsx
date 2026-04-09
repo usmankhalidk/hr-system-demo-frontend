@@ -30,11 +30,16 @@ import { translateApiError } from '../../utils/apiErrors';
 // ── Status badge ───────────────────────────────────────────────────────────
 
 const STATUS_META: Record<LeaveStatus, { bg: string; color: string }> = {
-  pending:               { bg: 'rgba(107,114,128,0.12)', color: '#6b7280' },
-  supervisor_approved:   { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6' },
-  area_manager_approved: { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
-  hr_approved:           { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
-  rejected:              { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
+  pending:                         { bg: 'rgba(107,114,128,0.12)', color: '#6b7280' },
+  'store manager approved':        { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6' },
+  'store manager rejected':        { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
+  'area manager approved':         { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
+  'area manager rejected':         { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
+  'HR approved':                   { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6' },
+  'HR rejected':                   { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
+  approved:                        { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
+  rejected:                        { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
+  cancelled:                       { bg: 'rgba(0,0,0,0.05)',       color: '#6b7280' },
 };
 
 function StatusBadge({ status }: { status: LeaveStatus }) {
@@ -46,27 +51,40 @@ function StatusBadge({ status }: { status: LeaveStatus }) {
       fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
       background: bg, color, textTransform: 'uppercase', whiteSpace: 'nowrap',
     }}>
-      {t(`leave.status_${status}`)}
+      {t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`)}
     </span>
   );
 }
 
 // ── Working days helper ────────────────────────────────────────────────────
 
-function countWorkingDays(start: string, end: string): number {
-  const s = new Date(start.split('T')[0] + 'T00:00:00');
-  const e = new Date(end.split('T')[0] + 'T00:00:00');
+function countWorkingDays(isoStart: string, isoEnd: string): number {
+  const parse = (iso: string) => {
+    const match = (iso ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return new Date();
+    return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+  };
+  const s = parse(isoStart);
+  const e = parse(isoEnd);
   let n = 0;
   const d = new Date(s);
-  while (d <= e) { const w = d.getDay(); if (w !== 0 && w !== 6) n++; d.setDate(d.getDate() + 1); }
+  while (d <= e) {
+    const w = d.getDay();
+    if (w !== 0 && w !== 6) n++;
+    d.setDate(d.getDate() + 1);
+  }
   return n;
 }
 
 // ── Format date range nicely ───────────────────────────────────────────────
 
 function fmtDate(iso: string, locale: string): string {
-  const datePart = (iso ?? '').split('T')[0]; // strip time component if present
-  return new Date(datePart + 'T00:00:00').toLocaleDateString(locale === 'en' ? 'en-GB' : 'it-IT', {
+  if (!iso) return '';
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return iso;
+  const [, y, m, d] = match;
+  const dateObj = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+  return dateObj.toLocaleDateString(locale === 'en' ? 'en-GB' : 'it-IT', {
     day: '2-digit', month: 'short',
   });
 }
@@ -767,7 +785,7 @@ export default function AdminLeavePanel() {
   const { user, permissions } = useAuth();
 
   const isAdmin = user?.role === 'admin';
-  const effectiveApproverRole = user?.role === 'admin' ? 'hr' : user?.role;
+  const effectiveApproverRole = user?.role === 'admin' ? 'admin' : user?.role;
   const locale = i18n.language;
 
   const [panelTab, setPanelTab] = useState<PanelTab>('requests');
@@ -778,9 +796,13 @@ export default function AdminLeavePanel() {
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const today       = formatLocalDate(new Date());
+  const now         = new Date();
   const monthStart  = today.slice(0, 8) + '01';
+  const lastDay     = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const monthEnd    = formatLocalDate(lastDay);
+
   const [dateFrom, setDateFrom]     = useState(monthStart);
-  const [dateTo,   setDateTo]       = useState(today);
+  const [dateTo,   setDateTo]       = useState(monthEnd);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType]     = useState('');
   const [search, setSearch]             = useState('');
@@ -852,8 +874,8 @@ export default function AdminLeavePanel() {
   }, [cEmployeeOpen]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
-  const pendingCount  = requests.filter((r) => r.status === 'pending').length;
-  const approvedCount = requests.filter((r) => r.status === 'hr_approved').length;
+  const pendingCount  = requests.filter((r) => r.status === 'pending' || r.status.includes('approved') && r.status !== 'approved').length;
+  const approvedCount = requests.filter((r) => r.status === 'approved').length;
 
   // ── Filtered rows ──────────────────────────────────────────────────────────
   const filtered = search
@@ -1127,10 +1149,12 @@ export default function AdminLeavePanel() {
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...selectStyle, flex: '1 1 140px', minWidth: 120 }}>
               <option value="">{t('leave.admin_filter_all_status')}</option>
               <option value="pending">{t('leave.status_pending')}</option>
-              <option value="supervisor_approved">{t('leave.status_supervisor_approved')}</option>
-              <option value="area_manager_approved">{t('leave.status_area_manager_approved')}</option>
-              <option value="hr_approved">{t('leave.status_hr_approved')}</option>
+              <option value="store manager approved">{t('leave.status_store_manager_approved')}</option>
+              <option value="area manager approved">{t('leave.status_area_manager_approved')}</option>
+              <option value="HR approved">{t('leave.status_hr_approved')}</option>
+              <option value="approved">{t('leave.status_approved')}</option>
               <option value="rejected">{t('leave.status_rejected')}</option>
+              <option value="cancelled">{t('leave.status_cancelled')}</option>
             </select>
             {/* Type filter */}
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...selectStyle, flex: '1 1 120px', minWidth: 100 }}>
@@ -1200,11 +1224,13 @@ export default function AdminLeavePanel() {
                         const days = countWorkingDays(req.startDate, req.endDate);
                         const isVacation = req.leaveType === 'vacation';
                         const typeColor = isVacation ? '#3b82f6' : '#f59e0b';
+                        const isHR = user?.role === 'hr';
                         const canAct =
-                          req.status !== 'hr_approved' &&
-                          req.status !== 'rejected' &&
+                          req.status !== 'approved' &&
+                          !req.status.includes('rejected') &&
+                          req.status !== 'cancelled' &&
                           !!effectiveApproverRole &&
-                          req.currentApproverRole === effectiveApproverRole;
+                          (isAdmin || (isHR && req.status !== 'HR approved') || req.currentApproverRole === effectiveApproverRole);
                         return (
                           <tr
                             key={req.id}

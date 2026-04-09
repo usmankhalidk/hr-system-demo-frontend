@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LeaveRequest, LeaveStatus, approveLeaveRequest, rejectLeaveRequest, downloadCertificate } from '../../api/leave';
+import { LeaveRequest, LeaveStatus, approveLeaveRequest, rejectLeaveRequest, downloadCertificate, cancelLeaveRequest } from '../../api/leave';
 import { getAvatarUrl } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -11,11 +11,16 @@ import { translateApiError } from '../../utils/apiErrors';
 // ---------------------------------------------------------------------------
 
 const STATUS_COLORS: Record<LeaveStatus, { bg: string; color: string }> = {
-  pending:               { bg: 'rgba(107,114,128,0.12)', color: 'var(--text-muted)' },
-  supervisor_approved:   { bg: 'var(--info-bg)',          color: 'var(--info)' },
-  area_manager_approved: { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6' },
-  hr_approved:           { bg: 'var(--accent-light)',     color: 'var(--accent)' },
-  rejected:              { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  pending:                         { bg: 'rgba(107,114,128,0.12)', color: 'var(--text-muted)' },
+  'store manager approved':        { bg: 'var(--info-bg)',          color: 'var(--info)' },
+  'store manager rejected':        { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  'area manager approved':         { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6' },
+  'area manager rejected':         { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  'HR approved':                   { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6' },
+  'HR rejected':                   { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  approved:                        { bg: 'var(--accent-light)',     color: 'var(--accent)' },
+  rejected:                        { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
+  cancelled:                       { bg: 'rgba(0,0,0,0.05)',        color: 'var(--text-muted)' },
 };
 
 function StatusBadge({ status }: { status: LeaveStatus }) {
@@ -27,7 +32,7 @@ function StatusBadge({ status }: { status: LeaveStatus }) {
       fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
       background: bg, color, textTransform: 'uppercase',
     }}>
-      {t(`leave.status_${status}`)}
+      {t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`)}
     </span>
   );
 }
@@ -36,7 +41,7 @@ function StatusBadge({ status }: { status: LeaveStatus }) {
 // 3-step chain stepper
 // ---------------------------------------------------------------------------
 
-const CHAIN_STEPS = ['store_manager', 'area_manager', 'hr'] as const;
+const CHAIN_STEPS = ['store_manager', 'area_manager', 'hr', 'admin'] as const;
 type ChainStep = typeof CHAIN_STEPS[number];
 
 function CheckIcon() {
@@ -55,15 +60,31 @@ function XIcon() {
   );
 }
 
-function ApprovalStepper({ currentApprover, status }: { currentApprover: string | null; status: LeaveStatus }) {
+function ApprovalStepper({ req }: { req: LeaveRequest }) {
+  const { currentApproverRole, status, skippedApprovers, escalated, isEmergencyOverride } = req;
   const { t } = useTranslation();
   const isRejected = status === 'rejected';
 
-  function stepState(stepRole: ChainStep): 'completed' | 'current' | 'pending' {
-    if (status === 'hr_approved') return 'completed';
-    if (isRejected) return 'pending'; // all grayed out for rejected
-    const currentIdx = currentApprover ? CHAIN_STEPS.indexOf(currentApprover as ChainStep) : -1;
+  function stepState(stepRole: ChainStep): 'completed' | 'current' | 'pending' | 'skipped' {
+    const skipped = skippedApprovers || [];
+    if (skipped.includes(stepRole)) return 'skipped';
+    
+    if (status === 'approved') return 'completed';
+    if (isEmergencyOverride && !status.includes('rejected')) return 'completed'; // Emergency override completes all steps visually
+    if (isRejected || status.includes('rejected')) return 'current';
+    
+    // Status-based completion logic
+    if (status === 'store manager approved' && stepRole === 'store_manager') return 'completed';
+    if (status === 'area manager approved') {
+       if (stepRole === 'store_manager' || stepRole === 'area_manager') return 'completed';
+    }
+    if (status === 'HR approved') {
+       if (stepRole === 'store_manager' || stepRole === 'area_manager' || stepRole === 'hr') return 'completed';
+    }
+
+    const currentIdx = currentApproverRole ? CHAIN_STEPS.indexOf(currentApproverRole as ChainStep) : -1;
     const stepIdx    = CHAIN_STEPS.indexOf(stepRole);
+
     if (currentIdx === -1) return 'pending';
     if (stepIdx < currentIdx) return 'completed';
     if (stepIdx === currentIdx) return 'current';
@@ -79,7 +100,8 @@ function ApprovalStepper({ currentApprover, status }: { currentApprover: string 
           color: 'var(--danger)', letterSpacing: 0.3, textTransform: 'uppercase',
         }}>
           <XIcon />
-          {t('leave.status_rejected')}
+          <XIcon />
+          {status.includes('rejected') ? t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`) : t('leave.status_rejected')}
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 0, opacity: isRejected ? 0.45 : 1, transition: 'opacity 0.2s' }}>
@@ -87,30 +109,40 @@ function ApprovalStepper({ currentApprover, status }: { currentApprover: string 
           const state = stepState(step);
           const isCompleted = state === 'completed';
           const isCurrent   = state === 'current';
+          const isSkipped   = state === 'skipped';
 
-          const circleBackground = isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'transparent';
-          const circleBorder     = isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--border)';
-          const circleTextColor  = (isCompleted || isCurrent) ? '#fff' : 'var(--text-muted)';
-          const labelColor       = isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--text-muted)';
+          const circleBackground = isSkipped ? 'var(--warning-bg)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'transparent';
+          const circleBorder     = isSkipped ? 'var(--warning)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--border)';
+          const circleTextColor  = (isCompleted || isCurrent || isSkipped) ? '#fff' : 'var(--text-muted)';
+          const labelColor       = isSkipped ? 'var(--warning)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--text-muted)';
           const nextState = idx < CHAIN_STEPS.length - 1 ? stepState(CHAIN_STEPS[idx + 1] as ChainStep) : 'pending';
-          const lineBackground   = nextState === 'pending' ? 'var(--border)' : 'var(--accent)';
+          const lineBackground   = nextState === 'pending' ? 'var(--border)' : (nextState === 'skipped' ? 'var(--warning)' : 'var(--accent)');
 
           return (
             <React.Fragment key={step}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64, position: 'relative' }}>
                 <div style={{
                   width: 30, height: 30, borderRadius: '50%',
                   background: circleBackground,
                   border: `2px solid ${circleBorder}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: circleTextColor,
+                  color: isSkipped ? '#fff' : circleTextColor,
                   transition: 'all 0.2s',
                   boxShadow: isCompleted ? '0 2px 8px rgba(201,151,58,0.35)' : isCurrent ? '0 2px 8px rgba(13,33,55,0.25)' : 'none',
                 }}>
-                  {isCompleted ? <CheckIcon /> : (
+                  {isSkipped ? (
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>~</span>
+                  ) : isCompleted ? <CheckIcon /> : (
                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{idx + 1}</span>
                   )}
                 </div>
+                {/* Escalated marker */}
+                {isCurrent && escalated && (
+                  <div style={{ position: 'absolute', top: -4, right: 12, background: 'var(--danger)', color: '#fff', fontSize: 9, padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>
+                    AUTO
+                  </div>
+                )}
+                
                 <div style={{
                   fontSize: 9, fontWeight: 600, color: labelColor,
                   marginTop: 4, textAlign: 'center', lineHeight: 1.2,
@@ -130,6 +162,9 @@ function ApprovalStepper({ currentApprover, status }: { currentApprover: string 
           );
         })}
       </div>
+      {isEmergencyOverride && status !== 'rejected' && (
+        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>{t('leave.emergency_override_label')}</div>
+      )}
     </div>
   );
 }
@@ -220,6 +255,70 @@ function RejectModal({
 }
 
 // ---------------------------------------------------------------------------
+// Cancel confirmation modal
+// ---------------------------------------------------------------------------
+
+function CancelModal({
+  open, onClose, onConfirm, loading,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(13,33,55,0.48)', backdropFilter: 'blur(3px)' }} />
+      <div style={{
+        position: 'relative', background: 'var(--surface)', borderRadius: 12,
+        width: 380, maxWidth: '90vw', overflow: 'hidden',
+        boxShadow: 'var(--shadow-lg)',
+      }}>
+        {/* Accent stripe */}
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--danger) 0%, #f97316 100%)' }} />
+        <div style={{ padding: 24 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
+            {t('leave.cancel_confirm_title')}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.55 }}>
+            {t('leave.cancel_confirm_msg')}
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                padding: '8px 16px', borderRadius: 8,
+                border: '1.5px solid var(--border)', background: 'transparent',
+                cursor: 'pointer', fontSize: 13, color: 'var(--text)',
+                fontWeight: 600,
+              }}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              style={{
+                padding: '8px 18px', borderRadius: 8, border: 'none',
+                background: 'var(--danger)', color: '#fff', fontWeight: 700,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: 13, opacity: loading ? 0.7 : 1,
+                transition: 'opacity 0.15s',
+              }}
+            >
+              {loading ? t('common.saving') : t('leave.cancel_request')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main list component
 // ---------------------------------------------------------------------------
 
@@ -237,8 +336,9 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
   const { user } = useAuth();
 
   const [rejectTarget, setRejectTarget] = useState<number | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<number | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const effectiveApproverRole = user?.role === 'admin' ? 'hr' : user?.role;
+  const effectiveApproverRole = user?.role === 'admin' ? 'admin' : user?.role;
 
   async function handleDownloadCertificate(req: LeaveRequest) {
     try {
@@ -281,20 +381,48 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
     }
   }
 
-  function formatDate(iso: string): string {
-    // Strip time component to avoid UTC-vs-local offset issues (DB returns full ISO timestamps)
-    const datePart = (iso ?? '').split('T')[0];
-    const d = new Date(datePart + 'T00:00:00');
-    const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
-    return d.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
+  async function handleCancel() {
+    if (cancelTarget === null) return;
+    setActionLoading(true);
+    try {
+      await cancelLeaveRequest(cancelTarget);
+      showToast(t('leave.cancelled_success'), 'success');
+      setCancelTarget(null);
+      onRefresh();
+    } catch (err: unknown) {
+      showToast(translateApiError(err, t, t('common.error_generic')) ?? t('common.error_generic'), 'error');
+    } finally {
+      setActionLoading(false);
+    }
   }
 
-  function getDurationDays(start: string, end: string): number {
-    const s = new Date(start.split('T')[0] + 'T00:00:00');
-    const e = new Date(end.split('T')[0] + 'T00:00:00');
+  function formatDate(iso: string): string {
+    if (!iso) return '';
+    // Use regex to get YYYY, MM, DD from the start of the string
+    // This handles both "YYYY-MM-DD" and "YYYY-MM-DDThh:mm..." and ignores any trailing Z or offset
+    const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return iso;
+    const [, y, m, d] = match;
+    const dateObj = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+    const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
+    return dateObj.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function getDurationDays(isoStart: string, isoEnd: string): number {
+    const parse = (iso: string) => {
+      const match = (iso ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return new Date();
+      return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+    };
+    const s = parse(isoStart);
+    const e = parse(isoEnd);
     let count = 0;
     const d = new Date(s);
-    while (d <= e) { const w = d.getDay(); if (w !== 0 && w !== 6) count++; d.setDate(d.getDate() + 1); }
+    while (d <= e) {
+      const w = d.getDay();
+      if (w !== 0 && w !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
     return count;
   }
 
@@ -327,6 +455,12 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
         open={rejectTarget !== null}
         onClose={() => setRejectTarget(null)}
         onConfirm={(notes) => rejectTarget !== null && handleReject(rejectTarget, notes)}
+        loading={actionLoading}
+      />
+      <CancelModal
+        open={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={handleCancel}
         loading={actionLoading}
       />
 
@@ -446,14 +580,15 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
                   padding: '10px 14px', marginTop: 4,
                   border: '1px solid var(--border)',
                 }}>
-                  <ApprovalStepper currentApprover={req.currentApproverRole} status={req.status} />
+                  <ApprovalStepper req={req} />
                 </div>
 
-                {/* Action buttons */}
+                {/* Action buttons — approvers */}
                 {showActions &&
-                  req.status !== 'hr_approved' &&
-                  req.status !== 'rejected' &&
-                  req.currentApproverRole === effectiveApproverRole && (
+                  req.status !== 'approved' &&
+                  !req.status.includes('rejected') &&
+                  req.status !== 'cancelled' &&
+                  (user?.role === 'admin' || (user?.role === 'hr' && req.status !== 'HR approved') || req.currentApproverRole === effectiveApproverRole) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button
                       onClick={() => handleApprove(req.id)}
@@ -489,6 +624,29 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                       </svg>
                       {t('leave.action_reject')}
+                    </button>
+                  </div>
+                )}
+                {/* Cancel button — only for the request owner when still pending */}
+                {!showActions && req.userId === user?.id && req.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button
+                      onClick={() => setCancelTarget(req.id)}
+                      disabled={actionLoading}
+                      style={{
+                         display: 'inline-flex', alignItems: 'center', gap: 6,
+                         padding: '7px 16px', borderRadius: 8,
+                         border: '1.5px solid var(--danger)',
+                         background: 'transparent', color: 'var(--danger)',
+                         fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                         opacity: actionLoading ? 0.6 : 1,
+                         transition: 'all 0.15s',
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                      {t('leave.cancel_request')}
                     </button>
                   </div>
                 )}

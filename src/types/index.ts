@@ -25,7 +25,23 @@ export interface Company {
   slug?: string;
   isActive: boolean;
   logoFilename?: string | null;
+  bannerFilename?: string | null;
   groupId?: number | null;
+  groupName?: string | null;
+  ownerUserId?: number | null;
+  ownerName?: string | null;
+  ownerSurname?: string | null;
+  ownerAvatarFilename?: string | null;
+  registrationNumber?: string | null;
+  companyEmail?: string | null;
+  companyPhoneNumbers?: string | null;
+  officesLocations?: string | null;
+  country?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  timezones?: string | null;
+  currency?: string | null;
   storeCount: number;
   employeeCount: number;
   createdAt: string;
@@ -35,7 +51,9 @@ export interface Store {
   id: number;
   companyId: number;
   companyName?: string;   // populated when super admin fetches across companies
+  groupName?: string | null;
   companyLogoFilename?: string | null;
+  logoFilename?: string | null;
   name: string;
   code: string;
   address: string | null;
@@ -44,6 +62,20 @@ export interface Store {
   isActive: boolean;
   employeeCount?: number;
   createdAt: string;
+}
+
+export interface StoreOperatingHour {
+  id?: number;
+  storeId?: number;
+  dayOfWeek: number;
+  openTime: string | null;
+  closeTime: string | null;
+  peakStartTime?: string | null;
+  peakEndTime?: string | null;
+  plannedShiftCount?: number | null;
+  plannedStaffCount?: number | null;
+  shiftPlanNotes?: string | null;
+  isClosed: boolean;
 }
 
 export interface Employee {

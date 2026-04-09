@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Store as StoreIcon } from 'lucide-react';
+import { ArrowLeftRight, Pencil, PlayCircle, Store as StoreIcon, Trash2 } from 'lucide-react';
 import {
   ShiftTemplate,
   listTemplates,
   createTemplate,
+  updateTemplate,
   deleteTemplate,
   createShift,
 } from '../../api/shifts';
@@ -22,8 +23,10 @@ interface ShiftPattern {
   dayOfWeek: number; // 0=Mon … 6=Sun
   startTime: string; // 'HH:MM'
   endTime: string;
+  breakType?: 'fixed' | 'flexible';
   breakStart?: string;
   breakEnd?: string;
+  breakMinutes?: number;
   notes?: string;
 }
 
@@ -41,16 +44,20 @@ interface DayConfig {
   enabled: boolean;
   startTime: string;
   endTime: string;
+  breakType: 'fixed' | 'flexible';
   breakStart: string;
   breakEnd: string;
+  breakMinutes: string;
 }
 
 const DEFAULT_DAY_CONFIG: DayConfig = {
   enabled: false,
   startTime: '',
   endTime: '',
+  breakType: 'fixed',
   breakStart: '',
   breakEnd: '',
+  breakMinutes: '',
 };
 
 function parseHmToMinutes(value: string): number | null {
@@ -73,9 +80,11 @@ function diffMinutes(startHm: string, endHm: string): number {
 
 function calculatePatternMinutes(pattern: ShiftPattern): number {
   const total = diffMinutes(pattern.startTime, pattern.endTime);
-  const breakMinutes = pattern.breakStart && pattern.breakEnd
-    ? diffMinutes(pattern.breakStart, pattern.breakEnd)
-    : 0;
+  const breakMinutes = (pattern.breakType ?? 'fixed') === 'flexible'
+    ? (pattern.breakMinutes ?? 0)
+    : (pattern.breakStart && pattern.breakEnd
+      ? diffMinutes(pattern.breakStart, pattern.breakEnd)
+      : 0);
   return Math.max(0, total - breakMinutes);
 }
 
@@ -122,20 +131,31 @@ function validateShiftPatternTiming(pattern: ShiftPattern, t: (k: string, o?: an
     return t('shifts.validation.endAfterStart', "L'orario di fine deve essere successivo all'inizio") + ` (${dayLabel})`;
   }
 
-  const hasBreakStart = Boolean(pattern.breakStart);
-  const hasBreakEnd = Boolean(pattern.breakEnd);
-  if (hasBreakStart !== hasBreakEnd) {
-    return t('shifts.validation.breakBothRequired', 'Se si inserisce una pausa, entrambi gli orari sono obbligatori') + ` (${dayLabel})`;
-  }
-
-  if (hasBreakStart && hasBreakEnd) {
-    const breakStartMinutes = parseHmToMinutes(pattern.breakStart!);
-    const breakEndMinutes = parseHmToMinutes(pattern.breakEnd!);
-    if (breakStartMinutes == null || breakEndMinutes == null || breakEndMinutes <= breakStartMinutes) {
-      return t('shifts.validation.breakEndAfterStart', "L'orario di fine pausa deve essere successivo all'inizio") + ` (${dayLabel})`;
+  const breakType = pattern.breakType ?? 'fixed';
+  if (breakType === 'flexible') {
+    const breakMinutes = pattern.breakMinutes ?? null;
+    if (breakMinutes == null || Number.isNaN(breakMinutes) || breakMinutes <= 0 || breakMinutes > 480) {
+      return t('shifts.validation.breakMinutesInvalid', 'La durata della pausa deve essere compresa tra 1 e 480 minuti') + ` (${dayLabel})`;
     }
-    if (breakStartMinutes < startMinutes || breakEndMinutes > endMinutes) {
+    if (breakMinutes >= (endMinutes - startMinutes)) {
       return t('shifts.validation.breakWithinShift', 'La pausa deve rientrare nella finestra del turno') + ` (${dayLabel})`;
+    }
+  } else {
+    const hasBreakStart = Boolean(pattern.breakStart);
+    const hasBreakEnd = Boolean(pattern.breakEnd);
+    if (hasBreakStart !== hasBreakEnd) {
+      return t('shifts.validation.breakBothRequired', 'Se si inserisce una pausa, entrambi gli orari sono obbligatori') + ` (${dayLabel})`;
+    }
+
+    if (hasBreakStart && hasBreakEnd) {
+      const breakStartMinutes = parseHmToMinutes(pattern.breakStart!);
+      const breakEndMinutes = parseHmToMinutes(pattern.breakEnd!);
+      if (breakStartMinutes == null || breakEndMinutes == null || breakEndMinutes <= breakStartMinutes) {
+        return t('shifts.validation.breakEndAfterStart', "L'orario di fine pausa deve essere successivo all'inizio") + ` (${dayLabel})`;
+      }
+      if (breakStartMinutes < startMinutes || breakEndMinutes > endMinutes) {
+        return t('shifts.validation.breakWithinShift', 'La pausa deve rientrare nella finestra del turno') + ` (${dayLabel})`;
+      }
     }
   }
 
@@ -258,6 +278,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   // ── Create Wizard ──────────────────────────────────────────────────────────
   // Step 0 = wizard hidden; Step 1 = name/store; Step 2 = day customisation
   const [wizardStep, setWizardStep] = useState<0 | 1 | 2>(0);
+  const [editingTemplate, setEditingTemplate] = useState<ShiftTemplate | null>(null);
   const [newName, setNewName] = useState('');
   const [newStoreId, setNewStoreId] = useState('');
   const [dayConfigs, setDayConfigs] = useState<DayConfig[]>(
@@ -265,6 +286,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   );
 
   function openWizard() {
+    setEditingTemplate(null);
     setNewName('');
     setNewStoreId('');
     setDayConfigs(Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY_CONFIG })));
@@ -272,8 +294,35 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setWizardStep(1);
   }
 
+  function openEditWizard(template: ShiftTemplate) {
+    const patterns: ShiftPattern[] = (template.templateData as unknown as TemplateData)?.shifts ?? [];
+    const nextDays = Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY_CONFIG }));
+
+    for (const pattern of patterns) {
+      if (pattern.dayOfWeek < 0 || pattern.dayOfWeek > 6) continue;
+      const breakType = pattern.breakType ?? (pattern.breakMinutes != null ? 'flexible' : 'fixed');
+      nextDays[pattern.dayOfWeek] = {
+        enabled: true,
+        startTime: pattern.startTime,
+        endTime: pattern.endTime,
+        breakType,
+        breakStart: breakType === 'fixed' ? (pattern.breakStart ?? '') : '',
+        breakEnd: breakType === 'fixed' ? (pattern.breakEnd ?? '') : '',
+        breakMinutes: breakType === 'flexible' && pattern.breakMinutes != null ? String(pattern.breakMinutes) : '',
+      };
+    }
+
+    setEditingTemplate(template);
+    setNewName(template.name);
+    setNewStoreId(String(template.storeId));
+    setDayConfigs(nextDays);
+    setError(null);
+    setWizardStep(1);
+  }
+
   function closeWizard() {
     setWizardStep(0);
+    setEditingTemplate(null);
     setError(null);
   }
 
@@ -336,8 +385,10 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
           dayOfWeek: d.dayOfWeek,
           startTime: d.startTime,
           endTime: d.endTime,
-          breakStart: d.breakStart || undefined,
-          breakEnd: d.breakEnd || undefined,
+          breakType: d.breakType,
+          breakStart: d.breakType === 'fixed' ? (d.breakStart || undefined) : undefined,
+          breakEnd: d.breakType === 'fixed' ? (d.breakEnd || undefined) : undefined,
+          breakMinutes: d.breakType === 'flexible' && d.breakMinutes ? parseInt(d.breakMinutes, 10) : undefined,
         },
         t as (k: string, o?: any) => string,
         DAY_LABELS_FULL[d.dayOfWeek],
@@ -351,7 +402,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setSaving(true);
     setError(null);
     try {
-      await createTemplate({
+      const payload = {
         store_id: parseInt(newStoreId, 10),
         name: newName.trim(),
         template_data: {
@@ -359,12 +410,21 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
             dayOfWeek: d.dayOfWeek,
             startTime: d.startTime,
             endTime: d.endTime,
-            breakStart: d.breakStart || undefined,
-            breakEnd: d.breakEnd || undefined,
+            breakType: d.breakType,
+            breakStart: d.breakType === 'fixed' ? (d.breakStart || undefined) : undefined,
+            breakEnd: d.breakType === 'fixed' ? (d.breakEnd || undefined) : undefined,
+            breakMinutes: d.breakType === 'flexible' && d.breakMinutes ? parseInt(d.breakMinutes, 10) : undefined,
           })),
         },
-      });
-      setSuccessMsg(`✓ Template "${newName.trim()}" created successfully!`);
+      };
+
+      if (editingTemplate) {
+        await updateTemplate(editingTemplate.id, payload);
+        setSuccessMsg(`✓ ${t('shifts.templateUpdated', 'Template updated successfully')}`);
+      } else {
+        await createTemplate(payload);
+        setSuccessMsg(`✓ Template "${newName.trim()}" created successfully!`);
+      }
       setTimeout(() => setSuccessMsg(null), 4000);
       closeWizard();
       await fetchTemplates();
@@ -473,14 +533,18 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
       for (const item of patternDates) {
         for (const dateStr of item.dates) {
           try {
+            const breakType = item.pattern.breakType ?? 'fixed';
+            const isFlexible = breakType === 'flexible';
             await createShift({
               user_id: emp,
               store_id: applyTemplate.storeId,
               date: dateStr,
               start_time: item.pattern.startTime,
               end_time: item.pattern.endTime,
-              break_start: item.pattern.breakStart ?? null,
-              break_end: item.pattern.breakEnd ?? null,
+              break_type: breakType,
+              break_start: isFlexible ? null : (item.pattern.breakStart ?? null),
+              break_end: isFlexible ? null : (item.pattern.breakEnd ?? null),
+              break_minutes: isFlexible ? (item.pattern.breakMinutes ?? null) : null,
               status: 'scheduled',
             });
             created++;
@@ -578,7 +642,9 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: 'var(--primary)' }}>
               {wizardStep === 1
-                ? t('shifts.newTemplate', 'New Shift Template')
+                ? (editingTemplate
+                  ? t('shifts.editTemplate', 'Edit Shift Template')
+                  : t('shifts.newTemplate', 'New Shift Template'))
                 : t('shifts.customizeDays', 'Customize Days & Times')}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -692,15 +758,18 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
                     {[
-                      { field: 'startTime' as const, label: 'Shift Start' },
-                      { field: 'endTime' as const, label: 'Shift End' },
-                      { field: 'breakStart' as const, label: 'Break Start' },
-                      { field: 'breakEnd' as const, label: 'Break End' },
-                    ].map(({ field, label }) => (
+                      { field: 'startTime' as const, label: 'Shift Start', inputType: 'time' as const },
+                      { field: 'endTime' as const, label: 'Shift End', inputType: 'time' as const },
+                      { field: 'breakStart' as const, label: 'Break Start', inputType: 'time' as const },
+                      { field: 'breakEnd' as const, label: 'Break End', inputType: 'time' as const },
+                      { field: 'breakMinutes' as const, label: 'Break (min)', inputType: 'number' as const },
+                    ].map(({ field, label, inputType }) => (
                       <div key={field}>
                         <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
                         <input
-                          type="time"
+                          type={inputType}
+                          min={inputType === 'number' ? 1 : undefined}
+                          max={inputType === 'number' ? 480 : undefined}
                           onChange={(e) => applyGlobalToAll(field, e.target.value)}
                           style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
                           onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
@@ -730,6 +799,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                           <div style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             marginBottom: 10,
+                            gap: 8,
                           }}>
                             <div style={{
                               fontWeight: 700, fontSize: 13,
@@ -737,19 +807,54 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                             }}>
                               {DAY_LABELS_FULL[idx]}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => toggleDay(idx)}
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: 'var(--text-muted)', fontSize: 12, padding: '2px 4px',
-                              }}
-                            >
-                              ✕ Remove
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                              <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 999, overflow: 'hidden' }}>
+                                {(['fixed', 'flexible'] as const).map((breakType) => (
+                                  <button
+                                    key={breakType}
+                                    type="button"
+                                    onClick={() => updateDay(idx, 'breakType', breakType)}
+                                    style={{
+                                      border: 'none',
+                                      background: d.breakType === breakType ? 'var(--accent)' : 'var(--surface)',
+                                      color: d.breakType === breakType ? '#fff' : 'var(--text-secondary)',
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      padding: '5px 10px',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {breakType === 'fixed'
+                                      ? t('shifts.form.breakType_fixed', 'Fixed break')
+                                      : t('shifts.form.breakType_flexible', 'Flexible break')}
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleDay(idx)}
+                                title={t('common.delete', 'Delete')}
+                                aria-label={t('common.delete', 'Delete')}
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 8,
+                                  border: '1px solid rgba(185,28,28,0.24)',
+                                  background: 'rgba(220,38,38,0.08)',
+                                  color: '#991b1b',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
 
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: d.breakType === 'flexible' ? '1fr 1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 8 }}>
                             <div>
                               <label style={smallLabelStyle}>Shift Start *</label>
                               <input
@@ -774,29 +879,52 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
                               />
                             </div>
-                            <div>
-                              <label style={smallLabelStyle}>Break Start</label>
-                              <input
-                                type="time"
-                                value={d.breakStart}
-                                onChange={(e) => updateDay(idx, 'breakStart', e.target.value)}
-                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
-                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
-                              />
-                            </div>
-                            <div>
-                              <label style={smallLabelStyle}>Break End</label>
-                              <input
-                                type="time"
-                                value={d.breakEnd}
-                                onChange={(e) => updateDay(idx, 'breakEnd', e.target.value)}
-                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
-                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
-                              />
-                            </div>
+                            {d.breakType === 'flexible' ? (
+                              <div>
+                                <label style={smallLabelStyle}>{t('shifts.form.breakMinutes', 'Break duration')}</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={480}
+                                  value={d.breakMinutes}
+                                  onChange={(e) => updateDay(idx, 'breakMinutes', e.target.value)}
+                                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <label style={smallLabelStyle}>Break Start</label>
+                                  <input
+                                    type="time"
+                                    value={d.breakStart}
+                                    onChange={(e) => updateDay(idx, 'breakStart', e.target.value)}
+                                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                                    onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                                    onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={smallLabelStyle}>Break End</label>
+                                  <input
+                                    type="time"
+                                    value={d.breakEnd}
+                                    onChange={(e) => updateDay(idx, 'breakEnd', e.target.value)}
+                                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px' }}
+                                    onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                                    onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                                  />
+                                </div>
+                              </>
+                            )}
                           </div>
+                          {d.breakType === 'flexible' && (
+                            <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)' }}>
+                              {t('shifts.form.breakFlexHint', 'Employee can take this break at any time during the shift, respecting total minutes.')}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -837,7 +965,11 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                 disabled={saving || enabledCount === 0}
                 onClick={(e) => handleCreate(e as any)}
               >
-                {saving ? 'Saving…' : `✓ Create Template (${enabledCount} day${enabledCount !== 1 ? 's' : ''})`}
+                {saving
+                  ? 'Saving…'
+                  : (editingTemplate
+                    ? t('shifts.saveTemplate', 'Save Template')
+                    : `✓ Create Template (${enabledCount} day${enabledCount !== 1 ? 's' : ''})`)}
               </button>
             </>
           )}
@@ -1199,20 +1331,32 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                           )}
                         </div>
                       </div>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => openApply(tmpl)}
-                        style={{ fontSize: 11, padding: '4px 12px' }}
-                      >
-                        {t('shifts.applyBtn', 'Apply')}
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => setConfirmDeleteId(tmpl.id)}
-                        style={{ fontSize: 11, padding: '4px 10px' }}
-                      >
-                        {t('common.delete', 'Delete')}
-                      </button>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => openApply(tmpl)}
+                          style={templateApplyBtnStyle}
+                        >
+                          <PlayCircle size={13} />
+                          {t('shifts.applyBtn', 'Apply')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditWizard(tmpl)}
+                          style={templateIconBtnStyle}
+                          title={t('common.edit', 'Edit')}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(tmpl.id)}
+                          style={templateDangerIconBtnStyle}
+                          title={t('common.delete', 'Delete')}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Expanded: shift pattern table */}
@@ -1235,7 +1379,9 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 <td style={{ padding: '5px 6px' }}>{p.startTime}</td>
                                 <td style={{ padding: '5px 6px' }}>{p.endTime}</td>
                                 <td style={{ padding: '5px 6px', color: 'var(--text-muted)' }}>
-                                  {p.breakStart && p.breakEnd ? `${p.breakStart}–${p.breakEnd}` : '—'}
+                                  {(p.breakType ?? 'fixed') === 'flexible'
+                                    ? `${p.breakMinutes ?? 0}m (${t('shifts.form.breakType_flexible', 'Flexible break')})`
+                                    : (p.breakStart && p.breakEnd ? `${p.breakStart}–${p.breakEnd}` : '—')}
                                 </td>
                                 <td style={{ padding: '5px 6px', fontWeight: 600, color: 'var(--primary)' }}>
                                   {formatMinutesAsHours(calculatePatternMinutes(p))}
@@ -1307,4 +1453,38 @@ const smallLabelStyle: React.CSSProperties = {
   fontWeight: 600,
   color: 'var(--text-muted)',
   marginBottom: 4,
+};
+
+const templateApplyBtnStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  border: '1px solid rgba(13,33,55,0.15)',
+  background: 'rgba(13,33,55,0.9)',
+  color: '#fff',
+  borderRadius: 8,
+  fontSize: 11,
+  fontWeight: 700,
+  padding: '4px 10px',
+  cursor: 'pointer',
+};
+
+const templateIconBtnStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  border: '1px solid var(--border)',
+  background: 'var(--surface)',
+  color: 'var(--text-secondary)',
+  borderRadius: 8,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+};
+
+const templateDangerIconBtnStyle: React.CSSProperties = {
+  ...templateIconBtnStyle,
+  color: '#991b1b',
+  borderColor: 'rgba(185,28,28,0.24)',
+  background: 'rgba(220,38,38,0.08)',
 };

@@ -12,7 +12,9 @@ import HomePage from './modules/home/HomePage';
 import EmployeeList from './modules/employees/EmployeeList';
 import EmployeeDetail from './modules/employees/EmployeeDetail';
 import StoreList from './modules/stores/StoreList';
+import StoreDetail from './modules/stores/StoreDetail';
 import SystemCompanyManagement from './modules/companies/SystemCompanyManagement';
+import CompanyDetail from './modules/companies/CompanyDetail';
 import SystemPermissionsPanel from './modules/permissions/SystemPermissionsPanel';
 import PermissionsPanel from './modules/permissions/PermissionsPanel';
 import ProfilePage from './modules/profile/ProfilePage';
@@ -102,9 +104,21 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/negozi/:slug" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="negozi">
+          <Layout title={t('nav.stores')}><StoreDetail /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/aziende" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
           <Layout title={t('nav.companies')}><SystemCompanyManagement /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/aziende/:slug" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
+          <Layout title={t('nav.companies')}><CompanyDetail /></Layout>
         </ProtectedRoute>
       } />
 

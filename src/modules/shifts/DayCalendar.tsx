@@ -62,11 +62,6 @@ const STATUS_META: Record<string, {
   },
 };
 
-function truncateStoreName(name: string, max = 16): string {
-  if (name.length <= max) return name;
-  return `${name.slice(0, Math.max(0, max - 1))}…`;
-}
-
 function transferVisualMeta(status: TransferAssignment['status']): {
   bg: string;
   border: string;
@@ -244,7 +239,7 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
             const showDualLane = transferTargetStoreId != null;
             const avatarInitials = `${(userData.name || '').slice(0, 1)}${(userData.surname || '').slice(0, 1)}`.toUpperCase();
             const avatarUrl = getAvatarUrl(userData.avatarFilename);
-            const fullName = `${userData.surname} ${userData.name}`.trim();
+            const fullName = `${userData.name} ${userData.surname}`.trim();
             const rowStoreNames = Array.from(new Set(userData.shifts.map((s) => s.storeName).filter(Boolean))) as string[];
             const originStoreName = rowTransfer?.originStoreName ?? rowStoreNames[0] ?? t('transfers.table.origin', 'Origine');
             const targetStoreName = rowTransfer?.targetStoreName ?? t('transfers.table.target', 'Destinazione');
@@ -263,7 +258,7 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                   minHeight: 56,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'flex-start',
                   gap: 8,
                   padding: '5px 8px',
                   background: isTransfer ? statusVisual?.bg : 'rgba(13,33,55,0.03)',
@@ -305,7 +300,7 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                     </div>
                     <div style={{
                       marginTop: 3,
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
                       gap: 4,
                       padding: '2px 7px',
@@ -316,11 +311,12 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                       fontSize: 9,
                       fontWeight: 800,
                       lineHeight: 1.2,
-                      maxWidth: '100%',
+                      width: '100%',
+                      minWidth: 0,
                     }}>
-                      <StoreIcon size={10} strokeWidth={2.3} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={opts.storeName}>
-                        {truncateStoreName(opts.storeName, 14)}
+                      <StoreIcon size={10} strokeWidth={2.3} style={{ flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }} title={opts.storeName}>
+                        {opts.storeName}
                       </span>
                     </div>
                   </div>
@@ -451,9 +447,7 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                         textOverflow: 'ellipsis',
                       }}>
                         <ArrowLeftRight size={9} strokeWidth={2.4} />
-                        <span title={transferStatusStore}>
-                          {truncateStoreName(transferStatusStore, 10)}
-                        </span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, maxWidth: 72 }} title={transferStatusStore}>{transferStatusStore}</span>
                         {t(`transfers.status.${transferStatus}`, transferStatus)}
                       </span>
                     )}
