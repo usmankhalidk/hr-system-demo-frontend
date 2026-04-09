@@ -9,6 +9,7 @@ interface ConfirmModalProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'warning' | 'primary';
+  children?: React.ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -20,6 +21,7 @@ export default function ConfirmModal({
   confirmLabel,
   cancelLabel,
   variant = 'danger',
+  children,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -106,6 +108,12 @@ export default function ConfirmModal({
             </p>
           </div>
         </div>
+
+        {children ? (
+          <div style={{ padding: '0 24px 12px' }}>
+            {children}
+          </div>
+        ) : null}
 
         {/* Footer */}
         <div style={{

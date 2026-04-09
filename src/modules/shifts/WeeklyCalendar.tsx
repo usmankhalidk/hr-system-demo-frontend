@@ -132,11 +132,6 @@ function hoursForShiftTotal(shift: Shift): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function truncateStoreName(name: string, max = 14): string {
-  if (name.length <= max) return name;
-  return `${name.slice(0, Math.max(0, max - 1))}…`;
-}
-
 export default function WeeklyCalendar({
   shifts,
   weekStart,
@@ -323,7 +318,7 @@ export default function WeeklyCalendar({
                     const transferTargets = Array.from(new Map(
                       rowTransfers.map((tb) => [`${tb.targetStoreName}-${tb.status}`, tb]),
                     ).values());
-                    const fullName = `${userData.surname} ${userData.name}`.trim();
+                    const fullName = `${userData.name} ${userData.surname}`.trim();
                     const initials = `${userData.name?.[0] ?? ''}${userData.surname?.[0] ?? ''}`.toUpperCase() || 'U';
                     const avatarUrl = getAvatarUrl(userData.avatarFilename);
                     const identityRows = transferTargets.length > 0
@@ -358,7 +353,7 @@ export default function WeeklyCalendar({
                             <div key={row.id} style={{
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
+                              justifyContent: 'flex-start',
                               gap: 8,
                               padding: '4px 0',
                             }}>
@@ -367,8 +362,8 @@ export default function WeeklyCalendar({
                                 height: 24,
                                 borderRadius: '50%',
                                 overflow: 'hidden',
-                                background: 'rgba(13,33,55,0.14)',
-                                color: '#0D2137',
+                                background: 'linear-gradient(135deg,var(--primary),var(--accent))',
+                                color: '#fff',
                                 fontSize: 9,
                                 fontWeight: 700,
                                 display: 'flex',
@@ -387,7 +382,7 @@ export default function WeeklyCalendar({
                                 {row.storeName && (
                                   <span style={{
                                     marginTop: 2,
-                                    display: 'inline-flex',
+                                    display: 'flex',
                                     alignItems: 'center',
                                     gap: 4,
                                     padding: '2px 7px',
@@ -398,10 +393,11 @@ export default function WeeklyCalendar({
                                     fontSize: '0.65rem',
                                     fontWeight: 700,
                                     lineHeight: 1.2,
-                                    maxWidth: '100%',
+                                    width: '100%',
+                                    minWidth: 0,
                                   }}>
-                                    <Store size={10} />
-                                    <span title={row.storeName}>{truncateStoreName(row.storeName)}</span>
+                                    <Store size={10} style={{ flexShrink: 0 }} />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }} title={row.storeName}>{row.storeName}</span>
                                   </span>
                                 )}
                               </div>
@@ -415,6 +411,7 @@ export default function WeeklyCalendar({
                 {days.map((day, colIdx) => {
                   const dateStr = formatDate(day);
                   const dayShifts = userData.shifts.get(dateStr) ?? [];
+                  const hasNonCancelledShift = dayShifts.some((shift) => shift.status !== 'cancelled');
                   const isToday = dateStr === todayStr();
                   const leave = getLeaveForUserDate(userId, dateStr);
                   const transfer = getTransferForUserDate(userId, dateStr);
@@ -489,7 +486,7 @@ export default function WeeklyCalendar({
                   return (
                     <td
                       key={colIdx}
-                      title={canEdit && dayShifts.length === 0 ? t('shifts.addShiftTooltip', '+ Aggiungi turno') : undefined}
+                      title={canEdit && !hasNonCancelledShift ? t('shifts.addShiftTooltip', '+ Aggiungi turno') : undefined}
                       style={{
                         padding: 4,
                         verticalAlign: 'top',
@@ -502,7 +499,7 @@ export default function WeeklyCalendar({
                           ? (lvVacation ? 'rgba(219,234,254,0.13)' : 'rgba(255,237,213,0.13)')
                           : (isToday ? 'rgba(201,151,58,0.04)' : undefined),
                       }}
-                      onClick={() => canEdit && dayShifts.length === 0 && onCellClick(userId, dateStr)}
+                      onClick={() => canEdit && !hasNonCancelledShift && onCellClick(userId, dateStr)}
                     >
                       {showDualLane ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -545,8 +542,8 @@ export default function WeeklyCalendar({
                               marginBottom: 4,
                             }}>
                               <ArrowLeftRight size={10} strokeWidth={2.4} />
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={transfer?.targetStoreName ?? ''}>
-                                {truncateStoreName(transfer?.targetStoreName ?? t('transfers.table.target', 'Destinazione'), 10)}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, maxWidth: 68 }} title={transfer?.targetStoreName ?? ''}>
+                                {transfer?.targetStoreName ?? t('transfers.table.target', 'Destinazione')}
                               </span>
                               <span>{t(`transfers.status.${transfer?.status ?? 'active'}`, transfer?.status ?? 'active')}</span>
                             </div>

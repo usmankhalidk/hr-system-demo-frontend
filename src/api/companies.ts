@@ -1,17 +1,35 @@
 import apiClient from './client';
 import { Company } from '../types';
 
+export interface CompanyProfilePayload {
+  registrationNumber?: string | null;
+  companyEmail?: string | null;
+  companyPhoneNumbers?: string | null;
+  officesLocations?: string | null;
+  country?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  timezones?: string | null;
+  currency?: string | null;
+}
+
 export async function getCompanies(): Promise<Company[]> {
   const { data } = await apiClient.get('/companies');
   return data.data;
 }
 
-export async function updateCompany(id: number, payload: { name: string; groupId?: number | null }): Promise<Company> {
+export async function getCompanyById(id: number): Promise<Company> {
+  const { data } = await apiClient.get(`/companies/${id}`);
+  return data.data;
+}
+
+export async function updateCompany(id: number, payload: { name: string; groupId?: number | null } & CompanyProfilePayload): Promise<Company> {
   const { data } = await apiClient.put(`/companies/${id}`, payload);
   return data.data;
 }
 
-export async function createCompany(payload: { name: string; groupId?: number | null }): Promise<Company> {
+export async function createCompany(payload: { name: string; groupId?: number | null } & CompanyProfilePayload): Promise<Company> {
   const { data } = await apiClient.post('/companies', payload);
   return data.data;
 }
@@ -40,4 +58,20 @@ export async function uploadCompanyLogo(id: number, file: File): Promise<{ logoU
 
 export async function deleteCompanyLogo(id: number): Promise<void> {
   await apiClient.delete(`/companies/${id}/logo`);
+}
+
+export async function uploadCompanyBanner(id: number, file: File): Promise<{ bannerUrl: string }> {
+  const formData = new FormData();
+  formData.append('banner', file);
+  const { data } = await apiClient.post(`/companies/${id}/banner`, formData);
+  return data.data;
+}
+
+export async function deleteCompanyBanner(id: number): Promise<void> {
+  await apiClient.delete(`/companies/${id}/banner`);
+}
+
+export async function transferCompanyOwnership(id: number, ownerUserId: number): Promise<Company> {
+  const { data } = await apiClient.patch(`/companies/${id}/owner`, { ownerUserId });
+  return data.data;
 }

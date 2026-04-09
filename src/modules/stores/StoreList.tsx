@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useToast } from '../../context/ToastContext';
@@ -87,7 +88,19 @@ function getCompanyInitials(name?: string): string {
   return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
+function toStoreSlug(store: Store): string {
+  const base = store.name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `${store.id}-${base || 'store'}`;
+}
+
 export function StoreList() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
@@ -115,6 +128,7 @@ export function StoreList() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deactivatingStore, setDeactivatingStore] = useState<Store | null>(null);
+  const [deactivateInput, setDeactivateInput] = useState('');
   const [deactivating, setDeactivating] = useState(false);
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
 
@@ -295,6 +309,7 @@ export function StoreList() {
 
   const openConfirm = (store: Store) => {
     setDeactivatingStore(store);
+    setDeactivateInput('');
     setDeactivateError(null);
     setConfirmOpen(true);
   };
@@ -302,11 +317,16 @@ export function StoreList() {
   const closeConfirm = () => {
     setConfirmOpen(false);
     setDeactivatingStore(null);
+    setDeactivateInput('');
     setDeactivateError(null);
   };
 
   const handleDeactivate = async () => {
     if (!deactivatingStore) return;
+    if (deactivateInput.trim() !== deactivatingStore.name) {
+      setDeactivateError(t('stores.deactivateNameError', 'Type the exact store name to confirm deactivation.'));
+      return;
+    }
     setDeactivating(true);
     setDeactivateError(null);
     try {
@@ -386,29 +406,24 @@ export function StoreList() {
       key: 'actions',
       label: t('stores.colActions'),
       render: (row) => {
-        const isAdmin = user?.role === 'admin';
-        const isManager = user?.role === 'store_manager';
         return (
           <div style={{ display: 'flex', gap: '8px' }}>
-            {(isAdmin || isManager) && (
-              <Button size="sm" variant="secondary" onClick={() => openEditForm(row)}>
-                {t('common.edit')}
-              </Button>
-            )}
-            {isAdmin && row.isActive && (
-              <Button size="sm" variant="danger" onClick={() => openConfirm(row)}>
-                {t('common.deactivate')}
-              </Button>
-            )}
-            {isAdmin && !row.isActive && (
-              <Button size="sm" variant="success" onClick={() => openActivate(row)}>
-                {t('common.activate')}
-              </Button>
-            )}
-            {isAdmin && !row.isActive && (
-              <Button size="sm" variant="danger" onClick={() => openDelete(row)}>
-                {t('common.delete')}
-              </Button>
+            <button
+              onClick={() => navigate(`/negozi/${toStoreSlug(row)}`)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '12px', fontWeight: 600, color: 'var(--accent)',
+                fontFamily: 'var(--font-body)', padding: '5px 10px',
+                borderRadius: 'var(--radius-sm)', display: 'inline-flex',
+                alignItems: 'center', gap: '3px', whiteSpace: 'nowrap',
+              }}
+            >
+              {t('common.open')} →
+            </button>
+            {!row.isActive && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
+                {t('common.inactive')}
+              </span>
             )}
           </div>
         );
@@ -581,7 +596,7 @@ export function StoreList() {
             <Button variant="secondary" onClick={closeConfirm} disabled={deactivating}>
               {t('common.cancel')}
             </Button>
-            <Button variant="danger" onClick={handleDeactivate} loading={deactivating}>
+            <Button variant="danger" onClick={handleDeactivate} loading={deactivating} disabled={deactivateInput.trim() !== (deactivatingStore?.name ?? '')}>
               {t('common.deactivate')}
             </Button>
           </>
@@ -596,6 +611,18 @@ export function StoreList() {
           <p style={{ margin: 0, color: 'var(--text-primary)' }}>
             {t('stores.confirmDeactivateMsg', { name: deactivatingStore?.name ?? '' })}
           </p>
+          <Input
+            label={t('stores.typeNameToDeactivate', 'Type the exact store name to deactivate')}
+            value={deactivateInput}
+            onChange={(event) => setDeactivateInput(event.target.value)}
+            placeholder={deactivatingStore?.name ?? ''}
+            disabled={deactivating}
+          />
+          <div style={{ fontSize: 12, color: deactivateInput.trim() === (deactivatingStore?.name ?? '') ? '#166534' : 'var(--text-muted)' }}>
+            {deactivateInput.trim() === (deactivatingStore?.name ?? '')
+              ? t('stores.deactivateNameMatched', 'Name matches. Deactivation is enabled.')
+              : t('stores.deactivateNameMismatch', 'Name must match exactly to deactivate.')}
+          </div>
         </div>
       </Modal>
 

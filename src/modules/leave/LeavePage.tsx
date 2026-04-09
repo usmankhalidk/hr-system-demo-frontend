@@ -162,46 +162,50 @@ function PersonalLeavePage() {
         <LeaveBalanceCard balances={balances} loading={loadingBalance} />
       )}
 
-      {/* Tabs */}
-      <div style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: 0, marginBottom: 24 }}>
-        <button style={tabStyle('mine')} onClick={() => setActiveTab('mine')}>
-          {t('leave.tab_mine')}
-        </button>
-        {userIsApprover && (
-          <button style={tabStyle('pending')} onClick={() => setActiveTab('pending')}>
-            {t('leave.tab_pending')}
-            {pendingRequests.length > 0 && (
-              <span style={{
-                marginLeft: 8, display: 'inline-flex',
-                alignItems: 'center', justifyContent: 'center',
-                width: 20, height: 20, borderRadius: '50%',
-                background: 'var(--accent)', color: '#fff',
-                fontSize: 11, fontWeight: 800,
-              }}>
-                {pendingRequests.length}
-              </span>
-            )}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)' }}>
+        {/* Tabs */}
+        <div style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: 0, padding: '0 12px', background: 'var(--surface-warm)' }}>
+          <button style={tabStyle('mine')} onClick={() => setActiveTab('mine')}>
+            {t('leave.tab_mine')}
           </button>
-        )}
-      </div>
+          {userIsApprover && (
+            <button style={tabStyle('pending')} onClick={() => setActiveTab('pending')}>
+              {t('leave.tab_pending')}
+              {pendingRequests.length > 0 && (
+                <span style={{
+                  marginLeft: 8, display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  width: 20, height: 20, borderRadius: '50%',
+                  background: 'var(--accent)', color: '#fff',
+                  fontSize: 11, fontWeight: 800,
+                }}>
+                  {pendingRequests.length}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
 
-      {/* Tab content */}
-      {activeTab === 'mine' && (
-        <LeaveApprovalList
-          requests={myRequests}
-          loading={loadingMine}
-          onRefresh={fetchMyRequests}
-          showActions={false}
-        />
-      )}
-      {activeTab === 'pending' && userIsApprover && (
-        <LeaveApprovalList
-          requests={pendingRequests}
-          loading={loadingPending}
-          onRefresh={fetchPendingRequests}
-          showActions
-        />
-      )}
+        {/* Tab content */}
+        <div style={{ padding: '10px 4px 6px' }}>
+          {activeTab === 'mine' && (
+            <LeaveApprovalList
+              requests={myRequests}
+              loading={loadingMine}
+              onRefresh={fetchMyRequests}
+              showActions={false}
+            />
+          )}
+          {activeTab === 'pending' && userIsApprover && (
+            <LeaveApprovalList
+              requests={pendingRequests}
+              loading={loadingPending}
+              onRefresh={fetchPendingRequests}
+              showActions
+            />
+          )}
+        </div>
+      </div>
 
       {/* Leave request drawer */}
       <LeaveRequestDrawer
