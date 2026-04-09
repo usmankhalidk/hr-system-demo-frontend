@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
@@ -66,8 +65,8 @@ describe('PermissionsPanel company scope', () => {
       expect(mockGetPermissions).toHaveBeenCalledWith(1);
     });
 
-    // The panel renders company "tabs" as buttons (not a <select> dropdown).
-    const betaButton = screen.getByRole('button', { name: 'Beta' });
+    // Company selector uses buttons (not a select). Wait for Beta button to appear after loading.
+    const betaButton = await screen.findByRole('button', { name: 'Beta' });
     fireEvent.click(betaButton);
 
     await waitFor(() => {

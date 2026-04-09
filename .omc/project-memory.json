@@ -1,0 +1,309 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775642945468,
+  "projectRoot": "/Users/user/hr-software/hr-system-demo-frontend",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "18.2.0",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "18.2.0",
+        "category": "frontend"
+      },
+      {
+        "name": "vite",
+        "version": "5.0.7",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "3.2.4",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": "npm test",
+    "lintCommand": null,
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "vite",
+      "build": "tsc && vite build",
+      "preview": "vite preview",
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "test:coverage": "vitest run --coverage"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": "type-based"
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 1,
+      "lastAccessed": 1775642945430,
+      "keyFiles": [
+        "index.html"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 3,
+      "lastAccessed": 1775642945431,
+      "keyFiles": [
+        "App.tsx",
+        "index.css",
+        "main.tsx"
+      ]
+    },
+    "dist/assets": {
+      "path": "dist/assets",
+      "purpose": "Static assets",
+      "fileCount": 2,
+      "lastAccessed": 1775642945439,
+      "keyFiles": [
+        "index-BpwfiZ85.css",
+        "index-CQAH7kkw.js"
+      ]
+    },
+    "src/api": {
+      "path": "src/api",
+      "purpose": "API routes",
+      "fileCount": 18,
+      "lastAccessed": 1775642945440,
+      "keyFiles": [
+        "ats.ts",
+        "attendance.ts",
+        "auth.ts"
+      ]
+    },
+    "src/components": {
+      "path": "src/components",
+      "purpose": "UI components",
+      "fileCount": 1,
+      "lastAccessed": 1775642945440,
+      "keyFiles": [
+        "ProtectedRoute.tsx"
+      ]
+    },
+    "src/test": {
+      "path": "src/test",
+      "purpose": "Test files",
+      "fileCount": 13,
+      "lastAccessed": 1775642945441,
+      "keyFiles": [
+        "auth.test.tsx",
+        "authTokenStorage.test.ts",
+        "employeeList.test.tsx"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/modules/onboarding/OnboardingPage.tsx",
+      "accessCount": 32,
+      "lastAccessed": 1775703684386,
+      "type": "file"
+    },
+    {
+      "path": "src/i18n/locales/en.ts",
+      "accessCount": 23,
+      "lastAccessed": 1775669914173,
+      "type": "directory"
+    },
+    {
+      "path": "",
+      "accessCount": 18,
+      "lastAccessed": 1775669938769,
+      "type": "directory"
+    },
+    {
+      "path": "src/modules/settings/SettingsPage.tsx",
+      "accessCount": 15,
+      "lastAccessed": 1775650719028,
+      "type": "file"
+    },
+    {
+      "path": "src/i18n/locales/it.ts",
+      "accessCount": 15,
+      "lastAccessed": 1775669918234,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/employees/EmployeeDetail.tsx",
+      "accessCount": 11,
+      "lastAccessed": 1775643542836,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/documents/DocumentsPage.tsx",
+      "accessCount": 10,
+      "lastAccessed": 1775650513094,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/ats/ATSPage.tsx",
+      "accessCount": 10,
+      "lastAccessed": 1775668728184,
+      "type": "file"
+    },
+    {
+      "path": "src/api/onboarding.ts",
+      "accessCount": 7,
+      "lastAccessed": 1775669941379,
+      "type": "file"
+    },
+    {
+      "path": "src/api/employees.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775650542389,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/transfers/TransfersPage.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775668611527,
+      "type": "file"
+    },
+    {
+      "path": "src",
+      "accessCount": 3,
+      "lastAccessed": 1775703641262,
+      "type": "directory"
+    },
+    {
+      "path": "src/utils/apiErrors.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775703647558,
+      "type": "file"
+    },
+    {
+      "path": "src/api/documents.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775650414833,
+      "type": "file"
+    },
+    {
+      "path": "src/api/ats.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775668348171,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/ShiftsPage.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775668391244,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/WeeklyCalendar.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775668401496,
+      "type": "file"
+    },
+    {
+      "path": "src/api/client.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775668701843,
+      "type": "file"
+    },
+    {
+      "path": "src/types/index.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775669608888,
+      "type": "file"
+    },
+    {
+      "path": "src/components/ui/Button.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775669934092,
+      "type": "file"
+    },
+    {
+      "path": "src/components/ui/Input.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775669934469,
+      "type": "file"
+    },
+    {
+      "path": "src/api/stores.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775668347696,
+      "type": "file"
+    },
+    {
+      "path": "src/api/shifts.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775668356276,
+      "type": "file"
+    },
+    {
+      "path": "src/api/transfers.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775668369823,
+      "type": "file"
+    },
+    {
+      "path": "src/api/companies.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775668645059,
+      "type": "file"
+    },
+    {
+      "path": "src/context/AuthContext.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775669603886,
+      "type": "file"
+    },
+    {
+      "path": "src/context/ToastContext.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775669604001,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
