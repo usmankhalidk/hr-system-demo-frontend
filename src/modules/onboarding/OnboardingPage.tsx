@@ -60,6 +60,15 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function getDueDateDisplay(dueDate: string | null, isOverdue: boolean, t: TFunction): { label: string; color: string } {
+  if (!dueDate) return { label: t('onboarding.noDueDate', 'No deadline'), color: 'var(--text-muted)' };
+  const diff = Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86400000);
+  if (isOverdue) return { label: t('onboarding.overdue', 'Overdue'), color: '#DC2626' };
+  if (diff === 0) return { label: t('onboarding.dueToday', 'Due today'), color: '#D97706' };
+  if (diff === 1) return { label: t('onboarding.dueTomorrow', 'Due tomorrow'), color: '#D97706' };
+  return { label: t('onboarding.dueInDays', { count: diff, defaultValue: 'Due in {{count}} days' }), color: '#15803D' };
+}
+
 function fmtRelative(iso: string, t: TFunction) {
   const diff = Date.now() - new Date(iso).getTime();
   const days = Math.floor(diff / 86400000);
@@ -1269,6 +1278,246 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   );
 };
 
+// ─── Employee Task View ────────────────────────────────────────────────────────
+
+const EmployeeTaskView: React.FC<{
+  progress: OnboardingProgress;
+  employeeName: string;
+  onComplete: (taskId: number, note?: string) => Promise<void>;
+  onUncomplete?: (taskId: number) => Promise<void>;
+}> = ({ progress, employeeName, onComplete, onUncomplete }) => {
+  const { t } = useTranslation();
+  const [activePhase, setActivePhase] = useState<Phase>('day1');
+  const [completingId, setCompletingId] = useState<number | null>(null);
+  const [noteTaskId, setNoteTaskId] = useState<number | null>(null);
+  const [note, setNote] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
+
+  const pendingTasks = progress.tasks.filter((task) => !task.completed);
+  const completedTasks = progress.tasks.filter((task) => task.completed);
+
+  // Group pending tasks by phase using their sort order index
+  const tasksByPhase = useMemo(() => {
+    const map = new Map<Phase, OnboardingTask[]>();
+    PHASE_ORDER.forEach((p) => map.set(p, []));
+    pendingTasks.forEach((task, i) => {
+      const phase = getPhase(i + 1);
+      map.get(phase)!.push(task);
+    });
+    return map;
+  }, [pendingTasks]);
+
+  const pendingCountByPhase = useMemo(() => {
+    const counts: Record<Phase, number> = { day1: 0, week1: 0, month1: 0, ongoing: 0 };
+    pendingTasks.forEach((_, i) => {
+      counts[getPhase(i + 1)]++;
+    });
+    return counts;
+  }, [pendingTasks]);
+
+  const handleComplete = async (taskId: number) => {
+    setCompletingId(taskId);
+    try {
+      await onComplete(taskId, note || undefined);
+      setNoteTaskId(null);
+      setNote('');
+    } finally {
+      setCompletingId(null);
+    }
+  };
+
+  return (
+    <div>
+      {/* Header with progress */}
+      <div style={{ marginBottom: 20, padding: '16px 20px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>
+          {t('onboarding.welcomeMessage', "Welcome, {{name}}! Here's your onboarding journey.", { name: employeeName })}
+        </h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
+          {t('onboarding.progressSubtitle', '{{completed}} of {{total}} tasks completed', { completed: progress.completed, total: progress.total })}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', width: `${progress.percentage}%`,
+              background: progress.percentage === 100 ? '#15803D' : 'var(--accent)',
+              borderRadius: 4, transition: 'width 0.5s ease',
+            }} />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: progress.percentage === 100 ? '#15803D' : 'var(--text-primary)', minWidth: 50, textAlign: 'right' }}>
+            {progress.completed}/{progress.total}
+          </span>
+        </div>
+      </div>
+
+      {/* Phase tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {PHASE_ORDER.map((phase) => {
+          const meta = PHASE_META[phase];
+          const count = pendingCountByPhase[phase];
+          const isActive = activePhase === phase;
+          return (
+            <button
+              key={phase}
+              onClick={() => setActivePhase(phase)}
+              style={{
+                padding: '7px 14px', borderRadius: 20,
+                border: `1.5px solid ${isActive ? meta.color : 'var(--border)'}`,
+                background: isActive ? meta.bg : 'var(--surface)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 13 }}>{meta.icon}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? meta.color : 'var(--text-muted)' }}>
+                {t(meta.labelKey)}
+              </span>
+              {count > 0 && (
+                <span style={{ fontSize: 10, fontWeight: 700, background: meta.color, color: '#fff', borderRadius: 10, padding: '1px 6px' }}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Task cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {(tasksByPhase.get(activePhase) ?? []).length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            ✓ {t('onboarding.onboardingComplete', 'All tasks in this phase are complete')}
+          </div>
+        ) : (
+          (tasksByPhase.get(activePhase) ?? []).map((task) => {
+            const due = getDueDateDisplay(task.dueDate, task.isOverdue, t);
+            return (
+              <div
+                key={task.id}
+                style={{
+                  padding: '14px 16px', borderRadius: 10,
+                  border: `1.5px solid ${task.isOverdue ? '#FCA5A5' : 'var(--border)'}`,
+                  background: task.isOverdue ? 'rgba(220,38,38,0.03)' : 'var(--surface)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>
+                    {CATEGORY_ICONS[task.templateCategory] ?? '📌'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{task.templateName}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[task.templatePriority] ?? '#6B7280', textTransform: 'uppercase' }}>
+                        {t(`onboarding.priority${task.templatePriority.charAt(0).toUpperCase() + task.templatePriority.slice(1)}` as any, task.templatePriority)}
+                      </span>
+                    </div>
+                    {task.templateDescription && (
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>{task.templateDescription}</p>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: due.color, fontWeight: 500 }}>📅 {due.label}</span>
+                      {task.templateLinkUrl && (
+                        <a
+                          href={task.templateLinkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}
+                        >
+                          {t('onboarding.openLink', 'Open →')}
+                        </a>
+                      )}
+                    </div>
+                    {noteTaskId === task.id && (
+                      <textarea
+                        autoFocus
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder={t('onboarding.completionNotePlaceholder', 'Add a note (optional)...')}
+                        rows={2}
+                        style={{
+                          width: '100%', marginTop: 10, padding: '8px 10px',
+                          borderRadius: 8, border: '1.5px solid var(--border)',
+                          background: 'var(--background)', fontSize: 12,
+                          resize: 'vertical', boxSizing: 'border-box',
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    {noteTaskId === task.id ? (
+                      <Button
+                        onClick={() => handleComplete(task.id)}
+                        disabled={completingId === task.id}
+                      >
+                        {completingId === task.id ? '...' : t('onboarding.markDoneWithNote', 'Mark as done')}
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" onClick={() => { setNoteTaskId(task.id); setNote(''); }}>
+                        {t('onboarding.markDone', 'Done')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Completed section */}
+      {completedTasks.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <button
+            onClick={() => setShowCompleted((v) => !v)}
+            style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--text-muted)',
+              background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6, padding: 0,
+            }}
+          >
+            {showCompleted ? '▾' : '▸'} {t('onboarding.progressTitle', 'Completed')} ({completedTasks.length})
+          </button>
+          {showCompleted && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {completedTasks.map((task) => (
+                <div
+                  key={task.id}
+                  style={{
+                    padding: '10px 14px', borderRadius: 8,
+                    border: '1px solid var(--border)', background: 'var(--background)', opacity: 0.75,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#15803D', fontSize: 14 }}>✓</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                      {task.templateName}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                      {fmtDate(task.completedAt)}
+                    </span>
+                  </div>
+                  {task.completionNote && (
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0 22px', fontStyle: 'italic' }}>
+                      "{task.completionNote}"
+                    </p>
+                  )}
+                  {onUncomplete && (
+                    <button
+                      onClick={() => onUncomplete(task.id)}
+                      style={{ fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4, marginLeft: 22, padding: 0 }}
+                    >
+                      ↩ Undo
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── My Tasks Panel ───────────────────────────────────────────────────────────
 
 const MyTasksPanel: React.FC = () => {
@@ -1278,7 +1527,6 @@ const MyTasksPanel: React.FC = () => {
 
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
   const [loading, setLoading] = useState(true);
-  const [completing, setCompleting] = useState<number | null>(null);
   const [celebration, setCelebration] = useState(false);
 
   useEffect(() => {
@@ -1292,36 +1540,6 @@ const MyTasksPanel: React.FC = () => {
       .catch(() => showToast(t('onboarding.errorLoad', 'Error loading tasks'), 'error'))
       .finally(() => setLoading(false));
   }, [user?.id]);
-
-  const handleComplete = async (taskId: number) => {
-    setCompleting(taskId);
-    try {
-      const updated = await completeTask(taskId);
-      setProgress((prev) => {
-        if (!prev) return prev;
-        const tasks = prev.tasks.map((t) => t.id === updated.id ? updated : t);
-        const completed = tasks.filter((t) => t.completed).length;
-        const pct = Math.round(completed / tasks.length * 100);
-        if (pct === 100 && prev.percentage < 100) setCelebration(true);
-        return { ...prev, tasks, completed, percentage: pct };
-      });
-    } catch (err) {
-      showToast(translateApiError(err, t, t('onboarding.errorComplete', 'Error completing task')) ?? '', 'error');
-    } finally { setCompleting(null); }
-  };
-
-  // Group tasks by phase using their list index as proxy for sort order
-  const grouped = useMemo(() => {
-    if (!progress) return new Map<Phase, OnboardingTask[]>();
-    const map = new Map<Phase, OnboardingTask[]>();
-    PHASE_ORDER.forEach((p) => map.set(p, []));
-    progress.tasks.forEach((task, idx) => {
-      map.get(getPhase(idx + 1))!.push(task);
-    });
-    return map;
-  }, [progress]);
-
-  const pct = progress?.percentage ?? 0;
 
   if (loading) return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
@@ -1374,140 +1592,26 @@ const MyTasksPanel: React.FC = () => {
         </div>
       )}
 
-      {/* Progress hero */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '20px 24px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-          <ProgressRing pct={pct} size={64} stroke={6} color="var(--accent)" />
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', marginBottom: 3 }}>
-              {t('onboarding.progressTitle', 'Your Onboarding Progress')}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              {t('onboarding.myProgressSubtitle', { completed: progress.completed, total: progress.total })}
-            </div>
-          </div>
-        </div>
-
-        {/* Phase milestones */}
-        <div style={{ display: 'flex', gap: 0, position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 10, left: 12, right: 12, height: 2, background: 'var(--border)', zIndex: 0 }} />
-          {PHASE_ORDER.map((phase) => {
-            const tasks = grouped.get(phase)!;
-            if (tasks.length === 0) return null;
-            const done = tasks.filter((t) => t.completed).length;
-            const complete = done === tasks.length && tasks.length > 0;
-            const meta = PHASE_META[phase];
-            return (
-              <div key={phase} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-                <div style={{
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: complete ? meta.color : 'var(--surface)',
-                  border: `2px solid ${complete ? meta.color : 'var(--border)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, color: complete ? '#fff' : 'var(--text-muted)',
-                  marginBottom: 5,
-                }}>
-                  {complete ? '✓' : meta.icon}
-                </div>
-                <div style={{ fontSize: 9, color: complete ? meta.color : 'var(--text-muted)', fontWeight: complete ? 700 : 400, textAlign: 'center', lineHeight: 1.2 }}>
-                  {t(meta.labelKey)}
-                </div>
-                <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>{done}/{tasks.length}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Phase-grouped task list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {PHASE_ORDER.map((phase) => {
-          const tasks = grouped.get(phase)!;
-          if (tasks.length === 0) return null;
-          const meta = PHASE_META[phase];
-          const doneCount = tasks.filter((t) => t.completed).length;
-          const allDone = doneCount === tasks.length;
-
-          return (
-            <div key={phase}>
-              {/* Phase header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '8px 12px', background: allDone ? `${meta.bg}` : 'var(--background)', borderRadius: 10, border: `1px solid ${allDone ? meta.border : 'var(--border)'}` }}>
-                <span style={{ fontSize: 16 }}>{meta.icon}</span>
-                <div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: allDone ? meta.color : 'var(--text-primary)' }}>{t(meta.labelKey)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{t(meta.subKey)}</span>
-                </div>
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {allDone && <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.bg, padding: '2px 7px', borderRadius: 99, border: `1px solid ${meta.border}` }}>{t('onboarding.phaseDone')}</span>}
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{doneCount}/{tasks.length}</span>
-                </div>
-              </div>
-
-              {/* Tasks */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    style={{
-                      background: 'var(--surface)', border: `1px solid ${task.completed ? 'rgba(21,128,61,0.2)' : 'var(--border)'}`,
-                      borderRadius: 12, padding: '14px 16px',
-                      display: 'flex', alignItems: 'flex-start', gap: 12,
-                      opacity: task.completed ? 0.7 : 1,
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    {/* Status circle */}
-                    <div style={{
-                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-                      background: task.completed ? '#15803D' : 'transparent',
-                      border: `2px solid ${task.completed ? '#15803D' : 'var(--border)'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 11, color: '#fff', transition: 'all 0.2s',
-                    }}>
-                      {task.completed && '✓'}
-                    </div>
-
-                    {/* Content */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: task.completed ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.completed ? 'line-through' : 'none', lineHeight: 1.4 }}>
-                        {task.templateName}
-                      </div>
-                      {task.templateDescription && !task.completed && (
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.5 }}>
-                          {task.templateDescription}
-                        </div>
-                      )}
-                      {task.completedAt && (
-                        <div style={{ fontSize: 11, color: '#15803D', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span>✓</span>
-                          <span>{t('onboarding.completedRelative', { time: fmtRelative(task.completedAt, t) })}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action */}
-                    {!task.completed && (
-                      <Button
-                        variant="accent" size="sm"
-                        loading={completing === task.id}
-                        onClick={() => handleComplete(task.id)}
-                        style={{ flexShrink: 0 }}
-                      >
-                        {t('onboarding.markDone')}
-                      </Button>
-                    )}
-                    {task.completed && (
-                      <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'rgba(21,128,61,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#15803D' }}>
-                        ✓
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <EmployeeTaskView
+        progress={progress}
+        employeeName={`${user?.name ?? ''} ${user?.surname ?? ''}`.trim()}
+        onComplete={async (taskId, noteText) => {
+          try {
+            const updated = await completeTask(taskId, noteText);
+            setProgress((prev) => {
+              if (!prev) return prev;
+              const tasks = prev.tasks.map((t) => t.id === updated.id ? updated : t);
+              const completed = tasks.filter((t) => t.completed).length;
+              const pct = Math.round(completed / tasks.length * 100);
+              if (pct === 100 && prev.percentage < 100) setCelebration(true);
+              return { ...prev, tasks, completed, percentage: pct };
+            });
+          } catch (err) {
+            showToast(translateApiError(err, t, t('onboarding.errorComplete', 'Error completing task')) ?? '', 'error');
+            throw err;
+          }
+        }}
+      />
     </div>
   );
 };
