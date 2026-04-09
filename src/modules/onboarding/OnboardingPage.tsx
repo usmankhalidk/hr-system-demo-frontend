@@ -906,7 +906,7 @@ const EmployeeDrawer: React.FC<{
           {isAdmin && (
             <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!employee.hasTasksAssigned && (
-                <Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: [] })}>
+                <Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: progress?.tasks.map((task) => task.templateId) ?? [] })}>
                   📋 {t('onboarding.assignTasks')}
                 </Button>
               )}
@@ -936,7 +936,7 @@ const EmployeeDrawer: React.FC<{
               <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
                 {t('onboarding.noTasksAssigned', 'No tasks assigned yet')}
-                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: [] })}>{t('onboarding.assignNow')}</Button></div>}
+                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: progress?.tasks.map((task) => task.templateId) ?? [] })}>{t('onboarding.assignNow')}</Button></div>}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
