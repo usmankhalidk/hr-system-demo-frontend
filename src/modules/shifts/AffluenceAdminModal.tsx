@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import axios from 'axios';
 import {
   getAffluence,
   createAffluence,
@@ -8,6 +9,16 @@ import {
   deleteAffluence,
   StoreAffluence,
 } from '../../api/shifts';
+
+function affluenceErrorKey(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const code: string = err.response?.data?.code ?? '';
+    if (code === 'CONFLICT') return 'shifts.affluence_error_conflict';
+    if (code === 'NOT_FOUND') return 'shifts.affluence_error_not_found';
+    if (err.response?.status === 404) return 'shifts.affluence_error_store_not_found';
+  }
+  return 'errors.DEFAULT';
+}
 
 const TIME_SLOTS = ['09:00-12:00', '12:00-15:00', '15:00-18:00', '18:00-21:00'] as const;
 const LEVELS = ['low', 'medium', 'high'] as const;
@@ -76,8 +87,8 @@ export default function AffluenceAdminModal({ storeId, onClose }: Props) {
       setForm(emptyForm);
       flash(t('shifts.affluence_added'));
       await load();
-    } catch {
-      setError(t('errors.DEFAULT'));
+    } catch (err) {
+      setError(t(affluenceErrorKey(err)));
     } finally {
       setSaving(false);
     }
@@ -92,8 +103,8 @@ export default function AffluenceAdminModal({ storeId, onClose }: Props) {
       setEditState(null);
       flash(t('shifts.affluence_updated'));
       await load();
-    } catch {
-      setError(t('errors.DEFAULT'));
+    } catch (err) {
+      setError(t(affluenceErrorKey(err)));
     } finally {
       setSaving(false);
     }
@@ -107,8 +118,8 @@ export default function AffluenceAdminModal({ storeId, onClose }: Props) {
       await deleteAffluence(id);
       flash(t('shifts.affluence_deleted'));
       await load();
-    } catch {
-      setError(t('errors.DEFAULT'));
+    } catch (err) {
+      setError(t(affluenceErrorKey(err)));
     } finally {
       setSaving(false);
     }

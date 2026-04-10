@@ -150,8 +150,8 @@
     },
     {
       "path": "src/i18n/locales/en.ts",
-      "accessCount": 23,
-      "lastAccessed": 1775669914173,
+      "accessCount": 27,
+      "lastAccessed": 1775818692443,
       "type": "directory"
     },
     {
@@ -161,15 +161,15 @@
       "type": "directory"
     },
     {
-      "path": "src/modules/settings/SettingsPage.tsx",
-      "accessCount": 15,
-      "lastAccessed": 1775650719028,
+      "path": "src/i18n/locales/it.ts",
+      "accessCount": 17,
+      "lastAccessed": 1775818697815,
       "type": "file"
     },
     {
-      "path": "src/i18n/locales/it.ts",
+      "path": "src/modules/settings/SettingsPage.tsx",
       "accessCount": 15,
-      "lastAccessed": 1775669918234,
+      "lastAccessed": 1775650719028,
       "type": "file"
     },
     {
@@ -197,6 +197,12 @@
       "type": "file"
     },
     {
+      "path": "src/api/client.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775818656405,
+      "type": "file"
+    },
+    {
       "path": "src/api/employees.ts",
       "accessCount": 3,
       "lastAccessed": 1775650542389,
@@ -218,6 +224,12 @@
       "path": "src/utils/apiErrors.ts",
       "accessCount": 3,
       "lastAccessed": 1775703647558,
+      "type": "file"
+    },
+    {
+      "path": "src/api/shifts.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775818647610,
       "type": "file"
     },
     {
@@ -245,12 +257,6 @@
       "type": "file"
     },
     {
-      "path": "src/api/client.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775668701843,
-      "type": "file"
-    },
-    {
       "path": "src/types/index.ts",
       "accessCount": 2,
       "lastAccessed": 1775669608888,
@@ -269,15 +275,15 @@
       "type": "file"
     },
     {
-      "path": "src/api/stores.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775668347696,
+      "path": "src/modules/shifts/AffluenceAdminModal.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775818716885,
       "type": "file"
     },
     {
-      "path": "src/api/shifts.ts",
+      "path": "src/api/stores.ts",
       "accessCount": 1,
-      "lastAccessed": 1775668356276,
+      "lastAccessed": 1775668347696,
       "type": "file"
     },
     {
