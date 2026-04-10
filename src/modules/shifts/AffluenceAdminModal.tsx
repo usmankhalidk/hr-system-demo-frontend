@@ -225,7 +225,7 @@ export default function AffluenceAdminModal({ storeId, onClose }: Props) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: 'var(--background)' }}>
-                    {[t('shifts.affluence_day_label'), t('shifts.affluence_time_slot_label'), 'Week', t('shifts.affluence_level_label'), t('shifts.affluence_required_staff_label'), ''].map((h, i) => (
+                    {[t('shifts.affluence_day_label'), t('shifts.affluence_time_slot_label'), t('shifts.affluence_week_label'), t('shifts.affluence_level_label'), t('shifts.affluence_required_staff_label'), ''].map((h, i) => (
                       <th key={i} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', fontSize: 11 }}>{h}</th>
                     ))}
                   </tr>
