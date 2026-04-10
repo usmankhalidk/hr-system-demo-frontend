@@ -147,6 +147,8 @@ export function StoreList() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
+
   const loadStores = async () => {
     setLoading(true);
     setError(null);
@@ -271,10 +273,18 @@ export function StoreList() {
     setFormStep(2);
   };
 
-  const handleSave = async () => {
+  const handleSkipClick = () => {
+    setSkipConfirmOpen(true);
+  };
+
+  const handleConfirmSkip = () => {
+    setSkipConfirmOpen(false);
+    handleSave(true);
+  };
+  const handleSave = async (skipTerminal: boolean = false) => {
     if (editingStore) {
       if (!validateForm()) return;
-    } else {
+    } else if (!skipTerminal) {
       if (!validateTerminal()) return;
     }
     setFormSaving(true);
@@ -296,14 +306,19 @@ export function StoreList() {
         await updateStore(editingStore.id, payload);
         showToast(t('stores.updatedSuccess'), 'success');
       } else {
-        if (!terminalPassword) {
+        const terminalPayload = skipTerminal
+          ? undefined
+          : { email: getTerminalEmail(), password: terminalPassword };
+
+        if (!skipTerminal && !terminalPassword) {
           setFormError('Terminal password is required');
           setFormSaving(false);
           return;
         }
+
         await createStore({
           ...payload,
-          terminal: { email: getTerminalEmail(), password: terminalPassword }
+          terminal: terminalPayload
         });
         showToast(t('stores.createdSuccess'), 'success');
       }
@@ -556,17 +571,22 @@ export function StoreList() {
               {t('common.cancel')}
             </Button>
             {editingStore ? (
-              <Button onClick={handleSave} loading={formSaving}>
+              <Button onClick={() => handleSave()} loading={formSaving}>
                 {t('common.save')}
               </Button>
             ) : formStep === 1 ? (
-              <Button onClick={handleNext}>
-                Next
+              <Button onClick={() => handleNext()}>
+                {t('common.next')}
               </Button>
             ) : (
-              <Button onClick={handleSave} loading={formSaving}>
-                {t('common.save')}
-              </Button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="secondary" onClick={() => handleSkipClick()} disabled={formSaving}>
+                  {t('stores.skipTerminal')}
+                </Button>
+                <Button onClick={() => handleSave()} loading={formSaving}>
+                  {t('common.save')}
+                </Button>
+              </div>
             )}
           </>
         }
@@ -821,6 +841,29 @@ export function StoreList() {
           </p>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--warning)', fontWeight: 500 }}>
             {t('stores.confirmDeleteWarning')}
+          </p>
+        </div>
+      </Modal>
+
+      {/* Skip Terminal Confirmation Modal */}
+      <Modal
+        open={skipConfirmOpen}
+        onClose={() => setSkipConfirmOpen(false)}
+        title={t('stores.skipTerminalConfirmTitle')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSkipConfirmOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleConfirmSkip}>
+              {t('common.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <p style={{ margin: 0, color: 'var(--text-primary)' }}>
+            {t('stores.skipTerminalConfirmMsg')}
           </p>
         </div>
       </Modal>

@@ -7,10 +7,11 @@ export interface Terminal {
   email: string;
   role: UserRole;
   status: 'active' | 'inactive';
-  company_id: number;
-  store_id: number;
+  companyId: number;
+  storeId: number;
   companyName: string;
   storeName: string;
+  plainPassword?: string;
 }
 
 export interface ListTerminalsResponse {
@@ -45,5 +46,43 @@ export const getTerminals = async (filters: TerminalFilters = {}): Promise<ListT
   if (filters.limit) params.append('limit', filters.limit.toString());
 
   const response = await apiClient.get<ListTerminalsResponse>(`terminals?${params.toString()}`);
+  return response.data;
+};
+
+export interface StoreTerminalStatus {
+  id: number;
+  name: string;
+  code: string;
+  address: string;
+  cap: string;
+  maxStaff: number;
+  companyId: number;
+  companyName: string;
+  hasTerminal: boolean;
+}
+
+export const getStoresWithTerminalStatus = async (): Promise<StoreTerminalStatus[]> => {
+  const response = await apiClient.get<{ success: boolean; data: StoreTerminalStatus[] }>('terminals/stores-status');
+  return response.data.data;
+};
+
+export interface CreateTerminalPayload {
+  storeId: number;
+  email: string;
+  password: string;
+}
+
+export const createTerminal = async (payload: CreateTerminalPayload): Promise<{ success: boolean; data: any }> => {
+  const response = await apiClient.post('terminals', payload);
+  return response.data;
+};
+
+export const updateTerminal = async (id: number, payload: { password?: string }): Promise<{ success: boolean; data: any }> => {
+  const response = await apiClient.patch(`terminals/${id}`, payload);
+  return response.data;
+};
+
+export const deleteTerminal = async (id: number): Promise<{ success: boolean; data: any }> => {
+  const response = await apiClient.delete(`terminals/${id}`);
   return response.data;
 };
