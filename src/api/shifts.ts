@@ -73,6 +73,7 @@ export interface StoreAffluence {
   timeSlot: string;
   level: 'low' | 'medium' | 'high';
   requiredStaff: number;
+  scheduledStaff?: number;
 }
 
 export interface CreateShiftPayload {

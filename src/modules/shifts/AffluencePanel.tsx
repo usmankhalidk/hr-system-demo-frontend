@@ -72,6 +72,9 @@ export default function AffluencePanel({ storeId, week }: Props) {
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: '#fff' }}>
             {t('shifts.affluence_suggestions')}
           </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+            {t('shifts.affluence_source_hint')}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {canManage && (
@@ -173,9 +176,24 @@ export default function AffluencePanel({ storeId, week }: Props) {
                           {t(`shifts.level_${slot.level}`)}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: 13, color: meta.color }}>{slot.requiredStaff}</span>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>pers.</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {slot.scheduledStaff !== undefined && (
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12,
+                            background: slot.scheduledStaff >= slot.requiredStaff
+                              ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.10)',
+                            color: slot.scheduledStaff >= slot.requiredStaff ? '#16a34a' : '#dc2626',
+                            border: `1px solid ${slot.scheduledStaff >= slot.requiredStaff ? '#86efac' : '#fca5a5'}`,
+                          }}>
+                            {slot.scheduledStaff >= slot.requiredStaff ? '✓' : '⚠'} {slot.scheduledStaff}/{slot.requiredStaff}
+                          </span>
+                        )}
+                        {slot.scheduledStaff === undefined && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: meta.color }}>{slot.requiredStaff}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('shifts.affluence_required_short')}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

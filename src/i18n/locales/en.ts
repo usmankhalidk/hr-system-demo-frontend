@@ -932,6 +932,8 @@ const en = {
     affluence_updated: 'Slot updated.',
     affluence_deleted: 'Slot deleted.',
     affluence_all_entries: 'All configured slots',
+    affluence_source_hint: 'Based on configured traffic patterns · scheduled / required',
+    affluence_required_short: 'req.',
     affluence_error_conflict: 'A slot already exists for this day / time combination. Edit the existing row instead.',
     affluence_error_not_found: 'Entry not found or already deleted.',
     affluence_error_store_not_found: 'Store not found. Refresh the page and try again.',

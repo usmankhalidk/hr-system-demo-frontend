@@ -14,8 +14,8 @@ function affluenceErrorKey(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const code: string = err.response?.data?.code ?? '';
     if (code === 'CONFLICT') return 'shifts.affluence_error_conflict';
+    if (code === 'STORE_NOT_FOUND') return 'shifts.affluence_error_store_not_found';
     if (code === 'NOT_FOUND') return 'shifts.affluence_error_not_found';
-    if (err.response?.status === 404) return 'shifts.affluence_error_store_not_found';
   }
   return 'errors.DEFAULT';
 }
