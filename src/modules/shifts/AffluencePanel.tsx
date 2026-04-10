@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAffluence, StoreAffluence } from '../../api/shifts';
+import { useAuth } from '../../context/AuthContext';
+import AffluenceAdminModal from './AffluenceAdminModal';
 
 interface Props {
   storeId: number;
@@ -28,6 +30,9 @@ export default function AffluencePanel({ storeId, week }: Props) {
   const [rows, setRows] = useState<StoreAffluence[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin' || user?.role === 'hr';
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,14 +72,37 @@ export default function AffluencePanel({ storeId, week }: Props) {
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: '#fff' }}>
             {t('shifts.affluence_suggestions')}
           </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+            {t('shifts.affluence_source_hint')}
+          </div>
         </div>
-        {loading && (
-          <div style={{
-            width: 16, height: 16, borderRadius: '50%',
-            border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff',
-            animation: 'spin 0.7s linear infinite',
-          }} />
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {canManage && (
+            <button
+              onClick={() => setAdminOpen(true)}
+              title={t('shifts.affluence_manage')}
+              style={{
+                background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: 6, color: '#fff', cursor: 'pointer',
+                padding: '4px 8px', fontSize: 11, fontWeight: 700,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              {t('shifts.affluence_manage')}
+            </button>
+          )}
+          {loading && (
+            <div style={{
+              width: 16, height: 16, borderRadius: '50%',
+              border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff',
+              animation: 'spin 0.7s linear infinite',
+            }} />
+          )}
+        </div>
       </div>
 
       {/* Day filter pills */}
@@ -148,9 +176,24 @@ export default function AffluencePanel({ storeId, week }: Props) {
                           {t(`shifts.level_${slot.level}`)}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: 13, color: meta.color }}>{slot.requiredStaff}</span>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>pers.</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {slot.scheduledStaff !== undefined && (
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12,
+                            background: slot.scheduledStaff >= slot.requiredStaff
+                              ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.10)',
+                            color: slot.scheduledStaff >= slot.requiredStaff ? '#16a34a' : '#dc2626',
+                            border: `1px solid ${slot.scheduledStaff >= slot.requiredStaff ? '#86efac' : '#fca5a5'}`,
+                          }}>
+                            {slot.scheduledStaff >= slot.requiredStaff ? '✓' : '⚠'} {slot.scheduledStaff}/{slot.requiredStaff}
+                          </span>
+                        )}
+                        {slot.scheduledStaff === undefined && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: meta.color }}>{slot.requiredStaff}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('shifts.affluence_required_short')}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -178,6 +221,12 @@ export default function AffluencePanel({ storeId, week }: Props) {
           );
         })}
       </div>
+      {adminOpen && (
+        <AffluenceAdminModal
+          storeId={storeId}
+          onClose={() => { setAdminOpen(false); load(); }}
+        />
+      )}
     </div>
   );
 }

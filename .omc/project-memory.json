@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775642945468,
+  "lastScanned": 1775820465854,
   "projectRoot": "/Users/user/hr-software/hr-system-demo-frontend",
   "techStack": {
     "languages": [
@@ -70,6 +70,7 @@
     "isMonorepo": false,
     "workspaces": [],
     "mainDirectories": [
+      "public",
       "src"
     ],
     "gitBranches": {
@@ -82,17 +83,27 @@
     "dist": {
       "path": "dist",
       "purpose": "Distribution/build output",
-      "fileCount": 1,
-      "lastAccessed": 1775642945430,
+      "fileCount": 2,
+      "lastAccessed": 1775820465835,
       "keyFiles": [
+        "favicon.png",
         "index.html"
+      ]
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 1,
+      "lastAccessed": 1775820465836,
+      "keyFiles": [
+        "favicon.png"
       ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 3,
-      "lastAccessed": 1775642945431,
+      "lastAccessed": 1775820465842,
       "keyFiles": [
         "App.tsx",
         "index.css",
@@ -102,42 +113,41 @@
     "dist/assets": {
       "path": "dist/assets",
       "purpose": "Static assets",
-      "fileCount": 2,
-      "lastAccessed": 1775642945439,
+      "fileCount": 3,
+      "lastAccessed": 1775820465843,
       "keyFiles": [
-        "index-BpwfiZ85.css",
-        "index-CQAH7kkw.js"
+        "fusaro-logo-BjyBPVsQ.png",
+        "index-CMVKs2Pn.css",
+        "index-CoFHjes-.js"
       ]
     },
     "src/api": {
       "path": "src/api",
       "purpose": "API routes",
-      "fileCount": 18,
-      "lastAccessed": 1775642945440,
+      "fileCount": 21,
+      "lastAccessed": 1775820465844,
       "keyFiles": [
         "ats.ts",
         "attendance.ts",
         "auth.ts"
       ]
     },
+    "src/assets": {
+      "path": "src/assets",
+      "purpose": "Static assets",
+      "fileCount": 1,
+      "lastAccessed": 1775820465845,
+      "keyFiles": [
+        "fusaro-logo.png"
+      ]
+    },
     "src/components": {
       "path": "src/components",
       "purpose": "UI components",
       "fileCount": 1,
-      "lastAccessed": 1775642945440,
+      "lastAccessed": 1775820465845,
       "keyFiles": [
         "ProtectedRoute.tsx"
-      ]
-    },
-    "src/test": {
-      "path": "src/test",
-      "purpose": "Test files",
-      "fileCount": 13,
-      "lastAccessed": 1775642945441,
-      "keyFiles": [
-        "auth.test.tsx",
-        "authTokenStorage.test.ts",
-        "employeeList.test.tsx"
       ]
     }
   },
@@ -150,8 +160,8 @@
     },
     {
       "path": "src/i18n/locales/en.ts",
-      "accessCount": 23,
-      "lastAccessed": 1775669914173,
+      "accessCount": 28,
+      "lastAccessed": 1775819692216,
       "type": "directory"
     },
     {
@@ -161,15 +171,15 @@
       "type": "directory"
     },
     {
-      "path": "src/modules/settings/SettingsPage.tsx",
-      "accessCount": 15,
-      "lastAccessed": 1775650719028,
+      "path": "src/i18n/locales/it.ts",
+      "accessCount": 18,
+      "lastAccessed": 1775819697555,
       "type": "file"
     },
     {
-      "path": "src/i18n/locales/it.ts",
+      "path": "src/modules/settings/SettingsPage.tsx",
       "accessCount": 15,
-      "lastAccessed": 1775669918234,
+      "lastAccessed": 1775650719028,
       "type": "file"
     },
     {
@@ -194,6 +204,24 @@
       "path": "src/api/onboarding.ts",
       "accessCount": 7,
       "lastAccessed": 1775669941379,
+      "type": "file"
+    },
+    {
+      "path": "src/api/shifts.ts",
+      "accessCount": 6,
+      "lastAccessed": 1775819668120,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/AffluencePanel.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775820469604,
+      "type": "file"
+    },
+    {
+      "path": "src/api/client.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775818656405,
       "type": "file"
     },
     {
@@ -245,12 +273,6 @@
       "type": "file"
     },
     {
-      "path": "src/api/client.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775668701843,
-      "type": "file"
-    },
-    {
       "path": "src/types/index.ts",
       "accessCount": 2,
       "lastAccessed": 1775669608888,
@@ -269,15 +291,15 @@
       "type": "file"
     },
     {
-      "path": "src/api/stores.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775668347696,
+      "path": "src/modules/shifts/AffluenceAdminModal.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775818716885,
       "type": "file"
     },
     {
-      "path": "src/api/shifts.ts",
+      "path": "src/api/stores.ts",
       "accessCount": 1,
-      "lastAccessed": 1775668356276,
+      "lastAccessed": 1775668347696,
       "type": "file"
     },
     {
@@ -303,6 +325,12 @@
       "accessCount": 1,
       "lastAccessed": 1775669604001,
       "type": "file"
+    },
+    {
+      "path": "src/i18n/locales",
+      "accessCount": 1,
+      "lastAccessed": 1775820479844,
+      "type": "directory"
     }
   ],
   "userDirectives": []

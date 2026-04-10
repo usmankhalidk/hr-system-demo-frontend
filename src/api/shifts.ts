@@ -73,6 +73,7 @@ export interface StoreAffluence {
   timeSlot: string;
   level: 'low' | 'medium' | 'high';
   requiredStaff: number;
+  scheduledStaff?: number;
 }
 
 export interface CreateShiftPayload {
@@ -208,7 +209,32 @@ export async function getAffluence(params: {
   store_id?: number;
   week?: string;
   day_of_week?: number;
+  raw?: 1;
 }): Promise<{ affluence: StoreAffluence[] }> {
   const res = await client.get('/shifts/affluence', { params });
   return res.data.data;
+}
+
+export async function createAffluence(data: {
+  store_id: number;
+  day_of_week: number;
+  time_slot: string;
+  level: 'low' | 'medium' | 'high';
+  required_staff: number;
+  iso_week?: number | null;
+}): Promise<{ affluence: StoreAffluence }> {
+  const res = await client.post('/shifts/affluence', data);
+  return res.data.data;
+}
+
+export async function updateAffluence(
+  id: number,
+  data: { level: 'low' | 'medium' | 'high'; required_staff: number },
+): Promise<{ affluence: StoreAffluence }> {
+  const res = await client.put(`/shifts/affluence/${id}`, data);
+  return res.data.data;
+}
+
+export async function deleteAffluence(id: number): Promise<void> {
+  await client.delete(`/shifts/affluence/${id}`);
 }
