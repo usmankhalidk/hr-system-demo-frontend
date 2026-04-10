@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Shield,
   ArrowLeftRight,
+  Monitor,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -41,6 +42,7 @@ const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'negozi',      implemented: true, icon: <Store size={15} /> },
   { key: 'messaggi',    implemented: true, icon: <MessageSquare size={15} /> },
   { key: 'impostazioni',implemented: true, icon: <Settings size={15} /> },
+  { key: 'terminali',    implemented: true, icon: <Monitor size={15} /> },
   { key: 'gestione_accessi', implemented: true, icon: <Shield size={15} /> },
   { key: 'documenti',   implemented: false, icon: <FileText size={15} /> },
   { key: 'ats',         implemented: false, icon: <Briefcase size={15} /> },

@@ -111,6 +111,16 @@ function dayOfWeekMonBased(date: Date): number {
   return (date.getDay() + 6) % 7;
 }
 
+function normalizeOffDays(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [5, 6];
+  const normalized = Array.from(new Set(
+    raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
+  )).sort((a, b) => a - b);
+  return normalized.length > 0 ? normalized : [5, 6];
+}
+
 function enumerateDatesForPattern(patternDay: number, startDate: string, endDate: string): string[] {
   const start = parseIsoDate(startDate);
   const end = parseIsoDate(endDate);
@@ -170,15 +180,14 @@ interface ShiftTemplatesPanelProps {
 export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPanelProps) {
   const { t } = useTranslation();
 
-  const DAY_LABELS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const DAY_LABELS_SHORT = [
-    t('shifts.dayMon', 'Mon'),
-    t('shifts.dayTue', 'Tue'),
-    t('shifts.dayWed', 'Wed'),
-    t('shifts.dayThu', 'Thu'),
-    t('shifts.dayFri', 'Fri'),
-    t('shifts.daySat', 'Sat'),
-    t('shifts.daySun', 'Sun'),
+  const DAY_LABELS_FULL = [
+    t('stores.dayMonday', 'Monday'),
+    t('stores.dayTuesday', 'Tuesday'),
+    t('stores.dayWednesday', 'Wednesday'),
+    t('stores.dayThursday', 'Thursday'),
+    t('stores.dayFriday', 'Friday'),
+    t('stores.daySaturday', 'Saturday'),
+    t('stores.daySunday', 'Sunday'),
   ];
 
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
@@ -208,7 +217,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     }
 
     if (!applyTemplate) {
-      return Array.from(byId.values()).sort((a, b) => a.surname.localeCompare(b.surname) || a.name.localeCompare(b.name));
+      return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name) || a.surname.localeCompare(b.surname));
     }
 
     const transferPriority: Record<TransferAssignment['status'], number> = {
@@ -258,6 +267,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
         terminationDate: null,
         workingType: null,
         weeklyHours: null,
+        offDays: [5, 6],
         status: 'active',
         firstAidFlag: false,
         maritalStatus: null,
@@ -269,7 +279,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
       });
     }
 
-    return Array.from(byId.values()).sort((a, b) => a.surname.localeCompare(b.surname) || a.name.localeCompare(b.name));
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name) || a.surname.localeCompare(b.surname));
   }, [employees, applyTransfers, applyTemplate]);
 
   // Confirm delete
@@ -457,7 +467,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplyTransfers([]);
     setEmployeesLoading(true);
     getEmployees({ storeId: tmpl.storeId, status: 'active', limit: 100 })
-      .then((d) => setEmployees(d.employees.sort((a, b) => a.surname.localeCompare(b.surname))))
+      .then((d) => setEmployees(d.employees.sort((a, b) => a.name.localeCompare(b.name) || a.surname.localeCompare(b.surname))))
       .catch(() => { setEmployees([]); })
       .finally(() => setEmployeesLoading(false));
   }
@@ -505,6 +515,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setError(null);
     let created = 0;
     let skipped = 0;
+    let skippedOffDay = 0;
     let failed = 0;
     const failureMessages: string[] = [];
 
@@ -529,14 +540,23 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
       dates: enumerateDatesForPattern(pattern.dayOfWeek, applyStartDate, applyEndDate),
     }));
 
-    for (const emp of applyEmployeeIds) {
+    const applyEmployeeById = new Map(applyEmployees.map((employee) => [employee.id, employee]));
+
+    for (const empId of applyEmployeeIds) {
+      const employee = applyEmployeeById.get(empId);
+      const employeeOffDays = normalizeOffDays(employee?.offDays);
       for (const item of patternDates) {
         for (const dateStr of item.dates) {
+          const dayMonBased = dayOfWeekMonBased(new Date(`${dateStr}T12:00:00`));
+          if (employeeOffDays.includes(dayMonBased)) {
+            skippedOffDay++;
+            continue;
+          }
           try {
             const breakType = item.pattern.breakType ?? 'fixed';
             const isFlexible = breakType === 'flexible';
             await createShift({
-              user_id: emp,
+              user_id: empId,
               store_id: applyTemplate.storeId,
               date: dateStr,
               start_time: item.pattern.startTime,
@@ -566,6 +586,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplying(false);
     const parts: string[] = [`✓ ${t('shifts.shiftsCreated', { count: created })}`];
     if (skipped > 0) parts.push(t('shifts.shiftsSkipped', { count: skipped }));
+    if (skippedOffDay > 0) parts.push(t('shifts.shiftsSkippedOffDay', { count: skippedOffDay }));
     if (failed > 0) parts.push(t('shifts.shiftsFailed', { count: failed }));
     setSuccessMsg(parts.join(' · '));
     setTimeout(() => setSuccessMsg(null), 4000);
@@ -712,7 +733,10 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
               {/* Day selector pills */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  Select Working Days
+                  {t('shifts.templateDayToggleTitle', 'Working / Off days')}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  {t('shifts.templateDayToggleHint', 'Click each day to toggle whether the template works that day or keeps it off.')}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {DAY_LABELS_FULL.map((label, idx) => {
@@ -723,25 +747,41 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                         type="button"
                         onClick={() => toggleDay(idx)}
                         style={{
-                          padding: '8px 14px',
+                          padding: '8px 12px',
                           borderRadius: 20,
                           border: `2px solid ${enabled ? 'var(--accent)' : 'var(--border)'}`,
-                          background: enabled ? 'var(--accent)' : 'var(--surface-warm)',
-                          color: enabled ? '#fff' : 'var(--text-secondary)',
+                          background: enabled ? 'rgba(201,151,58,0.13)' : 'var(--surface-warm)',
+                          color: 'var(--text-secondary)',
                           fontWeight: 600, fontSize: 13,
                           cursor: 'pointer',
                           transition: 'all 0.15s',
                           fontFamily: 'var(--font-body)',
+                          minWidth: 114,
                         }}
                       >
-                        {DAY_LABELS_SHORT[idx]}
+                        <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1, gap: 2 }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 700 }}>{label}</span>
+                          <span style={{
+                            fontSize: 9,
+                            fontWeight: 800,
+                            letterSpacing: '0.07em',
+                            textTransform: 'uppercase',
+                            borderRadius: 999,
+                            padding: '2px 7px',
+                            border: enabled ? '1px solid rgba(22,101,52,0.28)' : '1px solid rgba(180,83,9,0.3)',
+                            background: enabled ? 'rgba(134,239,172,0.2)' : 'rgba(251,191,36,0.2)',
+                            color: enabled ? '#166534' : '#92400e',
+                          }}>
+                            {enabled ? t('shifts.dayWorking', 'Working') : t('shifts.dayOff', 'Off')}
+                          </span>
+                        </span>
                       </button>
                     );
                   })}
                 </div>
                 {enabledCount === 0 && (
                   <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-                    ⚠ Please select at least one day.
+                    {t('shifts.templateDayRequired', 'Please set at least one working day.')}
                   </div>
                 )}
               </div>
@@ -1069,7 +1109,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {applyEmployees.map((emp) => {
                       const selected = applyEmployeeIds.includes(emp.id);
-                      const fullName = `${emp.surname} ${emp.name}`.trim();
+                      const fullName = `${emp.name} ${emp.surname}`.trim();
                       const initials = `${emp.name?.[0] ?? ''}${emp.surname?.[0] ?? ''}`.toUpperCase() || 'U';
                       const avatarUrl = getAvatarUrl(emp.avatarFilename);
                       const transfer = emp.transferForApply ?? null;
@@ -1288,7 +1328,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {templates.map((tmpl) => {
                 const patterns: ShiftPattern[] = (tmpl.templateData as unknown as TemplateData)?.shifts ?? [];
-                const storeName = stores.find((s) => s.id === tmpl.storeId)?.name ?? `#${tmpl.storeId}`;
+                const storeName = tmpl.storeName ?? stores.find((s) => s.id === tmpl.storeId)?.name ?? `#${tmpl.storeId}`;
                 const isExpanded = expandedId === tmpl.id;
                 return (
                   <li key={tmpl.id} style={{

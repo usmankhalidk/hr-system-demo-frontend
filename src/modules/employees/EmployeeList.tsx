@@ -411,7 +411,6 @@ export function EmployeeList() {
             <option value="area_manager">{tRole('area_manager')}</option>
             <option value="store_manager">{tRole('store_manager')}</option>
             <option value="employee">{tRole('employee')}</option>
-            <option value="store_terminal">{tRole('store_terminal')}</option>
           </Select>
         </div>
         {hasActiveFilters && (

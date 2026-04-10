@@ -137,6 +137,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                   const enabled = grid[mod.key]?.[roleKey] ?? false;
                   // Handle casting properly
                   const isEligible = isRoleEligibleForModule(roleKey, mod.key as any);
+                  const isTerminaliRestricted = mod.key === 'terminali' && (roleKey === 'store_manager' || roleKey === 'employee');
                   return (
                     <td key={roleKey} style={{
                       padding: '14px 10px',
@@ -149,7 +150,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                         ) : isSaved ? (
                           <CheckCircle2 size={18} color="var(--success)" style={{ animation: 'popIn 0.22s cubic-bezier(0.34,1.56,0.64,1)' }} />
                         ) : (
-                          <Toggle checked={enabled} onChange={() => onToggle(mod.key, roleKey)} disabled={isSaving || !isEligible} />
+                          <Toggle checked={enabled} onChange={() => onToggle(mod.key, roleKey)} disabled={isSaving || !isEligible || isTerminaliRestricted} />
                         )}
                       </div>
                     </td>

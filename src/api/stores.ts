@@ -13,7 +13,7 @@ export async function getStore(id: number): Promise<Store> {
   return data.data;
 }
 
-export async function createStore(payload: Partial<Store>): Promise<Store> {
+export async function createStore(payload: Partial<Store> & { terminal?: { email: string; password?: string } }): Promise<Store> {
   const { data } = await apiClient.post('/stores', payload);
   return data.data;
 }

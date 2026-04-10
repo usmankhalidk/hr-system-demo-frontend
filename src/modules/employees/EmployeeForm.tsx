@@ -1,13 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Eye, EyeOff, RefreshCw, Copy, CheckCircle2, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, Copy, CheckCircle2, KeyRound, ChevronDown, ShieldAlert, ShieldCheck, Store as StoreIcon } from 'lucide-react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useAuth } from '../../context/AuthContext';
 import { getEmployee, createEmployee, updateEmployee, getEmployees } from '../../api/employees';
 import { getCompanies } from '../../api/companies';
 import { translateApiError } from '../../utils/apiErrors';
 import { getStores } from '../../api/stores';
+import apiClient, { getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
 import { Company, Employee, Store, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -38,6 +39,7 @@ interface FormData {
   contractEndDate: string;
   workingType: 'full_time' | 'part_time' | '';
   weeklyHours: string;
+  offDays: number[];
   personalEmail: string;
   dateOfBirth: string;
   nationality: string;
@@ -58,10 +60,24 @@ const initialFormData: FormData = {
   companyId: '',
   storeId: '', supervisorId: '', department: '',
   hireDate: '', contractEndDate: '', workingType: '', weeklyHours: '',
+  offDays: [5, 6],
   personalEmail: '', dateOfBirth: '', nationality: '', gender: '',
   iban: '', address: '', cap: '', firstAidFlag: false, maritalStatus: '',
   contractType: '', probationMonths: '', terminationDate: '', terminationType: '',
 };
+
+const DEFAULT_OFF_DAYS = [5, 6]; // Mon=0 ... Sun=6
+const MON_BASED_DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+function normalizeOffDays(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_OFF_DAYS];
+  const normalized = Array.from(new Set(
+    raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
+  )).sort((a, b) => a - b);
+  return normalized.length > 0 ? normalized : [...DEFAULT_OFF_DAYS];
+}
 
 function generateUniqueId(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -125,6 +141,15 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const [loadingData, setLoadingData] = useState(isEditMode);
   const [error, setError] = useState<string | null>(null);
   const [step1Errors, setStep1Errors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [companyPermissionMap, setCompanyPermissionMap] = useState<Record<number, boolean>>({});
+  const [companyPickerOpen, setCompanyPickerOpen] = useState(false);
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
+  const [supervisorPickerOpen, setSupervisorPickerOpen] = useState(false);
+  const [supervisorQuery, setSupervisorQuery] = useState('');
+
+  const companyPickerRef = useRef<HTMLDivElement | null>(null);
+  const storePickerRef = useRef<HTMLDivElement | null>(null);
+  const supervisorPickerRef = useRef<HTMLDivElement | null>(null);
 
   // Password for new employee (create mode only)
   const [tempPassword, setTempPassword] = useState('');
@@ -143,13 +168,48 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   }, []);
 
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
+  const isSuperAdmin = user?.isSuperAdmin === true;
 
-  const canPickCompany = !isEditMode && (user?.role === 'admin' || user?.role === 'hr');
+  const canPickCompany = !isEditMode && (user?.role === 'admin' || user?.role === 'hr' || isSuperAdmin);
+  const canAssignAdminRole = user?.isSuperAdmin === true || user?.role === 'admin';
 
   const selectedCompanyId = formData.companyId ? parseInt(formData.companyId, 10) : NaN;
   const effectiveCompanyId = Number.isNaN(selectedCompanyId)
     ? (canPickCompany ? null : (user?.companyId ?? null))
     : selectedCompanyId;
+
+  const selectedCompany = companies.find((company) => company.id === selectedCompanyId) ?? null;
+  const selectedStore = stores.find((store) => String(store.id) === formData.storeId) ?? null;
+  const selectedSupervisor = supervisors.find((sup) => String(sup.id) === formData.supervisorId) ?? null;
+  const normalizedSupervisorQuery = supervisorQuery.trim().toLowerCase();
+  const filteredSupervisors = normalizedSupervisorQuery
+    ? supervisors.filter((sup) => {
+        const fullName = `${sup.name} ${sup.surname}`.toLowerCase();
+        return (
+          fullName.includes(normalizedSupervisorQuery)
+          || sup.email.toLowerCase().includes(normalizedSupervisorQuery)
+          || sup.role.toLowerCase().includes(normalizedSupervisorQuery)
+          || (sup.companyName ?? '').toLowerCase().includes(normalizedSupervisorQuery)
+        );
+      })
+    : supervisors;
+
+  const canCreateInCompany = useCallback((companyId: number): boolean => {
+    if (isSuperAdmin) return true;
+    return companyPermissionMap[companyId] !== false;
+  }, [companyPermissionMap, isSuperAdmin]);
+  const dayLabels = [
+    t('shifts.dayMon', 'Mon'),
+    t('shifts.dayTue', 'Tue'),
+    t('shifts.dayWed', 'Wed'),
+    t('shifts.dayThu', 'Thu'),
+    t('shifts.dayFri', 'Fri'),
+    t('shifts.daySat', 'Sat'),
+    t('shifts.daySun', 'Sun'),
+  ];
+  const dayOptions = MON_BASED_DAYS.map((value) => ({ value, label: dayLabels[value] }));
+  const workingDays = dayOptions.filter(({ value }) => !formData.offDays.includes(value));
+  const offDays = dayOptions.filter(({ value }) => formData.offDays.includes(value));
 
   useEffect(() => {
     if (effectiveCompanyId == null) {
@@ -163,12 +223,69 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
 
   // Load companies for admin/hr so grouped users can pick a target company
   useEffect(() => {
-    if (!isEditMode && (user?.role === 'admin' || user?.role === 'hr')) {
+    if (!isEditMode && (user?.role === 'admin' || user?.role === 'hr' || isSuperAdmin)) {
       getCompanies()
         .then(setCompanies)
         .catch(() => setCompanies([]));
     }
-  }, [isEditMode, user?.role]);
+  }, [isEditMode, isSuperAdmin, user?.role]);
+
+  useEffect(() => {
+    if (!canPickCompany || companies.length === 0) {
+      setCompanyPermissionMap({});
+      return;
+    }
+
+    if (isSuperAdmin) {
+      setCompanyPermissionMap(Object.fromEntries(companies.map((company) => [company.id, true])));
+      return;
+    }
+
+    let mounted = true;
+    Promise.all(
+      companies.map(async (company) => {
+        try {
+          const { data } = await apiClient.get('/permissions/effective', {
+            params: { target_company_id: company.id },
+          });
+          return [company.id, Boolean(data?.data?.modules?.dipendenti)] as const;
+        } catch {
+          return [company.id, false] as const;
+        }
+      }),
+    )
+      .then((entries) => {
+        if (!mounted) return;
+        setCompanyPermissionMap(Object.fromEntries(entries));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setCompanyPermissionMap({});
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [canPickCompany, companies, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!companyPickerOpen && !storePickerOpen && !supervisorPickerOpen) return;
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (companyPickerOpen && !companyPickerRef.current?.contains(target)) {
+        setCompanyPickerOpen(false);
+      }
+      if (storePickerOpen && !storePickerRef.current?.contains(target)) {
+        setStorePickerOpen(false);
+      }
+      if (supervisorPickerOpen && !supervisorPickerRef.current?.contains(target)) {
+        setSupervisorPickerOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [companyPickerOpen, storePickerOpen, supervisorPickerOpen]);
 
   // Load supervisor options (same company, filtered client-side)
   useEffect(() => {
@@ -229,6 +346,14 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   }, [isEditMode]);
 
   useEffect(() => {
+    if (!open) return;
+    setCompanyPickerOpen(false);
+    setStorePickerOpen(false);
+    setSupervisorPickerOpen(false);
+    setSupervisorQuery('');
+  }, [open]);
+
+  useEffect(() => {
     if (!isEditMode || !employeeId) return;
     let mounted = true;
     setLoadingData(true);
@@ -249,6 +374,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
           contractEndDate: emp.contractEndDate ?? '',
           workingType: emp.workingType ?? '',
           weeklyHours: emp.weeklyHours != null ? String(emp.weeklyHours) : '',
+          offDays: normalizeOffDays(emp.offDays),
           personalEmail: emp.personalEmail ?? '',
           dateOfBirth: emp.dateOfBirth ?? '',
           nationality: emp.nationality ?? '',
@@ -275,9 +401,22 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
     return () => { mounted = false; };
   }, [isEditMode, employeeId]);
 
-  const set = (field: keyof FormData, value: string | boolean) => {
+  const set = (field: keyof FormData, value: string | boolean | number[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (step1Errors[field]) setStep1Errors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const toggleOffDay = (day: number) => {
+    setFormData((prev) => {
+      const current = normalizeOffDays(prev.offDays);
+      const hasDay = current.includes(day);
+      if (hasDay) {
+        const next = current.filter((item) => item !== day);
+        if (next.length === 0) return prev;
+        return { ...prev, offDays: next };
+      }
+      return { ...prev, offDays: [...current, day].sort((a, b) => a - b) };
+    });
   };
 
   const validateStep1 = (): boolean => {
@@ -291,6 +430,12 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
     }
     if (!formData.role) errs.role = t('employees.fieldRequired');
     if (canPickCompany && !formData.companyId) errs.companyId = t('employees.fieldRequired');
+    if (canPickCompany && formData.companyId) {
+      const requestedCompanyId = parseInt(formData.companyId, 10);
+      if (!Number.isNaN(requestedCompanyId) && !canCreateInCompany(requestedCompanyId)) {
+        errs.companyId = t('employees.companyPermissionDenied', 'You do not have permission to create employees in this company.');
+      }
+    }
     if (!isEditMode && !formData.uniqueId.trim()) errs.uniqueId = t('employees.fieldRequired');
     setStep1Errors(errs);
     return Object.keys(errs).length === 0;
@@ -311,6 +456,9 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const handleBack = () => setStep(1);
 
   const validateStep2 = (): string | null => {
+    if (!Array.isArray(formData.offDays) || formData.offDays.length === 0) {
+      return t('employees.offDaysRequired', 'Please keep at least one off day.');
+    }
     // Weekly hours
     if (formData.weeklyHours) {
       const hours = parseFloat(formData.weeklyHours);
@@ -366,6 +514,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
         contractEndDate: formData.contractEndDate || undefined,
         workingType: (formData.workingType as 'full_time' | 'part_time') || null,
         weeklyHours: formData.weeklyHours ? parseFloat(formData.weeklyHours) : null,
+        offDays: normalizeOffDays(formData.offDays),
         personalEmail: formData.personalEmail || null,
         dateOfBirth: formData.dateOfBirth || null,
         nationality: formData.nationality || null,
@@ -715,20 +864,239 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       )}
                     </div>
                   </div>
-                  {/* Company selector: only shown when the user has access to multiple companies */}
+                  {/* Company selector: rich options with logo/owner/store count + permission hint */}
                   {canPickCompany && (
                     <div style={{ marginBottom: '14px' }}>
-                      <Select
-                        label={t('employees.companyField')}
-                        value={formData.companyId}
-                        onChange={(e) => set('companyId', e.target.value)}
-                        error={step1Errors.companyId}
-                      >
-                        <option value="">{t('employees.selectCompany', 'Select company')}</option>
-                        {companies.map((c) => (
-                          <option key={c.id} value={String(c.id)}>{c.name}</option>
-                        ))}
-                      </Select>
+                      <div style={{
+                        display: 'block',
+                        marginBottom: '5px',
+                        fontSize: '12.5px',
+                        fontWeight: 500,
+                        color: 'var(--text-secondary)',
+                        letterSpacing: '0.01em',
+                      }}>
+                        {`${t('employees.companyField')} *`}
+                      </div>
+                      <div ref={companyPickerRef} style={{ position: 'relative' }}>
+                        <button
+                          type="button"
+                          onClick={() => setCompanyPickerOpen((prev) => !prev)}
+                          style={{
+                            width: '100%',
+                            border: `1px solid ${step1Errors.companyId ? 'var(--danger)' : 'var(--border)'}`,
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--surface)',
+                            minHeight: 46,
+                            padding: selectedCompany ? '7px 10px' : '0 12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {selectedCompany ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                              <span style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                border: '1px solid var(--border)',
+                                background: 'rgba(13,33,55,0.08)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}>
+                                {getCompanyLogoUrl(selectedCompany.logoFilename) ? (
+                                  <img
+                                    src={getCompanyLogoUrl(selectedCompany.logoFilename) ?? ''}
+                                    alt={selectedCompany.name}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                ) : (
+                                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)' }}>
+                                    {selectedCompany.name.slice(0, 2).toUpperCase()}
+                                  </span>
+                                )}
+                              </span>
+                              <span style={{ minWidth: 0, textAlign: 'left' }}>
+                                <span style={{
+                                  display: 'block',
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: 'var(--text-primary)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {selectedCompany.name}
+                                </span>
+                                <span style={{
+                                  display: 'block',
+                                  fontSize: 11,
+                                  color: 'var(--text-muted)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {selectedCompany.ownerName
+                                    ? `${selectedCompany.ownerName}${selectedCompany.ownerSurname ? ` ${selectedCompany.ownerSurname}` : ''}`
+                                    : t('companies.ownerMissing', 'No owner assigned')}
+                                </span>
+                              </span>
+                              <span style={{
+                                marginLeft: 'auto',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: 'var(--text-secondary)',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {`${selectedCompany.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                              </span>
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                borderRadius: 999,
+                                border: `1px solid ${canCreateInCompany(selectedCompany.id) ? 'rgba(21,128,61,0.3)' : 'rgba(185,28,28,0.28)'}`,
+                                background: canCreateInCompany(selectedCompany.id) ? 'rgba(34,197,94,0.1)' : 'rgba(220,38,38,0.1)',
+                                color: canCreateInCompany(selectedCompany.id) ? '#166534' : '#991b1b',
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {canCreateInCompany(selectedCompany.id) ? <ShieldCheck size={11} /> : <ShieldAlert size={11} />}
+                                {canCreateInCompany(selectedCompany.id)
+                                  ? t('employees.companyAllowed', 'Can create')
+                                  : t('employees.companyNotAllowed', 'Not allowed')}
+                              </span>
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                              {t('employees.selectCompany', 'Select company')}
+                            </span>
+                          )}
+                          <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                        </button>
+
+                        {companyPickerOpen && (
+                          <div style={{
+                            position: 'absolute',
+                            left: 0,
+                            right: 0,
+                            top: 'calc(100% + 6px)',
+                            zIndex: 20,
+                            border: '1px solid var(--border)',
+                            borderRadius: 10,
+                            background: 'var(--surface)',
+                            boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
+                            maxHeight: 280,
+                            overflowY: 'auto',
+                          }}>
+                            {companies.map((company) => {
+                                const companyCreationAllowed = canCreateInCompany(company.id);
+                              return (
+                                <button
+                                  key={company.id}
+                                  type="button"
+                                    disabled={!companyCreationAllowed}
+                                  onClick={() => {
+                                      if (!companyCreationAllowed) return;
+                                    set('companyId', String(company.id));
+                                    setCompanyPickerOpen(false);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    border: 'none',
+                                    borderBottom: '1px solid var(--border)',
+                                    background: formData.companyId === String(company.id) ? 'var(--surface-warm)' : 'var(--surface)',
+                                    padding: '9px 10px',
+                                    textAlign: 'left',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    opacity: companyCreationAllowed ? 1 : 0.58,
+                                    cursor: companyCreationAllowed ? 'pointer' : 'not-allowed',
+                                  }}
+                                >
+                                  <span style={{
+                                    width: 26,
+                                    height: 26,
+                                    borderRadius: 8,
+                                    overflow: 'hidden',
+                                    border: '1px solid var(--border)',
+                                    background: 'rgba(13,33,55,0.08)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}>
+                                    {getCompanyLogoUrl(company.logoFilename) ? (
+                                      <img
+                                        src={getCompanyLogoUrl(company.logoFilename) ?? ''}
+                                        alt={company.name}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      />
+                                    ) : (
+                                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)' }}>
+                                        {company.name.slice(0, 2).toUpperCase()}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span style={{ minWidth: 0, flex: 1 }}>
+                                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                      {company.name}
+                                    </span>
+                                    <span style={{
+                                      display: 'block',
+                                      fontSize: 10.5,
+                                      color: 'var(--text-muted)',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {company.ownerName
+                                        ? `${company.ownerName}${company.ownerSurname ? ` ${company.ownerSurname}` : ''}`
+                                        : t('companies.ownerMissing', 'No owner assigned')}
+                                    </span>
+                                  </span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                    <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontWeight: 700 }}>
+                                      {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                                    </span>
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      borderRadius: 999,
+                                      border: `1px solid ${companyCreationAllowed ? 'rgba(21,128,61,0.3)' : 'rgba(185,28,28,0.28)'}`,
+                                      background: companyCreationAllowed ? 'rgba(34,197,94,0.1)' : 'rgba(220,38,38,0.1)',
+                                      color: companyCreationAllowed ? '#166534' : '#991b1b',
+                                      padding: '2px 7px',
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {companyCreationAllowed ? <ShieldCheck size={11} /> : <ShieldAlert size={11} />}
+                                      {companyCreationAllowed
+                                        ? t('employees.companyAllowed', 'Can create')
+                                        : t('employees.companyNotAllowed', 'Not allowed')}
+                                    </span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      {step1Errors.companyId && (
+                        <span style={{ marginTop: '4px', fontSize: '12px', color: 'var(--danger)', display: 'block' }}>
+                          {step1Errors.companyId}
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -740,49 +1108,422 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       error={step1Errors.role}
                     >
                       <option value="">{t('employees.selectRole')}</option>
-                      <option value="admin">{tRole('admin')}</option>
+                      {(canAssignAdminRole || formData.role === 'admin') && (
+                        <option value="admin">{tRole('admin')}</option>
+                      )}
                       <option value="hr">{tRole('hr')}</option>
                       <option value="area_manager">{tRole('area_manager')}</option>
                       <option value="store_manager">{tRole('store_manager')}</option>
                       <option value="employee">{tRole('employee')}</option>
-                      <option value="store_terminal">{tRole('store_terminal')}</option>
                     </Select>
                   </div>
 
                   <SectionDivider label={t('common.store')} />
-                  <div style={row2}>
-                    <Select
-                      label={t('common.store')}
-                      value={formData.storeId}
-                      onChange={(e) => set('storeId', e.target.value)}
-                      disabled={canPickCompany && effectiveCompanyId == null}
-                    >
-                      <option value="">
-                        {canPickCompany && effectiveCompanyId == null
-                          ? t('employees.selectCompanyFirst', 'Select company first')
-                          : t('employees.noStore')}
-                      </option>
-                      {stores.map((s) => (
-                        <option key={s.id} value={String(s.id)}>{s.name}</option>
-                      ))}
-                    </Select>
-                  <Select
-                    label={t('employees.supervisorField')}
-                    value={formData.supervisorId}
-                    onChange={(e) => set('supervisorId', e.target.value)}
-                    disabled={loadingSupervisors || (canPickCompany && effectiveCompanyId == null)}
-                  >
-                    <option value="">
-                      {canPickCompany && effectiveCompanyId == null
-                        ? t('employees.selectCompanyFirst', 'Select company first')
-                        : t('employees.noSupervisor')}
-                    </option>
-                    {supervisors.map((s) => (
-                      <option key={s.id} value={String(s.id)}>
-                        {s.name} {s.surname} ({tRole(s.role)}){s.storeName ? ` — ${s.storeName}` : ''}
-                      </option>
-                    ))}
-                  </Select>
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{
+                      display: 'block',
+                      marginBottom: '5px',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                      color: 'var(--text-secondary)',
+                      letterSpacing: '0.01em',
+                    }}>
+                      {t('common.store')}
+                    </div>
+                    <div ref={storePickerRef} style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (canPickCompany && effectiveCompanyId == null) return;
+                          setStorePickerOpen((prev) => !prev);
+                        }}
+                        disabled={canPickCompany && effectiveCompanyId == null}
+                        style={{
+                          width: '100%',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-sm)',
+                          background: 'var(--surface)',
+                          minHeight: 42,
+                          padding: selectedStore ? '7px 10px' : '0 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          cursor: (canPickCompany && effectiveCompanyId == null) ? 'not-allowed' : 'pointer',
+                          opacity: (canPickCompany && effectiveCompanyId == null) ? 0.6 : 1,
+                        }}
+                      >
+                        {selectedStore ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                            <span style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 8,
+                              overflow: 'hidden',
+                              border: '1px solid var(--border)',
+                              background: 'rgba(13,33,55,0.08)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}>
+                              {getStoreLogoUrl(selectedStore.logoFilename) ? (
+                                <img
+                                  src={getStoreLogoUrl(selectedStore.logoFilename) ?? ''}
+                                  alt={selectedStore.name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <StoreIcon size={14} color="var(--primary)" />
+                              )}
+                            </span>
+                            <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+                              <span style={{
+                                display: 'block',
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: 'var(--text-primary)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {selectedStore.name}
+                              </span>
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                              {`${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                            </span>
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                            {canPickCompany && effectiveCompanyId == null
+                              ? t('employees.selectCompanyFirst', 'Select company first')
+                              : t('employees.noStore')}
+                          </span>
+                        )}
+                        <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                      </button>
+
+                      {storePickerOpen && !(canPickCompany && effectiveCompanyId == null) && (
+                        <div style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          top: 'calc(100% + 6px)',
+                          zIndex: 20,
+                          border: '1px solid var(--border)',
+                          borderRadius: 10,
+                          background: 'var(--surface)',
+                          boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
+                          maxHeight: 260,
+                          overflowY: 'auto',
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              set('storeId', '');
+                              setStorePickerOpen(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderBottom: '1px solid var(--border)',
+                              background: formData.storeId ? 'var(--surface)' : 'var(--surface-warm)',
+                              padding: '10px 12px',
+                              textAlign: 'left',
+                              color: 'var(--text-secondary)',
+                              fontSize: 12,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {t('employees.noStore')}
+                          </button>
+                          {stores.map((store) => (
+                            <button
+                              key={store.id}
+                              type="button"
+                              onClick={() => {
+                                set('storeId', String(store.id));
+                                setStorePickerOpen(false);
+                              }}
+                              style={{
+                                width: '100%',
+                                border: 'none',
+                                borderBottom: '1px solid var(--border)',
+                                background: formData.storeId === String(store.id) ? 'var(--surface-warm)' : 'var(--surface)',
+                                padding: '9px 10px',
+                                textAlign: 'left',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{
+                                width: 26,
+                                height: 26,
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                border: '1px solid var(--border)',
+                                background: 'rgba(13,33,55,0.08)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}>
+                                {getStoreLogoUrl(store.logoFilename) ? (
+                                  <img
+                                    src={getStoreLogoUrl(store.logoFilename) ?? ''}
+                                    alt={store.name}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                ) : (
+                                  <StoreIcon size={14} color="var(--primary)" />
+                                )}
+                              </span>
+                              <span style={{ minWidth: 0, flex: 1 }}>
+                                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {store.name}
+                                </span>
+                              </span>
+                              <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {`${store.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{
+                      display: 'block',
+                      marginBottom: '5px',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                      color: 'var(--text-secondary)',
+                      letterSpacing: '0.01em',
+                    }}>
+                      {t('employees.supervisorField')}
+                    </div>
+                    <div ref={supervisorPickerRef} style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        disabled={loadingSupervisors || (canPickCompany && effectiveCompanyId == null)}
+                        onClick={() => {
+                          if (loadingSupervisors || (canPickCompany && effectiveCompanyId == null)) return;
+                          setCompanyPickerOpen(false);
+                          setStorePickerOpen(false);
+                          setSupervisorPickerOpen((prev) => !prev);
+                        }}
+                        style={{
+                          width: '100%',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-sm)',
+                          background: 'var(--surface)',
+                          minHeight: 46,
+                          padding: selectedSupervisor ? '7px 10px' : '0 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          cursor: (loadingSupervisors || (canPickCompany && effectiveCompanyId == null)) ? 'not-allowed' : 'pointer',
+                          opacity: (loadingSupervisors || (canPickCompany && effectiveCompanyId == null)) ? 0.68 : 1,
+                        }}
+                      >
+                        {selectedSupervisor ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                            <span style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: '50%',
+                              overflow: 'hidden',
+                              background: selectedSupervisor.avatarFilename ? 'transparent' : 'rgba(13,33,55,0.16)',
+                              color: '#0D2137',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}>
+                              {selectedSupervisor.avatarFilename ? (
+                                <img
+                                  src={getAvatarUrl(selectedSupervisor.avatarFilename) ?? ''}
+                                  alt={`${selectedSupervisor.name} ${selectedSupervisor.surname}`}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : `${selectedSupervisor.name?.[0] ?? ''}${selectedSupervisor.surname?.[0] ?? ''}`.toUpperCase() || 'U'}
+                            </span>
+                            <span style={{ minWidth: 0, textAlign: 'left' }}>
+                              <span style={{
+                                display: 'block',
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: 'var(--text-primary)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {selectedSupervisor.name} {selectedSupervisor.surname}
+                              </span>
+                              <span style={{
+                                display: 'block',
+                                fontSize: 11,
+                                color: 'var(--text-muted)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {tRole(selectedSupervisor.role)}
+                                {(selectedSupervisor.companyName ?? selectedCompany?.name)
+                                  ? ` · ${selectedSupervisor.companyName ?? selectedCompany?.name}`
+                                  : ''}
+                              </span>
+                            </span>
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                            {loadingSupervisors
+                              ? t('common.loading', 'Loading...')
+                              : (canPickCompany && effectiveCompanyId == null
+                                ? t('employees.selectCompanyFirst', 'Select company first')
+                                : t('employees.noSupervisor'))}
+                          </span>
+                        )}
+                        <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                      </button>
+
+                      {supervisorPickerOpen && !(loadingSupervisors || (canPickCompany && effectiveCompanyId == null)) && (
+                        <div style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          top: 'calc(100% + 6px)',
+                          zIndex: 20,
+                          border: '1px solid var(--border)',
+                          borderRadius: 10,
+                          background: 'var(--surface)',
+                          boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
+                          maxHeight: 280,
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                        }}>
+                          <div style={{ padding: 8, borderBottom: '1px solid var(--border)' }}>
+                            <input
+                              type="text"
+                              value={supervisorQuery}
+                              onChange={(e) => setSupervisorQuery(e.target.value)}
+                              placeholder={t('employees.searchSupervisor', 'Search supervisor...')}
+                              style={{
+                                width: '100%',
+                                border: '1px solid var(--border)',
+                                borderRadius: 8,
+                                background: 'var(--surface)',
+                                height: 34,
+                                padding: '0 10px',
+                                fontSize: 12,
+                                color: 'var(--text-primary)',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                          </div>
+                          <div style={{ overflowY: 'auto', maxHeight: 230 }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                set('supervisorId', '');
+                                setSupervisorPickerOpen(false);
+                                setSupervisorQuery('');
+                              }}
+                              style={{
+                                width: '100%',
+                                border: 'none',
+                                borderBottom: '1px solid var(--border)',
+                                background: formData.supervisorId ? 'var(--surface)' : 'var(--surface-warm)',
+                                padding: '10px 12px',
+                                textAlign: 'left',
+                                color: 'var(--text-secondary)',
+                                fontSize: 12,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {t('employees.noSupervisor')}
+                            </button>
+
+                            {filteredSupervisors.length === 0 ? (
+                              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                                {t('common.noData', 'No data')}
+                              </div>
+                            ) : filteredSupervisors.map((sup) => {
+                              const selected = formData.supervisorId === String(sup.id);
+                              const avatarUrl = getAvatarUrl(sup.avatarFilename);
+                              const fullName = `${sup.name} ${sup.surname}`.trim();
+                              return (
+                                <button
+                                  key={sup.id}
+                                  type="button"
+                                  onClick={() => {
+                                    set('supervisorId', String(sup.id));
+                                    setSupervisorPickerOpen(false);
+                                    setSupervisorQuery('');
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    border: 'none',
+                                    borderBottom: '1px solid var(--border-light)',
+                                    background: selected ? 'var(--surface-warm)' : 'var(--surface)',
+                                    padding: '9px 10px',
+                                    textAlign: 'left',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <span style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    background: avatarUrl ? 'transparent' : 'rgba(13,33,55,0.14)',
+                                    color: '#0D2137',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}>
+                                    {avatarUrl ? (
+                                      <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : `${sup.name?.[0] ?? ''}${sup.surname?.[0] ?? ''}`.toUpperCase() || 'U'}
+                                  </span>
+                                  <span style={{ minWidth: 0, flex: 1 }}>
+                                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                      {fullName}
+                                    </span>
+                                    <span style={{
+                                      display: 'block',
+                                      fontSize: 10.5,
+                                      color: 'var(--text-muted)',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {tRole(sup.role)}
+                                      {(sup.companyName ?? selectedCompany?.name) ? ` · ${sup.companyName ?? selectedCompany?.name}` : ''}
+                                    </span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <Input
@@ -955,6 +1696,135 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       value={formData.weeklyHours}
                       onChange={(e) => set('weeklyHours', e.target.value)}
                     />
+                  </div>
+
+                  <SectionDivider label={t('employees.workingDaysEditorTitle', 'Working / Off Days')} />
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{
+                      marginBottom: '9px',
+                      fontSize: '12px',
+                      color: 'var(--text-muted)',
+                      fontFamily: 'var(--font-body)',
+                      lineHeight: 1.45,
+                    }}>
+                      {t('employees.workingDaysEditorHint', 'Click a day to toggle between working and off status.')}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      flexWrap: 'nowrap',
+                      overflowX: 'auto',
+                      paddingBottom: 2,
+                    }}>
+                      {dayOptions.map((day) => {
+                        const isOff = formData.offDays.includes(day.value);
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() => toggleOffDay(day.value)}
+                            style={{
+                              border: `1px solid ${isOff ? 'rgba(180,83,9,0.32)' : 'rgba(22,101,52,0.28)'}`,
+                              background: isOff ? 'rgba(251,191,36,0.14)' : 'rgba(134,239,172,0.16)',
+                              color: isOff ? '#92400e' : '#166534',
+                              borderRadius: '10px',
+                              minWidth: isMobile ? 72 : 78,
+                              padding: '8px 10px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 2,
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-body)',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span style={{ whiteSpace: 'nowrap' }}>{day.label}</span>
+                            <span style={{
+                              fontSize: '9px',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                            }}>
+                              {isOff
+                                ? t('employees.dayStatusOff', 'Off')
+                                : t('employees.dayStatusWorking', 'Working')}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{
+                      marginTop: '10px',
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                      gap: '10px',
+                    }}>
+                      <div style={{
+                        border: '1px solid rgba(22,101,52,0.22)',
+                        background: 'rgba(220,252,231,0.35)',
+                        borderRadius: '10px',
+                        padding: '8px 10px',
+                      }}>
+                        <div style={{
+                          fontSize: '10px',
+                          color: '#166534',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.08em',
+                          marginBottom: 6,
+                        }}>
+                          {t('employees.workingDaysField', 'Working days')}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {workingDays.map((day) => (
+                            <span key={day.value} style={{
+                              fontSize: '11px',
+                              borderRadius: 999,
+                              padding: '2px 8px',
+                              background: 'rgba(22,163,74,0.14)',
+                              color: '#166534',
+                              fontWeight: 700,
+                            }}>
+                              {day.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{
+                        border: '1px solid rgba(180,83,9,0.24)',
+                        background: 'rgba(254,243,199,0.45)',
+                        borderRadius: '10px',
+                        padding: '8px 10px',
+                      }}>
+                        <div style={{
+                          fontSize: '10px',
+                          color: '#92400e',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.08em',
+                          marginBottom: 6,
+                        }}>
+                          {t('employees.offDaysField', 'Off days')}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {offDays.map((day) => (
+                            <span key={day.value} style={{
+                              fontSize: '11px',
+                              borderRadius: 999,
+                              padding: '2px 8px',
+                              background: 'rgba(217,119,6,0.14)',
+                              color: '#92400e',
+                              fontWeight: 700,
+                            }}>
+                              {day.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <SectionDivider label={t('employees.contractualDetails')} />

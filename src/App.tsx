@@ -23,6 +23,7 @@ import AttendanceLogsPage from './modules/attendance/AttendanceLogsPage';
 import AnomaliesPage from './modules/attendance/AnomaliesPage';
 import QRPage from './modules/attendance/QRPage';
 import TerminalPage from './modules/attendance/TerminalPage';
+import TerminalList from './modules/terminals/TerminalList';
 import LeavePage from './modules/leave/LeavePage';
 import SettingsPage from './modules/settings/SettingsPage';
 import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
@@ -107,6 +108,12 @@ function AppRoutes() {
       <Route path="/negozi/:slug" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="negozi">
           <Layout title={t('nav.stores')}><StoreDetail /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/terminali" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="terminali">
+          <Layout title={t('nav.terminals')}><TerminalList /></Layout>
         </ProtectedRoute>
       } />
 

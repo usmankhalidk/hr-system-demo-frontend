@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftRight, Building2, CalendarClock, Clock3, MapPin, Sparkles, Store, UserRound, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getAvatarUrl } from '../../api/client';
+import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { Employee, Store as StoreType } from '../../types';
 import { getEmployees, EmployeeListParams } from '../../api/employees';
@@ -160,6 +160,10 @@ export default function TransfersPage() {
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState('');
   const employeePickerRef = useRef<HTMLDivElement | null>(null);
+  const [originStorePickerOpen, setOriginStorePickerOpen] = useState(false);
+  const [targetStorePickerOpen, setTargetStorePickerOpen] = useState(false);
+  const originStorePickerRef = useRef<HTMLDivElement | null>(null);
+  const targetStorePickerRef = useRef<HTMLDivElement | null>(null);
 
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [cancelRestoreOriginalShifts, setCancelRestoreOriginalShifts] = useState(true);
@@ -178,13 +182,24 @@ export default function TransfersPage() {
       const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
       const roleLabel = t(`roles.${emp.role}`, emp.role).toLowerCase();
       const storeLabel = (emp.storeName ?? '').toLowerCase();
-      return fullName.includes(q) || roleLabel.includes(q) || storeLabel.includes(q) || emp.email.toLowerCase().includes(q);
+      const companyLabel = (emp.companyName ?? '').toLowerCase();
+      return fullName.includes(q) || roleLabel.includes(q) || storeLabel.includes(q) || companyLabel.includes(q) || emp.email.toLowerCase().includes(q);
     });
   }, [employeeSearch, employees, t]);
 
   const selectedEmployeeAvatarUrl = selectedEmployee?.avatarFilename
     ? getAvatarUrl(selectedEmployee.avatarFilename)
     : null;
+
+  const selectedOriginStore = useMemo(
+    () => stores.find((store) => String(store.id) === form.origin_store_id) ?? null,
+    [stores, form.origin_store_id],
+  );
+
+  const selectedTargetStore = useMemo(
+    () => stores.find((store) => String(store.id) === form.target_store_id) ?? null,
+    [stores, form.target_store_id],
+  );
 
   const selectedEmployeeInitials = `${selectedEmployee?.name?.[0] ?? ''}${selectedEmployee?.surname?.[0] ?? ''}`.toUpperCase() || 'U';
   const selectedEmployeeFullName = selectedEmployee
@@ -239,15 +254,22 @@ export default function TransfersPage() {
   }, [fetchTransfers]);
 
   useEffect(() => {
-    if (!employeePickerOpen) return;
+    if (!employeePickerOpen && !originStorePickerOpen && !targetStorePickerOpen) return;
     const onDown = (event: MouseEvent) => {
-      if (!employeePickerRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (employeePickerOpen && !employeePickerRef.current?.contains(target)) {
         setEmployeePickerOpen(false);
+      }
+      if (originStorePickerOpen && !originStorePickerRef.current?.contains(target)) {
+        setOriginStorePickerOpen(false);
+      }
+      if (targetStorePickerOpen && !targetStorePickerRef.current?.contains(target)) {
+        setTargetStorePickerOpen(false);
       }
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [employeePickerOpen]);
+  }, [employeePickerOpen, originStorePickerOpen, targetStorePickerOpen]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -309,6 +331,8 @@ export default function TransfersPage() {
     setLinkedShiftsLoading(false);
     setForm({ ...EMPTY_FORM, start_date: today, end_date: today, cancel_origin_shifts: true });
     setEmployeePickerOpen(false);
+    setOriginStorePickerOpen(false);
+    setTargetStorePickerOpen(false);
     setEmployeeSearch('');
     setDrawerOpen(true);
   }
@@ -328,6 +352,8 @@ export default function TransfersPage() {
       notes: transfer.notes ?? '',
     });
     setEmployeePickerOpen(false);
+    setOriginStorePickerOpen(false);
+    setTargetStorePickerOpen(false);
     setEmployeeSearch('');
     setDrawerOpen(true);
   }
@@ -340,6 +366,8 @@ export default function TransfersPage() {
     setLinkedShifts([]);
     setLinkedShiftsLoading(false);
     setEmployeePickerOpen(false);
+    setOriginStorePickerOpen(false);
+    setTargetStorePickerOpen(false);
     setEmployeeSearch('');
   }
 
@@ -806,6 +834,8 @@ export default function TransfersPage() {
                       disabled={Boolean(editingTransfer)}
                       onClick={() => {
                         if (editingTransfer) return;
+                        setOriginStorePickerOpen(false);
+                        setTargetStorePickerOpen(false);
                         setEmployeePickerOpen((prev) => !prev);
                       }}
                       style={{
@@ -844,8 +874,11 @@ export default function TransfersPage() {
                               {selectedEmployeeFullName}
                             </span>
                             <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {selectedEmployeeRoleLabel}
-                              {selectedEmployee.storeName ? ` · ${selectedEmployee.storeName}` : ''}
+                              <span>{selectedEmployeeRoleLabel}</span>
+                              {selectedEmployee.storeName ? <span>{` · ${selectedEmployee.storeName}`}</span> : null}
+                              {selectedEmployee.companyName ? (
+                                <span style={{ color: '#0f766e', fontWeight: 700 }}>{` · ${selectedEmployee.companyName}`}</span>
+                              ) : null}
                             </span>
                           </span>
                         </span>
@@ -935,8 +968,11 @@ export default function TransfersPage() {
                                       {fullName}
                                     </span>
                                     <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {roleLabel}
-                                      {emp.storeName ? ` · ${emp.storeName}` : ''}
+                                      <span>{roleLabel}</span>
+                                      {emp.storeName ? <span>{` · ${emp.storeName}`}</span> : null}
+                                      {emp.companyName ? (
+                                        <span style={{ color: '#0f766e', fontWeight: 700 }}>{` · ${emp.companyName}`}</span>
+                                      ) : null}
                                     </span>
                                   </span>
                                 </button>
@@ -981,8 +1017,11 @@ export default function TransfersPage() {
                           {selectedEmployeeFullName}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {selectedEmployeeRoleLabel}
-                          {selectedEmployee.storeName ? ` · ${selectedEmployee.storeName}` : ''}
+                          <span>{selectedEmployeeRoleLabel}</span>
+                          {selectedEmployee.storeName ? <span>{` · ${selectedEmployee.storeName}`}</span> : null}
+                          {selectedEmployee.companyName ? (
+                            <span style={{ color: '#0f766e', fontWeight: 700 }}>{` · ${selectedEmployee.companyName}`}</span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -994,18 +1033,157 @@ export default function TransfersPage() {
 
                 <div style={{ ...fieldRowStyle, marginTop: 8 }}>
                   <label style={labelStyle}>{t('transfers.form.originStore', 'Negozio origine')}</label>
-                  <select
-                    value={form.origin_store_id}
-                    onChange={(e) => setForm((p) => ({ ...p, origin_store_id: e.target.value }))}
-                    style={inputStyle}
-                  >
-                    <option value="">{t('transfers.form.useEmployeeStore', 'Usa negozio assegnato al dipendente')}</option>
-                    {stores.map((store) => (
-                      <option key={store.id} value={String(store.id)}>
-                        {store.companyName ? `${store.name} (${store.companyName})` : store.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div ref={originStorePickerRef} style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmployeePickerOpen(false);
+                        setTargetStorePickerOpen(false);
+                        setOriginStorePickerOpen((prev) => !prev);
+                      }}
+                      style={{
+                        ...inputStyle,
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      {selectedOriginStore ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                          <span style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 8,
+                            overflow: 'hidden',
+                            border: '1px solid var(--border)',
+                            background: 'rgba(13,33,55,0.14)',
+                            color: '#0D2137',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            {getStoreLogoUrl(selectedOriginStore.logoFilename) ? (
+                              <img
+                                src={getStoreLogoUrl(selectedOriginStore.logoFilename) ?? ''}
+                                alt={selectedOriginStore.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            ) : selectedOriginStore.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {selectedOriginStore.name}
+                            </span>
+                          </span>
+                          <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {selectedOriginStore.companyName ?? '—'}
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {selectedEmployee?.storeName
+                            ? t('transfers.form.detectedOrigin', {
+                              defaultValue: `Origine rilevata: ${selectedEmployee.storeName}`,
+                              store: selectedEmployee.storeName,
+                            })
+                            : t('transfers.form.useEmployeeStore', 'Usa negozio assegnato al dipendente')}
+                        </span>
+                      )}
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{originStorePickerOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {originStorePickerOpen && (
+                      <div style={{
+                        position: 'absolute',
+                        zIndex: 20,
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        boxShadow: '0 16px 30px rgba(0,0,0,0.18)',
+                        maxHeight: 260,
+                        overflowY: 'auto',
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, origin_store_id: '' }));
+                            setOriginStorePickerOpen(false);
+                          }}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderBottom: '1px solid var(--border)',
+                            background: form.origin_store_id ? 'var(--surface)' : 'var(--surface-warm)',
+                            padding: '8px 10px',
+                            textAlign: 'left',
+                            color: 'var(--text-secondary)',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {t('transfers.form.useEmployeeStore', 'Usa negozio assegnato al dipendente')}
+                        </button>
+                        {stores.map((store) => (
+                          <button
+                            key={store.id}
+                            type="button"
+                            onClick={() => {
+                              setForm((prev) => ({ ...prev, origin_store_id: String(store.id) }));
+                              setOriginStorePickerOpen(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderBottom: '1px solid var(--border)',
+                              background: form.origin_store_id === String(store.id) ? 'var(--surface-warm)' : 'var(--surface)',
+                              padding: '8px 10px',
+                              textAlign: 'left',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <span style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: 8,
+                              overflow: 'hidden',
+                              border: '1px solid var(--border)',
+                              background: 'rgba(13,33,55,0.14)',
+                              color: '#0D2137',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}>
+                              {getStoreLogoUrl(store.logoFilename) ? (
+                                <img src={getStoreLogoUrl(store.logoFilename) ?? ''} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : store.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <span style={{ minWidth: 0, flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {store.name}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {store.companyName ?? '—'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {!form.origin_store_id && selectedEmployee?.storeName && (
                     <div style={helpTextStyle}>
                       <MapPin size={11} />
@@ -1019,19 +1197,130 @@ export default function TransfersPage() {
 
                 <div style={{ ...fieldRowStyle, marginTop: 8 }}>
                   <label style={labelStyle}>{t('transfers.form.targetStore', 'Negozio destinazione')}</label>
-                  <select
-                    value={form.target_store_id}
-                    onChange={(e) => setForm((p) => ({ ...p, target_store_id: e.target.value }))}
-                    style={inputStyle}
-                    required
-                  >
-                    <option value="">{t('transfers.form.selectStore', 'Seleziona negozio')}</option>
-                    {stores.map((store) => (
-                      <option key={store.id} value={String(store.id)}>
-                        {store.companyName ? `${store.name} (${store.companyName})` : store.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div ref={targetStorePickerRef} style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmployeePickerOpen(false);
+                        setOriginStorePickerOpen(false);
+                        setTargetStorePickerOpen((prev) => !prev);
+                      }}
+                      style={{
+                        ...inputStyle,
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      {selectedTargetStore ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                          <span style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 8,
+                            overflow: 'hidden',
+                            border: '1px solid var(--border)',
+                            background: 'rgba(13,33,55,0.14)',
+                            color: '#0D2137',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            {getStoreLogoUrl(selectedTargetStore.logoFilename) ? (
+                              <img
+                                src={getStoreLogoUrl(selectedTargetStore.logoFilename) ?? ''}
+                                alt={selectedTargetStore.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            ) : selectedTargetStore.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {selectedTargetStore.name}
+                            </span>
+                          </span>
+                          <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {selectedTargetStore.companyName ?? '—'}
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('transfers.form.selectStore', 'Seleziona negozio')}</span>
+                      )}
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{targetStorePickerOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {targetStorePickerOpen && (
+                      <div style={{
+                        position: 'absolute',
+                        zIndex: 20,
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        boxShadow: '0 16px 30px rgba(0,0,0,0.18)',
+                        maxHeight: 260,
+                        overflowY: 'auto',
+                      }}>
+                        {stores.map((store) => (
+                          <button
+                            key={store.id}
+                            type="button"
+                            onClick={() => {
+                              setForm((prev) => ({ ...prev, target_store_id: String(store.id) }));
+                              setTargetStorePickerOpen(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderBottom: '1px solid var(--border)',
+                              background: form.target_store_id === String(store.id) ? 'var(--surface-warm)' : 'var(--surface)',
+                              padding: '8px 10px',
+                              textAlign: 'left',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <span style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: 8,
+                              overflow: 'hidden',
+                              border: '1px solid var(--border)',
+                              background: 'rgba(13,33,55,0.14)',
+                              color: '#0D2137',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}>
+                              {getStoreLogoUrl(store.logoFilename) ? (
+                                <img src={getStoreLogoUrl(store.logoFilename) ?? ''} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : store.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <span style={{ minWidth: 0, flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {store.name}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {store.companyName ?? '—'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
