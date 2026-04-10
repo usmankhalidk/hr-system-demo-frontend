@@ -2,23 +2,17 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getTerminals, Terminal } from '../../api/terminals';
-import apiClient from '../../api/client';
-import { translateApiError } from '../../utils/apiErrors';
-import { getStores } from '../../api/stores';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Store, UserRole } from '../../types';
+import { UserRole } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
-import { Select } from '../../components/ui/Select';
 import { Alert } from '../../components/ui/Alert';
 import { Pagination } from '../../components/ui/Pagination';
-
-interface CompanyOption {
-  id: number;
-  name: string;
-}
+import { TerminalForm } from './TerminalForm';
+import { Plus, ChevronRight } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
 
 const ROLE_BADGE_VARIANT: Record<UserRole | string, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
   admin: 'accent',
@@ -36,12 +30,13 @@ export default function TerminalList() {
   const { showToast } = useToast();
 
   const [terminals, setTerminals] = useState<Terminal[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
-  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedTerminal, setSelectedTerminal] = useState<Terminal | null>(null);
+  const [listReloadTick, setListReloadTick] = useState(0);
 
   const search = searchParams.get('search') ?? '';
   const storeId = searchParams.get('store_id') ?? '';
@@ -53,208 +48,163 @@ export default function TerminalList() {
   const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager';
   const isSuperAdmin = user?.isSuperAdmin === true;
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
-  const hasActiveFilters = !!(search || storeId || status || companyFilter);
 
-  const updateParam = useCallback(
-    (key: string, value: string) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        if (value) { next.set(key, value); } else { next.delete(key); }
-        if (key !== 'page') next.set('page', '1');
-        return next;
-      });
-    },
-    [setSearchParams]
-  );
-
-  useEffect(() => {
-    const targetId = companyFilter ? parseInt(companyFilter, 10) : undefined;
-    getStores(targetId ? { targetCompanyId: targetId } : undefined).then(setStores).catch(() => {});
-  }, [companyFilter]);
-
-  useEffect(() => {
-    if (!isAdminOrHr && !isSuperAdmin) return;
-    apiClient.get<{ data: CompanyOption[] }>('/companies')
-      .then((res) => {
-        const data = res.data?.data;
-        if (Array.isArray(data)) {
-          setCompanies(data.map((c) => ({ id: c.id, name: c.name })));
-        }
-      })
-      .catch(() => {});
-  }, [isAdminOrHr, isSuperAdmin]);
-
-  useEffect(() => {
+  const fetchTerminals = useCallback(async () => {
     setLoading(true);
     setError(null);
-    getTerminals({
-      search: search || undefined,
-      store_id: storeId || undefined,
-      status: status || undefined,
-      company_id: companyFilter || undefined,
-      page,
-      limit,
-    })
-      .then((res) => {
-        setTerminals(res.data.data);
-        setTotal(res.data.meta.total);
-        setTotalPages(res.data.meta.totalPages);
-      })
-      .catch((err) => {
-        setError(translateApiError(err, t, t('terminals.errorLoad', 'Errore nel caricamento dei terminali')));
-      })
-      .finally(() => setLoading(false));
-  }, [search, storeId, status, companyFilter, page, t]);
+    try {
+      const response = await getTerminals({
+        search,
+        status,
+        store_id: storeId,
+        company_id: companyFilter,
+        page,
+        limit,
+      });
+      setTerminals(response.data.data);
+      setTotal(response.data.meta.total);
+      setTotalPages(response.data.meta.totalPages);
+    } catch (err) {
+      console.error('Error loading terminals:', err);
+      setError(t('common.error'));
+    } finally {
+      setLoading(false);
+    }
+  }, [search, status, page, limit, t]);
+
+  useEffect(() => {
+    fetchTerminals();
+  }, [fetchTerminals, listReloadTick]);
+
+  const handleSearchChange = (val: string) => {
+    setSearchParams(prev => {
+      if (val) prev.set('search', val);
+      else prev.delete('search');
+      prev.set('page', '1');
+      return prev;
+    });
+  };
+
+  const handleOpenForm = (terminal: Terminal | null = null) => {
+    setSelectedTerminal(terminal);
+    setShowForm(true);
+  };
 
   const columns: Column<Terminal>[] = [
     {
       key: 'name',
-      label: t('terminals.colName'),
+      label: t('common.name'),
       render: (row) => (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13.5px' }}>{row.name}</span>
-          <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>{row.email}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700 }}>
+            {row.name.charAt(0).toUpperCase()}
+          </div>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{row.name}</span>
         </div>
       ),
     },
     {
+      key: 'email',
+      label: 'Email',
+      render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{row.email}</span>,
+    },
+    {
+      key: 'storeName',
+      label: t('employees.colStore'),
+      render: (row) => <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500 }}>{row.storeName}</span>,
+    },
+    {
+      key: 'companyName',
+      label: t('employees.colCompany'),
+      render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{row.companyName}</span>,
+    },
+    {
       key: 'role',
-      label: t('terminals.colRole'),
-      render: (row) => (
-        <Badge variant={ROLE_BADGE_VARIANT[row.role]}>{tRole(row.role)}</Badge>
-      ),
-    },
-    {
-      key: 'companyId',
-      label: t('terminals.colCompany'),
-      render: (row) => row.companyName || '—',
-    },
-    {
-      key: 'storeId',
-      label: t('terminals.colStore'),
-      render: (row) => row.storeName || '—',
+      label: t('common.role'),
+      render: (row) => <Badge variant={ROLE_BADGE_VARIANT[row.role]}>{tRole(row.role)}</Badge>,
     },
     {
       key: 'status',
-      label: t('terminals.colStatus'),
+      label: t('common.status'),
       render: (row) => (
-        <Badge variant={row.status === 'active' ? 'success' : 'danger'}>
-          {row.status === 'active' ? t('terminals.statusActive') : t('terminals.statusInactive')}
+        <Badge variant={row.status === 'active' ? 'success' : 'neutral'}>
+          {row.status === 'active' ? t('common.active') : t('common.inactive')}
         </Badge>
+      ),
+    },
+    {
+      key: 'id',
+      label: t('terminals.colActions'),
+      align: 'right',
+      render: (row) => (
+        <button
+          onClick={() => handleOpenForm(row)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: '12px', fontWeight: 600, color: 'var(--accent)',
+            fontFamily: 'var(--font-body)', padding: '5px 10px',
+            borderRadius: 'var(--radius-sm)', display: 'inline-flex',
+            alignItems: 'center', gap: '3px', whiteSpace: 'nowrap',
+          }}
+        >
+          {t('common.open')}
+          <ChevronRight size={14} />
+        </button>
       ),
     },
   ];
 
   return (
-    <div className="page-enter">
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '20px', flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px', fontFamily: 'var(--font-display)' }}>
-            {t('terminals.title')}
-          </h1>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
-            {t('terminals.subtitle')}
-          </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '20px' }}>
+        <div style={{ flex: 1, maxWidth: '400px' }}>
+          <Input
+            placeholder={t('terminals.searchPlaceholder')}
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+          />
         </div>
-      </div>
-
-      <Alert variant="info">
-        {t('terminals.readOnlyNotice')}
-      </Alert>
-
-      <div style={{
-        background: 'var(--surface)',
-        padding: '20px',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border)',
-        boxShadow: 'var(--shadow-sm)',
-        marginBottom: '24px',
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {t('common.search')}
-            </label>
-            <Input
-              value={search}
-              onChange={(e) => updateParam('search', e.target.value)}
-              placeholder={t('terminals.searchPlaceholder')}
-            />
-          </div>
-
-          {(isAdminOrHr || isSuperAdmin) && companies.length > 0 && (
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                {t('terminals.colCompany')}
-              </label>
-              <Select value={companyFilter} onChange={(e) => updateParam('company_id', e.target.value)}>
-                <option value="">{t('employees.allCompanies')}</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id.toString()}>{c.name}</option>
-                ))}
-              </Select>
-            </div>
-          )}
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {t('terminals.colStore')}
-            </label>
-            <Select value={storeId} onChange={(e) => updateParam('store_id', e.target.value)}>
-              <option value="">{t('employees.allStores')}</option>
-              {stores.map((s) => (
-                <option key={s.id} value={s.id.toString()}>{s.name}</option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {t('terminals.colStatus')}
-            </label>
-            <Select value={status} onChange={(e) => updateParam('status', e.target.value)}>
-              <option value="">{t('terminals.allStatuses')}</option>
-              <option value="active">{t('terminals.statusActive')}</option>
-              <option value="inactive">{t('terminals.statusInactive')}</option>
-            </Select>
-          </div>
-        </div>
-
-        {hasActiveFilters && (
-          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
-            <button
-              onClick={() => setSearchParams({})}
-              style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            >
-              {t('common.filter')} (Reset)
-            </button>
-          </div>
+        {(isAdminOrHr || isSuperAdmin) && (
+          <Button onClick={() => handleOpenForm(null)}>
+            <Plus size={18} style={{ marginRight: '8px' }} />
+            {t('terminals.newTerminal')}
+          </Button>
         )}
       </div>
 
-      {error ? (
-        <Alert variant="danger">{error}</Alert>
-      ) : (
-        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-          <Table
-            columns={columns}
-            data={terminals}
-            loading={loading}
-            emptyText={t('terminals.noTerminals')}
+      {error && <Alert variant="danger">{error}</Alert>}
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <Table
+          columns={columns}
+          data={terminals}
+          loading={loading}
+          onRowClick={(row) => handleOpenForm(row)}
+        />
+      </div>
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+          <Pagination
+            page={page}
+            pages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={(p) => setSearchParams(prev => { prev.set('page', p.toString()); return prev; })}
           />
-          {totalPages > 1 && (
-            <div style={{ padding: '20px', borderTop: '1px solid var(--border-light)' }}>
-              <Pagination
-                page={page}
-                pages={totalPages}
-                total={total}
-                limit={limit}
-                onPageChange={(p) => updateParam('page', p.toString())}
-              />
-            </div>
-          )}
         </div>
       )}
+
+      <TerminalForm
+        open={showForm}
+        terminal={selectedTerminal}
+        onSuccess={() => {
+          setShowForm(false);
+          setListReloadTick(prev => prev + 1);
+          showToast(selectedTerminal ? t('common.success') : t('terminals.terminalSaveSuccess'), 'success');
+        }}
+        onCancel={() => setShowForm(false)}
+      />
     </div>
   );
 }
