@@ -345,7 +345,14 @@ export function EmployeeDetail() {
     setLoading(true);
     setError(null);
     getEmployee(employeeId)
-      .then(setEmployee)
+      .then((emp) => {
+        if (emp.role === 'store_terminal') {
+          showToast(t('employees.errorTerminalAccessDeny', 'Accesso non consentito per i terminali in questo modulo'), 'warning');
+          navigate('/dipendenti', { replace: true });
+          return;
+        }
+        setEmployee(emp);
+      })
       .catch((err) => {
         setError(translateApiError(err, t, t('employees.errorLoad')));
       })

@@ -98,6 +98,7 @@ const en = {
     onboarding: 'Onboarding',
     documenti: 'Documents',
     deviceReset: 'Reset device',
+    terminals: 'Terminal',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -423,6 +424,25 @@ const en = {
     associationsNoStores: 'No stores in this scope.',
     associationsNoEmployees: 'No employees for this scope.',
     associationsUnassigned: 'Employees without store assignment',
+    errorTerminalAccessDeny: 'Access not allowed for terminals in this module',
+  },
+
+  // ─── Terminals ────────────────────────────────────────────────────────────
+  terminals: {
+    title: 'Store Terminals',
+    subtitle: 'Management and monitoring of fixed QR terminals',
+    colName: 'Terminal',
+    colRole: 'Role',
+    colCompany: 'Company',
+    colStore: 'Store',
+    colStatus: 'Status',
+    colActions: 'Actions',
+    searchPlaceholder: 'Search terminal or email...',
+    allStatuses: 'All statuses',
+    statusActive: 'Active',
+    statusInactive: 'Inactive',
+    noTerminals: 'No terminals found.',
+    readOnlyNotice: 'Terminals are automatically created and configured during store creation.',
   },
 
   // ─── Stores ───────────────────────────────────────────────────────────────
@@ -664,6 +684,7 @@ const en = {
       report: 'Reports',
       impostazioni: 'Settings',
       negozi: 'Stores',
+      terminali: 'Terminal',
       gestione_accessi: 'Permissions Management',
     },
   },

@@ -24,6 +24,7 @@ export const MODULE_KEYS = [
   'ats',
   'report',
   'gestione_accessi',
+  'terminali',
 ] as const;
 
 export type ModuleKey = typeof MODULE_KEYS[number];
@@ -49,6 +50,7 @@ export const SYSTEM_MODULE_KEYS = [
   'messaggi',
   'impostazioni',
   'gestione_accessi',
+  'terminali',
 ] as const;
 
 export type SystemModuleKey = typeof SYSTEM_MODULE_KEYS[number];
@@ -68,6 +70,7 @@ export const MODULE_ROLE_ELIGIBILITY: Record<ModuleKey, readonly ManagedRoleKey[
   ats: [],
   report: [],
   gestione_accessi: ['admin', 'hr', 'area_manager'],
+  terminali: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
 };
 
 export function isRoleEligibleForModule(role: ManagedRoleKey, moduleKey: ModuleKey): boolean {

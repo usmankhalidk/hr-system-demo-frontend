@@ -16,6 +16,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
+import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 
 interface StoreFormData {
   name: string;
@@ -123,6 +124,10 @@ export function StoreList() {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [formStep, setFormStep] = useState<1 | 2>(1);
+  const [terminalPassword, setTerminalPassword] = useState('');
+  const [terminalPasswordVisible, setTerminalPasswordVisible] = useState(false);
+  const [terminalPasswordError, setTerminalPasswordError] = useState<string | null>(null);
   // true while the code field shows an auto-suggested value (new form only)
   const codeIsAuto = useRef(false);
 
@@ -178,6 +183,10 @@ export function StoreList() {
     // Grouped admin/hr default to their own company.
     setFormCompanyId(isSuperAdmin ? null : (user?.companyId ?? null));
     codeIsAuto.current = true;
+    setFormStep(1);
+    setTerminalPassword('');
+    setTerminalPasswordVisible(false);
+    setTerminalPasswordError(null);
     setFormOpen(true);
   };
 
@@ -193,15 +202,18 @@ export function StoreList() {
     setFormErrors({});
     setFormError(null);
     codeIsAuto.current = false;
+    setFormStep(1);
     setFormOpen(true);
   };
 
   const closeForm = () => {
     setFormOpen(false);
+    setFormStep(1);
     setEditingStore(null);
     setFormData(emptyForm);
     setFormErrors({});
     setFormError(null);
+    setTerminalPasswordError(null);
     codeIsAuto.current = false;
     setFormCompanyId(null);
   };
@@ -218,8 +230,53 @@ export function StoreList() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSave = async () => {
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+    let newPassword = '';
+    for (let i = 0; i < 12; i++) {
+      newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setTerminalPassword(newPassword);
+    setTerminalPasswordError(null);
+  };
+
+  const getTerminalEmail = () => {
+    const storeName = formData.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    let companyName = '';
+    if (formCompanyId) {
+      companyName = companies.find((c) => c.id === formCompanyId)?.name || 'company';
+    } else {
+      companyName = companies[0]?.name || 'company';
+    }
+    companyName = companyName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${storeName || 'store'}@${companyName}.com`;
+  };
+
+  const validateTerminal = (): boolean => {
+    if (!terminalPassword || terminalPassword.length < 8) {
+      setTerminalPasswordError('Password must be at least 8 characters');
+      return false;
+    }
+    setTerminalPasswordError(null);
+    return true;
+  };
+
+  const handleNext = () => {
     if (!validateForm()) return;
+    if (!terminalPassword) {
+      // Auto-generate and reveal the password so user can note it down
+      generatePassword();
+      setTerminalPasswordVisible(true);
+    }
+    setFormStep(2);
+  };
+
+  const handleSave = async () => {
+    if (editingStore) {
+      if (!validateForm()) return;
+    } else {
+      if (!validateTerminal()) return;
+    }
     setFormSaving(true);
     setFormError(null);
     try {
@@ -239,7 +296,15 @@ export function StoreList() {
         await updateStore(editingStore.id, payload);
         showToast(t('stores.updatedSuccess'), 'success');
       } else {
-        await createStore(payload);
+        if (!terminalPassword) {
+          setFormError('Terminal password is required');
+          setFormSaving(false);
+          return;
+        }
+        await createStore({
+          ...payload,
+          terminal: { email: getTerminalEmail(), password: terminalPassword }
+        });
         showToast(t('stores.createdSuccess'), 'success');
       }
       closeForm();
@@ -484,15 +549,25 @@ export function StoreList() {
       <Modal
         open={formOpen}
         onClose={closeForm}
-        title={editingStore ? t('stores.editStore') : t('stores.newStore')}
+        title={editingStore ? t('stores.editStore') : (formStep === 1 ? t('stores.newStore') : 'Store Terminal')}
         footer={
           <>
             <Button variant="secondary" onClick={closeForm} disabled={formSaving}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={handleSave} loading={formSaving}>
-              {t('common.save')}
-            </Button>
+            {editingStore ? (
+              <Button onClick={handleSave} loading={formSaving}>
+                {t('common.save')}
+              </Button>
+            ) : formStep === 1 ? (
+              <Button onClick={handleNext}>
+                Next
+              </Button>
+            ) : (
+              <Button onClick={handleSave} loading={formSaving}>
+                {t('common.save')}
+              </Button>
+            )}
           </>
         }
       >
@@ -502,7 +577,70 @@ export function StoreList() {
               {formError}
             </Alert>
           )}
-          {showCompanyPicker && !editingStore && (
+
+          {(!editingStore && formStep === 2) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                {t('stores.terminalDescription', "It's the terminal that employees use to scan QR codes from their mobile devices.")}
+              </div>
+              
+              <Input
+                label="Terminal Email"
+                value={getTerminalEmail()}
+                readOnly
+                onChange={() => {}} // noop to avoid react warnings
+                style={{ backgroundColor: 'var(--surface-50)' }}
+              />
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Temporary password *
+                </label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Input
+                      type={terminalPasswordVisible ? 'text' : 'password'}
+                      value={terminalPassword}
+                      onChange={(e) => {
+                        setTerminalPassword(e.target.value);
+                        if (terminalPasswordError) setTerminalPasswordError(null);
+                      }}
+                      placeholder="Enter password..."
+                      style={{
+                        paddingRight: '40px',
+                        borderColor: terminalPasswordError ? '#DC2626' : undefined,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTerminalPasswordVisible(!terminalPasswordVisible)}
+                      style={{
+                        position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                        padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}
+                    >
+                      {terminalPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <Button variant="secondary" onClick={() => { generatePassword(); setTerminalPasswordVisible(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <RefreshCw size={14} /> Generate
+                  </Button>
+                </div>
+                {terminalPasswordError ? (
+                  <p style={{ margin: 0, fontSize: '12px', color: '#DC2626', fontWeight: 600 }}>
+                    {terminalPasswordError}
+                  </p>
+                ) : (
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {t('users.passwordHint', 'At least 8 characters. Save it — it will not be shown again.')}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              {showCompanyPicker && !editingStore && (
             <div>
               <Select
                 label={t('stores.fieldCompany')}
@@ -583,6 +721,8 @@ export function StoreList() {
             onChange={(e) => setFormData((prev) => ({ ...prev, maxStaff: e.target.value }))}
             placeholder={t('stores.placeholderMaxStaff')}
           />
+          </>
+          )}
         </div>
       </Modal>
 
