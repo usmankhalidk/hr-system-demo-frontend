@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { updateUserLocale } from '../../api/notifications';
 
 interface LanguageSwitcherProps {
   /** 'pill' = compact flag+code for header, 'full' = full label for sidebar */
@@ -29,7 +30,9 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ variant = 'p
   const current = i18n.language === 'en' ? 'en' : 'it';
 
   const toggle = () => {
-    i18n.changeLanguage(current === 'it' ? 'en' : 'it');
+    const next = current === 'it' ? 'en' : 'it';
+    i18n.changeLanguage(next);
+    updateUserLocale(next).catch(() => undefined);
   };
 
   if (variant === 'pill') {
@@ -49,7 +52,10 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ variant = 'p
           return (
             <button
               key={lang}
-              onClick={() => i18n.changeLanguage(lang)}
+              onClick={() => {
+                i18n.changeLanguage(lang);
+                updateUserLocale(lang).catch(() => undefined);
+              }}
               title={lang === 'it' ? 'Italiano' : 'English'}
               style={{
                 display: 'inline-flex',

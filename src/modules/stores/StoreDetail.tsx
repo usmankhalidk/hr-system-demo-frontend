@@ -40,7 +40,7 @@ import {
 import { getEmployees } from '../../api/employees';
 import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 import { translateApiError } from '../../utils/apiErrors';
-import { Employee, Store, StoreOperatingHour } from '../../types';
+import { Employee, Store, StoreOperatingHour, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
@@ -69,6 +69,30 @@ function parseStoreIdFromSlug(slug?: string): number | null {
   if (!match) return null;
   const id = parseInt(match[1], 10);
   return Number.isNaN(id) ? null : id;
+}
+
+const ROLE_PRIORITY: Record<UserRole, number> = {
+  admin: 0,
+  hr: 1,
+  area_manager: 2,
+  store_manager: 3,
+  employee: 4,
+  store_terminal: 5,
+};
+
+const ROLE_BADGE_VARIANT: Record<UserRole, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
+  admin: 'accent',
+  hr: 'info',
+  area_manager: 'success',
+  store_manager: 'warning',
+  employee: 'neutral',
+  store_terminal: 'neutral',
+};
+
+function compareEmployeesByRoleAndName(a: Employee, b: Employee): number {
+  const roleDiff = (ROLE_PRIORITY[a.role] ?? 99) - (ROLE_PRIORITY[b.role] ?? 99);
+  if (roleDiff !== 0) return roleDiff;
+  return `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`);
 }
 
 function defaultOperatingHours(): StoreOperatingHour[] {
@@ -178,6 +202,7 @@ export default function StoreDetail() {
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
 
   const canEdit = user?.role === 'admin' || user?.role === 'store_manager';
+  const canManageHours = user?.role === 'admin' || user?.role === 'store_manager' || user?.role === 'hr';
   const canManageStatus = user?.role === 'admin';
 
   const [store, setStore] = useState<Store | null>(null);
@@ -245,7 +270,7 @@ export default function StoreDetail() {
       ]);
 
       setStore(storeData);
-      setEmployees((employeesData.employees ?? []).sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`)));
+      setEmployees((employeesData.employees ?? []).sort(compareEmployeesByRoleAndName));
       setHours(normalizeOperatingHours(hoursData));
     } catch {
       setError(t('stores.errorLoad'));
@@ -620,7 +645,11 @@ export default function StoreDetail() {
                   </div>
 
                   <div style={{ display: 'grid', gap: 5 }}>
-                    <MetaLine icon={<BriefcaseBusiness size={12} />} label={t('roles.label', 'Role')} value={t(`roles.${employee.role}`, employee.role)} />
+                    <MetaLine
+                      icon={<BriefcaseBusiness size={12} />}
+                      label={t('roles.label', 'Role')}
+                      value={<Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{t(`roles.${employee.role}`, employee.role)}</Badge>}
+                    />
                     <MetaLine icon={<CalendarClock size={12} />} label={t('employees.hireDate', 'Hire date')} value={formatDate(employee.hireDate, locale)} />
                     <MetaLine
                       icon={<Clock3 size={12} />}
@@ -644,7 +673,7 @@ export default function StoreDetail() {
             <Clock3 size={13} />
             {t('stores.operatingHoursTitle', 'Operating hours')}
           </span>
-          {canEdit && (
+          {canManageHours && (
             <button
               type="button"
               onClick={() => { setHoursError(null); setHoursExpandedDays({}); setHoursModalOpen(true); }}
@@ -1106,7 +1135,7 @@ function InfoChip({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-function MetaLine({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function MetaLine({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>

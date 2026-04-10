@@ -8,6 +8,7 @@ import { getAvatarUrl } from '../../api/client';
 import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
+import { updateUserLocale } from '../../api/notifications';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { Employee } from '../../types';
@@ -384,10 +385,13 @@ export function ProfilePage() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {(['it', 'en'] as const).map((lang) => (
+                {(['it', 'en'] as const).map((lang) => (
                 <button
                   key={lang}
-                  onClick={() => i18n.changeLanguage(lang)}
+                  onClick={() => {
+                    i18n.changeLanguage(lang);
+                    updateUserLocale(lang).catch(() => undefined);
+                  }}
                   style={{
                     padding: '6px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                     cursor: 'pointer', transition: 'all 0.15s',

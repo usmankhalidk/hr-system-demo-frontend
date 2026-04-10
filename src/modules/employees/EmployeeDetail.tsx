@@ -26,6 +26,7 @@ import { DatePicker } from '../../components/ui/DatePicker';
 import { EmployeeForm } from './EmployeeForm';
 import { MessageBoard } from '../messages/MessageBoard';
 import { ComposeMessage } from '../messages/ComposeMessage';
+import { getEmployeeTasks, assignTasks, OnboardingProgress } from '../../api/onboarding';
 
 // ── Types & constants ──────────────────────────────────────────────────────────
 const ROLE_BADGE_VARIANT: Record<UserRole, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -93,6 +94,19 @@ function maskIban(iban: string): string {
   return `${iban.slice(0, 4)} •••• •••• ${iban.slice(-4)}`;
 }
 
+const DEFAULT_OFF_DAYS = [5, 6]; // Mon=0 ... Sun=6
+const MON_BASED_DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+function normalizeOffDays(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_OFF_DAYS];
+  const normalized = Array.from(new Set(
+    raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
+  )).sort((a, b) => a - b);
+  return normalized.length > 0 ? normalized : [...DEFAULT_OFF_DAYS];
+}
+
 // ── Info row (horizontal label / value) ───────────────────────────────────────
 function InfoRow({ label, value, last }: { label: string; value: React.ReactNode; last?: boolean }) {
   return (
@@ -142,6 +156,88 @@ function SectionPanel({ title, icon, children }: { title: string; icon: React.Re
       </div>
       <div style={{ padding: '4px 20px 8px' }}>{children}</div>
     </div>
+  );
+}
+
+// ── Onboarding Section ─────────────────────────────────────────────────────────
+function OnboardingSection({ employeeId, isAdminOrHr }: { employeeId: number; isAdminOrHr: boolean }) {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [progress, setProgress] = useState<OnboardingProgress | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [assigning, setAssigning] = useState(false);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try { setProgress(await getEmployeeTasks(employeeId)); }
+    catch { /* silently fail — onboarding may not be configured */ }
+    finally { setLoading(false); }
+  }, [employeeId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAssign = async () => {
+    setAssigning(true);
+    try {
+      const result = await assignTasks(employeeId);
+      showToast(t('onboarding.assignedSuccess', { count: result.assigned }), 'success');
+      await load();
+    } catch {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const pct = progress && progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+
+  return (
+    <SectionPanel title={t('nav.onboarding', 'Onboarding')} icon={
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+      </svg>
+    }>
+      {loading ? (
+        <div style={{ padding: '20px', textAlign: 'center' }}><Spinner size="sm" /></div>
+      ) : !progress || progress.total === 0 ? (
+        <div style={{ padding: '16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {t('onboarding.noTasks', 'Nessun task di onboarding assegnato')}
+          </span>
+          {isAdminOrHr && (
+            <Button size="sm" loading={assigning} onClick={handleAssign}>
+              {t('onboarding.assignTasks', 'Assegna task')}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div style={{ padding: '12px 0 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#15803D' : 'var(--primary)', borderRadius: 99, transition: 'width 0.4s' }} />
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: pct === 100 ? '#15803D' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              {progress.completed}/{progress.total} ({pct}%)
+            </span>
+          </div>
+          {progress.tasks.map((task, i) => (
+            <div key={task.id} style={{ padding: '9px 0', borderBottom: i < progress.tasks.length - 1 ? '1px solid var(--border-light)' : 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: task.completed ? 'rgba(21,128,61,0.12)' : 'var(--background)', border: `2px solid ${task.completed ? '#15803D' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {task.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+              </span>
+              <span style={{ fontSize: 13, color: task.completed ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.completed ? 'line-through' : 'none', flex: 1 }}>
+                {task.templateName}
+              </span>
+              {task.completedAt && (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {new Date(task.completedAt).toLocaleDateString('it-IT')}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionPanel>
   );
 }
 
@@ -369,6 +465,50 @@ export function EmployeeDetail() {
     : employee.workingType === 'part_time'
     ? t('employees.partTime')
     : '—';
+
+  const dayLabels = [
+    t('shifts.dayMon', 'Mon'),
+    t('shifts.dayTue', 'Tue'),
+    t('shifts.dayWed', 'Wed'),
+    t('shifts.dayThu', 'Thu'),
+    t('shifts.dayFri', 'Fri'),
+    t('shifts.daySat', 'Sat'),
+    t('shifts.daySun', 'Sun'),
+  ];
+  const offDays = normalizeOffDays(employee.offDays);
+  const workingDays = MON_BASED_DAYS.filter((day) => !offDays.includes(day));
+
+  const renderDayPills = (days: number[], mode: 'working' | 'off') => {
+    if (days.length === 0) return '—';
+    const isWorking = mode === 'working';
+    return (
+      <span style={{
+        display: 'inline-flex',
+        flexWrap: 'wrap',
+        gap: 6,
+        justifyContent: 'flex-end',
+        maxWidth: 260,
+      }}>
+        {days.map((day) => (
+          <span
+            key={`${mode}-${day}`}
+            style={{
+              padding: '2px 8px',
+              borderRadius: 999,
+              border: isWorking ? '1px solid rgba(22,101,52,0.25)' : '1px solid rgba(180,83,9,0.3)',
+              background: isWorking ? 'rgba(134,239,172,0.22)' : 'rgba(251,191,36,0.2)',
+              color: isWorking ? '#166534' : '#92400e',
+              fontSize: 11,
+              fontWeight: 700,
+              lineHeight: 1.35,
+            }}
+          >
+            {dayLabels[day] ?? `#${day}`}
+          </span>
+        ))}
+      </span>
+    );
+  };
 
   const renderAssociationEmployee = (item: EmployeeAssociationEntry, keyPrefix: string) => {
     const full = `${item.name} ${item.surname}`.trim();
@@ -639,6 +779,8 @@ export function EmployeeDetail() {
               {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
             </Badge>
           } />
+          <InfoRow label={t('employees.workingDaysField', 'Working days')} value={renderDayPills(workingDays as number[], 'working')} />
+          <InfoRow label={t('employees.offDaysField', 'Off days')} value={renderDayPills(offDays, 'off')} />
           <InfoRow
             label={t('employees.deviceBindingField')}
             value={
@@ -785,7 +927,14 @@ export function EmployeeDetail() {
         </div>
       )}
 
-      {/* Role associations tree */}
+      {/* Onboarding Tasks */}
+      {(isAdminOrHr || isOwnProfile) && employeeId && (
+        <div style={{ marginTop: 20 }}>
+          <OnboardingSection employeeId={employeeId} isAdminOrHr={isAdminOrHr} />
+        </div>
+      )}
+
+{/* Role associations tree */}
       <div style={{ marginTop: 20 }}>
         <SectionPanel title={t('employees.associationsSection')} icon={<IconUser />}>
           {associationsLoading ? (

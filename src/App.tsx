@@ -29,6 +29,9 @@ import SettingsPage from './modules/settings/SettingsPage';
 import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
 import ScanPage from './modules/attendance/ScanPage';
 import HRChatPage from './modules/messages/HRChatPage';
+import ATSPage from './modules/ats/ATSPage';
+import OnboardingPage from './modules/onboarding/OnboardingPage';
+import DocumentsPage from './modules/documents/DocumentsPage';
 import TransfersPage from './modules/transfers/TransfersPage';
 import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
 import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
@@ -210,6 +213,24 @@ function AppRoutes() {
       <Route path="/permessi" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="permessi">
           <Layout title={t('nav.permessi')}><LeavePage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/ats" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="ats">
+          <Layout title={t('nav.ats')}><ATSPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/onboarding" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+          <Layout title={t('nav.onboarding')}><OnboardingPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/documenti" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="documenti">
+          <Layout title={t('nav.documenti')}><DocumentsPage /></Layout>
         </ProtectedRoute>
       } />
 
