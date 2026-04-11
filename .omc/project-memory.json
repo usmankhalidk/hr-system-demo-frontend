@@ -160,21 +160,21 @@
     },
     {
       "path": "src/i18n/locales/en.ts",
-      "accessCount": 28,
-      "lastAccessed": 1775819692216,
+      "accessCount": 29,
+      "lastAccessed": 1775881362872,
       "type": "directory"
+    },
+    {
+      "path": "src/i18n/locales/it.ts",
+      "accessCount": 19,
+      "lastAccessed": 1775881363268,
+      "type": "file"
     },
     {
       "path": "",
       "accessCount": 18,
       "lastAccessed": 1775669938769,
       "type": "directory"
-    },
-    {
-      "path": "src/i18n/locales/it.ts",
-      "accessCount": 18,
-      "lastAccessed": 1775819697555,
-      "type": "file"
     },
     {
       "path": "src/modules/settings/SettingsPage.tsx",
@@ -186,6 +186,12 @@
       "path": "src/modules/employees/EmployeeDetail.tsx",
       "accessCount": 11,
       "lastAccessed": 1775643542836,
+      "type": "file"
+    },
+    {
+      "path": "src/hooks/useOfflineSync.ts",
+      "accessCount": 11,
+      "lastAccessed": 1775881666317,
       "type": "file"
     },
     {
@@ -297,6 +303,12 @@
       "type": "file"
     },
     {
+      "path": "src/modules/attendance/TerminalPage.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775881608555,
+      "type": "file"
+    },
+    {
       "path": "src/api/stores.ts",
       "accessCount": 1,
       "lastAccessed": 1775668347696,
@@ -331,6 +343,12 @@
       "accessCount": 1,
       "lastAccessed": 1775820479844,
       "type": "directory"
+    },
+    {
+      "path": "src/test/offlineSync.test.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775881361428,
+      "type": "file"
     }
   ],
   "userDirectives": []
