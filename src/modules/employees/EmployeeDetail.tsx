@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import ReactCountryFlag from 'react-country-flag';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import {
   getEmployee,
@@ -824,14 +825,32 @@ export function EmployeeDetail() {
                 ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12px', letterSpacing: '0.06em' }}>{maskIban(employee.iban)}</span>
                 : '—'
             } />
-            <InfoRow label={t('employees.nationalityField')} value={employee.nationality ?? '—'} />
+            <InfoRow
+              label={t('employees.nationalityField')}
+              value={employee.nationality ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  {employee.country ? <ReactCountryFlag countryCode={employee.country} svg style={{ width: '1em', height: '1em' }} /> : null}
+                  <span>{employee.nationality}</span>
+                </span>
+              ) : '—'}
+            />
             <InfoRow label={t('employees.genderField')} value={
               employee.gender === 'M' ? t('employees.genderMale')
               : employee.gender === 'F' ? t('employees.genderFemale')
               : employee.gender === 'other' ? t('employees.genderOther')
               : '—'
             } />
-            <InfoRow label={t('employees.addressField')} value={employee.address ? `${employee.address}${employee.cap ? `, ${employee.cap}` : ''}` : '—'} />
+            <InfoRow
+              label={t('employees.addressField')}
+              value={[
+                employee.address,
+                employee.city,
+                employee.state,
+                employee.country,
+                employee.cap,
+              ].filter(Boolean).join(', ') || '—'}
+            />
+            <InfoRow label={t('companies.companyPhoneNumbers', 'Phone')} value={employee.phone ?? '—'} />
             <InfoRow label={t('employees.firstAidField')} value={
               <span style={{ color: employee.firstAidFlag ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
                 {employee.firstAidFlag ? t('common.yes') : t('common.no')}

@@ -16,6 +16,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
+import { LocationFieldGroup } from '../../components/location';
 import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 
 interface StoreFormData {
@@ -23,6 +24,10 @@ interface StoreFormData {
   code: string;
   address: string;
   cap: string;
+  city: string;
+  state: string;
+  country: string;
+  phone: string;
   maxStaff: string;
 }
 
@@ -31,6 +36,10 @@ const emptyForm: StoreFormData = {
   code: '',
   address: '',
   cap: '',
+  city: '',
+  state: '',
+  country: '',
+  phone: '',
   maxStaff: '',
 };
 
@@ -197,6 +206,10 @@ export function StoreList() {
       code: store.code,
       address: store.address ?? '',
       cap: store.cap ?? '',
+      city: store.city ?? '',
+      state: store.state ?? '',
+      country: store.country ?? '',
+      phone: store.phone ?? '',
       maxStaff: store.maxStaff != null ? String(store.maxStaff) : '',
     });
     setFormErrors({});
@@ -285,6 +298,10 @@ export function StoreList() {
         code: formData.code.trim(),
         address: formData.address.trim() || null,
         cap: formData.cap.trim() || null,
+        city: formData.city.trim() || null,
+        state: formData.state.trim() || null,
+        country: formData.country.trim() || null,
+        phone: formData.phone.trim() || null,
         maxStaff: formData.maxStaff ? parseInt(formData.maxStaff, 10) : 0,
       };
 
@@ -701,17 +718,38 @@ export function StoreList() {
               </p>
             )}
           </div>
-          <Input
-            label={t('stores.fieldAddress')}
-            value={formData.address}
-            onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
-            placeholder={t('stores.placeholderAddress')}
-          />
-          <Input
-            label={t('stores.fieldCap')}
-            value={formData.cap}
-            onChange={(e) => setFormData((prev) => ({ ...prev, cap: e.target.value }))}
-            placeholder={t('stores.placeholderCap')}
+          <LocationFieldGroup
+            value={{
+              country: formData.country,
+              state: formData.state,
+              city: formData.city,
+              address: formData.address,
+              postalCode: formData.cap,
+              phone: formData.phone,
+            }}
+            onChange={(location) => {
+              setFormData((prev) => ({
+                ...prev,
+                country: location.country,
+                state: location.state,
+                city: location.city,
+                address: location.address,
+                cap: location.postalCode,
+                phone: location.phone,
+              }));
+            }}
+            includeAddress
+            includePostalCode
+            includePhone
+            disabled={formSaving}
+            labels={{
+              country: t('companies.country', 'Country'),
+              state: t('companies.state', 'State'),
+              city: t('companies.city', 'City'),
+              address: t('stores.fieldAddress'),
+              postalCode: t('stores.fieldCap'),
+              phone: t('companies.companyPhoneNumbers', 'Phone'),
+            }}
           />
           <Input
             label={t('stores.fieldMaxStaff')}

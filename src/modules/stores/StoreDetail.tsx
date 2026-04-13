@@ -6,24 +6,25 @@ import {
   MapPin,
   Users,
   ArrowLeft,
-  Hash,
   Pencil,
   PowerOff,
   Power,
   Trash2,
   Camera,
-  Clock3,
-  CalendarClock,
-  UserRound,
-  BriefcaseBusiness,
   UploadCloud,
+  BriefcaseBusiness,
+  CalendarClock,
+  Clock3,
+  UserRound,
   Settings2,
   Sunrise,
+  Hash,
   Sunset,
   TrendingUp,
   ClipboardList,
   PlusCircle,
   XCircle,
+  Phone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -46,12 +47,17 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Badge } from '../../components/ui/Badge';
+import { LocationFieldGroup } from '../../components/location';
 
 interface StoreFormData {
   name: string;
   code: string;
   address: string;
   cap: string;
+  city: string;
+  state: string;
+  country: string;
+  phone: string;
   maxStaff: string;
 }
 
@@ -60,6 +66,10 @@ const emptyForm: StoreFormData = {
   code: '',
   address: '',
   cap: '',
+  city: '',
+  state: '',
+  country: '',
+  phone: '',
   maxStaff: '',
 };
 
@@ -292,6 +302,10 @@ export default function StoreDetail() {
       code: store.code,
       address: store.address ?? '',
       cap: store.cap ?? '',
+      city: store.city ?? '',
+      state: store.state ?? '',
+      country: store.country ?? '',
+      phone: store.phone ?? '',
       maxStaff: store.maxStaff != null ? String(store.maxStaff) : '',
     });
     setFormError(null);
@@ -313,6 +327,10 @@ export default function StoreDetail() {
         code: formData.code.trim(),
         address: formData.address.trim() || null,
         cap: formData.cap.trim() || null,
+        city: formData.city.trim() || null,
+        state: formData.state.trim() || null,
+        country: formData.country.trim() || null,
+        phone: formData.phone.trim() || null,
         maxStaff: formData.maxStaff ? parseInt(formData.maxStaff, 10) : 0,
       });
       setEditOpen(false);
@@ -607,8 +625,18 @@ export default function StoreDetail() {
 
           <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
             <InfoChip icon={<Hash size={13} />} label={t('stores.colCode', 'Code')} value={store.code} />
-            <InfoChip icon={<MapPin size={13} />} label={t('stores.colAddress', 'Address')} value={store.address || '—'} />
-            <InfoChip icon={<Building2 size={13} />} label={t('stores.colCap', 'Postal code')} value={store.cap || '—'} />
+            <InfoChip
+              icon={<MapPin size={13} />}
+              label={t('stores.colAddress', 'Address')}
+              value={[
+                store.address,
+                store.city,
+                store.state,
+                store.country,
+                store.cap,
+              ].filter(Boolean).join(', ') || '—'}
+            />
+            <InfoChip icon={<Phone size={13} />} label={t('companies.companyPhoneNumbers', 'Phone')} value={store.phone || '—'} />
             <InfoChip icon={<Users size={13} />} label={t('stores.colMaxStaff', 'Max staff')} value={store.maxStaff != null ? String(store.maxStaff) : '0'} />
           </div>
         </div>
@@ -802,19 +830,38 @@ export default function StoreDetail() {
             placeholder={t('stores.placeholderCode')}
             disabled={formSaving}
           />
-          <Input
-            label={t('stores.fieldAddress')}
-            value={formData.address}
-            onChange={(event) => setFormData((p) => ({ ...p, address: event.target.value }))}
-            placeholder={t('stores.placeholderAddress')}
+          <LocationFieldGroup
+            value={{
+              country: formData.country,
+              state: formData.state,
+              city: formData.city,
+              address: formData.address,
+              postalCode: formData.cap,
+              phone: formData.phone,
+            }}
+            onChange={(location) => {
+              setFormData((prev) => ({
+                ...prev,
+                country: location.country,
+                state: location.state,
+                city: location.city,
+                address: location.address,
+                cap: location.postalCode,
+                phone: location.phone,
+              }));
+            }}
+            includeAddress
+            includePostalCode
+            includePhone
             disabled={formSaving}
-          />
-          <Input
-            label={t('stores.fieldCap')}
-            value={formData.cap}
-            onChange={(event) => setFormData((p) => ({ ...p, cap: event.target.value }))}
-            placeholder={t('stores.placeholderCap')}
-            disabled={formSaving}
+            labels={{
+              country: t('companies.country', 'Country'),
+              state: t('companies.state', 'State'),
+              city: t('companies.city', 'City'),
+              address: t('stores.fieldAddress'),
+              postalCode: t('stores.fieldCap'),
+              phone: t('companies.companyPhoneNumbers', 'Phone'),
+            }}
           />
           <Input
             label={t('stores.fieldMaxStaff')}

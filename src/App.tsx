@@ -35,6 +35,9 @@ import DocumentsPage from './modules/documents/DocumentsPage';
 import TransfersPage from './modules/transfers/TransfersPage';
 import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
 import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
+import PublicCareersPage from './modules/publicCareers/PublicCareersPage';
+import PublicJobDetailPage from './modules/publicCareers/PublicJobDetailPage';
+import EmailSettingsPage from './modules/email/EmailSettingsPage';
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -74,6 +77,8 @@ function AppRoutes() {
     <PermissionsRefresher />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/careers" element={<PublicCareersPage />} />
+      <Route path="/careers/jobs/:jobId" element={<PublicJobDetailPage />} />
 
       <Route path="/" element={
         <ProtectedRoute>
@@ -231,6 +236,12 @@ function AppRoutes() {
       <Route path="/documenti" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="documenti">
           <Layout title={t('nav.documenti')}><DocumentsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/impostazioni/email" element={
+        <ProtectedRoute roles={['admin', 'hr']}>
+          <Layout title={t('nav.email')}><EmailSettingsPage /></Layout>
         </ProtectedRoute>
       } />
 

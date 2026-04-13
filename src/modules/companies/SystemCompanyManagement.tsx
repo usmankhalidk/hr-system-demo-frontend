@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Building2, Users, Store, Plus, Layers } from 'lucide-react';
@@ -27,9 +27,79 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Badge } from '../../components/ui/Badge';
+import { LocationFieldGroup } from '../../components/location';
 
 type ModalMode = 'create' | 'edit';
+
+const FALLBACK_TIMEZONES = [
+  'UTC',
+  'Europe/Rome',
+  'Europe/London',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Asia/Dubai',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
+
+type IntlWithSupportedValues = typeof Intl & {
+  supportedValuesOf?: (key: string) => string[];
+  DisplayNames?: new (
+    locales?: string | string[],
+    options?: { type: 'region' },
+  ) => { of: (code: string) => string | undefined };
+};
+
+const intlWithSupportedValues = Intl as IntlWithSupportedValues;
+
+const TIMEZONE_OPTIONS = typeof intlWithSupportedValues.supportedValuesOf === 'function'
+  ? intlWithSupportedValues.supportedValuesOf('timeZone')
+  : FALLBACK_TIMEZONES;
+
+const TIMEZONE_SET = new Set(TIMEZONE_OPTIONS);
+
+const COUNTRY_TIMEZONE_FALLBACKS: Record<string, string[]> = {
+  IT: ['Europe/Rome'],
+  GB: ['Europe/London'],
+  IE: ['Europe/Dublin'],
+  ES: ['Europe/Madrid'],
+  FR: ['Europe/Paris'],
+  DE: ['Europe/Berlin'],
+  NL: ['Europe/Amsterdam'],
+  BE: ['Europe/Brussels'],
+  PT: ['Europe/Lisbon'],
+  US: ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles'],
+  CA: ['America/Toronto', 'America/Vancouver'],
+  BR: ['America/Sao_Paulo'],
+  AE: ['Asia/Dubai'],
+  SA: ['Asia/Riyadh'],
+  IN: ['Asia/Kolkata'],
+  CN: ['Asia/Shanghai'],
+  JP: ['Asia/Tokyo'],
+  SG: ['Asia/Singapore'],
+  AU: ['Australia/Sydney', 'Australia/Perth'],
+  NZ: ['Pacific/Auckland'],
+};
+
+function parseTimezones(value: string): string[] {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((item) => {
+      if (seen.has(item)) return;
+      seen.add(item);
+      list.push(item);
+    });
+  return list;
+}
 
 const AVATAR_PALETTE = ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'];
 function getAvatarColor(name: string): string {
@@ -192,8 +262,52 @@ export default function SystemCompanyManagement() {
   const [bannerError, setBannerError] = useState<string | null>(null);
   const [ownerCandidates, setOwnerCandidates] = useState<Array<{ id: number; name: string; surname: string }>>([]);
   const [ownerCandidatesLoading, setOwnerCandidatesLoading] = useState(false);
+  const [timezoneDraft, setTimezoneDraft] = useState<string | null>(null);
+
+  const timezoneValues = useMemo(
+    () => parseTimezones(formProfile.timezones),
+    [formProfile.timezones],
+  );
+
+  const detectedTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '', []);
+
+  const timezoneSelectOptions = useMemo<SelectOption[]>(() => {
+    const selected = new Set(timezoneValues);
+    return TIMEZONE_OPTIONS
+      .filter((timezone) => !selected.has(timezone))
+      .map((timezone) => ({
+        value: timezone,
+        label: timezone,
+        render: (
+          <div style={{ display: 'grid', gap: 1 }}>
+            <span style={{ fontWeight: 700 }}>{timezone}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+          </div>
+        ),
+      }));
+  }, [timezoneValues]);
+
+  const countryTimezoneSuggestions = useMemo(() => {
+    const code = formProfile.country.trim().toUpperCase();
+    if (!code) return [] as string[];
+    return (COUNTRY_TIMEZONE_FALLBACKS[code] ?? [])
+      .filter((timezone) => TIMEZONE_SET.has(timezone))
+      .filter((timezone) => !timezoneValues.includes(timezone));
+  }, [formProfile.country, timezoneValues]);
 
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
+
+  const countryLabel = useMemo(() => {
+    const code = formProfile.country.trim().toUpperCase();
+    if (!code) return '';
+    const DisplayNamesCtor = intlWithSupportedValues.DisplayNames;
+    if (typeof DisplayNamesCtor !== 'function') return code;
+    try {
+      return new DisplayNamesCtor([locale], { type: 'region' }).of(code) ?? code;
+    } catch {
+      return code;
+    }
+  }, [formProfile.country, locale]);
 
   const load = async () => {
     setLoading(true);
@@ -233,6 +347,7 @@ export default function SystemCompanyManagement() {
     setLogoError(null);
     setBannerError(null);
     setOwnerCandidates([]);
+    setTimezoneDraft(null);
     setModalOpen(true);
   };
 
@@ -247,6 +362,7 @@ export default function SystemCompanyManagement() {
     setFormError(null);
     setLogoError(null);
     setBannerError(null);
+    setTimezoneDraft(null);
     setModalOpen(true);
   };
 
@@ -262,6 +378,34 @@ export default function SystemCompanyManagement() {
     setBannerError(null);
     setOwnerCandidates([]);
     setOwnerCandidatesLoading(false);
+    setTimezoneDraft(null);
+  };
+
+  const setTimezoneValues = (items: string[]) => {
+    const normalized = items
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(', ');
+    setFormProfile((prev) => ({ ...prev, timezones: normalized }));
+  };
+
+  const addTimezone = (raw: string | null | undefined) => {
+    const timezone = (raw ?? '').trim();
+    if (!timezone) return;
+    if (!TIMEZONE_SET.has(timezone)) {
+      showToast(t('companies.invalidTimezone', 'Invalid timezone. Use IANA timezone values like Europe/Rome.'), 'error');
+      return;
+    }
+    if (timezoneValues.includes(timezone)) {
+      setTimezoneDraft(null);
+      return;
+    }
+    setTimezoneValues([...timezoneValues, timezone]);
+    setTimezoneDraft(null);
+  };
+
+  const removeTimezone = (timezone: string) => {
+    setTimezoneValues(timezoneValues.filter((item) => item !== timezone));
   };
 
   useEffect(() => {
@@ -455,7 +599,7 @@ export default function SystemCompanyManagement() {
           </p>
         </div>
         {user?.isSuperAdmin && (
-          <Button variant="secondary" onClick={openCreate}>
+          <Button variant="primary" onClick={openCreate}>
             <Plus size={15} style={{ marginRight: 6 }} />
             {t('companies.new')}
           </Button>
@@ -700,33 +844,9 @@ export default function SystemCompanyManagement() {
               disabled={formSaving}
             />
             <Input
-              label={t('companies.companyPhoneNumbers', 'Company Phone Numbers')}
-              value={formProfile.companyPhoneNumbers}
-              onChange={(e) => setFormProfile((prev) => ({ ...prev, companyPhoneNumbers: e.target.value }))}
-              disabled={formSaving}
-            />
-            <Input
               label={t('companies.officesLocations', 'Offices Locations')}
               value={formProfile.officesLocations}
               onChange={(e) => setFormProfile((prev) => ({ ...prev, officesLocations: e.target.value }))}
-              disabled={formSaving}
-            />
-            <Input
-              label={t('companies.country', 'Country')}
-              value={formProfile.country}
-              onChange={(e) => setFormProfile((prev) => ({ ...prev, country: e.target.value }))}
-              disabled={formSaving}
-            />
-            <Input
-              label={t('companies.city', 'City')}
-              value={formProfile.city}
-              onChange={(e) => setFormProfile((prev) => ({ ...prev, city: e.target.value }))}
-              disabled={formSaving}
-            />
-            <Input
-              label={t('companies.state', 'State')}
-              value={formProfile.state}
-              onChange={(e) => setFormProfile((prev) => ({ ...prev, state: e.target.value }))}
               disabled={formSaving}
             />
             <Input
@@ -735,19 +855,141 @@ export default function SystemCompanyManagement() {
               onChange={(e) => setFormProfile((prev) => ({ ...prev, currency: e.target.value }))}
               disabled={formSaving}
             />
-            <Input
-              label={t('companies.timezones', 'Timezones')}
-              value={formProfile.timezones}
-              onChange={(e) => setFormProfile((prev) => ({ ...prev, timezones: e.target.value }))}
-              disabled={formSaving}
-            />
-            <Input
-              label={t('companies.address', 'Address')}
-              value={formProfile.address}
-              onChange={(e) => setFormProfile((prev) => ({ ...prev, address: e.target.value }))}
-              disabled={formSaving}
-            />
           </div>
+
+          <div style={{ display: 'grid', gap: 8 }}>
+            <label style={{ marginBottom: 2, fontSize: '12.5px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              {t('companies.timezones', 'Timezones')}
+            </label>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {timezoneValues.length > 0 ? timezoneValues.map((timezone) => (
+                <span key={timezone} style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  border: '1px solid var(--border)',
+                  borderRadius: 999,
+                  background: 'var(--surface-warm)',
+                  color: 'var(--text-primary)',
+                  padding: '3px 8px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}>
+                  {timezone}
+                  <button
+                    type="button"
+                    onClick={() => removeTimezone(timezone)}
+                    disabled={formSaving}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      lineHeight: 1,
+                      padding: 0,
+                    }}
+                    aria-label={`Remove ${timezone}`}
+                  >
+                    x
+                  </button>
+                </span>
+              )) : (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {t('companies.noTimezonesSelected', 'No timezones selected yet')}
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) auto auto', gap: 8 }}>
+              <CustomSelect
+                value={timezoneDraft}
+                onChange={(value) => setTimezoneDraft(value)}
+                options={timezoneSelectOptions}
+                placeholder={t('companies.timezonesPlaceholder', 'Select IANA timezone, e.g. Europe/Rome')}
+                disabled={formSaving}
+                isClearable
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => addTimezone(timezoneDraft)}
+                disabled={formSaving || !timezoneDraft}
+              >
+                {t('common.add', 'Add')}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => addTimezone(detectedTimezone)}
+                disabled={formSaving || !detectedTimezone}
+              >
+                {t('companies.useLocalTimezone', 'Use local')}
+              </Button>
+            </div>
+
+            {countryTimezoneSuggestions.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {countryTimezoneSuggestions.map((timezone) => (
+                  <button
+                    key={timezone}
+                    type="button"
+                    onClick={() => addTimezone(timezone)}
+                    disabled={formSaving}
+                    style={{
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface-warm)',
+                      color: 'var(--text-secondary)',
+                      borderRadius: 999,
+                      padding: '3px 10px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {timezone}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('companies.timezonesHint', 'Store IANA timezone values (for example Europe/Rome) for scheduling, payroll cut-offs, and reporting.')}
+              {countryLabel ? ` ${t('companies.timezonesCountryHint', 'Country presets loaded for')}: ${countryLabel}.` : ''}
+            </span>
+          </div>
+
+          <LocationFieldGroup
+            value={{
+              country: formProfile.country,
+              state: formProfile.state,
+              city: formProfile.city,
+              address: formProfile.address,
+              postalCode: '',
+              phone: formProfile.companyPhoneNumbers,
+            }}
+            onChange={(location) => {
+              setFormProfile((prev) => ({
+                ...prev,
+                country: location.country,
+                state: location.state,
+                city: location.city,
+                address: location.address,
+                companyPhoneNumbers: location.phone,
+              }));
+            }}
+            includeAddress
+            includePostalCode={false}
+            includePhone
+            disabled={formSaving}
+            labels={{
+              country: t('companies.country', 'Country'),
+              state: t('companies.state', 'State'),
+              city: t('companies.city', 'City'),
+              address: t('companies.address', 'Address'),
+              phone: t('companies.companyPhoneNumbers', 'Company Phone Numbers'),
+            }}
+          />
 
           {modalMode === 'edit' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

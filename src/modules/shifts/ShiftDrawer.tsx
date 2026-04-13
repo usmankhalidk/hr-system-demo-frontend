@@ -828,6 +828,7 @@ export default function ShiftDrawer({
                 }}
                 style={{
                   ...fInput,
+                  minHeight: 42,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -884,7 +885,10 @@ export default function ShiftDrawer({
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}>
-                        {selectedStore.companyName ?? selectedStore.code}
+                        <span>{selectedStore.companyName ?? selectedStore.code}</span>
+                        <span style={{ color: '#0f766e', fontWeight: 700 }}>
+                          {` · ${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                        </span>
                       </span>
                     </span>
                   </span>
@@ -960,7 +964,10 @@ export default function ShiftDrawer({
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                             }}>
-                              {store.companyName ?? store.code}
+                              <span>{store.companyName ?? store.code}</span>
+                              <span style={{ color: '#0f766e', fontWeight: 700 }}>
+                                {` · ${store.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                              </span>
                             </span>
                           </span>
                         </button>
