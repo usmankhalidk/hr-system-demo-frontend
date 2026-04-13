@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../../context/AuthContext';
 import { generateQrToken, QrTokenResponse } from '../../api/attendance';
-import { useOfflineSync, OfflineEvent } from '../../hooks/useOfflineSync';
+import { useOfflineSync } from '../../context/OfflineSyncContext';
+import { type OfflineAttendanceEvent } from '../../utils/indexedDB';
 import { getStore } from '../../api/stores';
 import { Store } from '../../types';
 
 const REFRESH_AT_SECONDS = 15;
 
-type OfflineEventType = OfflineEvent['event_type'];
+type OfflineEventType = OfflineAttendanceEvent['event_type'];
 
 const OFFLINE_ACTIONS: { type: OfflineEventType; labelKey: string; bg: string; shadow: string }[] = [
   { type: 'checkin', labelKey: 'terminal.offline_checkin', bg: '#16a34a', shadow: 'rgba(22,163,74,0.35)' },

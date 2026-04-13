@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { listMyAttendanceEvents, type AttendanceEvent } from '../../api/attendance';
 import { Spinner } from '../../components/ui/Spinner';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
+import { useOfflineSync } from '../../context/OfflineSyncContext';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -31,6 +32,7 @@ type Filter = '7' | '30';
 export default function EmployeeCheckinPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { lastSyncTime } = useOfflineSync();
 
   const [filter, setFilter] = useState<Filter>('7');
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
@@ -67,18 +69,33 @@ export default function EmployeeCheckinPage() {
 
     void load();
     return () => { alive = false; };
-  }, [filter]);
+  }, [filter, lastSyncTime]);
 
   // Group events by date
   const grouped: { date: string; items: AttendanceEvent[] }[] = [];
-  for (const ev of events) {
-    const date = new Date(ev.eventTime ?? (ev as any).event_time).toISOString().split('T')[0];
-    let group = grouped.find((g) => g.date === date);
-    if (!group) {
-      group = { date, items: [] };
-      grouped.push(group);
+  if (Array.isArray(events)) {
+    for (const ev of events) {
+      if (!ev) continue;
+      const rawTime = (ev as any).eventTime ?? (ev as any).event_time;
+      if (!rawTime) continue;
+      
+      try {
+        const dObj = new Date(rawTime);
+        if (isNaN(dObj.getTime())) {
+          console.warn('[CheckinPage] Invalid date found for event:', ev);
+          continue;
+        }
+        const date = dObj.toISOString().split('T')[0];
+        let group = grouped.find((g) => g.date === date);
+        if (!group) {
+          group = { date, items: [] };
+          grouped.push(group);
+        }
+        group.items.push(ev);
+      } catch (err) {
+        console.error('[CheckinPage] Crash prevented during grouping:', err);
+      }
     }
-    group.items.push(ev);
   }
 
   return (

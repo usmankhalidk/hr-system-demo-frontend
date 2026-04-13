@@ -131,6 +131,15 @@ function BalanceBar({ balance, locale }: { balance: LeaveBalance; locale: string
 
 // ── Main component ─────────────────────────────────────────────────────────
 export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
+  // Defensive check: if data is null, render a loading state.
+  if (!data) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '200px' }}>
+        <div className="animate-spin" style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%' }} />
+      </div>
+    );
+  }
+
   const { profile, nextShift, leaveBalance = [], isBirthday = false, showLeaveBalance, showShifts } = data;
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -141,12 +150,20 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
   const shiftMeta = nextShift ? (STATUS_META[nextShift.status] ?? STATUS_META.scheduled) : null;
   const shiftIsToday = nextShift ? isToday(nextShift.date) : false;
   const shiftIsTomorrow = nextShift ? isTomorrow(nextShift.date) : false;
+  // Further safety for profile
+  if (!profile) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+        {t('home.employee.loadingProfile', 'Caricamento profilo...')}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       {/* Birthday banner */}
-      {isBirthday && (
+      {isBirthday && profile && (
         <div style={{
           background: 'linear-gradient(135deg, var(--accent) 0%, #B8831E 100%)',
           borderRadius: 'var(--radius-lg)', padding: '18px 24px',
@@ -160,7 +177,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
               {t('home.employee.birthdayTitle', { name: profile.name, defaultValue: `Buon compleanno, ${profile.name}!` })}
             </div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-              {t('home.employee.birthdaySubtitle')}
+              {t('home.employee.birthdaySubtitle', 'Ti auguriamo una splendida giornata!')}
               <PartyPopper size={14} strokeWidth={2} />
             </div>
           </div>
@@ -168,24 +185,26 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
       )}
 
       {/* Profile card */}
-      <Card title={t('home.employee.profileCard')}>
-        <div>
-          {[
-            [t('home.employee.firstName'), profile.name],
-            [t('home.employee.lastName'), profile.surname],
-          ].map(([label, value], i, arr) => (
-            <div key={label} style={{
-              display: 'flex', justifyContent: 'space-between', padding: '10px 0',
-              borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
-              borderTop: i === 0 ? '1px solid var(--border)' : 'none',
-              fontSize: 14,
-            }}>
-              <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
-              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{value}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
+      {profile && (
+        <Card title={t('home.employee.profileCard')}>
+          <div>
+            {[
+              [t('home.employee.firstName'), profile.name],
+              [t('home.employee.lastName'), profile.surname],
+            ].map(([label, value], i, arr) => (
+              <div key={label} style={{
+                display: 'flex', justifyContent: 'space-between', padding: '10px 0',
+                borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                borderTop: i === 0 ? '1px solid var(--border)' : 'none',
+                fontSize: 14,
+              }}>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Next shift */}
       {showShifts !== false && (

@@ -59,6 +59,7 @@ const en = {
     pending: 'Pending',
     copy: 'Copy URL',
     copied: 'Copied',
+    offlineMode: 'Offline Mode',
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────
