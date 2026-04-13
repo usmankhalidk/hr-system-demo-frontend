@@ -780,7 +780,6 @@ export function EmployeeDetail() {
             </Badge>
           } />
           <InfoRow label={t('employees.workingDaysField', 'Working days')} value={renderDayPills(workingDays as number[], 'working')} />
-          <InfoRow label={t('employees.offDaysField', 'Off days')} value={renderDayPills(offDays, 'off')} />
           <InfoRow
             label={t('employees.deviceBindingField')}
             value={
