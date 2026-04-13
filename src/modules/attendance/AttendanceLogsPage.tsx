@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { listAttendanceEvents, AttendanceEvent, EventType, AttendanceListParams } from '../../api/attendance';
 import { getEmployees } from '../../api/employees';
 import { getStores } from '../../api/stores';
+import { useOfflineSync } from '../../context/OfflineSyncContext';
 import client, { getAvatarUrl } from '../../api/client';
 import { formatLocalDate } from '../../utils/date';
 import { DatePicker } from '../../components/ui/DatePicker';
@@ -55,6 +56,7 @@ const EVENT_TYPE_LABEL_KEYS: Record<string, string> = {
 export default function AttendanceLogsPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const { lastSyncTime } = useOfflineSync();
   const { isMobile, isTablet } = useBreakpoint();
 
   const canEdit   = user?.role === 'admin' || user?.role === 'hr';
@@ -307,7 +309,7 @@ export default function AttendanceLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, eventType, filterStoreId, filterUserId, filterSearch, t]);
+  }, [dateFrom, dateTo, eventType, filterStoreId, filterUserId, filterSearch, lastSyncTime, t]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 

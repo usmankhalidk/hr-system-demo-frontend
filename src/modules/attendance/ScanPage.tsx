@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { recordCheckin, EventType } from '../../api/attendance';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
+import { useOfflineSync } from '../../context/OfflineSyncContext';
 
 // ── Event definitions ────────────────────────────────────────────────────────
 const EVENTS: { type: EventType; labelKey: string; bg: string; shadow: string }[] = [
@@ -14,6 +15,18 @@ const EVENTS: { type: EventType; labelKey: string; bg: string; shadow: string }[
 ];
 
 type Stage = 'ready' | 'loading' | 'success' | 'error';
+
+// ── Helper ──────────────────────────────────────────────────────────────────
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ScanPage() {
@@ -107,23 +120,77 @@ export default function ScanPage() {
     );
   }
 
-  // ── API call ───────────────────────────────────────────────────────────────
+  const { enqueue, isOnline } = useOfflineSync();
+
+  // ── API call or Offline Queue ─────────────────────────────────────────────
   async function handleAction(eventType: EventType) {
     if (stage === 'loading') return;
     setTappedType(eventType);
     setStage('loading');
     setErrorMsg('');
+
     try {
+      const eventTime = new Date().toISOString();
+      const client_uuid = generateUUID();
+
       if (!fingerprintRef.current) {
         const fp = await getDeviceFingerprint();
         fingerprintRef.current = fp.fingerprint;
       }
-      await recordCheckin({ qrToken: token, eventType, deviceFingerprint: fingerprintRef.current ?? undefined });
+
+      // If offline, skip the API call and go straight to local queue
+      if (!navigator.onLine) {
+        throw new Error('OFFLINE_MODE');
+      }
+
+      await recordCheckin({ 
+        qrToken: token, 
+        eventType, 
+        deviceFingerprint: fingerprintRef.current ?? undefined 
+      });
+      
       setStage('success');
       window.setTimeout(() => {
         navigate('/', { replace: true });
-      }, 1600);
-    } catch (err: unknown) {
+      }, 2000);
+    } catch (err: any) {
+      console.error('Attendance attempt error:', err);
+      
+      const isNetworkError = 
+        err.message === 'OFFLINE_MODE' || 
+        !navigator.onLine || 
+        err.code === 'ERR_NETWORK' ||
+        err.message?.toLowerCase().includes('network error') ||
+        err instanceof TypeError;
+
+      if (isNetworkError) {
+        // Handle offline or network failure by enqueuing
+        try {
+          const eventTime = new Date().toISOString();
+          const client_uuid = generateUUID();
+
+          await enqueue({
+            client_uuid,
+            event_type: eventType,
+            event_time: eventTime,
+            qr_token: token,
+            user_id: user?.id,
+            unique_id: user?.uniqueId || undefined,
+            device_fingerprint: fingerprintRef.current || undefined,
+          });
+          setStage('success');
+          // Match the online experience exactly
+          window.setTimeout(() => {
+            navigate('/', { replace: true });
+          }, 2000);
+        } catch (enqueueErr) {
+          console.error('Offline enqueue failed:', enqueueErr);
+          setStage('error');
+          setErrorMsg(t('common.error'));
+        }
+        return;
+      }
+
       const axiosErr = err as { response?: { data?: { error?: string; code?: string } } };
       setStage('error');
       const errCode = axiosErr?.response?.data?.code;
@@ -144,7 +211,7 @@ export default function ScanPage() {
         background: ev.bg, padding: 32, gap: 16,
         fontFamily: 'var(--font-display)',
       }}>
-        <div style={{ fontSize: 88, lineHeight: 1 }}>✓</div>
+        <div style={{ fontSize: 88, lineHeight: 1, color: '#fff' }}>✓</div>
         <div style={{
           fontSize: 38, fontWeight: 900, color: '#fff',
           letterSpacing: -1, textAlign: 'center',

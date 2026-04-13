@@ -17,6 +17,7 @@ export interface User {
   isDeviceRegistered?: boolean;
   deviceResetPending?: boolean;
   requiresDeviceRegistration?: boolean;
+  uniqueId?: string | null;
 }
 
 export interface Company {
