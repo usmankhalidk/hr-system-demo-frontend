@@ -14,6 +14,7 @@ const BATCH_SIZE = 100;
 interface OfflineSyncContextValue {
   queueLength: number;
   isOnline: boolean;
+  isSyncing: boolean; // New: state tracking the active background sync process
   lastSyncTime: number; // New: timestamp of the last successful batch sync
   enqueue: (event: Omit<OfflineAttendanceEvent, 'id' | 'client_uuid'> & { client_uuid?: string }) => Promise<void>;
   drainQueue: () => Promise<void>;
@@ -25,6 +26,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const syncingRef = useRef(false);
   const [queueLength, setQueueLength] = useState(0);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(0);
   const { showToast } = useToast();
   const { t } = useTranslation();
@@ -56,6 +58,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
     console.log(`[OfflineSync] Found ${events.length} pending events. Starting background sync...`);
     syncingRef.current = true;
+    setIsSyncing(true);
     
     try {
       let remaining = [...events];
@@ -139,6 +142,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       syncingRef.current = false;
+      setIsSyncing(false);
     }
   }, [refreshQueueLength, showToast, t]);
 
@@ -197,7 +201,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   }, [drainQueue, refreshQueueLength, showToast]);
 
   return (
-    <OfflineSyncContext.Provider value={{ queueLength, isOnline, lastSyncTime, enqueue, drainQueue }}>
+    <OfflineSyncContext.Provider value={{ queueLength, isOnline, isSyncing, lastSyncTime, enqueue, drainQueue }}>
       {children}
     </OfflineSyncContext.Provider>
   );
