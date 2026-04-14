@@ -121,7 +121,17 @@ function InfoRow({ label, value, last }: { label: string; value: React.ReactNode
 }
 
 // ── Section panel ──────────────────────────────────────────────────────────────
-function SectionPanel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+function SectionPanel({
+  title,
+  icon,
+  action,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{
       background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
@@ -130,17 +140,20 @@ function SectionPanel({ title, icon, children }: { title: string; icon: React.Re
     }}>
       <div style={{
         padding: '16px 20px', borderBottom: '1px solid var(--border-light)',
-        display: 'flex', alignItems: 'center', gap: '10px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
         background: 'var(--surface-warm)',
       }}>
-        <div style={{ color: 'var(--accent)', flexShrink: 0 }}>{icon}</div>
-        <h3 style={{
-          fontFamily: 'var(--font-display)', fontSize: '13px', fontWeight: 700,
-          color: 'var(--text-primary)', margin: 0,
-          textTransform: 'uppercase', letterSpacing: '0.04em',
-        }}>
-          {title}
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+          <div style={{ color: 'var(--accent)', flexShrink: 0 }}>{icon}</div>
+          <h3 style={{
+            fontFamily: 'var(--font-display)', fontSize: '13px', fontWeight: 700,
+            color: 'var(--text-primary)', margin: 0,
+            textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}>
+            {title}
+          </h3>
+        </div>
+        {action && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{action}</div>}
       </div>
       <div style={{ padding: '4px 20px 8px' }}>{children}</div>
     </div>
@@ -168,33 +181,73 @@ function OnboardingSection({ employeeId, isAdminOrHr }: { employeeId: number; is
     setAssigning(true);
     try {
       const result = await assignTasks(employeeId);
-      showToast(t('onboarding.assignedSuccess', { count: result.assigned }), 'success');
+      if (result.assigned > 0) {
+        showToast(t('onboarding.assignedSuccess', { count: result.assigned }), 'success');
+      } else if (!progress || progress.total === 0) {
+        showToast(t('onboarding.noTemplatesToAssign'), 'warning');
+      } else {
+        showToast(t('onboarding.noNewTasksToAssign'), 'info');
+      }
       await load();
-    } catch {
-      showToast(t('common.error'), 'error');
+    } catch (err: unknown) {
+      const message = translateApiError(err, t, t('onboarding.errorSave')) ?? t('onboarding.errorSave');
+      showToast(message, 'error');
     } finally {
       setAssigning(false);
     }
   };
 
   const pct = progress && progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+  const hasTasks = !!progress && progress.total > 0;
+  const headerAction = isAdminOrHr && hasTasks ? (
+    <Button size="sm" loading={assigning} onClick={handleAssign}>
+      {t('onboarding.assignTasks')}
+    </Button>
+  ) : undefined;
 
   return (
     <SectionPanel title={t('nav.onboarding', 'Onboarding')} icon={
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
       </svg>
-    }>
+    } action={headerAction}>
       {loading ? (
         <div style={{ padding: '20px', textAlign: 'center' }}><Spinner size="sm" /></div>
       ) : !progress || progress.total === 0 ? (
-        <div style={{ padding: '16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {t('onboarding.noTasks', 'Nessun task di onboarding assegnato')}
+        <div style={{
+          padding: '24px 0 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          textAlign: 'center',
+        }}>
+          <span style={{
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            background: 'var(--surface-warm)',
+            border: '1px solid var(--border)',
+            color: 'var(--accent)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+            </svg>
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {t('onboarding.noTasksAssigned')}
+          </span>
+          <span style={{ fontSize: 12.5, color: 'var(--text-muted)', maxWidth: 480, lineHeight: 1.45 }}>
+            {isAdminOrHr ? t('onboarding.noTasksAssignedHintAdmin') : t('onboarding.noTasksAssignedHintEmployee')}
           </span>
           {isAdminOrHr && (
-            <Button size="sm" loading={assigning} onClick={handleAssign}>
-              {t('onboarding.assignTasks', 'Assegna task')}
+            <Button size="sm" variant="accent" loading={assigning} onClick={handleAssign}>
+              {t('onboarding.assignTasks')}
             </Button>
           )}
         </div>
@@ -853,10 +906,49 @@ export function EmployeeDetail() {
       {/* Medical Checks */}
       {canViewSensitive && (
         <div style={{ marginTop: 20 }}>
-          <SectionPanel title={t('employees.medicalSection')} icon={<IconFile />}>
+          <SectionPanel
+            title={t('employees.medicalSection')}
+            icon={<IconFile />}
+            action={isAdminOrHr && medicals.length > 0 ? (
+              <Button size="sm" onClick={() => { setEditingMedical({ editing: null }); setMedicalFormOpen(true); }}>
+                {t('employees.addMedical')}
+              </Button>
+            ) : undefined}
+          >
             {medicals.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                {t('employees.noMedicals')}
+              <div style={{
+                padding: '24px 0 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                textAlign: 'center',
+              }}>
+                <span style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '50%',
+                  background: 'var(--surface-warm)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--accent)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2v20" />
+                    <path d="M2 12h20" />
+                  </svg>
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {t('employees.noMedicals')}
+                </span>
+                {isAdminOrHr && (
+                  <Button size="sm" variant="accent" onClick={() => { setEditingMedical({ editing: null }); setMedicalFormOpen(true); }}>
+                    {t('employees.addMedical')}
+                  </Button>
+                )}
               </div>
             ) : (
               medicals.map((m, i) => (
@@ -875,13 +967,6 @@ export function EmployeeDetail() {
                   )}
                 </div>
               ))
-            )}
-            {isAdminOrHr && (
-              <div style={{ padding: '10px 0' }}>
-                <Button size="sm" onClick={() => { setEditingMedical({ editing: null }); setMedicalFormOpen(true); }}>
-                  {t('employees.addMedical')}
-                </Button>
-              </div>
             )}
           </SectionPanel>
         </div>

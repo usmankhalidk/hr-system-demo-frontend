@@ -12,6 +12,7 @@ interface CitySelectProps {
   disabled?: boolean;
   error?: string;
   isClearable?: boolean;
+  highlightSelected?: boolean;
 }
 
 export function CitySelect({
@@ -24,6 +25,7 @@ export function CitySelect({
   disabled = false,
   error,
   isClearable = true,
+  highlightSelected = false,
 }: CitySelectProps) {
   const options = useMemo<SelectOption[]>(() => {
     if (!countryCode) return [];
@@ -60,6 +62,7 @@ export function CitySelect({
         disabled={isDisabled}
         error={error}
         isClearable={isClearable}
+        highlightSelected={highlightSelected}
       />
     </div>
   );

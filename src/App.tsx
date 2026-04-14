@@ -80,7 +80,9 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/careers" element={<PublicCareersPage />} />
+      <Route path="/careers/:companySlug" element={<PublicCareersPage />} />
       <Route path="/careers/jobs/:jobId" element={<PublicJobDetailPage />} />
+      <Route path="/careers/:companySlug/jobs/:jobId" element={<PublicJobDetailPage />} />
 
       <Route path="/" element={
         <ProtectedRoute>
