@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../../context/AuthContext';
 import { generateQrToken, QrTokenResponse } from '../../api/attendance';
-import { useOfflineSync, OfflineEvent } from '../../hooks/useOfflineSync';
+import { useOfflineSync } from '../../context/OfflineSyncContext';
+import { type OfflineAttendanceEvent } from '../../utils/indexedDB';
 import { getStore } from '../../api/stores';
 import { Store } from '../../types';
 
 const REFRESH_AT_SECONDS = 15;
 
-type OfflineEventType = OfflineEvent['event_type'];
+type OfflineEventType = OfflineAttendanceEvent['event_type'];
 
 const OFFLINE_ACTIONS: { type: OfflineEventType; labelKey: string; bg: string; shadow: string }[] = [
   { type: 'checkin', labelKey: 'terminal.offline_checkin', bg: '#16a34a', shadow: 'rgba(22,163,74,0.35)' },
@@ -53,7 +54,7 @@ export default function TerminalPage() {
   const [time, setTime] = useState(new Date());
   const [store, setStore] = useState<Store | null>(null);
 
-  const { enqueue, queueLength, isOnline } = useOfflineSync();
+  const { enqueue, queueLength, isOnline, isSyncing } = useOfflineSync();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const storeIdRef = useRef<number | null>(user?.storeId ?? null);
   // Wall-clock references used to compute accurate elapsed time
@@ -551,10 +552,14 @@ export default function TerminalPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.7 }}>
                       <span style={{
                         width: 6, height: 6, borderRadius: '50%',
-                        background: queueLength > 0 ? '#f59e0b' : '#22c55e',
+                        background: isSyncing ? '#3b82f6' : queueLength > 0 ? '#f59e0b' : '#22c55e',
                       }} />
-                      <span style={{ fontSize: 10, fontWeight: 800, color: queueLength > 0 ? '#fcd34d' : '#86efac' }}>
-                        {queueLength > 0 ? t('terminal.events_pending', { count: queueLength }) : 'ONLINE'}
+                      <span style={{ fontSize: 10, fontWeight: 800, color: isSyncing ? '#93c5fd' : queueLength > 0 ? '#fcd34d' : '#86efac' }}>
+                        {isSyncing
+                          ? t('terminal.events_syncing', { count: queueLength })
+                          : queueLength > 0
+                            ? t('terminal.events_pending', { count: queueLength })
+                            : 'ONLINE'}
                       </span>
                     </div>
                   </div>

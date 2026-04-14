@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775642945468,
+  "lastScanned": 1775820465854,
   "projectRoot": "/Users/user/hr-software/hr-system-demo-frontend",
   "techStack": {
     "languages": [
@@ -70,6 +70,7 @@
     "isMonorepo": false,
     "workspaces": [],
     "mainDirectories": [
+      "public",
       "src"
     ],
     "gitBranches": {
@@ -82,17 +83,27 @@
     "dist": {
       "path": "dist",
       "purpose": "Distribution/build output",
-      "fileCount": 1,
-      "lastAccessed": 1775642945430,
+      "fileCount": 2,
+      "lastAccessed": 1775820465835,
       "keyFiles": [
+        "favicon.png",
         "index.html"
+      ]
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 1,
+      "lastAccessed": 1775820465836,
+      "keyFiles": [
+        "favicon.png"
       ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 3,
-      "lastAccessed": 1775642945431,
+      "lastAccessed": 1775820465842,
       "keyFiles": [
         "App.tsx",
         "index.css",
@@ -102,46 +113,51 @@
     "dist/assets": {
       "path": "dist/assets",
       "purpose": "Static assets",
-      "fileCount": 2,
-      "lastAccessed": 1775642945439,
+      "fileCount": 3,
+      "lastAccessed": 1775820465843,
       "keyFiles": [
-        "index-BpwfiZ85.css",
-        "index-CQAH7kkw.js"
+        "fusaro-logo-BjyBPVsQ.png",
+        "index-CMVKs2Pn.css",
+        "index-CoFHjes-.js"
       ]
     },
     "src/api": {
       "path": "src/api",
       "purpose": "API routes",
-      "fileCount": 18,
-      "lastAccessed": 1775642945440,
+      "fileCount": 21,
+      "lastAccessed": 1775820465844,
       "keyFiles": [
         "ats.ts",
         "attendance.ts",
         "auth.ts"
       ]
     },
+    "src/assets": {
+      "path": "src/assets",
+      "purpose": "Static assets",
+      "fileCount": 1,
+      "lastAccessed": 1775820465845,
+      "keyFiles": [
+        "fusaro-logo.png"
+      ]
+    },
     "src/components": {
       "path": "src/components",
       "purpose": "UI components",
       "fileCount": 1,
-      "lastAccessed": 1775642945440,
+      "lastAccessed": 1775820465845,
       "keyFiles": [
         "ProtectedRoute.tsx"
-      ]
-    },
-    "src/test": {
-      "path": "src/test",
-      "purpose": "Test files",
-      "fileCount": 13,
-      "lastAccessed": 1775642945441,
-      "keyFiles": [
-        "auth.test.tsx",
-        "authTokenStorage.test.ts",
-        "employeeList.test.tsx"
       ]
     }
   },
   "hotPaths": [
+    {
+      "path": "src/i18n/locales/en.ts",
+      "accessCount": 35,
+      "lastAccessed": 1776131986619,
+      "type": "directory"
+    },
     {
       "path": "src/modules/onboarding/OnboardingPage.tsx",
       "accessCount": 32,
@@ -149,15 +165,21 @@
       "type": "file"
     },
     {
-      "path": "src/i18n/locales/en.ts",
+      "path": "src/i18n/locales/it.ts",
       "accessCount": 23,
-      "lastAccessed": 1775669914173,
-      "type": "directory"
+      "lastAccessed": 1776131987795,
+      "type": "file"
     },
     {
       "path": "",
+      "accessCount": 19,
+      "lastAccessed": 1776131828396,
+      "type": "directory"
+    },
+    {
+      "path": "src/modules/shifts/ShiftDrawer.tsx",
       "accessCount": 18,
-      "lastAccessed": 1775669938769,
+      "lastAccessed": 1776132030447,
       "type": "directory"
     },
     {
@@ -167,15 +189,27 @@
       "type": "file"
     },
     {
-      "path": "src/i18n/locales/it.ts",
+      "path": "src/modules/employees/EmployeeDetail.tsx",
       "accessCount": 15,
-      "lastAccessed": 1775669918234,
+      "lastAccessed": 1776131746409,
       "type": "file"
     },
     {
-      "path": "src/modules/employees/EmployeeDetail.tsx",
+      "path": "src/modules/shifts/WeeklyCalendar.tsx",
+      "accessCount": 13,
+      "lastAccessed": 1776131697848,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/attendance/EmployeeCheckinPage.tsx",
+      "accessCount": 12,
+      "lastAccessed": 1776132024112,
+      "type": "file"
+    },
+    {
+      "path": "src/hooks/useOfflineSync.ts",
       "accessCount": 11,
-      "lastAccessed": 1775643542836,
+      "lastAccessed": 1775881666317,
       "type": "file"
     },
     {
@@ -191,9 +225,45 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 8,
+      "lastAccessed": 1776131836665,
+      "type": "directory"
+    },
+    {
       "path": "src/api/onboarding.ts",
       "accessCount": 7,
       "lastAccessed": 1775669941379,
+      "type": "file"
+    },
+    {
+      "path": "src/api/shifts.ts",
+      "accessCount": 7,
+      "lastAccessed": 1776131699516,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/AffluencePanel.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775820469604,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/ShiftTemplatesPanel.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1776131777283,
+      "type": "directory"
+    },
+    {
+      "path": "src/api/client.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775818656405,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/ShiftsPage.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1776131717594,
       "type": "file"
     },
     {
@@ -209,15 +279,15 @@
       "type": "file"
     },
     {
-      "path": "src",
-      "accessCount": 3,
-      "lastAccessed": 1775703641262,
-      "type": "directory"
-    },
-    {
       "path": "src/utils/apiErrors.ts",
       "accessCount": 3,
       "lastAccessed": 1775703647558,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/home/StoreManagerHome.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1776131699205,
       "type": "file"
     },
     {
@@ -230,24 +300,6 @@
       "path": "src/api/ats.ts",
       "accessCount": 2,
       "lastAccessed": 1775668348171,
-      "type": "file"
-    },
-    {
-      "path": "src/modules/shifts/ShiftsPage.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775668391244,
-      "type": "file"
-    },
-    {
-      "path": "src/modules/shifts/WeeklyCalendar.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775668401496,
-      "type": "file"
-    },
-    {
-      "path": "src/api/client.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775668701843,
       "type": "file"
     },
     {
@@ -269,15 +321,33 @@
       "type": "file"
     },
     {
-      "path": "src/api/stores.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775668347696,
+      "path": "src/modules/shifts/AffluenceAdminModal.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775818716885,
       "type": "file"
     },
     {
-      "path": "src/api/shifts.ts",
+      "path": "src/modules/attendance/TerminalPage.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775881608555,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts",
+      "accessCount": 2,
+      "lastAccessed": 1776131027962,
+      "type": "directory"
+    },
+    {
+      "path": "src/modules/employees/EmployeeForm.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776131776567,
+      "type": "file"
+    },
+    {
+      "path": "src/api/stores.ts",
       "accessCount": 1,
-      "lastAccessed": 1775668356276,
+      "lastAccessed": 1775668347696,
       "type": "file"
     },
     {
@@ -303,6 +373,30 @@
       "accessCount": 1,
       "lastAccessed": 1775669604001,
       "type": "file"
+    },
+    {
+      "path": "src/i18n/locales",
+      "accessCount": 1,
+      "lastAccessed": 1775820479844,
+      "type": "directory"
+    },
+    {
+      "path": "src/test/offlineSync.test.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775881361428,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/DayCalendar.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776130919435,
+      "type": "directory"
+    },
+    {
+      "path": "src/i18n",
+      "accessCount": 1,
+      "lastAccessed": 1776131832867,
+      "type": "directory"
     }
   ],
   "userDirectives": []

@@ -75,8 +75,21 @@ export const HomePage: React.FC = () => {
     );
   }
 
-  if (!user || !data) {
-    return null;
+  if (!user || (!data && !error)) {
+    return (
+      <div style={centeredStyle}>
+        <Spinner size="lg" color="var(--accent)" />
+      </div>
+    );
+  }
+
+  // Safety: If somehow data is missing but we're about to render, show loading
+  if (!data && !error) {
+    return (
+      <div style={centeredStyle}>
+        <Spinner size="lg" color="var(--accent)" />
+      </div>
+    );
   }
 
   switch (user.role) {

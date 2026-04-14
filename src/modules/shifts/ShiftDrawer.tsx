@@ -94,22 +94,6 @@ function getInitials(name: string): string {
   return (name.slice(0, 2) || 'U').toUpperCase();
 }
 
-function normalizeOffDays(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return [5, 6];
-  const normalized = Array.from(new Set(
-    raw
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
-  )).sort((a, b) => a - b);
-  return normalized.length > 0 ? normalized : [5, 6];
-}
-
-function isDateOnOffDay(dateStr: string, offDays: number[]): boolean {
-  const parsed = new Date(`${dateStr}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return false;
-  const monBasedDay = (parsed.getDay() + 6) % 7;
-  return offDays.includes(monBasedDay);
-}
 
 const EMPTY_FORM: FormState = {
   user_id: '',
@@ -157,11 +141,6 @@ export default function ShiftDrawer({
 
   const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
   const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.surname}`.trim() : '';
-  const selectedEmployeeOffDays = normalizeOffDays(
-    selectedEmployee?.offDays ?? (form.user_id ? employeeOffDaysById[Number(form.user_id)] : undefined),
-  );
-  const selectedDateIsOffDay = Boolean(form.date && isDateOnOffDay(form.date, selectedEmployeeOffDays));
-  const statusLockedForOffDay = Boolean(shift && selectedDateIsOffDay);
   const dayShortLabels = [
     t('shifts.dayMon', 'Mon'),
     t('shifts.dayTue', 'Tue'),
@@ -171,7 +150,6 @@ export default function ShiftDrawer({
     t('shifts.daySat', 'Sat'),
     t('shifts.daySun', 'Sun'),
   ];
-  const selectedEmployeeOffDaysLabel = selectedEmployeeOffDays.map((day) => dayShortLabels[day] ?? `#${day}`).join(', ');
   const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
   const selectedStore = stores.find((store) => String(store.id) === form.store_id) ?? null;
   const expectedStoreId = activeTransferForDate?.targetStoreId ?? selectedEmployee?.storeId ?? null;
@@ -462,15 +440,6 @@ export default function ShiftDrawer({
       return;
     }
 
-    if (selectedDateIsOffDay && !shift) {
-      setError(t('errors.OFF_DAY_SHIFT_BLOCKED', 'This employee is off on the selected day.'));
-      return;
-    }
-
-    if (statusLockedForOffDay && shift && form.status !== shift.status) {
-      setError(t('errors.OFF_DAY_STATUS_LOCKED', 'Shift status cannot be changed on an off day.'));
-      return;
-    }
 
     setFormErrors({});
     setOverlapConflict(false);
@@ -1031,28 +1000,6 @@ export default function ShiftDrawer({
                 setForm((p) => ({ ...p, date: v }));
               }}
             />
-            {form.user_id && selectedDateIsOffDay && (
-              <div style={{
-                marginTop: 8,
-                fontSize: 12,
-                lineHeight: 1.45,
-                color: '#92400e',
-                background: 'rgba(251,191,36,0.14)',
-                border: '1px solid rgba(217,119,6,0.3)',
-                borderRadius: 8,
-                padding: '7px 9px',
-              }}>
-                {shift
-                  ? t('shifts.offDayStatusLockedHint', {
-                      days: selectedEmployeeOffDaysLabel,
-                      defaultValue: 'This date falls on an off-day ({{days}}). You can update details, but status changes are locked.',
-                    })
-                  : t('shifts.offDayCreateBlockedHint', {
-                      days: selectedEmployeeOffDaysLabel,
-                      defaultValue: 'This date falls on an off-day ({{days}}). Shift creation is blocked.',
-                    })}
-              </div>
-            )}
           </div>
 
           {/* ─── Section: Orario ────────────── */}
@@ -1251,7 +1198,7 @@ export default function ShiftDrawer({
                 const active = form.status === s;
                 const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
                 const bg    = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                const disabled = statusLockedForOffDay && s !== shift?.status;
+                const disabled = false;
                 return (
                   <button
                     key={s} type="button"
@@ -1278,7 +1225,7 @@ export default function ShiftDrawer({
                 const active = form.status === s;
                 const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
                 const bg    = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                const disabled = statusLockedForOffDay && s !== shift?.status;
+                const disabled = false;
                 return (
                   <button
                     key={s} type="button"
@@ -1298,17 +1245,6 @@ export default function ShiftDrawer({
                   </button>
                 );
               })}
-            </div>
-          )}
-          {statusLockedForOffDay && shift && (
-            <div style={{
-              marginTop: -14,
-              marginBottom: 14,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              lineHeight: 1.4,
-            }}>
-              {t('shifts.offDayStatusLockedHintCompact', 'Status changes are locked because this shift is on an off-day.')}
             </div>
           )}
 

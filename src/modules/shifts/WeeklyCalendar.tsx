@@ -304,11 +304,6 @@ export default function WeeklyCalendar({
             users.map(([userId, userData], rowIdx) => {
               const { hours: weekHours, hasScheduled } = weeklyTotalsForUser(userId, userData.shifts);
               const rowStoreNames = Array.from(userData.storeNames);
-              const userOffDaysRaw = employeeOffDaysById[userId] ?? [5, 6];
-              const parsedUserOffDays = Array.isArray(userOffDaysRaw)
-                ? userOffDaysRaw.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-                : [5, 6];
-              const userOffDays = parsedUserOffDays.length > 0 ? parsedUserOffDays : [5, 6];
               return (
               <tr
                 key={userId}
@@ -421,7 +416,6 @@ export default function WeeklyCalendar({
                   const hasNonCancelledShift = dayShifts.some((shift) => shift.status !== 'cancelled');
                   const isToday = dateStr === todayStr();
                   const dayMonBased = (day.getDay() + 6) % 7;
-                  const isOffDay = userOffDays.includes(dayMonBased);
                   const leave = getLeaveForUserDate(userId, dateStr);
                   const transfer = getTransferForUserDate(userId, dateStr);
                   const transferVm = transferVisualMeta(transfer?.status ?? 'active');
@@ -496,43 +490,22 @@ export default function WeeklyCalendar({
                     <td
                       key={colIdx}
                       title={canEdit && !hasNonCancelledShift
-                        ? (isOffDay ? t('shifts.offDayCellHint', 'Configured off-day') : t('shifts.addShiftTooltip', '+ Aggiungi turno'))
+                        ? t('shifts.addShiftTooltip', '+ Aggiungi turno')
                         : undefined}
                       style={{
                         padding: 4,
                         verticalAlign: 'top',
                         borderRight: '1px solid var(--border)',
                         borderBottom: '1px solid var(--border)',
-                        cursor: canEdit && !isOffDay ? 'pointer' : 'default',
+                        cursor: canEdit ? 'pointer' : 'default',
                         minHeight: 60,
                         position: 'relative',
                         background: leave
                           ? (lvVacation ? 'rgba(219,234,254,0.13)' : 'rgba(255,237,213,0.13)')
-                          : (isOffDay
-                            ? 'rgba(148,163,184,0.12)'
-                            : (isToday ? 'rgba(201,151,58,0.04)' : undefined)),
+                          : (isToday ? 'rgba(201,151,58,0.04)' : undefined),
                       }}
-                      onClick={() => canEdit && !isOffDay && !hasNonCancelledShift && onCellClick(userId, dateStr)}
+                      onClick={() => canEdit && !hasNonCancelledShift && onCellClick(userId, dateStr)}
                     >
-                      {isOffDay && (
-                        <div style={{
-                          marginBottom: 4,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '2px 6px',
-                          borderRadius: 999,
-                          border: '1px solid rgba(71,85,105,0.3)',
-                          background: 'rgba(241,245,249,0.95)',
-                          color: '#475569',
-                          fontSize: 9,
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          lineHeight: 1.2,
-                        }}>
-                          {t('shifts.offDayShort', 'Off')}
-                        </div>
-                      )}
 
                       {showDualLane ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

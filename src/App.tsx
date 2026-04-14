@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { SocketProvider } from './context/SocketContext';
+import { OfflineSyncProvider } from './context/OfflineSyncContext';
 import ToastContainer from './components/ui/ToastContainer';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/layout/Layout';
@@ -35,9 +36,10 @@ import DocumentsPage from './modules/documents/DocumentsPage';
 import TransfersPage from './modules/transfers/TransfersPage';
 import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
 import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
+import EmailSettingsPage from './modules/email/EmailSettingsPage';
 import PublicCareersPage from './modules/publicCareers/PublicCareersPage';
 import PublicJobDetailPage from './modules/publicCareers/PublicJobDetailPage';
-import EmailSettingsPage from './modules/email/EmailSettingsPage';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -256,10 +258,14 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <SocketProvider>
-          <BrowserRouter>
-            <ToastContainer />
-            <AppRoutes />
-          </BrowserRouter>
+          <OfflineSyncProvider>
+            <BrowserRouter>
+              <ToastContainer />
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
+            </BrowserRouter>
+          </OfflineSyncProvider>
         </SocketProvider>
       </AuthProvider>
     </ToastProvider>
