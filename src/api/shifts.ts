@@ -20,6 +20,7 @@ export interface Shift {
   isSplit: boolean;
   splitStart2: string | null;
   splitEnd2: string | null;
+  isOffDay: boolean;
   status: 'scheduled' | 'confirmed' | 'cancelled';
   notes: string | null;
   createdBy: number | null;
@@ -89,6 +90,7 @@ export interface CreateShiftPayload {
   is_split?: boolean;
   split_start2?: string | null;
   split_end2?: string | null;
+  is_off_day?: boolean;
   notes?: string | null;
   status?: 'scheduled' | 'confirmed' | 'cancelled';
 }

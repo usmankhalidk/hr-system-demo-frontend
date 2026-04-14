@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, CalendarDays, Palmtree, Thermometer, Coffee, Store as StoreIcon } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Moon, Palmtree, Thermometer, Coffee, Store as StoreIcon } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
@@ -60,6 +60,13 @@ const STATUS_META: Record<string, {
     labelKey: 'shifts.status.cancelled', labelFb: 'Annullato',
     descKey: 'shifts.status.cancelledDesc', descFb: 'Turno annullato',
   },
+};
+
+const OFF_DAY_META = {
+  bg: 'rgba(241,245,249,0.94)',
+  color: '#475569',
+  border: 'rgba(148,163,184,0.42)',
+  leftBorder: 'rgba(100,116,139,0.62)',
 };
 
 function transferVisualMeta(status: TransferAssignment['status']): {
@@ -244,6 +251,7 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
             const originStoreName = rowTransfer?.originStoreName ?? rowStoreNames[0] ?? t('transfers.table.origin', 'Origine');
             const targetStoreName = rowTransfer?.targetStoreName ?? t('transfers.table.target', 'Destinazione');
             const transferVm = transferVisualMeta(rowTransfer?.status ?? 'active');
+            const rowHasOffDay = userData.shifts.some((shift) => shift.isOffDay);
 
             const renderIdentityRow = (opts: {
               storeName: string;
@@ -324,7 +332,61 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
               );
             };
 
-            const renderShiftBlocks = (laneShifts: Shift[], laneKey: string) => laneShifts.map((shift) => {
+            const renderShiftBlocks = (laneShifts: Shift[], laneKey: string) => {
+              const offDayShifts = laneShifts.filter((shift) => shift.isOffDay);
+              const workingShifts = laneShifts.filter((shift) => !shift.isOffDay);
+              return (
+                <>
+                  {offDayShifts.map((shift, idx) => (
+                    <div
+                      key={`off-${shift.id}-${laneKey}`}
+                      onClick={(e) => { e.stopPropagation(); onShiftClick(shift); }}
+                      title={t('shifts.form.offDay', 'Off day')}
+                      style={{
+                        position: 'absolute',
+                        top: 5 + (idx * 34),
+                        left: 6,
+                        zIndex: 9,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '4px 8px 4px 6px',
+                        borderRadius: 8,
+                        borderTop: `1px solid ${OFF_DAY_META.border}`,
+                        borderRight: `1px solid ${OFF_DAY_META.border}`,
+                        borderBottom: `1px solid ${OFF_DAY_META.border}`,
+                        borderLeft: `3px solid ${OFF_DAY_META.leftBorder}`,
+                        background: OFF_DAY_META.bg,
+                        color: OFF_DAY_META.color,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                        cursor: 'pointer',
+                        maxWidth: 'calc(100% - 12px)',
+                      }}
+                    >
+                      <Moon size={11} strokeWidth={2.4} />
+                      <span style={{ overflow: 'hidden', lineHeight: 1.25 }}>
+                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t('shifts.form.offDay', 'Off day')}
+                        </span>
+                        {(shift.startTime.slice(0, 5) !== '00:00' || shift.endTime.slice(0, 5) !== '00:01') && (
+                          <span style={{
+                            display: 'block',
+                            fontSize: 9,
+                            color: '#64748b',
+                            textDecoration: 'line-through',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {t('shifts.status.cancelled', 'Cancelled')} · {shift.startTime.slice(0, 5)}–{shift.endTime.slice(0, 5)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                  {workingShifts.map((shift) => {
               const colors = STATUS_META[shift.status] ?? STATUS_META.scheduled;
               const isCancelled = shift.status === 'cancelled';
 
@@ -519,7 +581,10 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
               }
 
               return renderBlock(shift.startTime, shift.endTime, false, true);
-            });
+                  })}
+                </>
+              );
+            };
 
             return (
             <div
@@ -588,9 +653,9 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                   flex: 1,
                   position: 'relative',
                   minHeight: showDualLane ? 114 : 60,
-                  cursor: canEdit ? 'pointer' : 'default',
+                  cursor: canEdit && !rowHasOffDay ? 'pointer' : 'default',
                 }}
-                onClick={() => canEdit && onSlotClick(userId, dateStr)}
+                onClick={() => canEdit && !rowHasOffDay && onSlotClick(userId, dateStr)}
               >
                 {/* Leave timeline overlay — clean gradient wash */}
                 {rowLeave && (
@@ -728,6 +793,25 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
               <span style={{ color: 'var(--border)', fontSize: 14, lineHeight: 1 }}>·</span>
             </div>
           ))}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '3px 8px 3px 6px', borderRadius: 6, fontSize: 11, fontWeight: 800,
+              background: OFF_DAY_META.bg, color: OFF_DAY_META.color,
+              borderTop: `1px solid ${OFF_DAY_META.border}`,
+              borderRight: `1px solid ${OFF_DAY_META.border}`,
+              borderBottom: `1px solid ${OFF_DAY_META.border}`,
+              borderLeft: `3px solid ${OFF_DAY_META.leftBorder}`,
+            }}>
+              <Moon size={11} strokeWidth={2.4} />
+              {t('shifts.form.offDay', 'Off day')}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              {t('shifts.offDayLegend', 'Date marked as non-working day')}
+            </span>
+            <span style={{ color: 'var(--border)', fontSize: 14, lineHeight: 1 }}>·</span>
+          </div>
 
           {/* Break legend */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

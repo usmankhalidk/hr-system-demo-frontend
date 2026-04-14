@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Pencil, PlayCircle, Store as StoreIcon, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Moon, Palmtree, Pencil, PlayCircle, Store as StoreIcon, Thermometer, Trash2 } from 'lucide-react';
 import {
+  Shift,
   ShiftTemplate,
+  listShifts,
   listTemplates,
   createTemplate,
   updateTemplate,
   deleteTemplate,
   createShift,
 } from '../../api/shifts';
+import { getLeaveBlocks, LeaveBlock } from '../../api/leave';
 import { getStores } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
 import { getTransferBlocks, TransferAssignment } from '../../api/transfers';
@@ -111,16 +114,6 @@ function dayOfWeekMonBased(date: Date): number {
   return (date.getDay() + 6) % 7;
 }
 
-function normalizeOffDays(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return [5, 6];
-  const normalized = Array.from(new Set(
-    raw
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
-  )).sort((a, b) => a - b);
-  return normalized.length > 0 ? normalized : [5, 6];
-}
-
 function enumerateDatesForPattern(patternDay: number, startDate: string, endDate: string): string[] {
   const start = parseIsoDate(startDate);
   const end = parseIsoDate(endDate);
@@ -132,6 +125,56 @@ function enumerateDatesForPattern(patternDay: number, startDate: string, endDate
     }
   }
   return out;
+}
+
+function enumerateMonthsInRange(startDate: string, endDate: string): string[] {
+  const start = parseIsoDate(startDate);
+  const end = parseIsoDate(endDate);
+  if (!start || !end || start > end) return [];
+
+  const keys: string[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const endCursor = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= endCursor) {
+    keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return keys;
+}
+
+function overlapDaysInclusive(fromA: string, toA: string, fromB: string, toB: string): number {
+  const start = fromA > fromB ? fromA : fromB;
+  const end = toA < toB ? toA : toB;
+  if (start > end) return 0;
+  const startDate = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  return Math.floor((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+}
+
+function breakTone(breakType: 'none' | 'fixed' | 'flexible', active: boolean): {
+  background: string;
+  color: string;
+  border: string;
+} {
+  if (breakType === 'none') {
+    return {
+      background: active ? 'rgba(148,163,184,0.22)' : 'rgba(248,250,252,0.8)',
+      color: active ? '#475569' : '#64748b',
+      border: active ? 'rgba(100,116,139,0.5)' : 'rgba(203,213,225,0.9)',
+    };
+  }
+  if (breakType === 'flexible') {
+    return {
+      background: active ? 'rgba(56,189,248,0.18)' : 'rgba(240,249,255,0.9)',
+      color: active ? '#0369a1' : '#0c4a6e',
+      border: active ? 'rgba(14,116,144,0.45)' : 'rgba(186,230,253,0.95)',
+    };
+  }
+  return {
+    background: active ? 'rgba(217,119,6,0.16)' : 'rgba(255,251,235,0.9)',
+    color: active ? '#b45309' : '#92400e',
+    border: active ? 'rgba(180,83,9,0.4)' : 'rgba(253,230,138,0.95)',
+  };
 }
 
 function validateShiftPatternTiming(pattern: ShiftPattern, t: (k: string, o?: any) => string, dayLabel: string): string | null {
@@ -207,6 +250,9 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   const [applyEmployeeIds, setApplyEmployeeIds] = useState<number[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [applyTransfers, setApplyTransfers] = useState<TransferAssignment[]>([]);
+  const [applyRangeShifts, setApplyRangeShifts] = useState<Shift[]>([]);
+  const [applyLeaveBlocks, setApplyLeaveBlocks] = useState<LeaveBlock[]>([]);
+  const [applyContextLoading, setApplyContextLoading] = useState(false);
   const [employeesLoading, setEmployeesLoading] = useState(false);
   const [applying, setApplying] = useState(false);
 
@@ -267,7 +313,6 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
         terminationDate: null,
         workingType: null,
         weeklyHours: null,
-        offDays: [5, 6],
         status: 'active',
         firstAidFlag: false,
         maritalStatus: null,
@@ -509,6 +554,93 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   }, [applyTemplate, applyStartDate, applyEndDate]);
 
   useEffect(() => {
+    if (!applyTemplate || !applyStartDate || !applyEndDate || applyStartDate > applyEndDate) {
+      setApplyRangeShifts([]);
+      setApplyLeaveBlocks([]);
+      setApplyContextLoading(false);
+      return;
+    }
+
+    let mounted = true;
+    setApplyContextLoading(true);
+
+    const monthKeys = enumerateMonthsInRange(applyStartDate, applyEndDate);
+    Promise.all([
+      Promise.all(monthKeys.map((month) => listShifts({ month, store_id: applyTemplate.storeId }))),
+      getLeaveBlocks(applyStartDate, applyEndDate),
+    ])
+      .then(([shiftBuckets, leaveBlocks]) => {
+        if (!mounted) return;
+        const mergedShifts = shiftBuckets
+          .flatMap((bucket) => bucket.shifts)
+          .filter((shift) => {
+            const dateOnly = shift.date.split('T')[0];
+            return dateOnly >= applyStartDate && dateOnly <= applyEndDate;
+          });
+
+        setApplyRangeShifts(mergedShifts);
+        setApplyLeaveBlocks(leaveBlocks);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setApplyRangeShifts([]);
+        setApplyLeaveBlocks([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setApplyContextLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [applyTemplate, applyStartDate, applyEndDate]);
+
+  const applyContextByEmployee = useMemo(() => {
+    const result = new Map<number, {
+      offDayDates: number;
+      vacationDays: number;
+      sickDays: number;
+      hasPendingLeave: boolean;
+    }>();
+
+    for (const emp of applyEmployees) {
+      const offDayDates = new Set(
+        applyRangeShifts
+          .filter((shift) => shift.userId === emp.id && shift.isOffDay)
+          .map((shift) => shift.date.split('T')[0]),
+      );
+
+      let vacationDays = 0;
+      let sickDays = 0;
+      let hasPendingLeave = false;
+
+      for (const leave of applyLeaveBlocks) {
+        if (leave.userId !== emp.id) continue;
+        const overlapDays = overlapDaysInclusive(applyStartDate, applyEndDate, leave.startDate, leave.endDate);
+        if (overlapDays <= 0) continue;
+        if (leave.leaveType === 'vacation') {
+          vacationDays += overlapDays;
+        } else {
+          sickDays += overlapDays;
+        }
+        if (leave.status !== 'hr_approved') {
+          hasPendingLeave = true;
+        }
+      }
+
+      result.set(emp.id, {
+        offDayDates: offDayDates.size,
+        vacationDays,
+        sickDays,
+        hasPendingLeave,
+      });
+    }
+
+    return result;
+  }, [applyEmployees, applyRangeShifts, applyLeaveBlocks, applyStartDate, applyEndDate]);
+
+  useEffect(() => {
     setApplyEmployeeIds((prev) => prev.filter((id) => applyEmployees.some((emp) => emp.id === id)));
   }, [applyEmployees]);
 
@@ -524,6 +656,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setError(null);
     let created = 0;
     let skipped = 0;
+    let skippedOffDay = 0;
     let failed = 0;
     const failureMessages: string[] = [];
 
@@ -571,8 +704,12 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
             });
             created++;
           } catch (err: any) {
-            if (err?.response?.data?.code === 'OVERLAP_CONFLICT') {
+            const code: string | undefined = err?.response?.data?.code;
+            if (code === 'OVERLAP_CONFLICT') {
               skipped++;
+            } else if (code === 'OFF_DAY_ALREADY_MARKED' || code === 'OFF_DAY_SCHEDULE_BLOCKED') {
+              skipped++;
+              skippedOffDay++;
             } else {
               failed++;
               const backendMessage: string | undefined = err?.response?.data?.error ?? err?.message;
@@ -588,6 +725,12 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplying(false);
     const parts: string[] = [`✓ ${t('shifts.shiftsCreated', { count: created })}`];
     if (skipped > 0) parts.push(t('shifts.shiftsSkipped', { count: skipped }));
+    if (skippedOffDay > 0) {
+      parts.push(t('shifts.offDaySkipped', {
+        count: skippedOffDay,
+        defaultValue: '{{count}} skipped due to off-day markers',
+      }));
+    }
     if (failed > 0) parts.push(t('shifts.shiftsFailed', { count: failed }));
     setSuccessMsg(parts.join(' · '));
     setTimeout(() => setSuccessMsg(null), 4000);
@@ -739,46 +882,41 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
                   {t('shifts.templateDayToggleHint', 'Seleziona i giorni della settimana coperti da questo template. Il giorno di riposo viene assegnato dinamicamente nel calendario settimanale.')}
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {DAY_LABELS_FULL.map((label, idx) => {
-                    const enabled = dayConfigs[idx].enabled;
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => toggleDay(idx)}
-                        style={{
-                          padding: '8px 12px',
-                          borderRadius: 20,
-                          border: `2px solid ${enabled ? 'var(--accent)' : 'var(--border)'}`,
-                          background: enabled ? 'rgba(201,151,58,0.13)' : 'var(--surface-warm)',
-                          color: 'var(--text-secondary)',
-                          fontWeight: 600, fontSize: 13,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
-                          fontFamily: 'var(--font-body)',
-                          minWidth: 114,
-                        }}
-                      >
-                        <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1, gap: 2 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 700 }}>{label}</span>
-                          <span style={{
-                            fontSize: 9,
-                            fontWeight: 800,
-                            letterSpacing: '0.07em',
-                            textTransform: 'uppercase',
-                            borderRadius: 999,
-                            padding: '2px 7px',
-                            border: enabled ? '1px solid rgba(22,101,52,0.28)' : '1px solid rgba(180,83,9,0.3)',
-                            background: enabled ? 'rgba(134,239,172,0.2)' : 'rgba(251,191,36,0.2)',
-                            color: enabled ? '#166534' : '#92400e',
-                          }}>
-                            {enabled ? t('shifts.dayIncluded', 'Incluso') : t('shifts.dayExcluded', 'Escluso')}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, minmax(74px, 1fr))',
+                    gap: 6,
+                    minWidth: 560,
+                  }}>
+                    {DAY_LABELS_FULL.map((label, idx) => {
+                      const enabled = dayConfigs[idx].enabled;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => toggleDay(idx)}
+                          style={{
+                            padding: '7px 6px',
+                            borderRadius: 10,
+                            border: `1.5px solid ${enabled ? 'rgba(15,118,110,0.45)' : 'rgba(148,163,184,0.45)'}`,
+                            background: enabled ? 'rgba(20,184,166,0.12)' : 'rgba(248,250,252,0.9)',
+                            color: enabled ? '#0f766e' : '#64748b',
+                            fontWeight: 700,
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                            fontFamily: 'var(--font-body)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 {enabledCount === 0 && (
                   <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
@@ -833,12 +971,13 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                           }))}
                           style={{
                             border: 'none',
-                            background: 'var(--surface)',
-                            color: 'var(--text-secondary)',
+                            background: breakTone(bt, false).background,
+                            color: breakTone(bt, false).color,
                             fontSize: 11,
                             fontWeight: 700,
                             padding: '5px 10px',
                             cursor: 'pointer',
+                            borderRight: '1px solid var(--border-light)',
                           }}
                         >
                           {bt === 'none'
@@ -928,14 +1067,29 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                         breakMinutes: bt === 'flexible' ? day.breakMinutes : '',
                                       };
                                     }))}
+                                    onMouseEnter={(e) => {
+                                      if (d.breakType !== bt) {
+                                        e.currentTarget.style.filter = 'brightness(0.98)';
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.filter = '';
+                                    }}
                                     style={{
+                                      ...(function () {
+                                        const tone = breakTone(bt, d.breakType === bt);
+                                        return {
+                                          background: tone.background,
+                                          color: tone.color,
+                                          borderColor: tone.border,
+                                        };
+                                      })(),
                                       border: 'none',
-                                      background: d.breakType === bt ? 'var(--accent)' : 'var(--surface)',
-                                      color: d.breakType === bt ? '#fff' : 'var(--text-secondary)',
                                       fontSize: 11,
                                       fontWeight: 700,
                                       padding: '5px 10px',
                                       cursor: 'pointer',
+                                      borderRight: '1px solid var(--border-light)',
                                     }}
                                   >
                                     {bt === 'none'
@@ -1177,6 +1331,19 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                     </button>
                   )}
                 </div>
+                {!employeesLoading && applyContextLoading && (
+                  <div style={{
+                    marginBottom: 8,
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                    background: 'rgba(148,163,184,0.12)',
+                    border: '1px solid rgba(148,163,184,0.28)',
+                    borderRadius: 8,
+                    padding: '6px 8px',
+                  }}>
+                    {t('shifts.applyingContextLoading', 'Loading off-day and leave context for selected dates...')}
+                  </div>
+                )}
                 {employeesLoading ? (
                   <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Loading...')}</p>
                 ) : applyEmployees.length === 0 ? (
@@ -1191,6 +1358,11 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                       const transfer = emp.transferForApply ?? null;
                       const isTransferred = Boolean(emp.isTransferredForApply);
                       const homeStoreName = transfer?.originStoreName ?? emp.storeName;
+                      const context = applyContextByEmployee.get(emp.id);
+                      const offDayDates = context?.offDayDates ?? 0;
+                      const vacationDays = context?.vacationDays ?? 0;
+                      const sickDays = context?.sickDays ?? 0;
+                      const hasPendingLeave = Boolean(context?.hasPendingLeave);
                       return (
                         <label key={emp.id} style={{
                           display: 'flex', alignItems: 'flex-start', gap: 8,
@@ -1295,6 +1467,84 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 </span>
                               )}
                             </div>
+                            {!applyContextLoading && (offDayDates > 0 || vacationDays > 0 || sickDays > 0) && (
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                                {offDayDates > 0 && (
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '2px 7px 2px 6px',
+                                    borderRadius: 999,
+                                    borderLeft: '3px solid rgba(100,116,139,0.65)',
+                                    borderTop: '1px solid rgba(148,163,184,0.38)',
+                                    borderRight: '1px solid rgba(148,163,184,0.38)',
+                                    borderBottom: '1px solid rgba(148,163,184,0.38)',
+                                    background: 'rgba(241,245,249,0.9)',
+                                    color: '#475569',
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    lineHeight: 1.2,
+                                  }}>
+                                    <Moon size={10} />
+                                    {t('shifts.form.offDay', 'Off day')} · {offDayDates}
+                                  </span>
+                                )}
+                                {vacationDays > 0 && (
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '2px 7px 2px 6px',
+                                    borderRadius: 999,
+                                    borderLeft: '3px solid rgba(37,99,235,0.58)',
+                                    borderTop: '1px solid rgba(37,99,235,0.24)',
+                                    borderRight: '1px solid rgba(37,99,235,0.24)',
+                                    borderBottom: '1px solid rgba(37,99,235,0.24)',
+                                    background: 'rgba(219,234,254,0.85)',
+                                    color: '#1e40af',
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    lineHeight: 1.2,
+                                  }}>
+                                    <Palmtree size={10} />
+                                    {t('leave.type_vacation', 'Vacation')} · {vacationDays}
+                                  </span>
+                                )}
+                                {sickDays > 0 && (
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '2px 7px 2px 6px',
+                                    borderRadius: 999,
+                                    borderLeft: '3px solid rgba(234,88,12,0.55)',
+                                    borderTop: '1px solid rgba(234,88,12,0.25)',
+                                    borderRight: '1px solid rgba(234,88,12,0.25)',
+                                    borderBottom: '1px solid rgba(234,88,12,0.25)',
+                                    background: 'rgba(255,237,213,0.85)',
+                                    color: '#9a3412',
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    lineHeight: 1.2,
+                                  }}>
+                                    <Thermometer size={10} />
+                                    {t('leave.type_sick', 'Sick')} · {sickDays}
+                                    {hasPendingLeave && (
+                                      <span style={{
+                                        fontSize: 9,
+                                        padding: '1px 4px',
+                                        borderRadius: 4,
+                                        border: '1px dashed rgba(234,88,12,0.35)',
+                                        background: 'rgba(255,255,255,0.65)',
+                                      }}>
+                                        {t('leave.pending_short', 'pending')}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </label>
                       );

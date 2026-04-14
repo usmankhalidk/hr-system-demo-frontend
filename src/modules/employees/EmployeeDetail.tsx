@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import ReactCountryFlag from 'react-country-flag';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import {
   getEmployee,
@@ -92,19 +93,6 @@ function formatDate(dateStr: string | null | undefined, lang: string): string {
 function maskIban(iban: string): string {
   if (iban.length <= 8) return iban;
   return `${iban.slice(0, 4)} •••• •••• ${iban.slice(-4)}`;
-}
-
-const DEFAULT_OFF_DAYS = [5, 6]; // Mon=0 ... Sun=6
-const MON_BASED_DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
-
-function normalizeOffDays(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return [...DEFAULT_OFF_DAYS];
-  const normalized = Array.from(new Set(
-    raw
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
-  )).sort((a, b) => a - b);
-  return normalized.length > 0 ? normalized : [...DEFAULT_OFF_DAYS];
 }
 
 // ── Info row (horizontal label / value) ───────────────────────────────────────
@@ -466,50 +454,6 @@ export function EmployeeDetail() {
     ? t('employees.partTime')
     : '—';
 
-  const dayLabels = [
-    t('shifts.dayMon', 'Mon'),
-    t('shifts.dayTue', 'Tue'),
-    t('shifts.dayWed', 'Wed'),
-    t('shifts.dayThu', 'Thu'),
-    t('shifts.dayFri', 'Fri'),
-    t('shifts.daySat', 'Sat'),
-    t('shifts.daySun', 'Sun'),
-  ];
-  const offDays = normalizeOffDays(employee.offDays);
-  const workingDays = MON_BASED_DAYS.filter((day) => !offDays.includes(day));
-
-  const renderDayPills = (days: number[], mode: 'working' | 'off') => {
-    if (days.length === 0) return '—';
-    const isWorking = mode === 'working';
-    return (
-      <span style={{
-        display: 'inline-flex',
-        flexWrap: 'wrap',
-        gap: 6,
-        justifyContent: 'flex-end',
-        maxWidth: 260,
-      }}>
-        {days.map((day) => (
-          <span
-            key={`${mode}-${day}`}
-            style={{
-              padding: '2px 8px',
-              borderRadius: 999,
-              border: isWorking ? '1px solid rgba(22,101,52,0.25)' : '1px solid rgba(180,83,9,0.3)',
-              background: isWorking ? 'rgba(134,239,172,0.22)' : 'rgba(251,191,36,0.2)',
-              color: isWorking ? '#166534' : '#92400e',
-              fontSize: 11,
-              fontWeight: 700,
-              lineHeight: 1.35,
-            }}
-          >
-            {dayLabels[day] ?? `#${day}`}
-          </span>
-        ))}
-      </span>
-    );
-  };
-
   const renderAssociationEmployee = (item: EmployeeAssociationEntry, keyPrefix: string) => {
     const full = `${item.name} ${item.surname}`.trim();
     const initialsLabel = `${item.name?.[0] ?? ''}${item.surname?.[0] ?? ''}`.toUpperCase() || 'U';
@@ -779,7 +723,6 @@ export function EmployeeDetail() {
               {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
             </Badge>
           } />
-          <InfoRow label={t('employees.workingDaysField', 'Working days')} value={renderDayPills(workingDays as number[], 'working')} />
           <InfoRow
             label={t('employees.deviceBindingField')}
             value={
@@ -823,14 +766,32 @@ export function EmployeeDetail() {
                 ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12px', letterSpacing: '0.06em' }}>{maskIban(employee.iban)}</span>
                 : '—'
             } />
-            <InfoRow label={t('employees.nationalityField')} value={employee.nationality ?? '—'} />
+            <InfoRow
+              label={t('employees.nationalityField')}
+              value={employee.nationality ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  {employee.country ? <ReactCountryFlag countryCode={employee.country} svg style={{ width: '1em', height: '1em' }} /> : null}
+                  <span>{employee.nationality}</span>
+                </span>
+              ) : '—'}
+            />
             <InfoRow label={t('employees.genderField')} value={
               employee.gender === 'M' ? t('employees.genderMale')
               : employee.gender === 'F' ? t('employees.genderFemale')
               : employee.gender === 'other' ? t('employees.genderOther')
               : '—'
             } />
-            <InfoRow label={t('employees.addressField')} value={employee.address ? `${employee.address}${employee.cap ? `, ${employee.cap}` : ''}` : '—'} />
+            <InfoRow
+              label={t('employees.addressField')}
+              value={[
+                employee.address,
+                employee.city,
+                employee.state,
+                employee.country,
+                employee.cap,
+              ].filter(Boolean).join(', ') || '—'}
+            />
+            <InfoRow label={t('companies.companyPhoneNumbers', 'Phone')} value={employee.phone ?? '—'} />
             <InfoRow label={t('employees.firstAidField')} value={
               <span style={{ color: employee.firstAidFlag ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
                 {employee.firstAidFlag ? t('common.yes') : t('common.no')}

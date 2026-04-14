@@ -59,6 +59,10 @@ export interface Store {
   code: string;
   address: string | null;
   cap: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  phone?: string | null;
   maxStaff: number | null;
   isActive: boolean;
   employeeCount?: number;
@@ -95,7 +99,6 @@ export interface Employee {
   terminationDate: string | null;
   workingType: 'full_time' | 'part_time' | null;
   weeklyHours: number | null;
-  offDays?: number[];
   status: 'active' | 'inactive';
   firstAidFlag: boolean;
   maritalStatus: string | null;
@@ -108,6 +111,10 @@ export interface Employee {
   nationality?: string | null;
   gender?: string | null;
   iban?: string | null;
+  phone?: string | null;
+  country?: string | null;
+  state?: string | null;
+  city?: string | null;
   address?: string | null;
   cap?: string | null;
   contractType?: string | null;

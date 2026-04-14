@@ -16,6 +16,7 @@ import { Select } from '../../components/ui/Select';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { DatePicker } from '../../components/ui/DatePicker';
+import { LocationFieldGroup } from '../../components/location';
 
 interface EmployeeFormProps {
   open?: boolean;
@@ -44,6 +45,10 @@ interface FormData {
   nationality: string;
   gender: string;
   iban: string;
+  phone: string;
+  country: string;
+  city: string;
+  state: string;
   address: string;
   cap: string;
   firstAidFlag: boolean;
@@ -60,7 +65,7 @@ const initialFormData: FormData = {
   storeId: '', supervisorId: '', department: '',
   hireDate: '', contractEndDate: '', workingType: '', weeklyHours: '',
   personalEmail: '', dateOfBirth: '', nationality: '', gender: '',
-  iban: '', address: '', cap: '', firstAidFlag: false, maritalStatus: '',
+  iban: '', phone: '', country: '', city: '', state: '', address: '', cap: '', firstAidFlag: false, maritalStatus: '',
   contractType: '', probationMonths: '', terminationDate: '', terminationType: '',
 };
 
@@ -351,6 +356,10 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
           nationality: emp.nationality ?? '',
           gender: emp.gender ?? '',
           iban: emp.iban ?? '',
+          phone: emp.phone ?? '',
+          country: emp.country ?? '',
+          city: emp.city ?? '',
+          state: emp.state ?? '',
           address: emp.address ?? '',
           cap: emp.cap ?? '',
           firstAidFlag: emp.firstAidFlag ?? false,
@@ -474,6 +483,10 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
         nationality: formData.nationality || null,
         gender: formData.gender || null,
         iban: formData.iban || null,
+        phone: formData.phone || null,
+        country: formData.country || null,
+        city: formData.city || null,
+        state: formData.state || null,
         address: formData.address || null,
         cap: formData.cap || null,
         firstAidFlag: formData.firstAidFlag,
@@ -1694,18 +1707,35 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                   </div>
 
                   <SectionDivider label={t('employees.addressField')} />
-                  <div style={row2}>
-                    <Input
-                      label={t('employees.addressField')}
-                      value={formData.address}
-                      onChange={(e) => set('address', e.target.value)}
-                    />
-                    <Input
-                      label={t('employees.capField')}
-                      value={formData.cap}
-                      onChange={(e) => set('cap', e.target.value)}
-                    />
-                  </div>
+                  <LocationFieldGroup
+                    value={{
+                      country: formData.country,
+                      state: formData.state,
+                      city: formData.city,
+                      address: formData.address,
+                      postalCode: formData.cap,
+                      phone: formData.phone,
+                    }}
+                    onChange={(location) => {
+                      set('country', location.country);
+                      set('state', location.state);
+                      set('city', location.city);
+                      set('address', location.address);
+                      set('cap', location.postalCode);
+                      set('phone', location.phone);
+                    }}
+                    includeAddress
+                    includePostalCode
+                    includePhone
+                    labels={{
+                      country: t('companies.country', 'Country'),
+                      state: t('companies.state', 'State'),
+                      city: t('companies.city', 'City'),
+                      address: t('employees.addressField'),
+                      postalCode: t('employees.capField'),
+                      phone: t('companies.companyPhoneNumbers', 'Phone'),
+                    }}
+                  />
                   <div style={row2}>
                     <Select
                       label={t('employees.maritalStatusField')}

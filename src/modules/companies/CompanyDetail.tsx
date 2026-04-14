@@ -43,6 +43,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Select } from '../../components/ui/Select';
+import { LocationFieldGroup } from '../../components/location';
 
 function parseCompanyIdFromSlug(slug?: string): number | null {
   if (!slug) return null;
@@ -774,33 +775,9 @@ export default function CompanyDetail() {
               disabled={editSaving}
             />
             <Input
-              label={t('companies.companyPhoneNumbers', 'Company phone numbers')}
-              value={editProfile.companyPhoneNumbers}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, companyPhoneNumbers: event.target.value }))}
-              disabled={editSaving}
-            />
-            <Input
               label={t('companies.officesLocations', 'Offices locations')}
               value={editProfile.officesLocations}
               onChange={(event) => setEditProfile((prev) => ({ ...prev, officesLocations: event.target.value }))}
-              disabled={editSaving}
-            />
-            <Input
-              label={t('companies.country', 'Country')}
-              value={editProfile.country}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, country: event.target.value }))}
-              disabled={editSaving}
-            />
-            <Input
-              label={t('companies.city', 'City')}
-              value={editProfile.city}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, city: event.target.value }))}
-              disabled={editSaving}
-            />
-            <Input
-              label={t('companies.state', 'State')}
-              value={editProfile.state}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, state: event.target.value }))}
               disabled={editSaving}
             />
             <Input
@@ -815,13 +792,39 @@ export default function CompanyDetail() {
               onChange={(event) => setEditProfile((prev) => ({ ...prev, timezones: event.target.value }))}
               disabled={editSaving}
             />
-            <Input
-              label={t('companies.address', 'Address')}
-              value={editProfile.address}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, address: event.target.value }))}
-              disabled={editSaving}
-            />
           </div>
+
+          <LocationFieldGroup
+            value={{
+              country: editProfile.country,
+              state: editProfile.state,
+              city: editProfile.city,
+              address: editProfile.address,
+              postalCode: '',
+              phone: editProfile.companyPhoneNumbers,
+            }}
+            onChange={(location) => {
+              setEditProfile((prev) => ({
+                ...prev,
+                country: location.country,
+                state: location.state,
+                city: location.city,
+                address: location.address,
+                companyPhoneNumbers: location.phone,
+              }));
+            }}
+            includeAddress
+            includePostalCode={false}
+            includePhone
+            disabled={editSaving}
+            labels={{
+              country: t('companies.country', 'Country'),
+              state: t('companies.state', 'State'),
+              city: t('companies.city', 'City'),
+              address: t('companies.address', 'Address'),
+              phone: t('companies.companyPhoneNumbers', 'Company phone numbers'),
+            }}
+          />
         </div>
       </Modal>
 
