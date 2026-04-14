@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ArrowRight,
   BadgeCheck,
+  Bookmark,
   BriefcaseBusiness,
   Building2,
   Clock3,
@@ -9,8 +11,10 @@ import {
   Eye,
   FileText,
   Globe2,
+  Heart,
   Languages,
   MapPin,
+  Plus,
   Sparkles,
   Store as StoreIcon,
   Trash2,
@@ -277,6 +281,7 @@ type JobModalErrors = {
 
 const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultCompanyId, onSave, onClose, saving }) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { isMobile, isTablet } = useBreakpoint();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [title, setTitle] = useState(job?.title ?? '');
@@ -369,11 +374,6 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
     if (!title.trim()) nextErrors.title = t('common.required', 'Required');
     if (!description.trim()) nextErrors.description = t('common.required', 'Required');
-
-    if (remoteType !== 'remote') {
-      if (!locationOverride.city.trim()) nextErrors.city = t('common.required', 'Required');
-      if (!locationOverride.country.trim()) nextErrors.country = t('common.required', 'Required');
-    }
 
     const weeklyRaw = weeklyHoursInput.trim();
     if (weeklyRaw) {
@@ -470,69 +470,109 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
     return storesForSelectedCompany.find((store) => String(store.id) === storeId) ?? null;
   }, [storeId, storesForSelectedCompany]);
 
+  const selectedCompanyLogoUrl = useMemo(() => {
+    if (!companyId) return null;
+    const selected = companies.find((item) => String(item.id) === companyId);
+    return getCompanyLogoUrl(selected?.logoFilename);
+  }, [companies, companyId]);
+
   const formCompletion = useMemo(() => {
     const checks = [
       Boolean(title.trim()),
       Boolean(description.trim()),
       Boolean(companyId),
-      remoteType === 'remote' ? true : Boolean(locationOverride.country),
-      remoteType === 'remote' ? true : Boolean(locationOverride.city),
     ];
     const done = checks.filter(Boolean).length;
     const total = checks.length;
     return Math.round((done / total) * 100);
-  }, [title, description, companyId, remoteType, locationOverride.country, locationOverride.city]);
+    }, [title, description, companyId]);
 
   const companySelectOptions = useMemo<SelectOption[]>(() => {
     return companyOptions.map((company) => {
       const logoUrl = getCompanyLogoUrl(companies.find((item) => item.id === company.id)?.logoFilename);
-      const ownerAvatarUrl = getAvatarUrl(companies.find((item) => item.id === company.id)?.ownerAvatarFilename);
       const countryCode = normalizeCountryCode(companies.find((item) => item.id === company.id)?.country ?? '');
-      const detailParts = [
-        company.groupName,
-        company.ownerLabel ? `Owner: ${company.ownerLabel}` : null,
-        typeof company.storeCount === 'number' ? `${company.storeCount} stores` : null,
-      ].filter(Boolean);
+
+      const detailRows = [
+        company.groupName
+          ? {
+            key: `group-${company.id}`,
+            icon: <Building2 size={12} color="#64748B" />,
+            text: company.groupName,
+          }
+          : null,
+        company.ownerLabel
+          ? {
+            key: `owner-${company.id}`,
+            icon: <User2 size={12} color="#64748B" />,
+            text: `${t('ats.ownerLabel', 'Owner')}: ${company.ownerLabel}`,
+          }
+          : null,
+        typeof company.storeCount === 'number'
+          ? {
+            key: `stores-${company.id}`,
+            icon: <StoreIcon size={12} color="#64748B" />,
+            text: t('ats.storeCountLabel', '{{count}} stores', { count: company.storeCount }),
+          }
+          : null,
+      ].filter(Boolean) as Array<{ key: string; icon: React.ReactNode; text: string }>;
 
       return {
         value: String(company.id),
         label: company.name,
         render: (
-          <div style={{ display: 'grid', gap: 4 }}>
+            <div style={{ display: 'grid', gap: 5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {logoUrl ? <img src={logoUrl} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Building2 size={14} color="#64748B" />}
               </div>
-              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{company.name}</span>
-              {countryCode ? (
-                <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: 11 }}>
-                  <ReactCountryFlag countryCode={countryCode} svg style={{ width: '1em', height: '1em' }} />
-                  {countryCode}
-                </span>
-              ) : null}
+              <div style={{ display: 'grid', gap: 3, minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{company.name}</span>
+                  {countryCode ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: 11 }}>
+                      <ReactCountryFlag countryCode={countryCode} svg style={{ width: '1em', height: '1em' }} />
+                      {countryCode}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                {detailParts.length > 0 ? detailParts.join(' | ') : 'Standalone company'}
-              </span>
-              {ownerAvatarUrl ? <img src={ownerAvatarUrl} alt={company.ownerLabel ?? 'Owner'} style={{ marginLeft: 'auto', width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} /> : null}
+            <div style={{ display: 'grid', gap: 2, paddingLeft: 36 }}>
+              {detailRows.length > 0 ? detailRows.map((detail) => (
+                <span key={detail.key} style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {detail.icon}
+                  {detail.text}
+                </span>
+              )) : (
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Building2 size={12} color="#64748B" />
+                  {t('ats.standaloneCompany', 'Standalone company')}
+                </span>
+              )}
             </div>
           </div>
         ),
       };
     });
-  }, [companyOptions, companies]);
+  }, [companyOptions, companies, t]);
 
   const storeSelectOptions = useMemo<SelectOption[]>(() => {
     return storesForSelectedCompany.map((store) => {
       const location = [store.city, store.state, store.country].filter(Boolean).join(', ');
       const countryCode = normalizeCountryCode(store.country ?? '');
       const storeLogo = getStoreLogoUrl(store.logoFilename ?? null);
-      const detailParts = [
-        store.code ? `Code ${store.code}` : null,
-        location || null,
-        typeof store.employeeCount === 'number' ? `${store.employeeCount} staff` : null,
-      ].filter(Boolean);
+
+      const detailRows = [
+        store.code
+          ? { key: `code-${store.id}`, icon: <FileText size={12} color="#64748B" />, text: `${t('ats.codeLabel', 'Code')} ${store.code}` }
+          : null,
+        location
+          ? { key: `location-${store.id}`, icon: <MapPin size={12} color="#64748B" />, text: location }
+          : null,
+        typeof store.employeeCount === 'number'
+          ? { key: `staff-${store.id}`, icon: <User2 size={12} color="#64748B" />, text: t('ats.staffCountLabel', '{{count}} staff', { count: store.employeeCount }) }
+          : null,
+      ].filter(Boolean) as Array<{ key: string; icon: React.ReactNode; text: string }>;
 
       return {
         value: String(store.id),
@@ -543,17 +583,26 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
               <div style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {storeLogo ? <img src={storeLogo} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <StoreIcon size={13} color="#64748B" />}
               </div>
-              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{store.name}</span>
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{store.name}</span>
               {countryCode ? <ReactCountryFlag countryCode={countryCode} svg style={{ marginLeft: 'auto', width: '0.95em', height: '0.95em' }} /> : null}
             </div>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-              {detailParts.length > 0 ? detailParts.join(' | ') : 'Store'}
-            </span>
+            <div style={{ display: 'grid', gap: 2, paddingLeft: 32 }}>
+              {detailRows.length > 0 ? detailRows.map((detail) => (
+                <span key={detail.key} style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {detail.icon}
+                  {detail.text}
+                </span>
+              )) : (
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                  {t('common.store', 'Store')}
+                </span>
+              )}
+            </div>
           </div>
         ),
       };
     });
-  }, [storesForSelectedCompany]);
+  }, [storesForSelectedCompany, t]);
 
   const jobTypeSelectOptions = useMemo<SelectOption[]>(() => {
     return [
@@ -563,7 +612,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700 }}>{t('ats.jobType_fulltime')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Standard weekly schedule</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.fulltimeHint', 'Standard weekly schedule')}</span>
           </div>
         ),
       },
@@ -573,7 +622,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700 }}>{t('ats.jobType_parttime')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Flexible reduced hours</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.parttimeHint', 'Flexible reduced hours')}</span>
           </div>
         ),
       },
@@ -583,7 +632,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700 }}>{t('ats.jobType_contract')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Fixed term or project scope</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.contractHint', 'Fixed term or project scope')}</span>
           </div>
         ),
       },
@@ -593,7 +642,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700 }}>{t('ats.jobType_internship')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Training and mentorship track</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.internshipHint', 'Training and mentorship track')}</span>
           </div>
         ),
       },
@@ -608,7 +657,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Building2 size={13} />{t('ats.remoteType_onsite', 'On-site')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Presence required in store or office</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.remoteTypeOnsiteHint', 'Presence required in store or office')}</span>
           </div>
         ),
       },
@@ -618,7 +667,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><MapPin size={13} />{t('ats.remoteType_hybrid', 'Hybrid')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Split schedule between remote and on-site</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.remoteTypeHybridHint', 'Split schedule between remote and on-site')}</span>
           </div>
         ),
       },
@@ -628,7 +677,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Globe2 size={13} />{t('ats.remoteType_remote', 'Remote')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Fully remote collaboration</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.remoteTypeRemoteHint', 'Fully remote collaboration')}</span>
           </div>
         ),
       },
@@ -678,7 +727,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><FileText size={13} />{t('ats.status_draft')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Visible only to your internal team</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.statusDraftHint', 'Visible only to your internal team')}</span>
           </div>
         ),
       },
@@ -688,7 +737,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><BadgeCheck size={13} />{t('ats.status_published')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Visible on careers pages immediately</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.statusPublishedHint', 'Visible on careers pages immediately')}</span>
           </div>
         ),
       },
@@ -698,7 +747,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         render: (
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Eye size={13} />{t('ats.status_closed')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>No longer accepting candidates</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.statusClosedHint', 'No longer accepting candidates')}</span>
           </div>
         ),
       },
@@ -706,89 +755,300 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
   }, [t]);
 
   const stepCards: Array<{ id: 1 | 2 | 3; title: string; subtitle: string; icon: React.ReactNode }> = [
-    { id: 1, title: 'Job Details', subtitle: 'Role profile and location', icon: <BriefcaseBusiness size={14} /> },
-    { id: 2, title: 'Platform Settings', subtitle: 'Company, store and visibility', icon: <Sparkles size={14} /> },
-    { id: 3, title: 'Preview', subtitle: 'Final review before save', icon: <Eye size={14} /> },
+    { id: 1, title: t('ats.stepDetailsTitle', 'Job details'), subtitle: t('ats.stepDetailsSubtitle', 'Role profile and location'), icon: <BriefcaseBusiness size={14} /> },
+    { id: 2, title: t('ats.stepSettingsTitle', 'Platform settings'), subtitle: t('ats.stepSettingsSubtitle', 'Company, store and visibility'), icon: <Sparkles size={14} /> },
+    { id: 3, title: t('ats.stepReviewTitle', 'Review'), subtitle: t('ats.stepReviewSubtitle', 'Final check before save'), icon: <Eye size={14} /> },
   ];
 
   const isCompact = isMobile || isTablet;
+  const departmentLabel = t('common.department', 'Department');
+  const storeLabel = t('common.store', 'Store');
+  const statusLabel = t('common.status', 'Status');
+  const currentUserFullName = user ? `${user.name} ${user.surname ?? ''}`.trim() : t('common.user', 'User');
+  const currentUserInitials = user ? `${user.name?.[0] ?? ''}${user.surname?.[0] ?? ''}`.toUpperCase() : 'U';
+  const currentUserAvatarUrl = user?.avatarFilename ? getAvatarUrl(user.avatarFilename) : null;
+  const currentUserRoleLabel = user ? t(`roles.${user.role}`, user.role) : t('common.user', 'User');
+  const superAdminLabel = t('roles.super_admin', 'Super admin');
 
   return (
-    <ModalBackdrop onClose={onClose} closeOnBackdropClick={Boolean(job)} width={1220}>
-      {/* Header */}
-      <div style={{
-        padding: '20px 28px 18px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', gap: 12,
-        background: 'linear-gradient(180deg, rgba(13,33,55,0.04), rgba(201,151,58,0.04))',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, color: 'var(--text-primary)' }}>
-              {job ? t('ats.editJob') : t('ats.newJob')}
-            </h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-              {t('ats.stepFlow', 'Complete each section and review the live summary before saving.')}
-            </p>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>×</button>
-        </div>
+    <ModalBackdrop onClose={onClose} closeOnBackdropClick={Boolean(job)} width={1140}>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-          {stepCards.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                borderRadius: 10,
-                border: step === item.id ? '1px solid rgba(201,151,58,0.6)' : '1px solid var(--border)',
-                background: step === item.id ? 'rgba(201,151,58,0.12)' : '#fff',
-                color: step === item.id ? 'var(--text-primary)' : 'var(--text-muted)',
-                fontSize: 12,
-                fontWeight: step === item.id ? 700 : 500,
-                padding: '10px 11px',
-                display: 'grid',
-                gap: 4,
-              }}
-            >
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: '50%',
+      {/* Body */}
+      <form onSubmit={handleSubmit} style={{ padding: 0, display: 'grid', gap: 0 }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isCompact ? '1fr' : 'minmax(310px, 1fr) minmax(0, 1.85fr)',
+          gap: 0,
+          alignItems: 'stretch',
+        }}>
+          <aside style={{
+            border: 'none',
+            borderRight: isCompact ? 'none' : '1px solid rgba(255,255,255,0.14)',
+            padding: '16px 14px',
+            background: 'var(--sidebar-bg)',
+            display: 'grid',
+            gap: 14,
+            position: 'static',
+            height: '100%',
+            alignContent: 'start',
+            gridColumn: isCompact ? 'auto' : '1 / 2',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              borderRadius: 10,
+              padding: '7px 8px',
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.12)',
+            }}>
+              <div style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.18)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: 11,
+                overflow: 'hidden',
+                flexShrink: 0,
+              }}>
+                {currentUserAvatarUrl
+                  ? <img src={currentUserAvatarUrl} alt={currentUserFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : currentUserInitials}
+              </div>
+              <div style={{ display: 'grid', minWidth: 0 }}>
+                <span style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentUserFullName}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {currentUserRoleLabel}
+                  </span>
+                  {user?.isSuperAdmin && (
+                    <span style={{
+                      fontSize: 9.5,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      fontWeight: 800,
+                      color: '#F8D98B',
+                      border: '1px solid rgba(248,217,139,0.55)',
+                      background: 'rgba(201,151,58,0.18)',
+                      borderRadius: 999,
+                      padding: '1px 6px',
+                      lineHeight: 1.4,
+                    }}>
+                      {superAdminLabel}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div style={{
+              borderRadius: 12,
+              border: '1px solid rgba(255,255,255,0.16)',
+              background: 'rgba(255,255,255,0.08)',
+              padding: '12px 11px',
+              display: 'grid',
+              gap: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.22)',
+                  background: 'rgba(255,255,255,0.16)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: 11,
-                  color: step === item.id ? '#1f2937' : '#64748b',
-                  border: step === item.id ? '1px solid rgba(201,151,58,0.7)' : '1px solid rgba(148,163,184,0.4)',
-                  background: step === item.id ? 'rgba(201,151,58,0.24)' : '#fff',
+                  overflow: 'hidden',
+                  flexShrink: 0,
                 }}>
-                  {item.id}
-                </span>
-                <span style={{ color: step === item.id ? '#9A6808' : 'var(--text-muted)', display: 'inline-flex', alignItems: 'center' }}>{item.icon}</span>
+                  {selectedCompanyLogoUrl
+                    ? <img src={selectedCompanyLogoUrl} alt={selectedCompanyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Building2 size={18} color="#E2E8F0" />}
+                </div>
+                <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                  <strong style={{ color: '#FFFFFF', fontSize: 15, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedCompanyName}
+                  </strong>
+                  <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedCompanyMeta?.groupName ?? t('ats.standaloneCompany', 'Standalone company')}
+                  </span>
+                </div>
               </div>
-              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.title}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.subtitle}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Body */}
-      <form onSubmit={handleSubmit} style={{ padding: '22px 24px 18px', display: 'grid', gap: 14 }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isCompact ? '1fr' : 'minmax(0, 1.75fr) minmax(320px, 1fr)',
-          gap: 14,
-          alignItems: 'start',
-        }}>
-          <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 2 }}>
+                <span style={{ color: '#CBD5E1', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {t('ats.ownerLabel', 'Owner')}
+                </span>
+                <strong style={{ color: '#FFFFFF', fontSize: 20, lineHeight: 1.15, fontFamily: 'var(--font-display)', fontWeight: 800 }}>
+                  {selectedCompanyMeta?.ownerLabel ?? t('ats.ownerNotAssigned', 'Owner not assigned')}
+                </strong>
+              </div>
+
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.22)' }} />
+
+              <div style={{ display: 'grid', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, fontSize: 12, color: '#E2E8F0' }}>
+                  <span>{t('ats.completionLabel', 'Completion')}</span>
+                  <strong style={{ color: '#F8D98B' }}>{formCompletion}%</strong>
+                </div>
+                <div style={{ height: 7, borderRadius: 999, background: 'rgba(148,163,184,0.4)', overflow: 'hidden' }}>
+                  <div style={{ width: `${formCompletion}%`, height: '100%', background: 'linear-gradient(90deg, #D9AE58, #C9973A)' }} />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#F8FAFC', marginTop: 4 }}>
+                  <StoreIcon size={13} color="#CBD5E1" />
+                  <span>{selectedStoreMeta?.name ?? '-'}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#F8FAFC' }}>
+                  <Languages size={13} color="#CBD5E1" />
+                  <span>{language.toUpperCase()}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#F8FAFC' }}>
+                  <BadgeCheck size={13} color="#CBD5E1" />
+                  <span>{t(`ats.status_${status}`, status)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><BriefcaseBusiness size={13} color="#CBD5E1" />{jobType}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Globe2 size={13} color="#CBD5E1" />{remoteType}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Clock3 size={13} color="#CBD5E1" />{weeklyHoursInput.trim() || '-'} {t('ats.hoursPerWeek', 'hrs/week')}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Wallet size={13} color="#CBD5E1" />{salaryMinInput.trim() || '-'} - {salaryMaxInput.trim() || '-'}</div>
+                {remoteType !== 'remote' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <MapPin size={13} color="#CBD5E1" />
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      {locationOverride.country ? <ReactCountryFlag countryCode={locationOverride.country} svg style={{ width: '0.95em', height: '0.95em' }} /> : null}
+                      {locationOverride.city || '-'}, {countryNameFromCode(locationOverride.country)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ borderRadius: 10, border: '1px dashed rgba(148,163,184,0.55)', background: 'rgba(13,33,55,0.25)', padding: 10, color: '#E2E8F0', fontSize: 12.5, lineHeight: 1.5 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#F8FAFC', marginBottom: 4 }}>
+                <User2 size={13} /> {t('ats.hiringVisibilityTitle', 'Hiring visibility')}
+              </div>
+              {t('ats.hiringVisibilityHint', 'Published jobs become visible in careers and in XML feed. Draft jobs remain internal.')}
+            </div>
+          </aside>
+
+          <div style={{
+            display: 'grid',
+            gap: 12,
+            gridColumn: isCompact ? 'auto' : '2 / 3',
+            background: 'var(--surface)',
+            padding: '18px 20px 16px',
+          }}>
+            <div style={{
+              display: 'grid',
+              gap: 12,
+              paddingBottom: 12,
+              borderBottom: '1px solid var(--border)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {job ? t('ats.editJob') : t('ats.newJob')}
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.stepFlow', 'Complete each section and review the live summary before saving.')}
+                  </p>
+                </div>
+                <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>×</button>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: isCompact ? 8 : 0,
+                flexWrap: isCompact ? 'wrap' : 'nowrap',
+              }}>
+                {stepCards.map((item, index) => {
+                  const isDone = step > item.id;
+                  const isCurrent = step === item.id;
+
+                  return (
+                    <React.Fragment key={item.id}>
+                      <div style={{
+                        minWidth: isCompact ? 'calc(50% - 8px)' : 0,
+                        flex: isCompact ? '1 1 calc(50% - 8px)' : 1,
+                        display: 'grid',
+                        justifyItems: isCompact ? 'start' : 'center',
+                        gap: 6,
+                      }}>
+                        <div style={{ display: 'grid', gap: 2, textAlign: isCompact ? 'left' : 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 800,
+                              fontSize: 11,
+                              color: isDone || isCurrent ? '#ffffff' : '#64748b',
+                              border: isDone || isCurrent ? '1px solid rgba(201,151,58,0.9)' : '1px solid rgba(148,163,184,0.42)',
+                              background: isDone || isCurrent ? '#C9973A' : '#ffffff',
+                              boxShadow: isCurrent ? '0 0 0 3px rgba(201,151,58,0.22)' : 'none',
+                              transition: 'all 0.2s ease',
+                            }}>
+                              {isDone ? '✓' : item.id}
+                            </span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                              <span style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: 8,
+                                border: isCurrent ? '1px solid rgba(201,151,58,0.45)' : '1px solid rgba(148,163,184,0.28)',
+                                background: isCurrent ? 'rgba(201,151,58,0.14)' : '#fff',
+                                color: isCurrent ? '#9A6808' : '#64748b',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}>
+                                {item.icon}
+                              </span>
+                              <span style={{ fontSize: 12.5, fontWeight: 700, color: isCurrent ? '#9A6808' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.title}
+                              </span>
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.subtitle}</span>
+                        </div>
+                      </div>
+
+                      {index < stepCards.length - 1 && !isCompact && (
+                        <div style={{
+                          flex: 1,
+                          margin: '14px 10px 0',
+                          height: 2,
+                          borderRadius: 999,
+                          background: step > item.id ? '#C9973A' : 'rgba(148,163,184,0.38)',
+                          transition: 'background 0.2s ease',
+                        }} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12 }}>
             {step === 1 && (
               <>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                    <FileText size={14} /> Core role details
+                    <FileText size={14} /> {t('ats.coreRoleDetails', 'Core role details')}
                   </div>
 
                   <Input
@@ -820,17 +1080,50 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
                       {t('ats.jobTags')}
                     </label>
-                    <Input
-                      value={tagInput}
-                      onChange={(e) => setTagInput(e.target.value)}
-                      placeholder="Type a tag and press Enter"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addTag(tagInput);
-                        }
-                      }}
-                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center' }}>
+                      <input
+                        className="field-input"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        placeholder={t('ats.jobTagsInputPlaceholder', 'Type a tag and press Enter')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addTag(tagInput);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '8px 12px',
+                          fontSize: 13.5,
+                          borderRadius: 'var(--radius)',
+                          border: '1px solid var(--border)',
+                          outline: 'none',
+                          display: 'block',
+                          background: '#fff',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addTag(tagInput)}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 10,
+                          border: '1px solid rgba(201,151,58,0.42)',
+                          background: 'rgba(201,151,58,0.14)',
+                          color: '#8a6318',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                        }}
+                        aria-label={t('common.add', 'Add')}
+                      >
+                        <Plus size={15} />
+                      </button>
+                    </div>
                     <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {tags.map((tag) => (
                         <span
@@ -865,7 +1158,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                    <BriefcaseBusiness size={14} /> Contract and schedule
+                    <BriefcaseBusiness size={14} /> {t('ats.contractAndSchedule', 'Contract and schedule')}
                   </div>
                   <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
                     <div>
@@ -880,6 +1173,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                         searchable={false}
                         placeholder={t('ats.jobType')}
                         disabled={saving}
+                        highlightSelected
                       />
                     </div>
                     <div>
@@ -894,6 +1188,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                         searchable={false}
                         placeholder={t('ats.remoteMode', 'Work arrangement')}
                         disabled={saving}
+                        highlightSelected
                       />
                     </div>
                   </div>
@@ -935,7 +1230,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       placeholder={t('ats.contractTypePlaceholder')}
                     />
                     <Input
-                      label={t('employees.department')}
+                      label={departmentLabel}
                       value={department}
                       onChange={(e) => setDepartment(e.target.value)}
                       placeholder={t('ats.departmentPlaceholder')}
@@ -946,17 +1241,17 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                 {remoteType !== 'remote' && (
                   <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                      <MapPin size={14} /> Job location
+                        <MapPin size={14} /> {t('ats.jobLocation', 'Job location')}
                     </div>
 
                     <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
                       <CountrySelect
                         value={locationOverride.country || null}
                         onChange={(next) => setLocationOverride((prev) => ({ ...prev, country: next ?? '', state: '', city: '' }))}
-                        label={`${t('ats.jobCountryOverrideLabel', 'Country')} *`}
+                        label={t('ats.jobCountryOverrideLabel', 'Country')}
                         placeholder={t('ats.jobCountryOverrideLabel', 'Country')}
                         disabled={saving}
-                        error={errors.country}
+                        highlightSelected
                       />
 
                       <StateSelect
@@ -966,6 +1261,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                         label={t('ats.jobStateOverrideLabel', 'State')}
                         placeholder={t('ats.jobStateOverrideLabel', 'State')}
                         disabled={saving}
+                        highlightSelected
                       />
 
                       <div>
@@ -974,10 +1270,10 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                           stateCode={locationOverride.state || null}
                           value={locationOverride.city || null}
                           onChange={(next) => setLocationOverride((prev) => ({ ...prev, city: next ?? '' }))}
-                          label={`${t('ats.jobCityOverrideLabel', 'City')} *`}
+                          label={t('ats.jobCityOverrideLabel', 'City')}
                           placeholder={t('ats.jobCityOverrideLabel', 'City')}
                           disabled={saving}
-                          error={errors.city}
+                          highlightSelected
                         />
                       </div>
                     </div>
@@ -1004,7 +1300,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
             {step === 2 && (
               <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                  <Sparkles size={14} /> Platform settings
+                  <Sparkles size={14} /> {t('ats.platformSettings', 'Platform settings')}
                 </div>
 
                 <div>
@@ -1019,12 +1315,13 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     error={errors.companyId}
                     isClearable
                     disabled={saving}
+                    highlightSelected
                   />
                 </div>
 
                 <div>
                   <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                    {t('stores.store')}
+                    {storeLabel}
                   </label>
                   <CustomSelect
                     value={storeId || null}
@@ -1033,6 +1330,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     placeholder={t('ats.selectStore')}
                     disabled={saving || !companyId}
                     isClearable
+                    highlightSelected
                   />
                 </div>
 
@@ -1048,11 +1346,12 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       isClearable={false}
                       searchable={false}
                       disabled={saving}
+                      highlightSelected
                     />
                   </div>
                   <div>
                     <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                      {t('ats.status')}
+                      {statusLabel}
                     </label>
                     <CustomSelect
                       value={status}
@@ -1061,6 +1360,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       isClearable={false}
                       searchable={false}
                       disabled={saving}
+                      highlightSelected
                     />
                   </div>
                 </div>
@@ -1073,25 +1373,64 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
             {step === 3 && (
               <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, display: 'grid', gap: 12 }}>
-                <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 9px', background: 'rgba(2,132,199,0.12)', color: '#0369A1' }}>{jobType}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 9px', background: 'rgba(201,151,58,0.12)', color: '#9A6808' }}>{remoteType}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 9px', background: 'rgba(13,33,55,0.10)', color: 'var(--text-secondary)' }}>{language}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 9px', background: 'rgba(13,33,55,0.10)', color: 'var(--text-secondary)' }}>{status}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid rgba(201,151,58,0.22)', background: '#fffdf6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {selectedCompanyLogoUrl
+                        ? <img src={selectedCompanyLogoUrl} alt={selectedCompanyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <Building2 size={14} color="#8a6318" />}
+                    </div>
+                    <div style={{ display: 'grid', gap: 2 }}>
+                      <strong style={{ color: '#111827', fontSize: 13 }}>{selectedCompanyName}</strong>
+                      <span style={{ fontSize: 11.5, color: '#64748b' }}>{selectedCompanyMeta?.groupName ?? t('ats.standaloneCompany', 'Standalone company')}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', justifyItems: 'end', gap: 4 }}>
+                    <span style={{ borderRadius: 999, border: '1px solid rgba(13,33,55,0.15)', background: '#fff', color: '#334155', fontSize: 11, fontWeight: 700, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Clock3 size={12} /> {t('common.justNow', 'Just now')}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#9A6808' }}>
+                      0 {t('ats.appliedLabel', 'applied')}
+                    </span>
+                  </div>
                 </div>
 
-                <div style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
-                  <div><strong>{t('nav.companies')}:</strong> {selectedCompanyName}</div>
-                  <div><strong>{t('stores.store')}:</strong> {storesForSelectedCompany.find((store) => String(store.id) === storeId)?.name ?? '-'}</div>
-                  <div><strong>{t('ats.weeklyHours')}:</strong> {weeklyHoursInput.trim() || '-'}</div>
-                  <div><strong>{t('ats.contractType')}:</strong> {contractType.trim() || '-'}</div>
-                  <div><strong>{t('ats.salaryRange', 'Salary range')}:</strong> {salaryMinInput.trim() || '-'} - {salaryMaxInput.trim() || '-'}</div>
-                  <div>
-                    <strong>{t('ats.location', 'Location')}:</strong>{' '}
+                <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
+                <p style={{ margin: 0, color: '#4b5563', fontSize: 13.5, lineHeight: 1.55 }}>{description.trim() || '-'}</p>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {t(`ats.jobType_${JOB_TYPE_LABEL[jobType]}`)}
+                  </span>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {t(`ats.remoteType_${remoteType}`, remoteType)}
+                  </span>
+                  <span style={{ borderRadius: 999, background: status === 'closed' ? 'rgba(239,68,68,0.1)' : 'rgba(22,163,74,0.12)', border: status === 'closed' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(22,163,74,0.22)', color: status === 'closed' ? '#991b1b' : '#166534', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {t(`ats.status_${status}`)}
+                  </span>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {language === 'it' ? '🇮🇹 IT' : language === 'en' ? '🇬🇧 EN' : '🇮🇹 🇬🇧 IT + EN'}
+                  </span>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <MapPin size={12} />
                     {remoteType === 'remote'
                       ? t('ats.remoteType_remote', 'Remote')
                       : `${locationOverride.city || '-'}, ${countryNameFromCode(locationOverride.country)}`}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gap: 8, gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', border: '1px dashed rgba(148,163,184,0.38)', borderRadius: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.74)' }}>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.salaryRange', 'Salary range')}</strong>
+                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>€{salaryMinInput.trim() || '-'} - €{salaryMaxInput.trim() || '-'}</span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.weeklyHours')}</strong>
+                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{weeklyHoursInput.trim() || '-'}</span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{storeLabel}</strong>
+                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{selectedStoreMeta?.name ?? '-'}</span>
                   </div>
                 </div>
 
@@ -1100,116 +1439,72 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     <span key={`preview-${tag}`} style={{ fontSize: 11, borderRadius: 999, padding: '3px 9px', background: '#F8D98B', color: '#5C3E05', border: '1px solid #E7C36A', fontWeight: 600 }}>
                       {tag}
                     </span>
-                  )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No tags</span>}
+                  )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                  <div style={{ color: 'var(--text-primary)', lineHeight: 1.7, fontSize: 14, whiteSpace: 'pre-wrap' }}>
-                    {description || '-'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      type="button"
+                      style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Heart size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Bookmark size={15} />
+                    </button>
                   </div>
+
+                  <button
+                    type="button"
+                    style={{ border: 'none', background: 'transparent', color: '#9A6808', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}
+                  >
+                    {t('publicCareers.viewDetails', 'View details')} <ArrowRight size={14} />
+                  </button>
                 </div>
               </div>
             )}
-          </div>
-
-          <aside style={{
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            padding: 14,
-            background: 'linear-gradient(180deg, #ffffff, #fffaf0)',
-            display: 'grid',
-            gap: 10,
-            position: isCompact ? 'static' : 'sticky',
-            top: 8,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, color: '#1f2937' }}>
-              <Eye size={14} /> Live summary
             </div>
 
-            <div style={{ borderRadius: 10, background: '#fff', border: '1px solid rgba(13,33,55,0.12)', padding: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                <span>Completion</span>
-                <strong style={{ color: '#9A6808' }}>{formCompletion}%</strong>
-              </div>
-              <div style={{ height: 8, borderRadius: 999, background: '#F1F5F9', overflow: 'hidden' }}>
-                <div style={{ width: `${formCompletion}%`, height: '100%', background: 'linear-gradient(90deg, #D9AE58, #C9973A)' }} />
-              </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+              {step === 1 && (
+                <>
+                  <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
+                  <Button variant="primary" type="button" onClick={moveNext}>
+                    {t('common.next', 'Next')} →
+                  </Button>
+                </>
+              )}
+
+              {step === 2 && (
+                <>
+                  <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
+                  <Button variant="secondary" type="button" onClick={() => setStep(1)}>
+                    ← {t('common.back', 'Back')}
+                  </Button>
+                  <Button variant="secondary" type="button" onClick={moveNext}>
+                    {t('ats.previewStep', 'Preview')} →
+                  </Button>
+                  <Button variant="primary" type="submit" loading={saving} disabled={!title.trim() || !description.trim()}>
+                    {job ? t('ats.savePosition', 'Save position') : t('ats.createPosition', 'Create position')}
+                  </Button>
+                </>
+              )}
+
+              {step === 3 && (
+                <>
+                  <Button variant="secondary" type="button" onClick={() => setStep(2)}>
+                    {t('common.edit', 'Edit')}
+                  </Button>
+                  <Button variant="primary" type="button" onClick={onClose}>
+                    {t('common.close', 'Close')}
+                  </Button>
+                </>
+              )}
             </div>
-
-            <div style={{ borderRadius: 10, border: '1px solid rgba(13,33,55,0.12)', background: '#fff', padding: 10, display: 'grid', gap: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Assignment
-              </div>
-              <div style={{ display: 'grid', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#1f2937' }}>
-                  <Building2 size={13} color="#64748B" />
-                  <span>{selectedCompanyMeta?.name ?? '-'}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#1f2937' }}>
-                  <StoreIcon size={13} color="#64748B" />
-                  <span>{selectedStoreMeta?.name ?? '-'}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#1f2937' }}>
-                  <Languages size={13} color="#64748B" />
-                  <span>{language.toUpperCase()}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#1f2937' }}>
-                  <BadgeCheck size={13} color="#64748B" />
-                  <span>{status}</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ borderRadius: 10, border: '1px solid rgba(13,33,55,0.12)', background: '#fff', padding: 10, display: 'grid', gap: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Snapshot
-              </div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13, display: 'grid', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><BriefcaseBusiness size={13} color="#64748B" />{jobType}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Globe2 size={13} color="#64748B" />{remoteType}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Clock3 size={13} color="#64748B" />{weeklyHoursInput.trim() || '-'} hrs/week</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Wallet size={13} color="#64748B" />{salaryMinInput.trim() || '-'} - {salaryMaxInput.trim() || '-'}</div>
-                {remoteType !== 'remote' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <MapPin size={13} color="#64748B" />
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      {locationOverride.country ? <ReactCountryFlag countryCode={locationOverride.country} svg style={{ width: '0.95em', height: '0.95em' }} /> : null}
-                      {locationOverride.city || '-'}, {countryNameFromCode(locationOverride.country)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ borderRadius: 10, border: '1px dashed rgba(148,163,184,0.45)', background: '#fff', padding: 10, color: '#64748b', fontSize: 12.5, lineHeight: 1.5 }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                <User2 size={13} /> Hiring visibility
-              </div>
-              Published jobs become visible in careers and in XML feed. Draft jobs remain internal.
-            </div>
-          </aside>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
-          <div>
-            <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            {step > 1 && (
-              <Button variant="secondary" type="button" onClick={() => setStep((prev) => (prev - 1) as 1 | 2 | 3)}>
-                ← {t('common.back', 'Back')}
-              </Button>
-            )}
-
-            {step < 3 ? (
-              <Button variant="primary" type="button" onClick={moveNext}>
-                {t('common.next', 'Next')} →
-              </Button>
-            ) : (
-              <Button variant="primary" type="submit" loading={saving} disabled={!title.trim() || !description.trim()}>
-                {job ? 'Save position' : 'Create position'}
-              </Button>
-            )}
           </div>
         </div>
       </form>
@@ -2043,7 +2338,7 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
                   <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
-                      {t('stores.store')}
+                      {t('common.store', 'Store')}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2270,11 +2565,21 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [saving, setSaving] = useState(false);
   const [filterJob, setFilterJob] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addName, setAddName] = useState('');
+  const [addStep, setAddStep] = useState<1 | 2>(1);
+  const [addJobId, setAddJobId] = useState<string>('');
+  const [addFirstName, setAddFirstName] = useState('');
+  const [addLastName, setAddLastName] = useState('');
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
-  const [addJobId, setAddJobId] = useState<string>('');
+  const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
+  const [addResumePath, setAddResumePath] = useState('');
+  const [addCoverLetter, setAddCoverLetter] = useState('');
+  const [addTagInput, setAddTagInput] = useState('');
+  const [addTags, setAddTags] = useState<string[]>([]);
+  const [addGdprConsent, setAddGdprConsent] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
+  const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
+  const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
 
   const effectiveCompanyId = targetCompanyId ?? user?.companyId ?? undefined;
 
@@ -2370,17 +2675,35 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
 
   const handleAddCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!addJobId) {
+      showToast(t('ats.noPosition', 'No position selected'), 'error');
+      return;
+    }
+
+    const normalizedName = [addFirstName.trim(), addLastName.trim()]
+      .filter(Boolean)
+      .join(' ')
+      || addEmail.trim()
+      || t('ats.defaultCandidateName', 'Candidate');
+
     setAddSaving(true);
     try {
       const c = await createCandidate({
-        fullName: addName.trim(),
+        fullName: normalizedName,
         email: addEmail.trim() || undefined,
         phone: addPhone.trim() || undefined,
-        jobPostingId: addJobId ? parseInt(addJobId) : undefined,
+        jobPostingId: Number.parseInt(addJobId, 10),
+        linkedinUrl: addLinkedinUrl.trim() || undefined,
+        resumePath: addResumePath.trim() || undefined,
+        cvPath: addResumePath.trim() || undefined,
+        coverLetter: addCoverLetter.trim() || undefined,
+        gdprConsent: addGdprConsent,
+        tags: addTags.length > 0 ? addTags : undefined,
+        source: 'internal_manual',
+        appliedAt: new Date().toISOString(),
       });
       setCandidates((prev) => [c, ...prev]);
-      setShowAddModal(false);
-      setAddName(''); setAddEmail(''); setAddPhone(''); setAddJobId('');
+      closeAddCandidateModal();
       showToast(t('ats.candidateAdded'), 'success');
     } catch { showToast(t('ats.errorSave'), 'error'); }
     finally { setAddSaving(false); }
@@ -2402,7 +2725,73 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
     rejected:  '✕',
   };
 
-  const publishedJobs = jobs.filter((j) => j.status === 'published');
+  const addSelectionJobs = addModalJobs.length > 0 ? addModalJobs : jobs;
+  const publishedJobs = addSelectionJobs.filter((j) => String(j.status).toLowerCase() === 'published');
+  const closedJobs = addSelectionJobs.filter((j) => String(j.status).toLowerCase() === 'closed');
+  const addSelectedJob = addSelectionJobs.find((job) => String(job.id) === addJobId) ?? null;
+
+  const resetAddCandidateForm = useCallback(() => {
+    setAddStep(1);
+    setAddJobId('');
+    setAddFirstName('');
+    setAddLastName('');
+    setAddEmail('');
+    setAddPhone('');
+    setAddLinkedinUrl('');
+    setAddResumePath('');
+    setAddCoverLetter('');
+    setAddTagInput('');
+    setAddTags([]);
+    setAddGdprConsent(false);
+  }, []);
+
+  const loadAddModalJobs = useCallback(async () => {
+    setAddModalJobsLoading(true);
+    try {
+      const [published, closed] = await Promise.all([
+        getJobs(effectiveCompanyId ? { status: 'published', companyId: effectiveCompanyId } : { status: 'published' }),
+        getJobs(effectiveCompanyId ? { status: 'closed', companyId: effectiveCompanyId } : { status: 'closed' }),
+      ]);
+
+      const publishedIds = new Set(published.map((item) => item.id));
+      const merged = [...published, ...closed.filter((item) => !publishedIds.has(item.id))];
+      setAddModalJobs(merged);
+    } catch {
+      setAddModalJobs([]);
+    } finally {
+      setAddModalJobsLoading(false);
+    }
+  }, [effectiveCompanyId]);
+
+  useEffect(() => {
+    if (!showAddModal) return;
+    void loadAddModalJobs();
+  }, [showAddModal, loadAddModalJobs]);
+
+  const openAddCandidateModal = () => {
+    resetAddCandidateForm();
+    setShowAddModal(true);
+  };
+
+  const closeAddCandidateModal = () => {
+    setShowAddModal(false);
+    setAddModalJobs([]);
+    resetAddCandidateForm();
+  };
+
+  const appendCandidateTag = (rawTag: string) => {
+    const tag = rawTag.trim();
+    if (!tag) return;
+    setAddTags((prev) => {
+      if (prev.some((existing) => existing.toLowerCase() === tag.toLowerCase())) return prev;
+      return [...prev, tag];
+    });
+    setAddTagInput('');
+  };
+
+  const removeCandidateTag = (tag: string) => {
+    setAddTags((prev) => prev.filter((current) => current !== tag));
+  };
 
   return (
     <div>
@@ -2444,7 +2833,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         )}
 
         {canEdit && (
-          <Button variant="primary" size="sm" style={{ marginLeft: 'auto' }} onClick={() => setShowAddModal(true)}>
+          <Button variant="primary" size="sm" style={{ marginLeft: 'auto' }} onClick={openAddCandidateModal}>
             <span style={{ fontSize: 16 }}>+</span> {t('ats.addCandidate')}
           </Button>
         )}
@@ -2617,61 +3006,355 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
 
       {/* Add Candidate Modal */}
       {showAddModal && (
-        <ModalBackdrop onClose={() => setShowAddModal(false)} width={480}>
+        <ModalBackdrop onClose={closeAddCandidateModal} width={760}>
           <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
                 {t('ats.addCandidate')}
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                {t('ats.candidateName')}
+                {addStep === 1
+                  ? t('ats.selectPositionStepHint', 'Step 1 of 2: choose the job post first.')
+                  : t('ats.optionalCandidateStepHint', 'Step 2 of 2: add candidate details (all optional).')}
               </p>
             </div>
-            <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, padding: '2px 6px' }}>×</button>
+            <button onClick={closeAddCandidateModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, padding: '2px 6px' }}>×</button>
           </div>
 
-          <form onSubmit={handleAddCandidate} style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Input
-              label={`${t('ats.candidateName')} *`}
-              value={addName}
-              onChange={(e) => setAddName(e.target.value)}
-              required
-              placeholder="Mario Rossi"
-              autoFocus
-            />
+          <div style={{
+            padding: '14px 28px 12px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-warm)',
+            display: 'flex',
+            alignItems: 'center',
+          }}>
+            {[1, 2].map((currentStep, index) => (
+              <React.Fragment key={currentStep}>
+                <div style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
+                  <div style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-display)',
+                    border: addStep >= currentStep ? '1px solid rgba(201,151,58,0.9)' : '1px solid rgba(148,163,184,0.4)',
+                    color: addStep >= currentStep ? '#ffffff' : '#64748b',
+                    background: addStep >= currentStep ? '#C9973A' : '#fff',
+                  }}>
+                    {addStep > currentStep ? '✓' : currentStep}
+                  </div>
+                  <span style={{
+                    fontSize: 10,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: addStep === currentStep ? '#9A6808' : 'var(--text-muted)',
+                    fontWeight: addStep === currentStep ? 700 : 500,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {currentStep === 1 ? t('ats.position', 'Position') : t('ats.candidateProfile', 'Candidate profile')}
+                  </span>
+                </div>
+                {index === 0 && (
+                  <div style={{
+                    flex: 1,
+                    height: 2,
+                    borderRadius: 999,
+                    margin: '0 12px 18px',
+                    background: addStep > 1 ? '#C9973A' : 'rgba(148,163,184,0.36)',
+                  }} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Input label="Email" type="email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="mario@email.com" />
-              <Input label={t('ats.phone')} type="tel" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="+39 345..." />
-            </div>
+          <form onSubmit={handleAddCandidate} style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {addStep === 1 ? (
+              <>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: '#fff', display: 'grid', gap: 10 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    {t('ats.selectPositionStepBody', 'Select the role for this candidate. You can add profile details in the next step.')}
+                  </div>
 
-            <div>
-              <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                {t('ats.position')}
-              </label>
-              <select
-                value={addJobId}
-                onChange={(e) => setAddJobId(e.target.value)}
-                style={{
-                  width: '100%', padding: '8px 12px', fontSize: 13.5,
-                  background: 'var(--surface)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius)', color: 'var(--text-primary)',
-                  outline: 'none', cursor: 'pointer', boxSizing: 'border-box',
-                }}
-              >
-                <option value="">{t('ats.noPosition')}</option>
-                {publishedJobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
-                {publishedJobs.length === 0 && jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
-              </select>
-            </div>
+                  {addModalJobsLoading ? (
+                    <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '14px 12px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                      {t('common.loading', 'Loading...')}
+                    </div>
+                  ) : publishedJobs.length === 0 && closedJobs.length === 0 ? (
+                    <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '14px 12px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                      {t('ats.noPosition')}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 12, maxHeight: 340, overflowY: 'auto', paddingRight: 2 }}>
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <BadgeCheck size={13} /> {t('ats.status_published', 'Published')}
+                        </div>
+
+                        {publishedJobs.length === 0 ? (
+                          <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '10px 11px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                            {t('ats.noPublishedPositions', 'No published positions available.')}
+                          </div>
+                        ) : publishedJobs.map((jobOption) => {
+                          const isSelected = String(jobOption.id) === addJobId;
+                          const locationLabel = [jobOption.city, jobOption.state, jobOption.country].filter(Boolean).join(', ')
+                            || t(`ats.remoteType_${jobOption.remoteType}`, jobOption.remoteType);
+
+                          return (
+                            <button
+                              key={jobOption.id}
+                              type="button"
+                              onClick={() => setAddJobId(String(jobOption.id))}
+                              style={{
+                                border: isSelected ? '1px solid rgba(201,151,58,0.62)' : '1px solid var(--border)',
+                                borderRadius: 10,
+                                padding: '10px 11px',
+                                background: isSelected ? 'rgba(201,151,58,0.12)' : '#fff',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                textAlign: 'left',
+                              }}
+                            >
+                              <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                                <strong style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {jobOption.title}
+                                </strong>
+                                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{locationLabel}</span>
+                              </div>
+                              <span style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                border: isSelected ? '1px solid rgba(201,151,58,0.9)' : '1px solid rgba(148,163,184,0.4)',
+                                background: isSelected ? '#C9973A' : '#fff',
+                                color: '#fff',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}>
+                                {isSelected ? '✓' : ''}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#991B1B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <Eye size={13} /> {t('ats.status_closed', 'Closed')}
+                        </div>
+
+                        {closedJobs.length === 0 ? (
+                          <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '10px 11px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                            {t('ats.noClosedPositions', 'No closed positions available.')}
+                          </div>
+                        ) : closedJobs.map((jobOption) => {
+                          const locationLabel = [jobOption.city, jobOption.state, jobOption.country].filter(Boolean).join(', ')
+                            || t(`ats.remoteType_${jobOption.remoteType}`, jobOption.remoteType);
+
+                          return (
+                            <div
+                              key={`closed-${jobOption.id}`}
+                              style={{
+                                border: '1px solid rgba(239,68,68,0.24)',
+                                borderRadius: 10,
+                                padding: '10px 11px',
+                                background: 'rgba(239,68,68,0.06)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                                <strong style={{ fontSize: 13, color: '#7F1D1D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {jobOption.title}
+                                </strong>
+                                <span style={{ fontSize: 11.5, color: '#991B1B' }}>{locationLabel}</span>
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#991B1B' }}>
+                                {t('ats.closedSelectionDisabled', 'Closed')}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ border: '1px solid rgba(201,151,58,0.35)', borderRadius: 10, padding: '9px 11px', background: 'rgba(201,151,58,0.09)', color: '#5F4308', fontSize: 12.5 }}>
+                  <strong>{t('ats.position', 'Position')}:</strong> {addSelectedJob?.title ?? '-'}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                  <Input
+                    label={t('employees.firstName', 'First name')}
+                    value={addFirstName}
+                    onChange={(e) => setAddFirstName(e.target.value)}
+                    placeholder="Mario"
+                    autoFocus
+                  />
+                  <Input
+                    label={t('employees.lastName', 'Last name')}
+                    value={addLastName}
+                    onChange={(e) => setAddLastName(e.target.value)}
+                    placeholder="Rossi"
+                  />
+                  <Input
+                    label="Email"
+                    type="email"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    placeholder="mario@email.com"
+                  />
+                  <Input
+                    label={t('ats.phone')}
+                    type="tel"
+                    value={addPhone}
+                    onChange={(e) => setAddPhone(e.target.value)}
+                    placeholder="+39 345..."
+                  />
+                  <Input
+                    label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
+                    type="url"
+                    value={addLinkedinUrl}
+                    onChange={(e) => setAddLinkedinUrl(e.target.value)}
+                    placeholder="https://linkedin.com/in/..."
+                  />
+                  <Input
+                    label={t('publicCareers.cvLabel', 'CV / Resume URL')}
+                    value={addResumePath}
+                    onChange={(e) => setAddResumePath(e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                    {t('publicCareers.coverLetterLabel', 'Cover letter')}
+                  </label>
+                  <textarea
+                    className="field-input"
+                    value={addCoverLetter}
+                    onChange={(e) => setAddCoverLetter(e.target.value)}
+                    rows={4}
+                    maxLength={1000}
+                    placeholder={t('publicCareers.coverLetterPlaceholder', 'Tell us a bit about this candidate profile')}
+                    style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
+                  />
+                  <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{addCoverLetter.length}/1000</div>
+                </div>
+
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: '#fff', display: 'grid', gap: 8 }}>
+                  <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    {t('ats.jobTags')}
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8 }}>
+                    <input
+                      className="field-input"
+                      value={addTagInput}
+                      onChange={(e) => setAddTagInput(e.target.value)}
+                      placeholder={t('ats.jobTagsInputPlaceholder', 'Type a tag and press Enter')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          appendCandidateTag(addTagInput);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => appendCandidateTag(addTagInput)}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        border: '1px solid rgba(201,151,58,0.42)',
+                        background: 'rgba(201,151,58,0.14)',
+                        color: '#8a6318',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {addTags.length > 0 ? addTags.map((tag) => (
+                      <span
+                        key={`candidate-tag-${tag}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '4px 9px',
+                          borderRadius: 999,
+                          fontSize: 12,
+                          background: '#FEF4DA',
+                          color: '#5C3E05',
+                          border: '1px solid #F4DEAB',
+                          fontWeight: 700,
+                        }}
+                      >
+                        <span>{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeCandidateTag(tag)}
+                          style={{ border: 'none', background: 'transparent', color: '#7a5715', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
+                  </div>
+                </div>
+
+                <label style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={addGdprConsent}
+                    onChange={(e) => setAddGdprConsent(e.target.checked)}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span>{t('publicCareers.privacyConsent', 'Privacy consent collected')}</span>
+                </label>
+              </>
+            )}
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
-              <Button variant="secondary" type="button" onClick={() => setShowAddModal(false)}>
+              <Button variant="secondary" type="button" onClick={closeAddCandidateModal}>
                 {t('common.cancel')}
               </Button>
-              <Button variant="primary" type="submit" loading={addSaving} disabled={!addName.trim()}>
-                {t('ats.addCandidate')}
-              </Button>
+
+              {addStep === 2 && (
+                <Button variant="secondary" type="button" onClick={() => setAddStep(1)}>
+                  ← {t('common.back', 'Back')}
+                </Button>
+              )}
+
+              {addStep === 1 ? (
+                <Button variant="primary" type="button" onClick={() => setAddStep(2)} disabled={!addJobId}>
+                  {t('common.next', 'Next')} →
+                </Button>
+              ) : (
+                <Button variant="primary" type="submit" loading={addSaving} disabled={!addJobId}>
+                  {t('ats.addCandidate')}
+                </Button>
+              )}
             </div>
           </form>
         </ModalBackdrop>

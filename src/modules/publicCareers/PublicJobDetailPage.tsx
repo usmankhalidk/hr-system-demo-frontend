@@ -64,11 +64,13 @@ const REMOTE_LABEL: Record<UiLanguage, Record<string, string>> = {
 
 const ROLE_LABEL: Record<UiLanguage, Record<string, string>> = {
   en: {
+    admin: 'System Admin',
     hr: 'HR Lead',
     area_manager: 'Area Manager',
     store_manager: 'Store Manager',
   },
   it: {
+    admin: 'Amministratore',
     hr: 'Responsabile HR',
     area_manager: 'Area Manager',
     store_manager: 'Responsabile Negozio',
@@ -153,6 +155,7 @@ const COPY: Record<UiLanguage, {
   privacyRequiredError: string;
   coverLetterTooLongError: string;
   submitError: string;
+  positionClosedNotice: string;
   saveAction: string;
   likeAction: string;
   commentAction: string;
@@ -238,6 +241,7 @@ const COPY: Record<UiLanguage, {
     privacyRequiredError: 'You must accept the privacy notice to submit your application.',
     coverLetterTooLongError: 'Cover letter must be 1000 characters or less.',
     submitError: 'Unable to submit your application right now.',
+    positionClosedNotice: 'This position is currently closed and no longer accepting new applications.',
     saveAction: 'save this role',
     likeAction: 'like this role',
     commentAction: 'comment on this role',
@@ -323,6 +327,7 @@ const COPY: Record<UiLanguage, {
     privacyRequiredError: 'Devi accettare l\'informativa privacy per inviare la candidatura.',
     coverLetterTooLongError: 'La lettera di presentazione deve essere massimo 1000 caratteri.',
     submitError: 'Impossibile inviare la candidatura in questo momento.',
+    positionClosedNotice: 'Questa posizione e chiusa e non accetta nuove candidature.',
     saveAction: 'salvare questo ruolo',
     likeAction: 'mettere like a questo ruolo',
     commentAction: 'commentare questo ruolo',
@@ -393,7 +398,13 @@ export default function PublicJobDetailPage() {
   const uiLanguage: UiLanguage = i18n.language?.startsWith('it') ? 'it' : 'en';
   const copy = COPY[uiLanguage];
 
-  const { jobId } = useParams<{ jobId?: string }>();
+  const { jobId, companySlug } = useParams<{ jobId?: string; companySlug?: string }>();
+  const legacyCompanySlug = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('company_slug');
+    return slug && slug.trim() !== '' ? slug : undefined;
+  }, []);
+  const effectiveCompanySlug = companySlug ?? legacyCompanySlug;
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -448,7 +459,7 @@ export default function PublicJobDetailPage() {
     setLoading(true);
     setError(null);
 
-    getPublicJobDetail(parsedJobId)
+    getPublicJobDetail(parsedJobId, effectiveCompanySlug)
       .then((data) => {
         setCompanyName(data.company.name);
         setCompanyMeta({
@@ -471,7 +482,7 @@ export default function PublicJobDetailPage() {
       .finally(() => {
         setLoading(false);
       });
-  }, [jobId, copy.invalidJobId, copy.loadJobError, copy.missingJobId]);
+  }, [jobId, effectiveCompanySlug, copy.invalidJobId, copy.loadJobError, copy.missingJobId]);
 
   const browserLanguage = useMemo(() => {
     return navigator.language.toLowerCase().startsWith('it') ? 'it' : 'en';
@@ -488,6 +499,11 @@ export default function PublicJobDetailPage() {
   const companyBannerUrl = getCompanyBannerUrl(companyMeta?.bannerFilename ?? job?.companyBannerFilename);
   const storeLogoUrl = getStoreLogoUrl(job?.storeLogoFilename);
   const remoteFallback = uiLanguage === 'it' ? 'Remoto / Flessibile' : 'Remote / Flexible';
+  const fallbackBackPath = effectiveCompanySlug ? `/careers/${encodeURIComponent(effectiveCompanySlug)}` : '/careers';
+  const careersBackPath = companyMeta?.slug
+    ? `/careers/${encodeURIComponent(companyMeta.slug)}`
+    : fallbackBackPath;
+  const isJobClosed = job?.status === 'closed';
 
   useEffect(() => {
     if (!job) return;
@@ -588,6 +604,11 @@ export default function PublicJobDetailPage() {
     event.preventDefault();
     if (!job) return;
 
+    if (job.status === 'closed') {
+      setSubmitMessage(copy.positionClosedNotice);
+      return;
+    }
+
     if (!resume) {
       setSubmitMessage(copy.attachCvError);
       return;
@@ -665,7 +686,7 @@ export default function PublicJobDetailPage() {
       <div className="careers-detail-shell">
         <div className="careers-detail-wrapper">
           <div className="careers-empty error" style={{ marginTop: 24 }}>{error ?? copy.jobNotFound}</div>
-          <Link className="careers-detail-back" to="/careers">
+          <Link className="careers-detail-back" to={fallbackBackPath}>
             <ArrowLeft size={14} />
             {copy.backToCareers}
           </Link>
@@ -678,7 +699,7 @@ export default function PublicJobDetailPage() {
     <div className="careers-detail-shell">
       <div className="careers-detail-wrapper">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <Link className="careers-detail-back" to="/careers">
+          <Link className="careers-detail-back" to={careersBackPath}>
             <ArrowLeft size={14} />
             {copy.backToAllPositions}
           </Link>
@@ -716,10 +737,16 @@ export default function PublicJobDetailPage() {
                 {formatLocation(job, remoteFallback)}
               </div>
 
-              <a className="careers-detail-primary-btn" href="#apply-form">
-                {copy.applyNow}
-                <Send size={14} />
-              </a>
+              {!isJobClosed ? (
+                <a className="careers-detail-primary-btn" href="#apply-form">
+                  {copy.applyNow}
+                  <Send size={14} />
+                </a>
+              ) : (
+                <span className="careers-detail-primary-btn" style={{ opacity: 0.8, cursor: 'default' }}>
+                  {copy.positionClosedNotice}
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -833,7 +860,7 @@ export default function PublicJobDetailPage() {
             <section id="apply-form" className="careers-detail-card">
               <h3>{copy.applyTitle}</h3>
               <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
-                {copy.applySubtitle}
+                {isJobClosed ? copy.positionClosedNotice : copy.applySubtitle}
               </p>
 
               <form onSubmit={handleSubmit} className="careers-form-grid">
@@ -904,7 +931,7 @@ export default function PublicJobDetailPage() {
                   </div>
                 )}
 
-                <button type="submit" className="careers-form-submit" disabled={submitting}>
+                <button type="submit" className="careers-form-submit" disabled={submitting || isJobClosed}>
                   {submitting ? copy.submitting : copy.submitApplication}
                 </button>
               </form>

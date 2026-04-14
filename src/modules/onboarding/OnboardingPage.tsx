@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { Building2, CheckCircle2, ChevronDown, ChevronUp, Pencil, Power, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { translateApiError } from '../../utils/apiErrors';
@@ -9,6 +10,10 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { getAvatarUrl } from '../../api/client';
+import { getCompanies } from '../../api/companies';
+import { getStores } from '../../api/stores';
+import { getEmployees } from '../../api/employees';
+import type { Company, Store, Employee } from '../../types';
 import {
   getTemplates, createTemplate, updateTemplate, deleteTemplate,
   getEmployeeTasks, assignTasks, completeTask, uncompleteTask,
@@ -338,13 +343,16 @@ const TemplatesPanel: React.FC = () => {
   const { showToast } = useToast();
 
   const [templates, setTemplates] = useState<OnboardingTemplate[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState('');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OnboardingTemplate | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
+    companyId: '',
     name: '',
     description: '',
     sortOrder: '1',
@@ -356,26 +364,110 @@ const TemplatesPanel: React.FC = () => {
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<OnboardingTemplate | null>(null);
+  const [assignDrawerOpen, setAssignDrawerOpen] = useState(false);
+  const [assignCompanyId, setAssignCompanyId] = useState<string>('');
+  const [assignEmployeeId, setAssignEmployeeId] = useState<string>('');
+  const [assignEmployees, setAssignEmployees] = useState<Employee[]>([]);
+  const [assignTemplates, setAssignTemplates] = useState<OnboardingTemplate[]>([]);
+  const [assignSelected, setAssignSelected] = useState<Set<number>>(new Set());
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+
+  const companyMap = useMemo(() => {
+    const map = new Map<number, string>();
+    companies.forEach((company) => map.set(company.id, company.name));
+    return map;
+  }, [companies]);
+
+  const loadCompanies = useCallback(async () => {
+    try {
+      const rows = await getCompanies();
+      setCompanies(rows.slice().sort((a, b) => a.name.localeCompare(b.name)));
+    } catch {
+      showToast(t('onboarding.errorLoad', 'Error loading data'), 'error');
+    }
+  }, [showToast, t]);
+
+  useEffect(() => {
+    void loadCompanies();
+  }, [loadCompanies]);
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setTemplates(await getTemplates(showInactive)); }
+    try {
+      const targetCompanyId = companyFilter !== 'all' ? parseInt(companyFilter, 10) : undefined;
+      setTemplates(await getTemplates(showInactive, targetCompanyId));
+    }
     catch { showToast(t('onboarding.errorLoad', 'Error loading tasks'), 'error'); }
     finally { setLoading(false); }
-  }, [showInactive]);
+  }, [showInactive, companyFilter, showToast, t]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!assignDrawerOpen) return;
+
+    const preferredCompany = companyFilter !== 'all'
+      ? companyFilter
+      : (companies.length > 0 ? String(companies[0].id) : '');
+
+    setAssignCompanyId((prev) => prev || preferredCompany);
+  }, [assignDrawerOpen, companyFilter, companies]);
+
+  useEffect(() => {
+    if (!assignDrawerOpen || !assignCompanyId) {
+      setAssignEmployees([]);
+      setAssignTemplates([]);
+      setAssignSelected(new Set());
+      return;
+    }
+
+    const companyId = parseInt(assignCompanyId, 10);
+    if (Number.isNaN(companyId)) return;
+
+    setAssignLoading(true);
+    Promise.all([
+      getEmployees({ targetCompanyId: companyId, role: 'employee', status: 'active', limit: 500 }),
+      getTemplates(false, companyId),
+    ])
+      .then(([employeesResponse, templatesResponse]) => {
+        const employeeRows = employeesResponse.employees.filter((employee) => employee.role === 'employee');
+        setAssignEmployees(employeeRows);
+        setAssignTemplates(templatesResponse);
+        setAssignSelected(new Set(templatesResponse.map((template) => template.id)));
+        if (!employeeRows.some((employee) => String(employee.id) === assignEmployeeId)) {
+          setAssignEmployeeId('');
+        }
+      })
+      .catch(() => {
+        setAssignEmployees([]);
+        setAssignTemplates([]);
+        setAssignSelected(new Set());
+        showToast(t('onboarding.errorLoad', 'Error loading data'), 'error');
+      })
+      .finally(() => setAssignLoading(false));
+  }, [assignDrawerOpen, assignCompanyId, assignEmployeeId, showToast, t]);
 
   const openCreate = () => {
     setEditing(null);
     const nextOrder = templates.length > 0 ? Math.max(...templates.map((t) => t.sortOrder)) + 1 : 1;
-    setForm({ name: '', description: '', sortOrder: String(nextOrder), category: 'other', dueDays: '', linkUrl: '', priority: 'medium' });
+    setForm({
+      companyId: companyFilter !== 'all' ? companyFilter : '',
+      name: '',
+      description: '',
+      sortOrder: String(nextOrder),
+      category: 'other',
+      dueDays: '',
+      linkUrl: '',
+      priority: 'medium',
+    });
     setModalOpen(true);
   };
 
   const openEdit = (tmpl: OnboardingTemplate) => {
     setEditing(tmpl);
     setForm({
+      companyId: String(tmpl.companyId),
       name: tmpl.name,
       description: tmpl.description ?? '',
       sortOrder: String(tmpl.sortOrder),
@@ -390,9 +482,17 @@ const TemplatesPanel: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
+
+    const parsedCompanyId = parseInt(form.companyId, 10);
+    if (Number.isNaN(parsedCompanyId)) {
+      showToast(t('onboarding.errorSave', 'Error saving'), 'error');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
+        companyId: parsedCompanyId,
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         sortOrder: parseInt(form.sortOrder, 10) || 1,
@@ -402,7 +502,10 @@ const TemplatesPanel: React.FC = () => {
         priority: form.priority,
       };
       if (editing) {
-        const updated = await updateTemplate(editing.id, payload);
+        const updated = await updateTemplate(editing.id, {
+          ...payload,
+          targetCompanyId: editing.companyId,
+        });
         setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
         showToast(t('onboarding.templateUpdated', 'Task updated'), 'success');
       } else {
@@ -411,6 +514,7 @@ const TemplatesPanel: React.FC = () => {
         showToast(t('onboarding.templateCreated', 'Task created'), 'success');
       }
       setModalOpen(false);
+      await load();
     } catch (err) {
       showToast(translateApiError(err, t, t('onboarding.errorSave', 'Error saving')) ?? '', 'error');
     } finally { setSaving(false); }
@@ -419,7 +523,7 @@ const TemplatesPanel: React.FC = () => {
   const handleToggle = async (tmpl: OnboardingTemplate) => {
     setTogglingId(tmpl.id);
     try {
-      const updated = await updateTemplate(tmpl.id, { isActive: !tmpl.isActive });
+      const updated = await updateTemplate(tmpl.id, { isActive: !tmpl.isActive, targetCompanyId: tmpl.companyId });
       setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       showToast(updated.isActive ? t('onboarding.templateActivated', 'Task activated') : t('onboarding.templateDeactivated', 'Task deactivated'), 'success');
     } catch (err) {
@@ -436,7 +540,7 @@ const TemplatesPanel: React.FC = () => {
     setDeleteConfirm(null);
     setDeletingId(tmpl.id);
     try {
-      const result = await deleteTemplate(tmpl.id);
+      const result = await deleteTemplate(tmpl.id, tmpl.companyId);
       if (result.deleted) {
         setTemplates((prev) => prev.filter((t) => t.id !== tmpl.id));
         showToast(t('onboarding.templateDeleted', 'Task deleted'), 'success');
@@ -450,18 +554,34 @@ const TemplatesPanel: React.FC = () => {
   };
 
   const handleMove = async (tmpl: OnboardingTemplate, dir: 'up' | 'down') => {
-    const sorted = [...templates].sort((a, b) => a.sortOrder - b.sortOrder);
+    const sorted = templates
+      .filter((item) => item.companyId === tmpl.companyId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
     const idx = sorted.findIndex((t) => t.id === tmpl.id);
     const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= sorted.length) return;
     const other = sorted[swapIdx];
     try {
       const [a, b] = await Promise.all([
-        updateTemplate(tmpl.id, { sortOrder: other.sortOrder }),
-        updateTemplate(other.id, { sortOrder: tmpl.sortOrder }),
+        updateTemplate(tmpl.id, { sortOrder: other.sortOrder, targetCompanyId: tmpl.companyId }),
+        updateTemplate(other.id, { sortOrder: tmpl.sortOrder, targetCompanyId: other.companyId }),
       ]);
       setTemplates((prev) => prev.map((t) => t.id === a.id ? a : t.id === b.id ? b : t));
     } catch { /* ignore */ }
+  };
+
+  const handleAssignFromLibrary = async () => {
+    if (!assignCompanyId || !assignEmployeeId || assignSelected.size === 0) return;
+    setAssigning(true);
+    try {
+      const result = await assignTasks(parseInt(assignEmployeeId, 10), Array.from(assignSelected));
+      showToast(t('onboarding.assignedTasks', { n: result.assigned }), 'success');
+      setAssignDrawerOpen(false);
+    } catch (err) {
+      showToast(translateApiError(err, t, t('onboarding.errorSave', 'Error')) ?? '', 'error');
+    } finally {
+      setAssigning(false);
+    }
   };
 
   const visible = useMemo(() => {
@@ -489,6 +609,16 @@ const TemplatesPanel: React.FC = () => {
           value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder={t('common.search')} style={{ maxWidth: 240 }}
         />
+        <select
+          value={companyFilter}
+          onChange={(e) => setCompanyFilter(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 170 }}
+        >
+          <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
+          {companies.map((company) => (
+            <option key={company.id} value={String(company.id)}>{company.name}</option>
+          ))}
+        </select>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)}
             style={{ width: 15, height: 15, accentColor: 'var(--primary)' }} />
@@ -499,7 +629,10 @@ const TemplatesPanel: React.FC = () => {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {activeCount} {t('onboarding.activeTasksCount', 'active tasks')}
           </span>
-          <Button variant="accent" size="sm" onClick={openCreate}>
+          <Button variant="primary" size="sm" onClick={() => setAssignDrawerOpen(true)}>
+            <UserPlus size={14} /> {t('onboarding.assignTasks')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={openCreate}>
             + {t('onboarding.newTemplate', 'New Task')}
           </Button>
         </div>
@@ -544,7 +677,7 @@ const TemplatesPanel: React.FC = () => {
           <div style={{ fontSize: 44, marginBottom: 12 }}>📋</div>
           <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 6 }}>{t('onboarding.noTemplates', 'No tasks yet')}</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>{t('onboarding.noTemplatesHint', 'Create onboarding tasks for new employees')}</div>
-          <Button variant="accent" onClick={openCreate}>+ {t('onboarding.newTemplate', 'New Task')}</Button>
+          <Button variant="primary" onClick={openCreate}>+ {t('onboarding.newTemplate', 'New Task')}</Button>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -568,18 +701,26 @@ const TemplatesPanel: React.FC = () => {
 
                 {/* Task cards */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {list.sort((a, b) => a.sortOrder - b.sortOrder).map((tmpl, idx, arr) => (
-                    <div
-                      key={tmpl.id}
-                      style={{
-                        background: 'var(--surface)', border: `1px solid ${tmpl.isActive ? meta.border : 'var(--border)'}`,
-                        borderLeft: `4px solid ${tmpl.isActive ? meta.color : '#D1D5DB'}`,
-                        borderRadius: 12, padding: '14px 16px',
-                        display: 'flex', alignItems: 'center', gap: 14,
-                        opacity: tmpl.isActive ? 1 : 0.55,
-                        transition: 'all 0.15s',
-                      }}
-                    >
+                  {list.sort((a, b) => a.sortOrder - b.sortOrder).map((tmpl) => {
+                    const companyPhaseList = list
+                      .filter((item) => item.companyId === tmpl.companyId)
+                      .sort((a, b) => a.sortOrder - b.sortOrder);
+                    const companyIndex = companyPhaseList.findIndex((item) => item.id === tmpl.id);
+                    const isCompanyFirst = companyIndex <= 0;
+                    const isCompanyLast = companyIndex === companyPhaseList.length - 1;
+
+                    return (
+                      <div
+                        key={tmpl.id}
+                        style={{
+                          background: 'var(--surface)', border: `1px solid ${tmpl.isActive ? meta.border : 'var(--border)'}`,
+                          borderLeft: `4px solid ${tmpl.isActive ? meta.color : '#D1D5DB'}`,
+                          borderRadius: 12, padding: '14px 16px',
+                          display: 'flex', alignItems: 'center', gap: 14,
+                          opacity: tmpl.isActive ? 1 : 0.55,
+                          transition: 'all 0.15s',
+                        }}
+                      >
                       {/* Sort order badge */}
                       <div style={{
                         width: 28, height: 28, borderRadius: 8, flexShrink: 0,
@@ -599,6 +740,11 @@ const TemplatesPanel: React.FC = () => {
                           {!tmpl.isActive && (
                             <span style={{ fontSize: 10, background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 99, padding: '1px 6px', fontWeight: 600 }}>INACTIVE</span>
                           )}
+                          {companyFilter === 'all' && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 7px' }}>
+                              <Building2 size={11} /> {companyMap.get(tmpl.companyId) ?? `#${tmpl.companyId}`}
+                            </span>
+                          )}
                         </div>
                         {tmpl.description && (
                           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tmpl.description}</div>
@@ -609,38 +755,41 @@ const TemplatesPanel: React.FC = () => {
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
                         {/* Move up/down */}
                         <button
-                          onClick={() => handleMove(tmpl, 'up')} disabled={idx === 0}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 26, height: 26, cursor: idx === 0 ? 'not-allowed' : 'pointer', fontSize: 12, color: 'var(--text-muted)', opacity: idx === 0 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => handleMove(tmpl, 'up')} disabled={isCompanyFirst}
+                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: isCompanyFirst ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', opacity: isCompanyFirst ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           title="Move up"
-                        >↑</button>
+                        ><ChevronUp size={14} /></button>
                         <button
-                          onClick={() => handleMove(tmpl, 'down')} disabled={idx === arr.length - 1}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 26, height: 26, cursor: idx === arr.length - 1 ? 'not-allowed' : 'pointer', fontSize: 12, color: 'var(--text-muted)', opacity: idx === arr.length - 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => handleMove(tmpl, 'down')} disabled={isCompanyLast}
+                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: isCompanyLast ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', opacity: isCompanyLast ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           title="Move down"
-                        >↓</button>
+                        ><ChevronDown size={14} /></button>
                         <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 2px' }} />
                         <button
                           onClick={() => handleToggle(tmpl)} disabled={togglingId === tmpl.id}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: tmpl.isActive ? '#15803D' : 'var(--text-muted)', fontWeight: 600 }}
+                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: tmpl.isActive ? '#15803D' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           title={tmpl.isActive ? 'Deactivate' : 'Activate'}
                         >
-                          {togglingId === tmpl.id ? '…' : tmpl.isActive ? '✓ Active' : '○ Off'}
+                          {togglingId === tmpl.id ? '…' : <Power size={13} />}
                         </button>
                         <button
                           onClick={() => openEdit(tmpl)}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}
+                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title={t('common.edit')}
                         >
-                          {t('common.edit')}
+                          <Pencil size={13} />
                         </button>
                         <button
                           onClick={() => handleDelete(tmpl)} disabled={deletingId === tmpl.id}
-                          style={{ background: 'none', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: '#DC2626', fontWeight: 600 }}
+                          style={{ background: 'none', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title={t('common.delete')}
                         >
-                          {deletingId === tmpl.id ? '…' : t('common.delete')}
+                          {deletingId === tmpl.id ? '…' : <Trash2 size={13} />}
                         </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -663,6 +812,23 @@ const TemplatesPanel: React.FC = () => {
             <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1, padding: '2px 6px' }}>×</button>
           </div>
           <form onSubmit={handleSave} style={{ padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                {t('nav.companies', 'Companies')} *
+              </label>
+              <select
+                value={form.companyId}
+                disabled={editing != null}
+                onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}
+                required
+              >
+                <option value="">{t('employees.selectCompany', 'Select company')}</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={String(company.id)}>{company.name}</option>
+                ))}
+              </select>
+            </div>
             <Input
               label={`${t('onboarding.templateName', 'Task name')} *`}
               value={form.name}
@@ -763,11 +929,102 @@ const TemplatesPanel: React.FC = () => {
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
               <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button>
-              <Button variant="accent" type="submit" loading={saving} disabled={!form.name.trim()}>{t('common.save')}</Button>
+              <Button variant="primary" type="submit" loading={saving} disabled={!form.name.trim() || !form.companyId}>{t('common.save')}</Button>
             </div>
           </form>
         </ModalBackdrop>
       )}
+
+      <SideDrawer open={assignDrawerOpen} onClose={() => setAssignDrawerOpen(false)}>
+        <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', background: 'var(--surface-warm)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--text-primary)' }}>
+                {t('onboarding.assignTasks')}
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                {t('onboarding.lookupHint')}
+              </p>
+            </div>
+            <button onClick={() => setAssignDrawerOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
+          </div>
+        </div>
+
+        <div style={{ padding: '16px 22px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+              <Building2 size={13} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} /> {t('nav.companies', 'Companies')}
+            </label>
+            <select
+              value={assignCompanyId}
+              onChange={(e) => setAssignCompanyId(e.target.value)}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13.5 }}
+            >
+              <option value="">{t('employees.selectCompany', 'Select company')}</option>
+              {companies.map((company) => (
+                <option key={company.id} value={String(company.id)}>{company.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+              <Users size={13} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} /> {t('onboarding.employeeIdLabel', 'Employee')}
+            </label>
+            <select
+              value={assignEmployeeId}
+              onChange={(e) => setAssignEmployeeId(e.target.value)}
+              disabled={assignLoading || assignEmployees.length === 0}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13.5 }}
+            >
+              <option value="">{assignLoading ? t('common.loading') : t('onboarding.searchEmployeePlaceholder', 'Search employee...')}</option>
+              {assignEmployees.map((employee) => (
+                <option key={employee.id} value={String(employee.id)}>{employee.name} {employee.surname} ({employee.email})</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: 'var(--background)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+              {t('onboarding.tabTemplates', 'Tasks')} ({assignTemplates.length})
+            </div>
+            {assignTemplates.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('onboarding.noTemplates', 'No onboarding tasks configured')}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+                {assignTemplates.map((template) => (
+                  <label key={template.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-primary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={assignSelected.has(template.id)}
+                      onChange={() => {
+                        setAssignSelected((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(template.id)) next.delete(template.id);
+                          else next.add(template.id);
+                          return next;
+                        });
+                      }}
+                      style={{ accentColor: 'var(--primary)' }}
+                    />
+                    <span>{template.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Button
+            variant="primary"
+            onClick={handleAssignFromLibrary}
+            loading={assigning}
+            disabled={!assignCompanyId || !assignEmployeeId || assignSelected.size === 0 || assignTemplates.length === 0}
+          >
+            <CheckCircle2 size={14} /> {t('onboarding.assignConfirm', 'Assign')}
+          </Button>
+        </div>
+      </SideDrawer>
+
       <ConfirmModal
         open={deleteConfirm !== null}
         title={t('onboarding.deleteConfirm', 'Delete Task')}
@@ -802,8 +1059,9 @@ const EmployeeDrawer: React.FC<{
   const [assignModal, setAssignModal] = useState<{ employeeId: number; name: string; assignedIds: number[] } | null>(null);
 
   useEffect(() => {
-    getTemplates(false).then(setTemplates).catch(() => {});
-  }, []);
+    if (!employee) return;
+    getTemplates(false, employee.companyId).then(setTemplates).catch(() => {});
+  }, [employee]);
 
   useEffect(() => {
     if (!employee) return;
@@ -931,7 +1189,7 @@ const EmployeeDrawer: React.FC<{
           {isAdmin && (
             <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!employee.hasTasksAssigned && (
-                <Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: progress?.tasks.map((task) => task.templateId) ?? [] })}>
+                <Button variant="primary" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: progress?.tasks.map((task) => task.templateId) ?? [] })}>
                   📋 {t('onboarding.assignTasks')}
                 </Button>
               )}
@@ -961,7 +1219,7 @@ const EmployeeDrawer: React.FC<{
               <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
                 {t('onboarding.noTasksAssigned', 'No tasks assigned yet')}
-                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="accent" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: progress?.tasks.map((task) => task.templateId) ?? [] })}>{t('onboarding.assignNow')}</Button></div>}
+                {isAdmin && <div style={{ marginTop: 8 }}><Button variant="primary" size="sm" onClick={() => setAssignModal({ employeeId: employee.employeeId, name: `${employee.name} ${employee.surname}`, assignedIds: progress?.tasks.map((task) => task.templateId) ?? [] })}>{t('onboarding.assignNow')}</Button></div>}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1071,32 +1329,52 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   const { showToast } = useToast();
 
   const [overview, setOverview] = useState<EmployeeOnboardingOverview[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [storeFilter, setStoreFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOnboardingOverview | null>(null);
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
+  useEffect(() => {
+    getCompanies()
+      .then((rows) => setCompanies(rows.slice().sort((a, b) => a.name.localeCompare(b.name))))
+      .catch(() => {});
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
-    try { setOverview(await getOnboardingOverview()); }
+    try {
+      const targetCompanyId = companyFilter !== 'all' ? parseInt(companyFilter, 10) : undefined;
+      setOverview(await getOnboardingOverview(targetCompanyId));
+    }
     catch { showToast(t('onboarding.errorLoad', 'Error loading overview'), 'error'); }
     finally { setLoading(false); }
-  }, []);
+  }, [companyFilter, showToast, t]);
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    setStoreFilter('');
+  }, [companyFilter]);
+
   const stores = useMemo(() => {
-    const s = new Set(overview.map((e) => e.storeName).filter(Boolean) as string[]);
-    return Array.from(s).sort();
+    const map = new Map<number, { id: number; name: string; companyId: number }>();
+    overview.forEach((row) => {
+      if (row.storeId && row.storeName) {
+        map.set(row.storeId, { id: row.storeId, name: row.storeName, companyId: row.companyId });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [overview]);
 
   const filtered = useMemo(() => {
     let list = overview;
     if (search) { const q = search.toLowerCase(); list = list.filter((e) => `${e.name} ${e.surname} ${e.email}`.toLowerCase().includes(q)); }
-    if (storeFilter) list = list.filter((e) => e.storeName === storeFilter);
+    if (storeFilter) list = list.filter((e) => String(e.storeId ?? '') === storeFilter);
     if (statusFilter === 'not_started') list = list.filter((e) => !e.hasTasksAssigned);
     if (statusFilter === 'in_progress') list = list.filter((e) => e.hasTasksAssigned && e.percentage < 100);
     if (statusFilter === 'complete')    list = list.filter((e) => e.hasTasksAssigned && e.percentage === 100);
@@ -1115,7 +1393,8 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     setBulkConfirmOpen(false);
     setBulkAssigning(true);
     try {
-      const result = await bulkAssignAll();
+      const targetCompanyId = companyFilter !== 'all' ? parseInt(companyFilter, 10) : undefined;
+      const result = await bulkAssignAll(targetCompanyId);
       showToast(t('onboarding.bulkAssignDone', 'Tasks assigned to {{count}} employees', { count: result.employees }), 'success');
       void load();
     } catch (err) {
@@ -1150,13 +1429,25 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('common.search')} style={{ maxWidth: 220 }} />
+        <select
+          value={companyFilter}
+          onChange={(e) => setCompanyFilter(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 170 }}
+        >
+          <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
+          {companies.map((company) => (
+            <option key={company.id} value={String(company.id)}>{company.name}</option>
+          ))}
+        </select>
         {stores.length > 0 && (
           <select
             value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}
             style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none' }}
           >
             <option value="">All stores</option>
-            {stores.map((s) => <option key={s} value={s}>{s}</option>)}
+            {stores.map((store) => (
+              <option key={store.id} value={String(store.id)}>{store.name}</option>
+            ))}
           </select>
         )}
         {/* Status pills */}
@@ -1245,6 +1536,11 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {emp.name} {emp.surname}
                     </div>
+                    {emp.companyName && (
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        🏢 {emp.companyName}
+                      </div>
+                    )}
                     {emp.storeName && (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         🏪 {emp.storeName}
@@ -1679,8 +1975,8 @@ export default function OnboardingPage() {
       `}</style>
 
       {/* Hero header */}
-      <div style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #1a3a5c 60%, #0f2030 100%)', padding: '32px 32px 28px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ padding: '18px 16px 0' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(135deg, var(--primary) 0%, #1a3a5c 60%, #0f2030 100%)', padding: '32px 32px 28px', borderRadius: 22, border: '1px solid rgba(255,255,255,0.14)', boxShadow: '0 12px 30px rgba(10,26,43,0.25)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -1736,7 +2032,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 32px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '22px 32px 28px' }}>
         {tab === 'templates' && isAdmin    && <TemplatesPanel />}
         {tab === 'overview'  && canOverview && <OverviewPanel isAdmin={isAdmin} />}
         {tab === 'mytasks'                  && <MyTasksPanel />}

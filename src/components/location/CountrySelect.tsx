@@ -11,6 +11,7 @@ interface CountrySelectProps {
   disabled?: boolean;
   error?: string;
   isClearable?: boolean;
+  highlightSelected?: boolean;
 }
 
 export function CountrySelect({
@@ -21,6 +22,7 @@ export function CountrySelect({
   disabled = false,
   error,
   isClearable = true,
+  highlightSelected = false,
 }: CountrySelectProps) {
   const options = useMemo<SelectOption[]>(() => {
     return Country.getAllCountries()
@@ -53,6 +55,7 @@ export function CountrySelect({
         disabled={disabled}
         error={error}
         isClearable={isClearable}
+        highlightSelected={highlightSelected}
       />
     </div>
   );

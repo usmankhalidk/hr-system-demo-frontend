@@ -17,9 +17,10 @@ interface CustomSelectProps {
   error?: string;
   isClearable?: boolean;
   searchable?: boolean;
+  highlightSelected?: boolean;
 }
 
-export default function CustomSelect({ value, onChange, options, placeholder = 'Select...', disabled = false, error, isClearable = true, searchable = true }: CustomSelectProps) {
+export default function CustomSelect({ value, onChange, options, placeholder = 'Select...', disabled = false, error, isClearable = true, searchable = true, highlightSelected = false }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -61,8 +62,16 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
         style={{
           width: '100%',
           minHeight: 40,
-          background: disabled ? 'var(--background-muted)' : 'var(--background)',
-          border: error ? '1px solid var(--danger)' : (isOpen ? '1px solid var(--primary)' : '1px solid var(--border)'),
+          background: disabled
+            ? 'var(--background-muted)'
+            : (highlightSelected && selectedOption ? 'rgba(201,151,58,0.14)' : '#ffffff'),
+          border: error
+            ? '1px solid var(--danger)'
+            : (isOpen
+              ? '1px solid var(--primary)'
+              : (highlightSelected && selectedOption
+                ? '1px solid rgba(201,151,58,0.45)'
+                : '1px solid var(--border)')),
           borderRadius: 'var(--radius)',
           padding: '8px 12px',
           display: 'flex',
@@ -102,7 +111,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
             left: 0,
             right: 0,
             marginTop: 4,
-            background: 'var(--background)',
+            background: '#ffffff',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             boxShadow: 'var(--shadow-lg)',
@@ -113,7 +122,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
           }}
         >
           {searchable && (
-             <div style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', borderTopLeftRadius: 'var(--radius)', borderTopRightRadius: 'var(--radius)' }}>
+             <div style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: '#ffffff', borderTopLeftRadius: 'var(--radius)', borderTopRightRadius: 'var(--radius)' }}>
                <Search size={14} color="var(--text-muted)" />
                <input
                  ref={searchInputRef}
@@ -144,16 +153,23 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
                     borderRadius: 4,
                     display: 'flex',
                     alignItems: 'center',
-                    background: opt.value === value ? 'rgba(201,151,58,0.08)' : 'transparent',
-                    color: 'var(--text-primary)',
+                    background: opt.value === value
+                      ? (highlightSelected ? 'rgba(201,151,58,0.14)' : 'rgba(13,33,55,0.06)')
+                      : 'transparent',
+                    color: opt.value === value ? '#7a5715' : 'var(--text-primary)',
+                    fontWeight: opt.value === value ? 700 : 500,
                     fontSize: 14,
                     transition: 'background 0.15s'
                   }}
-                  onMouseEnter={(e) => { if (opt.value !== value) e.currentTarget.style.background = 'var(--background-hover)'; }}
-                  onMouseLeave={(e) => { if (opt.value !== value) e.currentTarget.style.background = 'transparent'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(201,151,58,0.12)'; }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = opt.value === value
+                      ? (highlightSelected ? 'rgba(201,151,58,0.14)' : 'rgba(13,33,55,0.06)')
+                      : 'transparent';
+                  }}
                 >
                   <div style={{ flex: 1 }}>{opt.render || opt.label}</div>
-                  {opt.value === value && <Check size={16} color="var(--primary)" />}
+                  {opt.value === value && <Check size={16} color="#9A6808" />}
                 </div>
               ))
             )}

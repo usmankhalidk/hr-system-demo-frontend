@@ -46,9 +46,12 @@ export interface OnboardingProgress {
 
 export interface EmployeeOnboardingOverview {
   employeeId: number;
+  companyId: number;
+  companyName: string;
   name: string;
   surname: string;
   email: string;
+  storeId: number | null;
   storeName: string | null;
   avatarFilename: string | null;
   total: number;
@@ -61,14 +64,19 @@ export interface EmployeeOnboardingOverview {
 // Templates
 // ---------------------------------------------------------------------------
 
-export async function getTemplates(includeInactive = false): Promise<OnboardingTemplate[]> {
+export async function getTemplates(includeInactive = false, targetCompanyId?: number): Promise<OnboardingTemplate[]> {
+  const params: Record<string, unknown> = {};
+  if (includeInactive) params.include_inactive = true;
+  if (targetCompanyId != null) params.target_company_id = targetCompanyId;
+
   const { data } = await apiClient.get('/onboarding/templates', {
-    params: includeInactive ? { include_inactive: true } : undefined,
+    params: Object.keys(params).length > 0 ? params : undefined,
   });
   return data.data.templates as OnboardingTemplate[];
 }
 
 export async function createTemplate(payload: {
+  companyId?: number;
   name: string;
   description?: string;
   sortOrder?: number;
@@ -78,6 +86,7 @@ export async function createTemplate(payload: {
   priority?: OnboardingTemplate['priority'];
 }): Promise<OnboardingTemplate> {
   const { data } = await apiClient.post('/onboarding/templates', {
+    company_id: payload.companyId,
     name: payload.name,
     description: payload.description ?? null,
     sort_order: payload.sortOrder ?? 0,
@@ -92,6 +101,7 @@ export async function createTemplate(payload: {
 export async function updateTemplate(
   id: number,
   payload: {
+    targetCompanyId?: number;
     name?: string;
     description?: string;
     sortOrder?: number;
@@ -111,12 +121,15 @@ export async function updateTemplate(
   if (payload.dueDays !== undefined)     body.due_days = payload.dueDays;
   if (payload.linkUrl !== undefined)     body.link_url = payload.linkUrl;
   if (payload.priority !== undefined)    body.priority = payload.priority;
+  if (payload.targetCompanyId !== undefined) body.target_company_id = payload.targetCompanyId;
   const { data } = await apiClient.patch(`/onboarding/templates/${id}`, body);
   return data.data.template as OnboardingTemplate;
 }
 
-export async function deleteTemplate(id: number): Promise<{ deleted: boolean; deactivated: boolean }> {
-  const { data } = await apiClient.delete(`/onboarding/templates/${id}`);
+export async function deleteTemplate(id: number, targetCompanyId?: number): Promise<{ deleted: boolean; deactivated: boolean }> {
+  const { data } = await apiClient.delete(`/onboarding/templates/${id}`, {
+    params: targetCompanyId != null ? { target_company_id: targetCompanyId } : undefined,
+  });
   return data.data as { deleted: boolean; deactivated: boolean };
 }
 
@@ -152,8 +165,10 @@ export async function completeTask(taskId: number, note?: string): Promise<Onboa
 // Overview (admin)
 // ---------------------------------------------------------------------------
 
-export async function getOnboardingOverview(): Promise<EmployeeOnboardingOverview[]> {
-  const { data } = await apiClient.get('/onboarding/overview');
+export async function getOnboardingOverview(targetCompanyId?: number): Promise<EmployeeOnboardingOverview[]> {
+  const { data } = await apiClient.get('/onboarding/overview', {
+    params: targetCompanyId != null ? { target_company_id: targetCompanyId } : undefined,
+  });
   return data.data.overview as EmployeeOnboardingOverview[];
 }
 
@@ -165,8 +180,10 @@ export interface OnboardingStats {
   avgPercentage: number;
 }
 
-export async function getOnboardingStats(): Promise<OnboardingStats> {
-  const { data } = await apiClient.get('/onboarding/stats');
+export async function getOnboardingStats(targetCompanyId?: number): Promise<OnboardingStats> {
+  const { data } = await apiClient.get('/onboarding/stats', {
+    params: targetCompanyId != null ? { target_company_id: targetCompanyId } : undefined,
+  });
   return data.data.stats as OnboardingStats;
 }
 
@@ -175,8 +192,8 @@ export async function uncompleteTask(taskId: number): Promise<OnboardingTask> {
   return data.data.task as OnboardingTask;
 }
 
-export async function bulkAssignAll(): Promise<{ employees: number; tasks: number }> {
-  const { data } = await apiClient.post('/onboarding/bulk-assign');
+export async function bulkAssignAll(targetCompanyId?: number): Promise<{ employees: number; tasks: number }> {
+  const { data } = await apiClient.post('/onboarding/bulk-assign', targetCompanyId != null ? { target_company_id: targetCompanyId } : {});
   return data.data as { employees: number; tasks: number };
 }
 

@@ -199,6 +199,17 @@ export async function createCandidate(payload: {
   phone?: string;
   jobPostingId?: number;
   storeId?: number;
+  tags?: string[];
+  cvPath?: string;
+  resumePath?: string;
+  linkedinUrl?: string;
+  coverLetter?: string;
+  source?: string;
+  sourceRef?: string;
+  gdprConsent?: boolean;
+  applicantLocale?: string;
+  consentAcceptedAt?: string;
+  appliedAt?: string;
 }): Promise<Candidate> {
   const { data } = await apiClient.post('/ats/candidates', payload);
   return data.data.candidate as Candidate;
