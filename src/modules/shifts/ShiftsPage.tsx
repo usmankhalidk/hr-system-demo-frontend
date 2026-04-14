@@ -5,7 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import { listShifts, Shift, copyWeek, exportShifts, importShifts, downloadImportTemplate, ImportResult, approveWeekForEmployee } from '../../api/shifts';
 import { getLeaveBlocks, LeaveBlock } from '../../api/leave';
 import { getTransferBlocks, TransferAssignment } from '../../api/transfers';
-import { getEmployees } from '../../api/employees';
 import { getStores } from '../../api/stores';
 import { Store } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
@@ -62,16 +61,6 @@ function formatDateDisplay(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-function normalizeOffDays(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return [5, 6];
-  const normalized = Array.from(new Set(
-    raw
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
-  )).sort((a, b) => a - b);
-  return normalized.length > 0 ? normalized : [5, 6];
 }
 
 const MANAGEMENT_ROLES = ['admin', 'hr', 'area_manager', 'store_manager'];
@@ -165,7 +154,6 @@ export default function ShiftsPage() {
   const [leaveBlocks, setLeaveBlocks] = useState<LeaveBlock[]>([]);
   const [transferBlocks, setTransferBlocks] = useState<TransferAssignment[]>([]);
   const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
-  const [employeeOffDaysById, setEmployeeOffDaysById] = useState<Record<number, number[]>>({});
 
   const canEdit = user ? MANAGEMENT_ROLES.includes(user.role) : false;
   const isStoreManager = user?.role === 'store_manager';
@@ -177,46 +165,6 @@ export default function ShiftsPage() {
       getStores().then(setStores).catch(() => {});
     }
   }, [canEdit, isStoreManager]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadEmployeeOffDays = async () => {
-      try {
-        const nextMap: Record<number, number[]> = {};
-        const limit = 200;
-        let page = 1;
-        let pages = 1;
-
-        do {
-          const res = await getEmployees({ status: 'active', limit, page, forShiftPlanning: true });
-          for (const employee of res.employees ?? []) {
-            nextMap[employee.id] = normalizeOffDays(employee.offDays);
-          }
-          pages = Math.max(1, res.pages || 1);
-          page += 1;
-        } while (page <= pages);
-
-        if (mounted) {
-          setEmployeeOffDaysById(nextMap);
-        }
-      } catch {
-        if (mounted) {
-          setEmployeeOffDaysById({});
-        }
-      }
-    };
-
-    if (canEdit) {
-      void loadEmployeeOffDays();
-    } else {
-      setEmployeeOffDaysById({});
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, [canEdit]);
 
   const fetchShifts = useCallback(async () => {
     setLoading(true);
@@ -720,7 +668,6 @@ export default function ShiftsPage() {
               canEdit={canEdit}
               leaveBlocks={leaveBlocks}
               transferBlocks={transferBlocks}
-              employeeOffDaysById={employeeOffDaysById}
               canApproveWeek={canApproveWeek}
               onApproveWeekForUser={handleApproveWeekForUser}
               approvingUserId={approvingUserId}
@@ -983,7 +930,6 @@ export default function ShiftsPage() {
         shift={editingShift}
         prefillDate={prefillDate}
         prefillUserId={prefillUserId}
-        employeeOffDaysById={employeeOffDaysById}
         onClose={handleDrawerClose}
       />
       <ShiftTemplatesPanel

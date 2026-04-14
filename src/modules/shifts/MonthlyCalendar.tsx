@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Moon } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
@@ -36,9 +37,14 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
 
   // Build shift count map by date
   const countMap = new Map<string, number>();
+  const offDayMap = new Map<string, number>();
   for (const shift of shifts) {
+    const dateKey = shift.date.split('T')[0];
+    if (shift.isOffDay) {
+      offDayMap.set(dateKey, (offDayMap.get(dateKey) ?? 0) + 1);
+      continue;
+    }
     if (shift.status !== 'cancelled') {
-      const dateKey = shift.date.split('T')[0];
       countMap.set(dateKey, (countMap.get(dateKey) ?? 0) + 1);
     }
   }
@@ -118,12 +124,14 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
           }
           const dateStr = formatDate(date);
           const count = countMap.get(dateStr) ?? 0;
+          const offDayCount = offDayMap.get(dateStr) ?? 0;
           const leaveDots = leaveMap.get(dateStr) ?? [];
           const transferCounts = transferMap.get(dateStr) ?? { active: 0, completed: 0, cancelled: 0 };
           const transferCount = transferCounts.active + transferCounts.completed + transferCounts.cancelled;
           const isToday = dateStr === today;
           const hasLeave = leaveDots.length > 0;
           const hasTransfer = transferCount > 0;
+          const hasOffDay = offDayCount > 0;
 
           return (
             <div
@@ -135,12 +143,18 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
                 border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
                 padding: 6,
                 cursor: 'pointer',
-                background: isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)',
+                background: hasOffDay
+                  ? 'rgba(241,245,249,0.92)'
+                  : (isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)'),
                 transition: 'background 0.15s',
                 boxShadow: (count > 0 || hasLeave || hasTransfer) ? 'var(--shadow-xs)' : undefined,
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)')}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hasOffDay ? 'rgba(226,232,240,0.95)' : 'var(--background)')}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = hasOffDay
+                  ? 'rgba(241,245,249,0.92)'
+                  : (isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)');
+              }}
             >
               <div style={{
                 fontWeight: isToday ? 700 : 500,
@@ -172,6 +186,30 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
                   marginBottom: hasLeave ? 4 : 0,
                 }}>
                   {count} {count === 1 ? t('shifts.shiftCount', 'turno') : t('shifts.shiftCountPlural', 'turni')}
+                </div>
+              )}
+              {hasOffDay && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginTop: count > 0 ? 0 : 2,
+                  marginBottom: (hasLeave || hasTransfer) ? 4 : 0,
+                  background: 'rgba(241,245,249,0.96)',
+                  borderTop: '1px solid rgba(148,163,184,0.42)',
+                  borderRight: '1px solid rgba(148,163,184,0.42)',
+                  borderBottom: '1px solid rgba(148,163,184,0.42)',
+                  borderLeft: '3px solid rgba(100,116,139,0.62)',
+                  color: '#475569',
+                  borderRadius: 6,
+                  padding: '1px 7px 1px 5px',
+                  fontSize: '0.68rem',
+                  fontWeight: 800,
+                  letterSpacing: 0.2,
+                }}>
+                  <Moon size={10} strokeWidth={2.5} />
+                  {t('shifts.form.offDay', 'Off day')}
+                  {offDayCount > 1 ? `×${offDayCount}` : ''}
                 </div>
               )}
               {hasLeave && (

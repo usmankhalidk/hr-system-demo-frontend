@@ -99,7 +99,6 @@ export interface Employee {
   terminationDate: string | null;
   workingType: 'full_time' | 'part_time' | null;
   weeklyHours: number | null;
-  offDays?: number[];
   status: 'active' | 'inactive';
   firstAidFlag: boolean;
   maritalStatus: string | null;
