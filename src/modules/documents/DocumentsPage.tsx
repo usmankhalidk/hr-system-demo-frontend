@@ -9,16 +9,18 @@ import {
   getCategories,
   createCategory,
   updateCategory,
-  uploadDocument,
-  downloadDocument,
-  deleteDocument,
   signDocument,
   bulkUploadDocuments,
+  getDocumentsGeneric,
+  downloadDocumentGeneric,
+  updateDocumentGeneric,
   EmployeeDocument,
   DocumentCategory,
 } from '../../api/documents';
+import { UnifiedUploadWizard } from './UnifiedUploadModal';
 import { getEmployees } from '../../api/employees';
-import { Employee } from '../../types';
+import { getCompanies } from '../../api/companies';
+import { Employee, Company } from '../../types';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -69,7 +71,9 @@ function mimeIcon(mime: string | null): string {
   return '📁';
 }
 
-const HR_ROLES = ['admin', 'hr', 'area_manager', 'store_manager'];
+const CAN_MANAGE_ROLES = ['admin', 'hr'];
+const CAN_VIEW_ALL_ROLES = ['admin', 'hr', 'area_manager', 'store_manager'];
+const HR_ROLES = CAN_VIEW_ALL_ROLES;
 
 // ── Shared modal wrapper ────────────────────────────────────────────────────
 
@@ -111,11 +115,10 @@ const labelStyle: React.CSSProperties = {
 
 // ── Upload Document Modal ──────────────────────────────────────────────────
 
-const UploadModal: React.FC<{ employeeId: number; employeeName: string; categories: DocumentCategory[]; onClose: () => void; onSuccess: () => void }> = ({ employeeId, employeeName, categories, onClose, onSuccess }) => {
+const UploadModal: React.FC<{ employeeId: number; employeeName: string; onClose: () => void; onSuccess: () => void }> = ({ employeeId, employeeName, onClose, onSuccess }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [file, setFile] = useState<File | null>(null);
-  const [categoryId, setCategoryId] = useState('');
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [expiresAt, setExpiresAt] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -125,7 +128,7 @@ const UploadModal: React.FC<{ employeeId: number; employeeName: string; categori
     if (!file) return;
     setUploading(true);
     try {
-      await uploadDocument(employeeId, file, { categoryId: categoryId ? parseInt(categoryId, 10) : null, requiresSignature, expiresAt: expiresAt || null });
+      await uploadDocument(employeeId, file, { requiresSignature, expiresAt: expiresAt || null });
       showToast(t('documents.uploaded'), 'success');
       onSuccess(); onClose();
     } catch { showToast(t('documents.errorUpload'), 'error'); }
@@ -142,13 +145,6 @@ const UploadModal: React.FC<{ employeeId: number; employeeName: string; categori
         <div>
           <label style={labelStyle}>{t('documents.selectFile')}</label>
           <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" required onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ fontSize: 13, color: 'var(--text-primary)' }} />
-        </div>
-        <div>
-          <label style={labelStyle}>{t('documents.categoryLabel')}</label>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={inputStyle}>
-            <option value="">{t('documents.noCategoryOption')}</option>
-            {categories.filter(c => c.isActive).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
         </div>
         <div>
           <label style={labelStyle}>{t('documents.expiresAtLabel')}</label>
@@ -171,192 +167,356 @@ const UploadModal: React.FC<{ employeeId: number; employeeName: string; categori
   );
 };
 
-// ── Bulk Upload Modal ──────────────────────────────────────────────────────
 
-const BulkUploadModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = ({ onClose, onSuccess }) => {
-  const { t } = useTranslation();
-  const { showToast } = useToast();
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<{ matched: number; unmatched: number; total: number; names: string[] } | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return;
-    setUploading(true);
-    try {
-      const res = await bulkUploadDocuments(file);
-      setResult({ matched: res.matchedFiles, unmatched: res.unmatchedFiles, total: res.totalFiles, names: res.unmatchedFileNames });
-      showToast(t('documents.uploaded'), 'success');
-      onSuccess();
-    } catch { showToast(t('documents.errorBulk'), 'error'); }
-    finally { setUploading(false); }
-  };
-
-  return (
-    <ModalBackdrop onClose={onClose} width={500}>
-      <ModalHeader title={t('documents.bulkTitle')} onClose={onClose} />
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.6, marginTop: -8 }}>
-        {t('documents.bulkDesc')}
-      </p>
-      {result ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ padding: '12px 16px', background: result.unmatched > 0 ? 'rgba(201,151,58,0.1)' : 'rgba(21,128,61,0.1)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
-            {t('documents.bulkResult', { matched: result.matched, unmatched: result.unmatched, total: result.total })}
-          </div>
-          {result.names.length > 0 && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--background)', borderRadius: 7, padding: '10px 12px', lineHeight: 1.6 }}>
-              <strong>{t('documents.bulkUnmatched', { files: '' }).replace(': ', '')}: </strong>{result.names.join(', ')}
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
-            <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}>
-              {t('common.close')}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle}>{t('documents.bulkSelect')}</label>
-            <input type="file" accept=".zip,application/zip" required onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ fontSize: 13, color: 'var(--text-primary)' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" disabled={uploading || !file} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--primary)', color: '#fff', cursor: uploading || !file ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, opacity: uploading || !file ? 0.6 : 1 }}>
-              {uploading ? t('documents.bulkUploading') : t('documents.bulkUpload')}
-            </button>
-          </div>
-        </form>
-      )}
-    </ModalBackdrop>
-  );
-};
 
 // ── Categories Modal ───────────────────────────────────────────────────────
 
 const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { allowedCompanyIds } = useAuth();
+  
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
   const [newName, setNewName] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setCategories(await getCategories(showInactive)); }
+    try { 
+      // Fetch both categories and companies
+      const [allCats, allComps] = await Promise.all([
+        getCategories(true), // Fetch all to handle UI filtering
+        getCompanies(),
+      ]);
+
+      setCategories(allCats);
+      
+      // Filter companies based on allowed IDs
+      const filteredComps = allComps.filter(c => allowedCompanyIds.includes(c.id));
+      setCompanies(filteredComps);
+
+      // Auto-select company if only one
+      if (filteredComps.length === 1) {
+        setSelectedCompanyId(filteredComps[0].id);
+      }
+    }
     catch { showToast(t('documents.errorLoad'), 'error'); }
     finally { setLoading(false); }
-  }, [showInactive]);
+  }, [allowedCompanyIds, t, showToast]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || !selectedCompanyId) return;
+
+    // Strict duplicate check: one category with this name per company
+    const exists = categories.some(c => 
+      c.companyId === selectedCompanyId && 
+      c.name.toLowerCase() === newName.trim().toLowerCase()
+    );
+
+    if (exists) {
+      showToast(t('documents.categoryExists', 'Category already exists for this company'), 'error');
+      return;
+    }
+
     setSaving(true);
-    try { await createCategory(newName.trim()); setNewName(''); showToast(t('documents.categoryCreated'), 'success'); await load(); }
+    try { 
+      await createCategory(newName.trim(), selectedCompanyId); 
+      setNewName(''); 
+      showToast(t('documents.categoryCreated'), 'success'); 
+      await load(); 
+    }
     catch { showToast(t('common.error'), 'error'); }
     finally { setSaving(false); }
   };
 
   const handleToggle = async (cat: DocumentCategory) => {
-    try { await updateCategory(cat.id, { isActive: !cat.isActive }); showToast(t('documents.categoryUpdated'), 'success'); await load(); }
+    try { await updateCategory(cat.id, { isActive: !cat.isActive, companyId: cat.companyId, currentCompanyId: cat.companyId }); showToast(t('documents.categoryUpdated'), 'success'); await load(); }
     catch { showToast(t('common.error'), 'error'); }
   };
 
   const handleRename = async (cat: DocumentCategory) => {
     if (!editName.trim() || editName.trim() === cat.name) { setEditId(null); return; }
-    try { await updateCategory(cat.id, { name: editName.trim() }); showToast(t('documents.categoryUpdated'), 'success'); setEditId(null); await load(); }
+    try { await updateCategory(cat.id, { name: editName.trim(), companyId: cat.companyId, currentCompanyId: cat.companyId }); showToast(t('documents.categoryUpdated'), 'success'); setEditId(null); await load(); }
     catch { showToast(t('common.error'), 'error'); }
   };
+
+  // UI Filtering: Show active only or inactive only
+  const filteredCategories = showInactive 
+    ? categories.filter(c => !c.isActive)
+    : categories.filter(c => c.isActive);
 
   return (
     <ModalBackdrop onClose={onClose} width={480}>
       <ModalHeader title={t('documents.categoriesTitle')} onClose={onClose} />
 
-      <form onSubmit={handleCreate} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('documents.categoryNamePlaceholder')} style={{ ...inputStyle, flex: 1 }} />
-        <button type="submit" disabled={saving || !newName.trim()} style={{ padding: '9px 14px', borderRadius: 7, border: 'none', background: 'var(--primary)', color: '#fff', cursor: saving || !newName.trim() ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, opacity: saving || !newName.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}>
-          + {t('documents.newCategory')}
+      <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {t('documents.categoryName')}
+          </label>
+          <input 
+            value={newName} 
+            onChange={(e) => setNewName(e.target.value)} 
+            placeholder={t('documents.categoryNamePlaceholder')} 
+            style={{ ...inputStyle, width: '100%' }} 
+          />
+        </div>
+
+        {companies.length > 1 && (
+          <div>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+              {t('documents.companyLabel')}
+            </label>
+            <select 
+              value={selectedCompanyId || ''} 
+              onChange={(e) => setSelectedCompanyId(Number(e.target.value))}
+              style={{ ...inputStyle, width: '100%', cursor: 'pointer' }}
+            >
+              <option value="">{t('documents.selectCompany')}</option>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        <button 
+          type="submit" 
+          disabled={saving || !newName.trim() || !selectedCompanyId} 
+          style={{ 
+            width: '100%',
+            padding: '11px 14px', 
+            borderRadius: 8, 
+            border: 'none', 
+            background: 'var(--primary)', 
+            color: '#fff', 
+            cursor: (saving || !newName.trim() || !selectedCompanyId) ? 'not-allowed' : 'pointer', 
+            fontSize: 13, 
+            fontWeight: 700, 
+            opacity: (saving || !newName.trim() || !selectedCompanyId) ? 0.6 : 1,
+            marginTop: 4,
+            transition: 'all 0.15s ease'
+          }}
+        >
+          {saving ? '...' : `+ ${t('documents.newCategory')}`}
         </button>
       </form>
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 14, fontSize: 12, color: 'var(--text-muted)' }}>
-        <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-        {t('documents.showInactive')}
-      </label>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)' }}>
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          {t('documents.showInactive')}
+        </label>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+          {filteredCategories.length} {t('documents.categoriesCount')}
+        </span>
+      </div>
 
+      <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 4 }} className="sidebar-scroll">
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 40, borderRadius: 7 }} />)}
+          {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 44, borderRadius: 8 }} />)}
         </div>
-      ) : categories.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>Nessuna categoria ancora</div>
+      ) : filteredCategories.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)', fontSize: 13, background: 'var(--background)', borderRadius: 12, border: '1.5px dashed var(--border)' }}>
+          {showInactive ? 'No inactive categories' : t('documents.noCategories')}
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {categories.map(cat => (
-            <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 8, background: 'var(--background)', border: '1px solid var(--border)', opacity: cat.isActive ? 1 : 0.5 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filteredCategories.map(cat => (
+            <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border)', transition: 'all 0.2s ease' }}>
               <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}><IconTag /></span>
-              {editId === cat.id ? (
-                <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)}
-                  onBlur={() => handleRename(cat)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleRename(cat); if (e.key === 'Escape') setEditId(null); }}
-                  style={{ flex: 1, padding: '3px 7px', borderRadius: 4, border: '1px solid var(--primary)', background: 'var(--background)', color: 'var(--text-primary)', fontSize: 13 }}
-                />
-              ) : (
-                <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{cat.name}</span>
-              )}
-              <button onClick={() => { setEditId(cat.id); setEditName(cat.name); }} title={t('common.edit')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 4 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {editId === cat.id ? (
+                  <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)}
+                    onBlur={() => handleRename(cat)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleRename(cat); if (e.key === 'Escape') setEditId(null); }}
+                    style={{ width: '100%', padding: '4px 8px', borderRadius: 6, border: '1px solid var(--primary)', background: 'var(--background)', color: 'var(--text-primary)', fontSize: 13 }}
+                  />
+                ) : (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.name}</div>
+                    {companies.length > 1 && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                        {companies.find(c => c.id === cat.companyId)?.name || `Company ID: ${cat.companyId}`}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <button 
+                onClick={() => { setEditId(cat.id); setEditName(cat.name); }} 
+                title={t('common.edit')} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', borderRadius: 6, transition: 'background 0.1s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--background)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
                 <IconPen />
               </button>
-              <button onClick={() => handleToggle(cat)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${cat.isActive ? '#DC2626' : '#15803D'}`, background: 'transparent', color: cat.isActive ? '#DC2626' : '#15803D', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <button onClick={() => handleToggle(cat)} style={{ fontSize: 11, padding: '5px 10px', borderRadius: 7, border: `1px solid ${cat.isActive ? '#DC262630' : '#15803D30'}`, background: cat.isActive ? 'rgba(220,38,38,0.05)' : 'rgba(21,128,61,0.05)', color: cat.isActive ? '#DC2626' : '#15803D', cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: 600 }}>
                 {cat.isActive ? t('common.deactivate') : t('common.activate')}
               </button>
             </div>
           ))}
         </div>
       )}
+      </div>
+    </ModalBackdrop>
+  );
+};
+
+// ── Edit Document Modal ────────────────────────────────────────────────────
+
+const EditDocumentModal: React.FC<{ doc: any; onClose: () => void; onSuccess: () => void }> = ({ doc, onClose, onSuccess }) => {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const { allowedCompanyIds } = useAuth();
+  
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmps, setLoadingEmps] = useState(true);
+  
+  const fileName = doc.fileName || doc.title || '';
+  const lastDot = fileName.lastIndexOf('.');
+  const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
+  const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
+
+  const [title, setTitle] = useState(initialTitle);
+  const [employeeId, setEmployeeId] = useState<number | null>(doc.employeeId || doc.employee_id || null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Fetch employees for the first allowed company as a basic multi-tenant filter
+    if (allowedCompanyIds.length > 0) {
+      setLoadingEmps(true);
+      getEmployees({ companyId: allowedCompanyIds[0], status: 'active' })
+        .then(res => setEmployees(res.employees))
+        .catch(() => showToast(t('employees.errorLoad'), 'error'))
+        .finally(() => setLoadingEmps(false));
+    }
+  }, [allowedCompanyIds, t, showToast]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      await updateDocumentGeneric(doc.id, { 
+        title: `${title}${extension}`, 
+        employee_id: employeeId 
+      });
+      showToast(t('documents.categoryUpdated'), 'success');
+      onSuccess();
+      onClose();
+    } catch {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalBackdrop onClose={onClose} width={440}>
+      <ModalHeader title={t('documents.editDocument')} onClose={onClose} />
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <label style={labelStyle}>{t('documents.fileNameNoExt')}</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input 
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)} 
+              style={{ ...inputStyle, flex: 1 }} 
+              required 
+            />
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{extension}</span>
+          </div>
+        </div>
+
+        <div>
+          <label style={labelStyle}>{t('documents.assigned')}</label>
+          <select 
+            value={employeeId || ''} 
+            onChange={(e) => setEmployeeId(e.target.value ? Number(e.target.value) : null)}
+            style={inputStyle}
+            disabled={loadingEmps}
+          >
+            <option value="">{t('documents.unassigned')}</option>
+            {employees.map(emp => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name} {emp.surname} (ID: {emp.uniqueId || emp.id})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8 }}>
+          <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+            {t('common.cancel')}
+          </button>
+          <button type="submit" disabled={saving || !title.trim()} style={{ padding: '9px 22px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: (saving || !title.trim()) ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, opacity: (saving || !title.trim()) ? 0.6 : 1 }}>
+            {saving ? '...' : t('documents.saveChanges')}
+          </button>
+        </div>
+      </form>
     </ModalBackdrop>
   );
 };
 
 // ── Documents Table ────────────────────────────────────────────────────────
 
-const DocumentsTable: React.FC<{ docs: EmployeeDocument[]; categories: DocumentCategory[]; canManage: boolean; isEmployee: boolean; onRefresh: () => void }> = ({ docs, categories, canManage, isEmployee, onRefresh }) => {
+const DocumentsTable: React.FC<{ docs: any[]; categories: DocumentCategory[]; canManage: boolean; isEmployee: boolean; onRefresh: () => void; onEdit?: (doc: any) => void }> = ({ docs, categories, canManage, isEmployee, onRefresh, onEdit }) => {
+  const { user } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const [signingDoc, setSigningDoc] = useState<EmployeeDocument | null>(null);
+  const [signingDoc, setSigningDoc] = useState<any | null>(null);
+  const [deletingDoc, setDeletingDoc] = useState<any | null>(null);
   const [signConsent, setSignConsent] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const handleDownload = async (doc: EmployeeDocument) => {
-    try { await downloadDocument(doc.id, doc.fileName); }
+  const handleDownload = async (doc: any) => {
+    try { 
+      const name = doc.fileName || doc.title || 'document';
+      await downloadDocumentGeneric(doc.id, name); 
+    }
     catch { showToast(t('documents.errorLoad'), 'error'); }
   };
 
-  const handleDelete = async (doc: EmployeeDocument) => {
-    if (!window.confirm(t('documents.confirmDelete', { name: doc.fileName }))) return;
-    try { await deleteDocument(doc.id); showToast(t('documents.deleted'), 'success'); onRefresh(); }
-    catch { showToast(t('documents.errorDelete'), 'error'); }
+  const handleDeleteClick = (doc: any) => {
+    setDeletingDoc(doc);
   };
 
-  const handleSignClick = (doc: EmployeeDocument) => {
+  const handleConfirmDelete = async () => {
+    if (!deletingDoc) return;
+    setDeleting(true);
+    try { 
+      await deleteDocument(deletingDoc.id); 
+      showToast(t('documents.deleted'), 'success'); 
+      onRefresh(); 
+      setDeletingDoc(null);
+    }
+    catch { showToast(t('documents.errorDelete'), 'error'); }
+    finally { setDeleting(false); }
+  };
+
+  const handleSignClick = (doc: any) => {
     setSigningDoc(doc);
     setSignConsent(false);
   };
 
+  const { i18n } = useTranslation();
   const handleSignConfirm = async () => {
-    if (!signingDoc || !signConsent) return;
+    if (!signingDoc) return;
     setSigning(true);
     try {
-      await signDocument(signingDoc.id);
+      await signDocument(signingDoc.id, i18n.language);
       showToast(t('documents.signedSuccess'), 'success');
       setSigningDoc(null);
       onRefresh();
@@ -385,27 +545,68 @@ const DocumentsTable: React.FC<{ docs: EmployeeDocument[]; categories: DocumentC
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--background)' }}>
-            {[t('documents.fileName'), t('documents.category'), t('documents.uploadedOn'), t('documents.expiresOn'), t('documents.signature'), t('common.actions')].map((h, i) => (
-              <th key={i} style={{ padding: '10px 14px', textAlign: i === 5 ? 'right' : 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                {h}
+            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('documents.fileName')}
+            </th>
+            {(!isEmployee) && (
+              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {t('documents.assigned')}
               </th>
-            ))}
+            )}
+            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('documents.category')}
+            </th>
+            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('documents.uploadedOn')}
+            </th>
+            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('documents.expiresOn')}
+            </th>
+            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('documents.signature')}
+            </th>
+            <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('common.actions')}
+            </th>
           </tr>
         </thead>
         <tbody>
-          {docs.map((doc) => (
+          {docs.map((doc: any) => (
             <tr key={doc.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.12s' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <td style={{ padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>{mimeIcon(doc.mimeType)}</span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.fileName}</span>
+                  <span style={{ fontSize: 16 }}>{mimeIcon(doc.mimeType || doc.mime_type)}</span>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {doc.fileName || doc.title}
+                  </span>
                 </div>
               </td>
+              {(!isEmployee) && (
+                <td style={{ padding: '12px 14px' }}>
+                  {doc.employeeName || doc.employee_name ? (
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+                      {doc.employeeName || doc.employee_name}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 12, color: '#C9973A', fontStyle: 'italic', fontWeight: 600 }}>
+                      ⚠ {t('documents.unassigned')}
+                    </span>
+                  )}
+                </td>
+              )}
               <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>
-                {doc.categoryName ? <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--background)', border: '1px solid var(--border)', fontWeight: 500 }}>{doc.categoryName}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                {(doc.categoryName || doc.category) ? (
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--background)', border: '1px solid var(--border)', fontWeight: 500 }}>
+                    {doc.categoryName || doc.category}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11, fontStyle: 'italic' }}>
+                    {t('documents.noCategory')}
+                  </span>
+                )}
               </td>
               <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatDate(doc.createdAt)}</td>
               <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
@@ -418,21 +619,26 @@ const DocumentsTable: React.FC<{ docs: EmployeeDocument[]; categories: DocumentC
                   ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('documents.notRequired')}</span>
                   : doc.signedAt
                     ? <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(21,128,61,0.1)', color: '#15803D', fontWeight: 600 }}>✓ {t('documents.signed')}</span>
-                    : <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(201,151,58,0.1)', color: '#C9973A', fontWeight: 600 }}>{t('documents.unsigned')}</span>
+                    : <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(201,151,58,0.1)', color: '#C9973A', fontWeight: 600 }}>{t('documents.required')}</span>
                 }
               </td>
               <td style={{ padding: '12px 14px' }}>
                 <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                  <button onClick={() => handleDownload(doc)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
-                    <IconDownload /> {t('documents.download')}
+                  <button onClick={() => handleDownload(doc)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, title: t('documents.download') }}>
+                    <IconDownload />
                   </button>
-                  {doc.requiresSignature && !doc.signedAt && (isEmployee || canManage) && (
+                  {onEdit && canManage && (
+                    <button onClick={() => onEdit(doc)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, title: t('common.edit') }}>
+                      <IconPen />
+                    </button>
+                  )}
+                  {doc.requiresSignature && !doc.signedAt && Number(doc.employeeId || doc.employee_id) === user?.id && (
                     <button onClick={() => handleSignClick(doc)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                       <IconPen /> {t('documents.sign')}
                     </button>
                   )}
                   {canManage && (
-                    <button onClick={() => handleDelete(doc)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid #DC262630', background: 'rgba(220,38,38,0.05)', color: '#DC2626', cursor: 'pointer', fontSize: 12 }}>
+                    <button onClick={() => handleDeleteClick(doc)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid #DC262630', background: 'rgba(220,38,38,0.05)', color: '#DC2626', cursor: 'pointer', fontSize: 12, title: t('common.delete') }}>
                       <IconTrash />
                     </button>
                   )}
@@ -446,29 +652,76 @@ const DocumentsTable: React.FC<{ docs: EmployeeDocument[]; categories: DocumentC
 
     {signingDoc && (
       <ModalBackdrop onClose={() => !signing && setSigningDoc(null)} width={440}>
-        <ModalHeader title={t('documents.signTitle', 'Firma documento')} onClose={() => !signing && setSigningDoc(null)} />
+        <ModalHeader title={t('documents.signTitle')} onClose={() => !signing && setSigningDoc(null)} />
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', padding: '9px 13px', background: 'var(--background)', borderRadius: 8, marginBottom: 16, border: '1px solid var(--border)' }}>
-          {signingDoc.fileName}
+          {signingDoc.fileName || signingDoc.title}
         </div>
         <div style={{ display: 'flex', gap: 10, padding: '12px 14px', background: 'rgba(201,151,58,0.08)', border: '1.5px solid rgba(201,151,58,0.28)', borderRadius: 10, marginBottom: 20 }}>
-          <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.4 }}>⚠️</span>
+          <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.4 }}>⚖️</span>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            {t('documents.signLegalText', 'Firmando questo documento dichiari di averne preso visione e di acconsentire alla firma digitale. La firma sarà registrata insieme alla data, all\'ora e al tuo indirizzo IP come prova legale di consenso.')}
+            {t('documents.signConsentLabel')}
           </p>
         </div>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginBottom: 24, padding: '12px 14px', background: 'var(--background)', borderRadius: 8, border: `1.5px solid ${signConsent ? 'var(--primary)' : 'var(--border)'}`, transition: 'border-color 0.15s' }}>
-          <input type="checkbox" checked={signConsent} onChange={(e) => setSignConsent(e.target.checked)} style={{ marginTop: 2, flexShrink: 0, width: 16, height: 16, accentColor: 'var(--primary)', cursor: 'pointer' }} />
-          <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5, fontWeight: signConsent ? 600 : 400 }}>
-            {t('documents.signConsentLabel', 'Ho letto il documento e acconsento alla firma digitale')}
-          </span>
-        </label>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
-          <button onClick={() => setSigningDoc(null)} disabled={signing} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: signing ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 500 }}>
-            {t('common.cancel')}
-          </button>
-          <button onClick={handleSignConfirm} disabled={!signConsent || signing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: !signConsent || signing ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, opacity: !signConsent || signing ? 0.55 : 1, transition: 'opacity 0.15s' }}>
-            <IconPen /> {signing ? t('documents.signing', 'Firma in corso...') : t('documents.sign')}
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+           <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px 0', fontStyle: 'italic' }}>
+             {t('documents.signedBy')}: <strong>{user?.name} {user?.surname}</strong> ({user?.role})
+           </p>
+           <button 
+             onClick={handleSignConfirm} 
+             disabled={signing} 
+             style={{ 
+               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, 
+               padding: '12px 24px', borderRadius: 10, border: 'none', 
+               background: 'var(--primary)', color: '#fff', 
+               cursor: signing ? 'not-allowed' : 'pointer', 
+               fontSize: 14, fontWeight: 700, 
+               boxShadow: '0 4px 15px rgba(var(--primary-rgb), 0.3)',
+               transition: 'transform 0.2s, background 0.2s',
+               opacity: signing ? 0.7 : 1
+             }}
+             onMouseEnter={(e) => !signing && (e.currentTarget.style.transform = 'translateY(-1px)')}
+             onMouseLeave={(e) => !signing && (e.currentTarget.style.transform = 'translateY(0)')}
+           >
+             <IconPen /> {signing ? t('common.saving') : t('common.confirm')}
+           </button>
+           <button 
+             onClick={() => setSigningDoc(null)} 
+             disabled={signing} 
+             style={{ 
+               padding: '10px 24px', borderRadius: 10, border: '1px solid var(--border)', 
+               background: 'transparent', color: 'var(--text-secondary)', 
+               cursor: signing ? 'not-allowed' : 'pointer', 
+               fontSize: 13, fontWeight: 500 
+             }}
+           >
+             {t('common.cancel')}
+           </button>
+        </div>
+      </ModalBackdrop>
+    )}
+    {deletingDoc && (
+      <ModalBackdrop onClose={() => !deleting && setDeletingDoc(null)} width={400}>
+        <ModalHeader title={t('common.confirmAction', 'Conferma azione')} onClose={() => !deleting && setDeletingDoc(null)} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 0' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>🗑️</span>
+            <div>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {t('documents.confirmDelete', { name: deletingDoc.fileName || deletingDoc.title })}
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Questa azione è irreversibile. Il documento verrà rimosso permanentemente dal sistema.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8 }}>
+            <button onClick={() => setDeletingDoc(null)} disabled={deleting} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 500 }}>
+              {t('common.cancel')}
+            </button>
+            <button onClick={handleConfirmDelete} disabled={deleting} style={{ padding: '8px 22px', borderRadius: 8, border: 'none', background: '#DC2626', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, boxShadow: '0 4px 12px rgba(220,38,38,0.2)' }}>
+              {deleting ? '...' : t('common.delete', 'Elimina')}
+            </button>
+          </div>
         </div>
       </ModalBackdrop>
     )}
@@ -563,17 +816,18 @@ const DocumentsPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const isHR = user ? HR_ROLES.includes(user.role) : false;
+  const canManage = user ? CAN_MANAGE_ROLES.includes(user.role) : false;
+  const canViewAll = user ? CAN_VIEW_ALL_ROLES.includes(user.role) : false;
   const isEmployee = user?.role === 'employee';
 
-  const [docs, setDocs] = useState<EmployeeDocument[]>([]);
+  const [docs, setDocs] = useState<any[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showBulkModal, setShowBulkModal] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
+  const [editingDoc, setEditingDoc] = useState<any | null>(null);
 
   useEffect(() => {
     getCategories(false).then(setCategories).catch(() => {});
@@ -586,6 +840,9 @@ const DocumentsPage: React.FC = () => {
         setDocs(await getMyDocuments());
       } else if (selectedEmployee) {
         setDocs(await getEmployeeDocuments(selectedEmployee.id));
+      } else if (canViewAll) {
+        const globalDocs = await getDocumentsGeneric();
+        setDocs(globalDocs);
       } else {
         setDocs([]);
       }
@@ -625,19 +882,14 @@ const DocumentsPage: React.FC = () => {
           </p>
         </div>
 
-        {isHR && (
+        {canManage && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={() => setShowCatModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
               <IconTag /> {t('documents.manageCategories')}
             </button>
-            <button onClick={() => setShowBulkModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-              <IconUpload /> {t('documents.bulkUpload')}
+            <button onClick={() => setShowUploadModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              <IconUpload /> {t('documents.uploadDoc')}
             </button>
-            {selectedEmployee && (
-              <button onClick={() => setShowUploadModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                <IconUpload /> {t('documents.uploadDoc')}
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -646,7 +898,7 @@ const DocumentsPage: React.FC = () => {
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
 
         {/* Panel toolbar */}
-        {isHR && (
+        {canViewAll && (
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'var(--background)' }}>
             <EmployeeCombobox onSelect={handleSelectEmployee} />
             {selectedEmployee && (
@@ -672,13 +924,14 @@ const DocumentsPage: React.FC = () => {
               </div>
             ))}
           </div>
-        ) : isEmployee || selectedEmployee ? (
+        ) : (isEmployee || selectedEmployee || canViewAll) ? (
           <DocumentsTable
             docs={docs}
             categories={categories}
-            canManage={isHR}
+            canManage={canManage}
             isEmployee={isEmployee}
             onRefresh={loadDocs}
+            onEdit={setEditingDoc}
           />
         ) : (
           <div style={{ padding: '72px 24px', textAlign: 'center' }}>
@@ -690,11 +943,21 @@ const DocumentsPage: React.FC = () => {
       </div>
 
       {/* Modals */}
-      {showUploadModal && selectedEmployee && (
-        <UploadModal employeeId={selectedEmployee.id} employeeName={employeeName} categories={categories} onClose={() => setShowUploadModal(false)} onSuccess={loadDocs} />
+      {showUploadModal && (
+        <UnifiedUploadWizard 
+          onClose={() => setShowUploadModal(false)} 
+          onSuccess={loadDocs} 
+          targetEmployee={selectedEmployee}
+        />
       )}
-      {showBulkModal && <BulkUploadModal onClose={() => setShowBulkModal(false)} onSuccess={loadDocs} />}
       {showCatModal && <CategoriesModal onClose={() => { setShowCatModal(false); getCategories(false).then(setCategories).catch(() => {}); }} />}
+      {editingDoc && (
+        <EditDocumentModal 
+          doc={editingDoc} 
+          onClose={() => setEditingDoc(null)} 
+          onSuccess={loadDocs} 
+        />
+      )}
     </div>
   );
 };
