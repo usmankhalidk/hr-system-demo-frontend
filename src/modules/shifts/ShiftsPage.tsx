@@ -407,15 +407,7 @@ export default function ShiftsPage() {
       if (result.copied === 0) {
         setError(t('shifts.nothingToCopy', 'Nessun turno da copiare in questa settimana'));
       } else {
-        setSuccess(
-          result.skippedOffDay && result.skippedOffDay > 0
-            ? t('shifts.copyWeekWithSkips', {
-                copied: result.copied,
-                skipped: result.skippedOffDay,
-                defaultValue: `Week copied: ${result.copied} shifts, ${result.skippedOffDay} skipped on off-days.`,
-              })
-            : t('shifts.copiedSuccess', 'Settimana copiata con successo'),
-        );
+        setSuccess(t('shifts.copiedSuccess', 'Settimana copiata con successo'));
         setTimeout(() => setSuccess(null), 3500);
         fetchShifts();
       }

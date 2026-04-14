@@ -130,7 +130,7 @@ export async function copyWeek(payload: {
   store_id: number;
   source_week: string;
   target_week: string;
-}): Promise<{ copied: number; skippedOffDay?: number; shifts: Shift[] }> {
+}): Promise<{ copied: number; shifts: Shift[] }> {
   const res = await client.post('/shifts/copy-week', payload);
   return {
     ...res.data.data,

@@ -32,10 +32,11 @@ type Filter = '7' | '30';
 
 export default function EmployeeCheckinPage() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
   const { lastSyncTime, isOnline, isSyncing, queueLength, enqueue } = useOfflineSync();
 
   const [filter, setFilter] = useState<Filter>('7');
+  const [historyVersion, setHistoryVersion] = useState(0);
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,16 +78,29 @@ export default function EmployeeCheckinPage() {
         });
         setActionMsg({ text: 'Timbratura salvata offline — verrà sincronizzata automaticamente', ok: true });
       } else {
-        await client.post('/attendance/checkin', {
-          event_type: eventType,
-          event_time: eventTime,
-          unique_id: user?.uniqueId || undefined,
-          user_id: user?.id,
-          device_fingerprint: fingerprintRef.current || undefined,
+        // Use /sync endpoint — /checkin requires a QR token and is for terminal use only.
+        // /sync accepts authenticated direct clock-ins without a QR token.
+        const clientUuid: string =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const res = await client.post('/attendance/sync', {
+          events: [{
+            event_type: eventType,
+            event_time: eventTime,
+            unique_id: user?.uniqueId || undefined,
+            user_id: user?.id,
+            device_fingerprint: fingerprintRef.current || undefined,
+            client_uuid: clientUuid,
+          }],
         });
+        const result = (res.data as any)?.data ?? res.data;
+        if ((result?.failed ?? 0) > 0) {
+          throw new Error(result?.errors?.[0] ?? 'Errore durante la timbratura');
+        }
         setActionMsg({ text: 'Timbratura registrata con successo', ok: true });
-        // Refresh history after a short delay
-        window.setTimeout(() => setFilter((f) => f), 1500);
+        // Increment historyVersion to trigger a real re-fetch of attendance history
+        window.setTimeout(() => setHistoryVersion((v) => v + 1), 1500);
       }
     } catch (err: any) {
       const msg = err?.response?.data?.error ?? 'Errore durante la timbratura';
@@ -122,7 +136,7 @@ export default function EmployeeCheckinPage() {
 
     void load();
     return () => { alive = false; };
-  }, [filter, lastSyncTime]);
+  }, [filter, lastSyncTime, historyVersion]);
 
   // Group events by date
   const grouped: { date: string; items: AttendanceEvent[] }[] = [];
@@ -369,8 +383,8 @@ export default function EmployeeCheckinPage() {
         </div>
       </div>
 
-      {/* Attendance history */}
-      <div style={{
+      {/* Attendance history — only shown when presenze module is enabled */}
+      {permissions['presenze'] !== false && <div style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)',
@@ -487,7 +501,7 @@ export default function EmployeeCheckinPage() {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

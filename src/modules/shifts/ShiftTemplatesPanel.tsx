@@ -524,7 +524,6 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setError(null);
     let created = 0;
     let skipped = 0;
-    let skippedOffDay = 0;
     let failed = 0;
     const failureMessages: string[] = [];
 
@@ -553,14 +552,8 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
     for (const empId of applyEmployeeIds) {
       const employee = applyEmployeeById.get(empId);
-      const employeeOffDays = normalizeOffDays(employee?.offDays);
       for (const item of patternDates) {
         for (const dateStr of item.dates) {
-          const dayMonBased = dayOfWeekMonBased(new Date(`${dateStr}T12:00:00`));
-          if (employeeOffDays.includes(dayMonBased)) {
-            skippedOffDay++;
-            continue;
-          }
           try {
             const breakType = item.pattern.breakType ?? 'fixed';
             const isFlexible = breakType === 'flexible';
@@ -595,7 +588,6 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplying(false);
     const parts: string[] = [`✓ ${t('shifts.shiftsCreated', { count: created })}`];
     if (skipped > 0) parts.push(t('shifts.shiftsSkipped', { count: skipped }));
-    if (skippedOffDay > 0) parts.push(t('shifts.shiftsSkippedOffDay', { count: skippedOffDay }));
     if (failed > 0) parts.push(t('shifts.shiftsFailed', { count: failed }));
     setSuccessMsg(parts.join(' · '));
     setTimeout(() => setSuccessMsg(null), 4000);
@@ -742,10 +734,10 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
               {/* Day selector pills */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  {t('shifts.templateDayToggleTitle', 'Working / Off days')}
+                  {t('shifts.templateDayToggleTitle', 'Giorni inclusi nel template')}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-                  {t('shifts.templateDayToggleHint', 'Click each day to toggle whether the template works that day or keeps it off.')}
+                  {t('shifts.templateDayToggleHint', 'Seleziona i giorni della settimana coperti da questo template. Il giorno di riposo viene assegnato dinamicamente nel calendario settimanale.')}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {DAY_LABELS_FULL.map((label, idx) => {
@@ -781,7 +773,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                             background: enabled ? 'rgba(134,239,172,0.2)' : 'rgba(251,191,36,0.2)',
                             color: enabled ? '#166534' : '#92400e',
                           }}>
-                            {enabled ? t('shifts.dayWorking', 'Working') : t('shifts.dayOff', 'Off')}
+                            {enabled ? t('shifts.dayIncluded', 'Incluso') : t('shifts.dayExcluded', 'Escluso')}
                           </span>
                         </span>
                       </button>
