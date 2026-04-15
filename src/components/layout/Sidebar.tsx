@@ -151,6 +151,13 @@ const IconClipboard = () => (
     <line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" />
   </svg>
 );
+const IconDatabase = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <ellipse cx="12" cy="5" rx="8" ry="3" />
+    <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+    <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
+  </svg>
+);
 
 const ROLE_ACCENT: Record<UserRole, string> = {
   admin: '#C9973A', hr: '#0284C7', area_manager: '#15803D',
@@ -197,6 +204,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.deviceReset', path: '/dipendenti/reset-device', icon: <IconSmartphone />, permissionKey: 'dipendenti' },
       { labelKey: 'nav.terminals', path: '/terminali', icon: <IconTerminal />, permissionKey: 'terminali' },
       { labelKey: 'nav.turni', path: '/turni', icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze', path: '/presenze', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
@@ -217,6 +225,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.onboarding', path: '/onboarding', icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti', path: '/documenti', icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.turni', path: '/turni', icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze', path: '/presenze', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
@@ -236,6 +245,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.onboarding', path: '/onboarding', icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti', path: '/documenti', icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.turni', path: '/turni', icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze', path: '/presenze', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
@@ -251,6 +261,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.onboarding', path: '/onboarding', icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti', path: '/documenti', icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.turni', path: '/turni', icon: <IconCalendar />, permissionKey: 'turni' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.trasferimenti', path: '/trasferimenti', icon: <IconTransfer />, permissionKey: 'trasferimenti' },
       { labelKey: 'nav.presenze', path: '/presenze', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
