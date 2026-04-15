@@ -10,6 +10,7 @@ import {
   createCategory,
   updateCategory,
   signDocument,
+  deleteDocument,
   bulkUploadDocuments,
   getDocumentsGeneric,
   downloadDocumentGeneric,
