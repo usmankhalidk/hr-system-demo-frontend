@@ -16,7 +16,11 @@ export interface JobPosting {
   id: number;
   companyId: number;
   companySlug: string;
+  companyName: string | null;
+  companyLogoFilename: string | null;
   storeId: number | null;
+  storeName: string | null;
+  storeLogoFilename: string | null;
   location: string;
   city: string | null;
   state: string | null;
@@ -43,6 +47,12 @@ export interface JobPosting {
   status: JobStatus;
   source: string;
   indeedPostId: string | null;
+  createdById: number | null;
+  createdByName: string | null;
+  createdBySurname: string | null;
+  createdByRole: string | null;
+  createdByAvatarFilename: string | null;
+  createdByStoreName: string | null;
   publishedAt: string | null;
   closedAt: string | null;
   createdAt: string;
