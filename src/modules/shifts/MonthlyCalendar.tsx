@@ -178,6 +178,7 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
           const transferCount = transferCounts.active + transferCounts.completed + transferCounts.cancelled;
           const isToday = dateStr === today;
           const hasTransfer = transferCount > 0;
+          const hasStoreShiftSummary = storeCount > 0 || shiftCount > 0;
           const hasSummaryTags = hasTransfer || vacationApprovedUsers > 0 || sickApprovedUsers > 0 || offDayUserCount > 0;
 
           return (
@@ -185,7 +186,7 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
               key={dateStr}
               onClick={() => onDayClick(dateStr)}
               style={{
-                minHeight: 104,
+                minHeight: 92,
                 borderRadius: 6,
                 border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
                 padding: 7,
@@ -220,46 +221,48 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
                 ) : date.getDate()}
               </div>
 
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 6,
-                borderRadius: 5,
-                border: '1px solid rgba(58,123,213,0.34)',
-                borderLeft: '3px solid #1e4a7a',
-                background: 'linear-gradient(135deg, rgba(30,74,122,0.14), rgba(13,33,55,0.08))',
-                padding: '3px 6px',
-              }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  borderRadius: 4,
-                  color: '#12345a',
-                  padding: '0 2px',
-                  fontSize: '0.64rem',
-                  fontWeight: 800,
-                  lineHeight: 1.2,
-                }} title={t('shifts.monthlyStores', 'Stores')}>
-                  <Store size={10} strokeWidth={2.4} />
-                  {t('shifts.monthlyStores', 'Stores')} {storeCount}
-                </span>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  borderRadius: 4,
-                  border: '1px solid rgba(58,123,213,0.55)',
-                  background: 'linear-gradient(135deg, #1E4A7A, #0D2137)',
-                  color: '#f8fbff',
-                  padding: '2px 7px',
-                  fontSize: '0.64rem',
-                  fontWeight: 800,
-                  lineHeight: 1.2,
-                }}
-                title={t('shifts.shiftCountPlural', 'Shifts')}
-                >
-                  <Clock3 size={10} strokeWidth={2.4} />
-                  {t('shifts.shiftCountPlural', 'Shifts')} {shiftCount}
-                </span>
-              </div>
+              {hasStoreShiftSummary && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 6,
+                  borderRadius: 5,
+                  border: '1px solid rgba(58,123,213,0.34)',
+                  borderLeft: '3px solid #1e4a7a',
+                  background: 'linear-gradient(135deg, rgba(30,74,122,0.14), rgba(13,33,55,0.08))',
+                  padding: '3px 6px',
+                }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    borderRadius: 4,
+                    color: '#12345a',
+                    padding: '0 2px',
+                    fontSize: '0.64rem',
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                  }} title={t('shifts.monthlyStores', 'Stores')}>
+                    <Store size={10} strokeWidth={2.4} />
+                    {t('shifts.monthlyStores', 'Stores')} {storeCount}
+                  </span>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    borderRadius: 4,
+                    border: '1px solid rgba(58,123,213,0.55)',
+                    background: 'linear-gradient(135deg, #1E4A7A, #0D2137)',
+                    color: '#f8fbff',
+                    padding: '2px 7px',
+                    fontSize: '0.64rem',
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                  }}
+                  title={t('shifts.shiftCountPlural', 'Shifts')}
+                  >
+                    <Clock3 size={10} strokeWidth={2.4} />
+                    {t('shifts.shiftCountPlural', 'Shifts')} {shiftCount}
+                  </span>
+                </div>
+              )}
 
               {employeeCount > 0 && (
                 <div style={{ marginTop: 5, minHeight: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
