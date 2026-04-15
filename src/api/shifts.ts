@@ -20,6 +20,7 @@ export interface Shift {
   isSplit: boolean;
   splitStart2: string | null;
   splitEnd2: string | null;
+  isOffDay: boolean;
   status: 'scheduled' | 'confirmed' | 'cancelled';
   notes: string | null;
   createdBy: number | null;
@@ -89,6 +90,7 @@ export interface CreateShiftPayload {
   is_split?: boolean;
   split_start2?: string | null;
   split_end2?: string | null;
+  is_off_day?: boolean;
   notes?: string | null;
   status?: 'scheduled' | 'confirmed' | 'cancelled';
 }
@@ -130,7 +132,7 @@ export async function copyWeek(payload: {
   store_id: number;
   source_week: string;
   target_week: string;
-}): Promise<{ copied: number; skippedOffDay?: number; shifts: Shift[] }> {
+}): Promise<{ copied: number; shifts: Shift[] }> {
   const res = await client.post('/shifts/copy-week', payload);
   return {
     ...res.data.data,

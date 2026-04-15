@@ -16,6 +16,7 @@ import { Select } from '../../components/ui/Select';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { DatePicker } from '../../components/ui/DatePicker';
+import { LocationFieldGroup } from '../../components/location';
 
 interface EmployeeFormProps {
   open?: boolean;
@@ -39,12 +40,15 @@ interface FormData {
   contractEndDate: string;
   workingType: 'full_time' | 'part_time' | '';
   weeklyHours: string;
-  offDays: number[];
   personalEmail: string;
   dateOfBirth: string;
   nationality: string;
   gender: string;
   iban: string;
+  phone: string;
+  country: string;
+  city: string;
+  state: string;
   address: string;
   cap: string;
   firstAidFlag: boolean;
@@ -60,24 +64,10 @@ const initialFormData: FormData = {
   companyId: '',
   storeId: '', supervisorId: '', department: '',
   hireDate: '', contractEndDate: '', workingType: '', weeklyHours: '',
-  offDays: [5, 6],
   personalEmail: '', dateOfBirth: '', nationality: '', gender: '',
-  iban: '', address: '', cap: '', firstAidFlag: false, maritalStatus: '',
+  iban: '', phone: '', country: '', city: '', state: '', address: '', cap: '', firstAidFlag: false, maritalStatus: '',
   contractType: '', probationMonths: '', terminationDate: '', terminationType: '',
 };
-
-const DEFAULT_OFF_DAYS = [5, 6]; // Mon=0 ... Sun=6
-const MON_BASED_DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
-
-function normalizeOffDays(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return [...DEFAULT_OFF_DAYS];
-  const normalized = Array.from(new Set(
-    raw
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
-  )).sort((a, b) => a - b);
-  return normalized.length > 0 ? normalized : [...DEFAULT_OFF_DAYS];
-}
 
 function generateUniqueId(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -198,19 +188,6 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
     if (isSuperAdmin) return true;
     return companyPermissionMap[companyId] !== false;
   }, [companyPermissionMap, isSuperAdmin]);
-  const dayLabels = [
-    t('shifts.dayMon', 'Mon'),
-    t('shifts.dayTue', 'Tue'),
-    t('shifts.dayWed', 'Wed'),
-    t('shifts.dayThu', 'Thu'),
-    t('shifts.dayFri', 'Fri'),
-    t('shifts.daySat', 'Sat'),
-    t('shifts.daySun', 'Sun'),
-  ];
-  const dayOptions = MON_BASED_DAYS.map((value) => ({ value, label: dayLabels[value] }));
-  const workingDays = dayOptions.filter(({ value }) => !formData.offDays.includes(value));
-  const offDays = dayOptions.filter(({ value }) => formData.offDays.includes(value));
-
   useEffect(() => {
     if (effectiveCompanyId == null) {
       setStores([]);
@@ -374,12 +351,15 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
           contractEndDate: emp.contractEndDate ?? '',
           workingType: emp.workingType ?? '',
           weeklyHours: emp.weeklyHours != null ? String(emp.weeklyHours) : '',
-          offDays: normalizeOffDays(emp.offDays),
           personalEmail: emp.personalEmail ?? '',
           dateOfBirth: emp.dateOfBirth ?? '',
           nationality: emp.nationality ?? '',
           gender: emp.gender ?? '',
           iban: emp.iban ?? '',
+          phone: emp.phone ?? '',
+          country: emp.country ?? '',
+          city: emp.city ?? '',
+          state: emp.state ?? '',
           address: emp.address ?? '',
           cap: emp.cap ?? '',
           firstAidFlag: emp.firstAidFlag ?? false,
@@ -404,19 +384,6 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const set = (field: keyof FormData, value: string | boolean | number[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (step1Errors[field]) setStep1Errors((prev) => ({ ...prev, [field]: undefined }));
-  };
-
-  const toggleOffDay = (day: number) => {
-    setFormData((prev) => {
-      const current = normalizeOffDays(prev.offDays);
-      const hasDay = current.includes(day);
-      if (hasDay) {
-        const next = current.filter((item) => item !== day);
-        if (next.length === 0) return prev;
-        return { ...prev, offDays: next };
-      }
-      return { ...prev, offDays: [...current, day].sort((a, b) => a - b) };
-    });
   };
 
   const validateStep1 = (): boolean => {
@@ -456,9 +423,6 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const handleBack = () => setStep(1);
 
   const validateStep2 = (): string | null => {
-    if (!Array.isArray(formData.offDays) || formData.offDays.length === 0) {
-      return t('employees.offDaysRequired', 'Please keep at least one off day.');
-    }
     // Weekly hours
     if (formData.weeklyHours) {
       const hours = parseFloat(formData.weeklyHours);
@@ -514,12 +478,15 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
         contractEndDate: formData.contractEndDate || undefined,
         workingType: (formData.workingType as 'full_time' | 'part_time') || null,
         weeklyHours: formData.weeklyHours ? parseFloat(formData.weeklyHours) : null,
-        offDays: normalizeOffDays(formData.offDays),
         personalEmail: formData.personalEmail || null,
         dateOfBirth: formData.dateOfBirth || null,
         nationality: formData.nationality || null,
         gender: formData.gender || null,
         iban: formData.iban || null,
+        phone: formData.phone || null,
+        country: formData.country || null,
+        city: formData.city || null,
+        state: formData.state || null,
         address: formData.address || null,
         cap: formData.cap || null,
         firstAidFlag: formData.firstAidFlag,
@@ -1698,135 +1665,6 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                     />
                   </div>
 
-                  <SectionDivider label={t('employees.workingDaysEditorTitle', 'Working / Off Days')} />
-                  <div style={{ marginBottom: '14px' }}>
-                    <div style={{
-                      marginBottom: '9px',
-                      fontSize: '12px',
-                      color: 'var(--text-muted)',
-                      fontFamily: 'var(--font-body)',
-                      lineHeight: 1.45,
-                    }}>
-                      {t('employees.workingDaysEditorHint', 'Click a day to toggle between working and off status.')}
-                    </div>
-                    <div style={{
-                      display: 'flex',
-                      gap: '8px',
-                      flexWrap: 'nowrap',
-                      overflowX: 'auto',
-                      paddingBottom: 2,
-                    }}>
-                      {dayOptions.map((day) => {
-                        const isOff = formData.offDays.includes(day.value);
-                        return (
-                          <button
-                            key={day.value}
-                            type="button"
-                            onClick={() => toggleOffDay(day.value)}
-                            style={{
-                              border: `1px solid ${isOff ? 'rgba(180,83,9,0.32)' : 'rgba(22,101,52,0.28)'}`,
-                              background: isOff ? 'rgba(251,191,36,0.14)' : 'rgba(134,239,172,0.16)',
-                              color: isOff ? '#92400e' : '#166534',
-                              borderRadius: '10px',
-                              minWidth: isMobile ? 72 : 78,
-                              padding: '8px 10px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 2,
-                              cursor: 'pointer',
-                              fontFamily: 'var(--font-body)',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              flexShrink: 0,
-                            }}
-                          >
-                            <span style={{ whiteSpace: 'nowrap' }}>{day.label}</span>
-                            <span style={{
-                              fontSize: '9px',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.06em',
-                            }}>
-                              {isOff
-                                ? t('employees.dayStatusOff', 'Off')
-                                : t('employees.dayStatusWorking', 'Working')}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div style={{
-                      marginTop: '10px',
-                      display: 'grid',
-                      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-                      gap: '10px',
-                    }}>
-                      <div style={{
-                        border: '1px solid rgba(22,101,52,0.22)',
-                        background: 'rgba(220,252,231,0.35)',
-                        borderRadius: '10px',
-                        padding: '8px 10px',
-                      }}>
-                        <div style={{
-                          fontSize: '10px',
-                          color: '#166534',
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.08em',
-                          marginBottom: 6,
-                        }}>
-                          {t('employees.workingDaysField', 'Working days')}
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          {workingDays.map((day) => (
-                            <span key={day.value} style={{
-                              fontSize: '11px',
-                              borderRadius: 999,
-                              padding: '2px 8px',
-                              background: 'rgba(22,163,74,0.14)',
-                              color: '#166534',
-                              fontWeight: 700,
-                            }}>
-                              {day.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <div style={{
-                        border: '1px solid rgba(180,83,9,0.24)',
-                        background: 'rgba(254,243,199,0.45)',
-                        borderRadius: '10px',
-                        padding: '8px 10px',
-                      }}>
-                        <div style={{
-                          fontSize: '10px',
-                          color: '#92400e',
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.08em',
-                          marginBottom: 6,
-                        }}>
-                          {t('employees.offDaysField', 'Off days')}
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          {offDays.map((day) => (
-                            <span key={day.value} style={{
-                              fontSize: '11px',
-                              borderRadius: 999,
-                              padding: '2px 8px',
-                              background: 'rgba(217,119,6,0.14)',
-                              color: '#92400e',
-                              fontWeight: 700,
-                            }}>
-                              {day.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   <SectionDivider label={t('employees.contractualDetails')} />
                   <div style={row2}>
                     <Input
@@ -1869,18 +1707,35 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                   </div>
 
                   <SectionDivider label={t('employees.addressField')} />
-                  <div style={row2}>
-                    <Input
-                      label={t('employees.addressField')}
-                      value={formData.address}
-                      onChange={(e) => set('address', e.target.value)}
-                    />
-                    <Input
-                      label={t('employees.capField')}
-                      value={formData.cap}
-                      onChange={(e) => set('cap', e.target.value)}
-                    />
-                  </div>
+                  <LocationFieldGroup
+                    value={{
+                      country: formData.country,
+                      state: formData.state,
+                      city: formData.city,
+                      address: formData.address,
+                      postalCode: formData.cap,
+                      phone: formData.phone,
+                    }}
+                    onChange={(location) => {
+                      set('country', location.country);
+                      set('state', location.state);
+                      set('city', location.city);
+                      set('address', location.address);
+                      set('cap', location.postalCode);
+                      set('phone', location.phone);
+                    }}
+                    includeAddress
+                    includePostalCode
+                    includePhone
+                    labels={{
+                      country: t('companies.country', 'Country'),
+                      state: t('companies.state', 'State'),
+                      city: t('companies.city', 'City'),
+                      address: t('employees.addressField'),
+                      postalCode: t('employees.capField'),
+                      phone: t('companies.companyPhoneNumbers', 'Phone'),
+                    }}
+                  />
                   <div style={row2}>
                     <Select
                       label={t('employees.maritalStatusField')}

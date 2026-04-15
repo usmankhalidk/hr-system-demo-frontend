@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Palmtree, Thermometer, Store } from 'lucide-react';
+import { ArrowLeftRight, Moon, Palmtree, Thermometer, Store } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
@@ -49,6 +49,13 @@ const STATUS_META: Record<string, {
   },
 };
 
+const OFF_DAY_META = {
+  bg: 'rgba(241,245,249,0.92)',
+  color: '#475569',
+  border: 'rgba(148,163,184,0.42)',
+  leftBorder: 'rgba(100,116,139,0.62)',
+};
+
 interface WeeklyCalendarProps {
   shifts: Shift[];
   weekStart: Date;
@@ -57,7 +64,6 @@ interface WeeklyCalendarProps {
   canEdit: boolean;
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
-  employeeOffDaysById?: Record<number, number[] | undefined>;
   /** Admin / HR / Area manager: show weekly approve control per row */
   canApproveWeek?: boolean;
   onApproveWeekForUser?: (userId: number) => void;
@@ -141,7 +147,6 @@ export default function WeeklyCalendar({
   canEdit,
   leaveBlocks,
   transferBlocks,
-  employeeOffDaysById = {},
   canApproveWeek = false,
   onApproveWeekForUser,
   approvingUserId = null,
@@ -304,11 +309,6 @@ export default function WeeklyCalendar({
             users.map(([userId, userData], rowIdx) => {
               const { hours: weekHours, hasScheduled } = weeklyTotalsForUser(userId, userData.shifts);
               const rowStoreNames = Array.from(userData.storeNames);
-              const userOffDaysRaw = employeeOffDaysById[userId] ?? [5, 6];
-              const parsedUserOffDays = Array.isArray(userOffDaysRaw)
-                ? userOffDaysRaw.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-                : [5, 6];
-              const userOffDays = parsedUserOffDays.length > 0 ? parsedUserOffDays : [5, 6];
               return (
               <tr
                 key={userId}
@@ -418,10 +418,9 @@ export default function WeeklyCalendar({
                 {days.map((day, colIdx) => {
                   const dateStr = formatDate(day);
                   const dayShifts = userData.shifts.get(dateStr) ?? [];
-                  const hasNonCancelledShift = dayShifts.some((shift) => shift.status !== 'cancelled');
+                  const hasOffDay = dayShifts.some((shift) => shift.isOffDay);
+                  const hasVisibleShift = dayShifts.some((shift) => shift.isOffDay || shift.status !== 'cancelled');
                   const isToday = dateStr === todayStr();
-                  const dayMonBased = (day.getDay() + 6) % 7;
-                  const isOffDay = userOffDays.includes(dayMonBased);
                   const leave = getLeaveForUserDate(userId, dateStr);
                   const transfer = getTransferForUserDate(userId, dateStr);
                   const transferVm = transferVisualMeta(transfer?.status ?? 'active');
@@ -437,6 +436,65 @@ export default function WeeklyCalendar({
                   const showDualLane = transferTargetStoreId != null;
 
                   const renderShiftBadge = (shift: Shift) => {
+                    if (shift.isOffDay) {
+                      const hasMeaningfulWindow = fmt(shift.startTime) !== '00:00' || fmt(shift.endTime) !== '00:01';
+                      return (
+                        <div
+                          key={shift.id}
+                          onClick={(e) => { e.stopPropagation(); onShiftClick(shift); }}
+                          title={t('shifts.form.offDay', 'Off day')}
+                          style={{
+                            background: OFF_DAY_META.bg,
+                            color: OFF_DAY_META.color,
+                            borderRadius: 6,
+                            padding: '4px 7px 4px 6px',
+                            marginBottom: 3,
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            borderTop: `1px solid ${OFF_DAY_META.border}`,
+                            borderRight: `1px solid ${OFF_DAY_META.border}`,
+                            borderBottom: `1px solid ${OFF_DAY_META.border}`,
+                            borderLeft: `3px solid ${OFF_DAY_META.leftBorder}`,
+                            transition: 'filter 0.15s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(1.05)'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = ''; }}
+                        >
+                          <span style={{
+                            width: 15,
+                            height: 15,
+                            borderRadius: 4,
+                            background: 'rgba(100,116,139,0.16)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            <Moon size={10} strokeWidth={2.5} />
+                          </span>
+                          <span style={{ lineHeight: 1.25, overflow: 'hidden' }}>
+                            <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('shifts.form.offDay', 'Off day')}
+                            </span>
+                            {hasMeaningfulWindow && (
+                              <span style={{
+                                display: 'block',
+                                fontSize: '0.62rem',
+                                color: '#64748b',
+                                textDecoration: 'line-through',
+                              }}>
+                                {t('shifts.status.cancelled', 'Cancelled')} · {fmt(shift.startTime)}–{fmt(shift.endTime)}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    }
+
                     const meta = STATUS_META[shift.status] ?? STATUS_META.scheduled;
                     return (
                       <div
@@ -495,44 +553,25 @@ export default function WeeklyCalendar({
                   return (
                     <td
                       key={colIdx}
-                      title={canEdit && !hasNonCancelledShift
-                        ? (isOffDay ? t('shifts.offDayCellHint', 'Configured off-day') : t('shifts.addShiftTooltip', '+ Aggiungi turno'))
+                      title={canEdit && !hasVisibleShift
+                        ? t('shifts.addShiftTooltip', '+ Aggiungi turno')
                         : undefined}
                       style={{
                         padding: 4,
                         verticalAlign: 'top',
                         borderRight: '1px solid var(--border)',
                         borderBottom: '1px solid var(--border)',
-                        cursor: canEdit && !isOffDay ? 'pointer' : 'default',
+                        cursor: canEdit ? 'pointer' : 'default',
                         minHeight: 60,
                         position: 'relative',
                         background: leave
                           ? (lvVacation ? 'rgba(219,234,254,0.13)' : 'rgba(255,237,213,0.13)')
-                          : (isOffDay
-                            ? 'rgba(148,163,184,0.12)'
-                            : (isToday ? 'rgba(201,151,58,0.04)' : undefined)),
+                          : hasOffDay
+                            ? 'rgba(226,232,240,0.22)'
+                          : (isToday ? 'rgba(201,151,58,0.04)' : undefined),
                       }}
-                      onClick={() => canEdit && !isOffDay && !hasNonCancelledShift && onCellClick(userId, dateStr)}
+                      onClick={() => canEdit && !hasVisibleShift && onCellClick(userId, dateStr)}
                     >
-                      {isOffDay && (
-                        <div style={{
-                          marginBottom: 4,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '2px 6px',
-                          borderRadius: 999,
-                          border: '1px solid rgba(71,85,105,0.3)',
-                          background: 'rgba(241,245,249,0.95)',
-                          color: '#475569',
-                          fontSize: 9,
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          lineHeight: 1.2,
-                        }}>
-                          {t('shifts.offDayShort', 'Off')}
-                        </div>
-                      )}
 
                       {showDualLane ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -719,6 +758,24 @@ export default function WeeklyCalendar({
               <span style={{ color: 'var(--border)', fontSize: 14, lineHeight: 1 }}>·</span>
             </div>
           ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 700,
+              background: OFF_DAY_META.bg, color: OFF_DAY_META.color,
+              borderTop: `1px solid ${OFF_DAY_META.border}`,
+              borderRight: `1px solid ${OFF_DAY_META.border}`,
+              borderBottom: `1px solid ${OFF_DAY_META.border}`,
+              borderLeft: `3px solid ${OFF_DAY_META.leftBorder}`,
+            }}>
+              <Moon size={11} strokeWidth={2.4} />
+              {t('shifts.form.offDay', 'Off day')}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              {t('shifts.offDayLegend', 'Date marked as non-working day')}
+            </span>
+            <span style={{ color: 'var(--border)', fontSize: 14, lineHeight: 1 }}>·</span>
+          </div>
           {canEdit && (
             <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 4 }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

@@ -153,27 +153,33 @@
   },
   "hotPaths": [
     {
+      "path": "src/i18n/locales/en.ts",
+      "accessCount": 35,
+      "lastAccessed": 1776131986619,
+      "type": "directory"
+    },
+    {
       "path": "src/modules/onboarding/OnboardingPage.tsx",
       "accessCount": 32,
       "lastAccessed": 1775703684386,
       "type": "file"
     },
     {
-      "path": "src/i18n/locales/en.ts",
-      "accessCount": 29,
-      "lastAccessed": 1775881362872,
-      "type": "directory"
-    },
-    {
       "path": "src/i18n/locales/it.ts",
-      "accessCount": 19,
-      "lastAccessed": 1775881363268,
+      "accessCount": 23,
+      "lastAccessed": 1776131987795,
       "type": "file"
     },
     {
       "path": "",
+      "accessCount": 19,
+      "lastAccessed": 1776131828396,
+      "type": "directory"
+    },
+    {
+      "path": "src/modules/shifts/ShiftDrawer.tsx",
       "accessCount": 18,
-      "lastAccessed": 1775669938769,
+      "lastAccessed": 1776132030447,
       "type": "directory"
     },
     {
@@ -184,8 +190,20 @@
     },
     {
       "path": "src/modules/employees/EmployeeDetail.tsx",
-      "accessCount": 11,
-      "lastAccessed": 1775643542836,
+      "accessCount": 15,
+      "lastAccessed": 1776131746409,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/WeeklyCalendar.tsx",
+      "accessCount": 13,
+      "lastAccessed": 1776131697848,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/attendance/EmployeeCheckinPage.tsx",
+      "accessCount": 12,
+      "lastAccessed": 1776132024112,
       "type": "file"
     },
     {
@@ -207,6 +225,12 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 8,
+      "lastAccessed": 1776131836665,
+      "type": "directory"
+    },
+    {
       "path": "src/api/onboarding.ts",
       "accessCount": 7,
       "lastAccessed": 1775669941379,
@@ -214,8 +238,8 @@
     },
     {
       "path": "src/api/shifts.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775819668120,
+      "accessCount": 7,
+      "lastAccessed": 1776131699516,
       "type": "file"
     },
     {
@@ -225,9 +249,21 @@
       "type": "file"
     },
     {
+      "path": "src/modules/shifts/ShiftTemplatesPanel.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1776131777283,
+      "type": "directory"
+    },
+    {
       "path": "src/api/client.ts",
       "accessCount": 4,
       "lastAccessed": 1775818656405,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/ShiftsPage.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1776131717594,
       "type": "file"
     },
     {
@@ -243,15 +279,15 @@
       "type": "file"
     },
     {
-      "path": "src",
-      "accessCount": 3,
-      "lastAccessed": 1775703641262,
-      "type": "directory"
-    },
-    {
       "path": "src/utils/apiErrors.ts",
       "accessCount": 3,
       "lastAccessed": 1775703647558,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/home/StoreManagerHome.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1776131699205,
       "type": "file"
     },
     {
@@ -264,18 +300,6 @@
       "path": "src/api/ats.ts",
       "accessCount": 2,
       "lastAccessed": 1775668348171,
-      "type": "file"
-    },
-    {
-      "path": "src/modules/shifts/ShiftsPage.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775668391244,
-      "type": "file"
-    },
-    {
-      "path": "src/modules/shifts/WeeklyCalendar.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775668401496,
       "type": "file"
     },
     {
@@ -306,6 +330,18 @@
       "path": "src/modules/attendance/TerminalPage.tsx",
       "accessCount": 2,
       "lastAccessed": 1775881608555,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/shifts",
+      "accessCount": 2,
+      "lastAccessed": 1776131027962,
+      "type": "directory"
+    },
+    {
+      "path": "src/modules/employees/EmployeeForm.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776131776567,
       "type": "file"
     },
     {
@@ -349,6 +385,18 @@
       "accessCount": 1,
       "lastAccessed": 1775881361428,
       "type": "file"
+    },
+    {
+      "path": "src/modules/shifts/DayCalendar.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776130919435,
+      "type": "directory"
+    },
+    {
+      "path": "src/i18n",
+      "accessCount": 1,
+      "lastAccessed": 1776131832867,
+      "type": "directory"
     }
   ],
   "userDirectives": []

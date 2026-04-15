@@ -19,7 +19,6 @@ interface ShiftDrawerProps {
   shift: Shift | null;
   prefillDate?: string;
   prefillUserId?: number;
-  employeeOffDaysById?: Record<number, number[] | undefined>;
   onClose: (refreshNeeded: boolean) => void;
 }
 
@@ -29,13 +28,14 @@ interface FormState {
   date: string;
   start_time: string;
   end_time: string;
-  break_type: 'fixed' | 'flexible';
+  break_type: 'none' | 'fixed' | 'flexible';
   break_start: string;
   break_end: string;
   break_minutes: string;
   is_split: boolean;
   split_start2: string;
   split_end2: string;
+  is_off_day: boolean;
   notes: string;
   status: 'scheduled' | 'confirmed' | 'cancelled';
 }
@@ -94,22 +94,6 @@ function getInitials(name: string): string {
   return (name.slice(0, 2) || 'U').toUpperCase();
 }
 
-function normalizeOffDays(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return [5, 6];
-  const normalized = Array.from(new Set(
-    raw
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6),
-  )).sort((a, b) => a - b);
-  return normalized.length > 0 ? normalized : [5, 6];
-}
-
-function isDateOnOffDay(dateStr: string, offDays: number[]): boolean {
-  const parsed = new Date(`${dateStr}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return false;
-  const monBasedDay = (parsed.getDay() + 6) % 7;
-  return offDays.includes(monBasedDay);
-}
 
 const EMPTY_FORM: FormState = {
   user_id: '',
@@ -117,13 +101,14 @@ const EMPTY_FORM: FormState = {
   date: '',
   start_time: '',
   end_time: '',
-  break_type: 'fixed',
+  break_type: 'none',
   break_start: '',
   break_end: '',
   break_minutes: '',
   is_split: false,
   split_start2: '',
   split_end2: '',
+  is_off_day: false,
   notes: '',
   status: 'scheduled',
 };
@@ -133,7 +118,6 @@ export default function ShiftDrawer({
   shift,
   prefillDate,
   prefillUserId,
-  employeeOffDaysById = {},
   onClose,
 }: ShiftDrawerProps) {
   const { t } = useTranslation();
@@ -157,21 +141,6 @@ export default function ShiftDrawer({
 
   const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
   const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.surname}`.trim() : '';
-  const selectedEmployeeOffDays = normalizeOffDays(
-    selectedEmployee?.offDays ?? (form.user_id ? employeeOffDaysById[Number(form.user_id)] : undefined),
-  );
-  const selectedDateIsOffDay = Boolean(form.date && isDateOnOffDay(form.date, selectedEmployeeOffDays));
-  const statusLockedForOffDay = Boolean(shift && selectedDateIsOffDay);
-  const dayShortLabels = [
-    t('shifts.dayMon', 'Mon'),
-    t('shifts.dayTue', 'Tue'),
-    t('shifts.dayWed', 'Wed'),
-    t('shifts.dayThu', 'Thu'),
-    t('shifts.dayFri', 'Fri'),
-    t('shifts.daySat', 'Sat'),
-    t('shifts.daySun', 'Sun'),
-  ];
-  const selectedEmployeeOffDaysLabel = selectedEmployeeOffDays.map((day) => dayShortLabels[day] ?? `#${day}`).join(', ');
   const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
   const selectedStore = stores.find((store) => String(store.id) === form.store_id) ?? null;
   const expectedStoreId = activeTransferForDate?.targetStoreId ?? selectedEmployee?.storeId ?? null;
@@ -242,6 +211,10 @@ export default function ShiftDrawer({
       }
     }
 
+    if (f.is_off_day) {
+      return errs;
+    }
+
     // Required time fields
     if (!f.start_time) errs.start_time = t('shifts.validation.startRequired');
     if (!f.end_time)   errs.end_time   = t('shifts.validation.endRequired');
@@ -257,7 +230,7 @@ export default function ShiftDrawer({
       if (f.break_minutes && (isNaN(mins) || mins <= 0 || mins > 480)) {
         errs.break_minutes = t('shifts.validation.breakMinutesInvalid');
       }
-    } else {
+    } else if (f.break_type === 'fixed') {
       // Fixed break: both or neither
       const hasBS = f.break_start.length > 0;
       const hasBE = f.break_end.length   > 0;
@@ -319,19 +292,25 @@ export default function ShiftDrawer({
     if (shift) {
       // API returns HH:MM:SS — slice to HH:MM so TimePicker and backend both accept it
       const t5 = (v: string | null | undefined) => (v ?? '').slice(0, 5);
+      const breakMode: FormState['break_type'] = shift.breakType === 'flexible'
+        ? 'flexible'
+        : (shift.breakStart || shift.breakEnd)
+          ? 'fixed'
+          : 'none';
       setForm({
         user_id: String(shift.userId),
         store_id: String(shift.storeId),
         date: normalizeShiftDateForForm(shift.date),
         start_time: t5(shift.startTime),
         end_time: t5(shift.endTime),
-        break_type: shift.breakType ?? 'fixed',
+        break_type: breakMode,
         break_start: t5(shift.breakStart),
         break_end: t5(shift.breakEnd),
         break_minutes: shift.breakMinutes != null ? String(shift.breakMinutes) : '',
         is_split: Boolean(shift.isSplit),
         split_start2: t5(shift.splitStart2),
         split_end2: t5(shift.splitEnd2),
+        is_off_day: Boolean(shift.isOffDay),
         notes: shift.notes ?? '',
         status: shift.status,
       });
@@ -462,44 +441,45 @@ export default function ShiftDrawer({
       return;
     }
 
-    if (selectedDateIsOffDay && !shift) {
-      setError(t('errors.OFF_DAY_SHIFT_BLOCKED', 'This employee is off on the selected day.'));
-      return;
-    }
-
-    if (statusLockedForOffDay && shift && form.status !== shift.status) {
-      setError(t('errors.OFF_DAY_STATUS_LOCKED', 'Shift status cannot be changed on an off day.'));
-      return;
-    }
 
     setFormErrors({});
     setOverlapConflict(false);
     setSaving(true);
     try {
+      const isOffDay = form.is_off_day;
       const isFlexible = form.break_type === 'flexible';
+      const isNoBreak = form.break_type === 'none';
+      const breakTypeOut: 'fixed' | 'flexible' = form.break_type === 'flexible' ? 'flexible' : 'fixed';
       const isStoreManager = user?.role === 'store_manager';
       let statusOut: CreateShiftPayload['status'] = form.status;
-      if (isStoreManager && form.status === 'confirmed') {
+      if (isOffDay) {
+        statusOut = 'cancelled';
+      }
+      if (isStoreManager && statusOut === 'confirmed') {
         setError(t('shifts.storeManagerCannotConfirm'));
         setSaving(false);
         return;
       }
-      if (isStoreManager && shift?.status === 'confirmed') {
+      if (isStoreManager && shift?.status === 'confirmed' && !isOffDay) {
         statusOut = undefined;
       }
+
+      const startTimeOut = isOffDay ? (form.start_time || '00:00') : form.start_time;
+      const endTimeOut = isOffDay ? (form.end_time || '00:01') : form.end_time;
       const payload: CreateShiftPayload = {
         user_id: parseInt(form.user_id, 10),
         store_id: parseInt(form.store_id, 10),
         date: form.date,
-        start_time: form.start_time,
-        end_time: form.end_time,
-        break_type: form.break_type,
-        break_start: isFlexible ? null : (form.break_start || null),
-        break_end: isFlexible ? null : (form.break_end || null),
-        break_minutes: isFlexible ? (form.break_minutes ? parseInt(form.break_minutes, 10) : null) : null,
-        is_split: form.is_split,
-        split_start2: form.is_split ? (form.split_start2 || null) : null,
-        split_end2: form.is_split ? (form.split_end2 || null) : null,
+        start_time: startTimeOut,
+        end_time: endTimeOut,
+        break_type: breakTypeOut,
+        break_start: (isOffDay || isNoBreak || isFlexible) ? null : (form.break_start || null),
+        break_end: (isOffDay || isNoBreak || isFlexible) ? null : (form.break_end || null),
+        break_minutes: (isOffDay || isNoBreak) ? null : (isFlexible ? (form.break_minutes ? parseInt(form.break_minutes, 10) : null) : null),
+        is_split: isOffDay ? false : form.is_split,
+        split_start2: (isOffDay || !form.is_split) ? null : (form.split_start2 || null),
+        split_end2: (isOffDay || !form.is_split) ? null : (form.split_end2 || null),
+        is_off_day: isOffDay,
         notes: form.notes || null,
         status: statusOut,
       };
@@ -828,6 +808,7 @@ export default function ShiftDrawer({
                 }}
                 style={{
                   ...fInput,
+                  minHeight: 42,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -884,7 +865,10 @@ export default function ShiftDrawer({
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}>
-                        {selectedStore.companyName ?? selectedStore.code}
+                        <span>{selectedStore.companyName ?? selectedStore.code}</span>
+                        <span style={{ color: '#0f766e', fontWeight: 700 }}>
+                          {` · ${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                        </span>
                       </span>
                     </span>
                   </span>
@@ -960,7 +944,10 @@ export default function ShiftDrawer({
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                             }}>
-                              {store.companyName ?? store.code}
+                              <span>{store.companyName ?? store.code}</span>
+                              <span style={{ color: '#0f766e', fontWeight: 700 }}>
+                                {` · ${store.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                              </span>
                             </span>
                           </span>
                         </button>
@@ -1024,285 +1011,370 @@ export default function ShiftDrawer({
                 setForm((p) => ({ ...p, date: v }));
               }}
             />
-            {form.user_id && selectedDateIsOffDay && (
-              <div style={{
-                marginTop: 8,
-                fontSize: 12,
-                lineHeight: 1.45,
-                color: '#92400e',
-                background: 'rgba(251,191,36,0.14)',
-                border: '1px solid rgba(217,119,6,0.3)',
-                borderRadius: 8,
-                padding: '7px 9px',
-              }}>
-                {shift
-                  ? t('shifts.offDayStatusLockedHint', {
-                      days: selectedEmployeeOffDaysLabel,
-                      defaultValue: 'This date falls on an off-day ({{days}}). You can update details, but status changes are locked.',
-                    })
-                  : t('shifts.offDayCreateBlockedHint', {
-                      days: selectedEmployeeOffDaysLabel,
-                      defaultValue: 'This date falls on an off-day ({{days}}). Shift creation is blocked.',
-                    })}
-              </div>
-            )}
           </div>
 
-          {/* ─── Section: Orario ────────────── */}
-          <SectionDivider label={t('shifts.sectionOrario')} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-            <TimePicker
-              label={t('shifts.form.startTime')}
-              value={form.start_time}
-              onChange={(v) => {
-                setForm((p) => ({ ...p, start_time: v }));
-                setFormErrors((fe) => { const n = { ...fe }; delete n.start_time; return n; });
-              }}
-              error={formErrors.start_time}
-              required
-            />
-            <TimePicker
-              label={t('shifts.form.endTime')}
-              value={form.end_time}
-              onChange={(v) => {
-                setForm((p) => ({ ...p, end_time: v }));
-                setFormErrors((fe) => { const n = { ...fe }; delete n.end_time; return n; });
-              }}
-              error={formErrors.end_time}
-              required
-            />
+          <div style={{ ...fieldRow, marginBottom: 20 }}>
+            <label style={fLabel}>{t('shifts.form.dayType', 'Day type')}</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm((prev) => {
+                    const revertingFromOffDay = prev.is_off_day;
+                    const resetPlaceholderTimes = revertingFromOffDay && prev.start_time === '00:00' && prev.end_time === '00:01';
+                    return {
+                      ...prev,
+                      is_off_day: false,
+                      start_time: resetPlaceholderTimes ? '' : prev.start_time,
+                      end_time: resetPlaceholderTimes ? '' : prev.end_time,
+                      status: prev.status === 'cancelled' ? 'scheduled' : prev.status,
+                    };
+                  });
+                }}
+                style={{
+                  padding: '9px 10px',
+                  borderRadius: 10,
+                  border: `1.5px solid ${!form.is_off_day ? 'var(--accent)' : 'var(--border)'}`,
+                  background: !form.is_off_day ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
+                  color: !form.is_off_day ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                {t('shifts.form.workingDay', 'Working day')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm((prev) => ({
+                    ...prev,
+                    is_off_day: true,
+                    status: 'cancelled',
+                    break_type: 'none',
+                    break_start: '',
+                    break_end: '',
+                    break_minutes: '',
+                    is_split: false,
+                    split_start2: '',
+                    split_end2: '',
+                  }));
+                  setFormErrors((fe) => {
+                    const next = { ...fe };
+                    delete next.start_time;
+                    delete next.end_time;
+                    delete next.break_start;
+                    delete next.break_end;
+                    delete next.break_minutes;
+                    delete next.split_start2;
+                    delete next.split_end2;
+                    return next;
+                  });
+                }}
+                style={{
+                  padding: '9px 10px',
+                  borderRadius: 10,
+                  border: `1.5px solid ${form.is_off_day ? 'rgba(185,28,28,0.5)' : 'var(--border)'}`,
+                  background: form.is_off_day ? 'rgba(239,68,68,0.1)' : 'var(--surface)',
+                  color: form.is_off_day ? '#b91c1c' : 'var(--text-secondary)',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                {t('shifts.form.offDay', 'Off day')}
+              </button>
+            </div>
+            <div style={{ marginTop: 7, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+              {form.is_off_day
+                ? t('shifts.offDayAutoCancelHint', 'This date will be marked as off-day and any existing working shift for this user/date will be cancelled.')
+                : t('shifts.workingDayHint', 'Configure full shift details for this working day.')}
+            </div>
           </div>
 
-          {/* ─── Section: Pausa ─────────────── */}
-          <SectionDivider label={t('shifts.sectionBreak')} optional />
-
-          {/* Break type toggle: Fissa / Flessibile */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            {(['fixed', 'flexible'] as const).map((bt) => {
-              const active = form.break_type === bt;
-              return (
-                <button
-                  key={bt} type="button"
-                  onClick={() => {
-                    setForm((p) => ({ ...p, break_type: bt }));
-                    setFormErrors((fe) => { const n = { ...fe }; delete n.break_start; delete n.break_end; delete n.break_minutes; return n; });
-                  }}
-                  style={{
-                    flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                    border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                    background: active ? 'rgba(201,151,58,0.09)' : 'transparent',
-                    color: active ? 'var(--accent)' : 'var(--text-muted)',
-                    fontFamily: 'var(--font-body)',
-                  }}
-                >
-                  {t(`shifts.form.breakType_${bt}`)}
-                </button>
-              );
-            })}
-          </div>
-
-          {form.break_type === 'flexible' ? (
-            <div style={{ marginBottom: 4 }}>
-              <label style={fLabel}>
-                {t('shifts.form.breakMinutes')}
-                <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="number"
-                  min={1}
-                  max={480}
-                  placeholder="30"
-                  value={form.break_minutes}
-                  onChange={(e) => {
-                    setForm((p) => ({ ...p, break_minutes: e.target.value }));
-                    setFormErrors((fe) => { const n = { ...fe }; delete n.break_minutes; return n; });
-                  }}
-                  onFocus={focusHandler}
-                  onBlur={blurHandler}
-                  style={{ ...fInput, width: 100 }}
-                />
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.breakMinutesUnit')}</span>
-              </div>
-              {formErrors.break_minutes && (
-                <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.break_minutes}</div>
-              )}
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                {t('shifts.form.breakFlexHint')}
-              </div>
+          {form.is_off_day ? (
+            <div style={{
+              marginBottom: 20,
+              borderRadius: 10,
+              border: '1px solid rgba(185,28,28,0.25)',
+              background: 'rgba(254,242,242,0.8)',
+              padding: '10px 12px',
+              color: '#991b1b',
+              fontSize: 12,
+              lineHeight: 1.55,
+            }}>
+              <strong style={{ display: 'block', marginBottom: 4 }}>
+                {t('shifts.form.offDay', 'Off day')}
+              </strong>
+              <span>
+                {t('shifts.offDayExplain', 'A dedicated off-day tag will be shown in the calendar. Switch back to Working day to restore normal shift controls.')}
+              </span>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-              <TimePicker
-                label={t('shifts.form.breakStart')}
-                value={form.break_start}
-                onChange={(v) => {
-                  setForm((p) => ({ ...p, break_start: v }));
-                  setFormErrors((fe) => { const n = { ...fe }; delete n.break_start; return n; });
-                }}
-                error={formErrors.break_start}
-              />
-              <TimePicker
-                label={t('shifts.form.breakEnd')}
-                value={form.break_end}
-                onChange={(v) => {
-                  setForm((p) => ({ ...p, break_end: v }));
-                  setFormErrors((fe) => { const n = { ...fe }; delete n.break_end; return n; });
-                }}
-                error={formErrors.break_end}
-              />
-            </div>
-          )}
+            <>
+              {/* ─── Section: Orario ────────────── */}
+              <SectionDivider label={t('shifts.sectionOrario')} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                <TimePicker
+                  label={t('shifts.form.startTime')}
+                  value={form.start_time}
+                  onChange={(v) => {
+                    setForm((p) => ({ ...p, start_time: v }));
+                    setFormErrors((fe) => { const n = { ...fe }; delete n.start_time; return n; });
+                  }}
+                  error={formErrors.start_time}
+                  required
+                />
+                <TimePicker
+                  label={t('shifts.form.endTime')}
+                  value={form.end_time}
+                  onChange={(v) => {
+                    setForm((p) => ({ ...p, end_time: v }));
+                    setFormErrors((fe) => { const n = { ...fe }; delete n.end_time; return n; });
+                  }}
+                  error={formErrors.end_time}
+                  required
+                />
+              </div>
 
-          {/* ─── Section: Turno spezzato ─────── */}
-          <SectionDivider label={t('shifts.sectionSplit')} optional />
-          {/* Toggle switch */}
-          <div
-            role="switch"
-            aria-checked={form.is_split}
-            tabIndex={0}
-            onClick={() => {
-              const next = !form.is_split;
-              setForm((prev) => ({ ...prev, is_split: next }));
-              if (!next) {
-                setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === ' ' || e.key === 'Enter') {
-                e.preventDefault();
-                const next = !form.is_split;
-                setForm((prev) => ({ ...prev, is_split: next }));
-                if (!next) {
-                  setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
-                }
-              }
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: form.is_split ? 12 : 20, outline: 'none', userSelect: 'none' }}
-          >
-            <div
-              style={{
-                position: 'relative', width: 38, height: 22,
-                background: form.is_split ? 'var(--accent)' : 'var(--border)',
-                borderRadius: 11, transition: 'background 0.2s', flexShrink: 0,
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 3, left: form.is_split ? 19 : 3,
-                width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-              }} />
-            </div>
-            <div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: form.is_split ? 'var(--primary)' : 'var(--text-secondary)' }}>
-                {form.is_split ? t('shifts.form.splitEnabled') : t('shifts.form.splitDisabled')}
-              </span>
-              {!form.is_split && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                  {t('shifts.form.splitHint')}
+              {/* ─── Section: Pausa ─────────────── */}
+              <SectionDivider label={t('shifts.sectionBreak')} optional />
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+                {(['none', 'fixed', 'flexible'] as const).map((bt) => {
+                  const active = form.break_type === bt;
+                  const breakTypeLabel = bt === 'none'
+                    ? t('shifts.form.breakType_none', 'No break')
+                    : t(`shifts.form.breakType_${bt}`);
+                  return (
+                    <button
+                      key={bt}
+                      type="button"
+                      onClick={() => {
+                        setForm((p) => ({
+                          ...p,
+                          break_type: bt,
+                          break_start: bt === 'fixed' ? p.break_start : '',
+                          break_end: bt === 'fixed' ? p.break_end : '',
+                          break_minutes: bt === 'flexible' ? p.break_minutes : '',
+                        }));
+                        setFormErrors((fe) => {
+                          const n = { ...fe };
+                          delete n.break_start;
+                          delete n.break_end;
+                          delete n.break_minutes;
+                          return n;
+                        });
+                      }}
+                      style={{
+                        borderRadius: 10,
+                        border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                        background: active ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
+                        color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                        padding: '8px 6px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {breakTypeLabel}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {form.break_type === 'flexible' ? (
+                <div style={{ marginBottom: 4 }}>
+                  <label style={fLabel}>
+                    {t('shifts.form.breakMinutes')}
+                    <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="number"
+                      min={1}
+                      max={480}
+                      placeholder="30"
+                      value={form.break_minutes}
+                      onChange={(e) => {
+                        setForm((p) => ({ ...p, break_minutes: e.target.value }));
+                        setFormErrors((fe) => { const n = { ...fe }; delete n.break_minutes; return n; });
+                      }}
+                      onFocus={focusHandler}
+                      onBlur={blurHandler}
+                      style={{ ...fInput, width: 100 }}
+                    />
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.breakMinutesUnit')}</span>
+                  </div>
+                  {formErrors.break_minutes && (
+                    <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.break_minutes}</div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                    {t('shifts.form.breakFlexHint')}
+                  </div>
+                </div>
+              ) : form.break_type === 'fixed' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                  <TimePicker
+                    label={t('shifts.form.breakStart')}
+                    value={form.break_start}
+                    onChange={(v) => {
+                      setForm((p) => ({ ...p, break_start: v }));
+                      setFormErrors((fe) => { const n = { ...fe }; delete n.break_start; return n; });
+                    }}
+                    error={formErrors.break_start}
+                  />
+                  <TimePicker
+                    label={t('shifts.form.breakEnd')}
+                    value={form.break_end}
+                    onChange={(v) => {
+                      setForm((p) => ({ ...p, break_end: v }));
+                      setFormErrors((fe) => { const n = { ...fe }; delete n.break_end; return n; });
+                    }}
+                    error={formErrors.break_end}
+                  />
+                </div>
+              ) : (
+                <div style={{ marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('shifts.form.breakNoneHint', 'No break will be assigned to this shift.')}
                 </div>
               )}
-            </div>
-          </div>
 
-          {form.is_split && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-              <TimePicker
-                label={t('shifts.form.splitStart2')}
-                value={form.split_start2}
-                onChange={(v) => {
-                  setForm((p) => ({ ...p, split_start2: v }));
-                  setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
+              {/* ─── Section: Turno spezzato ─────── */}
+              <SectionDivider label={t('shifts.sectionSplit')} optional />
+              <div
+                role="switch"
+                aria-checked={form.is_split}
+                tabIndex={0}
+                onClick={() => {
+                  const next = !form.is_split;
+                  setForm((prev) => ({ ...prev, is_split: next }));
+                  if (!next) {
+                    setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
+                  }
                 }}
-                error={formErrors.split_start2}
-              />
-              <TimePicker
-                label={t('shifts.form.splitEnd2')}
-                value={form.split_end2}
-                onChange={(v) => {
-                  setForm((p) => ({ ...p, split_end2: v }));
-                  setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    const next = !form.is_split;
+                    setForm((prev) => ({ ...prev, is_split: next }));
+                    if (!next) {
+                      setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
+                    }
+                  }
                 }}
-                error={formErrors.split_end2}
-              />
-            </div>
-          )}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: form.is_split ? 12 : 20, outline: 'none', userSelect: 'none' }}
+              >
+                <div
+                  style={{
+                    position: 'relative', width: 38, height: 22,
+                    background: form.is_split ? 'var(--accent)' : 'var(--border)',
+                    borderRadius: 11, transition: 'background 0.2s', flexShrink: 0,
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 3, left: form.is_split ? 19 : 3,
+                    width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </div>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: form.is_split ? 'var(--primary)' : 'var(--text-secondary)' }}>
+                    {form.is_split ? t('shifts.form.splitEnabled') : t('shifts.form.splitDisabled')}
+                  </span>
+                  {!form.is_split && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                      {t('shifts.form.splitHint')}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-          {/* ─── Section: Stato ─────────────── */}
-          <SectionDivider label={t('shifts.form.status')} />
-          {user?.role === 'store_manager' && shift?.status === 'confirmed' ? (
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.45 }}>
-              <strong style={{ color: 'var(--primary)' }}>{t('shifts.status.confirmed')}</strong>
-              <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                {t('shifts.storeManagerConfirmedHint')}
-              </span>
-            </div>
-          ) : user?.role === 'store_manager' ? (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-              {(['scheduled', 'cancelled'] as const).map((s) => {
-                const active = form.status === s;
-                const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
-                const bg    = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                const disabled = statusLockedForOffDay && s !== shift?.status;
-                return (
-                  <button
-                    key={s} type="button"
-                    onClick={() => !disabled && setForm((p) => ({ ...p, status: s }))}
-                    disabled={disabled}
-                    style={{
-                      flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                      fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', transition: 'all 0.12s',
-                      border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                      background: active ? bg : 'transparent',
-                      color: active ? color : 'var(--text-muted)',
-                      opacity: disabled ? 0.55 : 1,
-                      fontFamily: 'var(--font-body)',
+              {form.is_split && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                  <TimePicker
+                    label={t('shifts.form.splitStart2')}
+                    value={form.split_start2}
+                    onChange={(v) => {
+                      setForm((p) => ({ ...p, split_start2: v }));
+                      setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
                     }}
-                  >
-                    {t(`shifts.status.${s}`)}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-              {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
-                const active = form.status === s;
-                const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
-                const bg    = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                const disabled = statusLockedForOffDay && s !== shift?.status;
-                return (
-                  <button
-                    key={s} type="button"
-                    onClick={() => !disabled && setForm((p) => ({ ...p, status: s }))}
-                    disabled={disabled}
-                    style={{
-                      flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                      fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', transition: 'all 0.12s',
-                      border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                      background: active ? bg : 'transparent',
-                      color: active ? color : 'var(--text-muted)',
-                      opacity: disabled ? 0.55 : 1,
-                      fontFamily: 'var(--font-body)',
+                    error={formErrors.split_start2}
+                  />
+                  <TimePicker
+                    label={t('shifts.form.splitEnd2')}
+                    value={form.split_end2}
+                    onChange={(v) => {
+                      setForm((p) => ({ ...p, split_end2: v }));
+                      setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
                     }}
-                  >
-                    {t(`shifts.status.${s}`)}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {statusLockedForOffDay && shift && (
-            <div style={{
-              marginTop: -14,
-              marginBottom: 14,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              lineHeight: 1.4,
-            }}>
-              {t('shifts.offDayStatusLockedHintCompact', 'Status changes are locked because this shift is on an off-day.')}
-            </div>
+                    error={formErrors.split_end2}
+                  />
+                </div>
+              )}
+
+              {/* ─── Section: Stato ─────────────── */}
+              <SectionDivider label={t('shifts.form.status')} />
+              {user?.role === 'store_manager' && shift?.status === 'confirmed' ? (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.45 }}>
+                  <strong style={{ color: 'var(--primary)' }}>{t('shifts.status.confirmed')}</strong>
+                  <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('shifts.storeManagerConfirmedHint')}
+                  </span>
+                </div>
+              ) : user?.role === 'store_manager' ? (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+                  {(['scheduled', 'cancelled'] as const).map((s) => {
+                    const active = form.status === s;
+                    const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
+                    const bg = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, status: s }))}
+                        style={{
+                          flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
+                          fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                          border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                          background: active ? bg : 'transparent',
+                          color: active ? color : 'var(--text-muted)',
+                          fontFamily: 'var(--font-body)',
+                        }}
+                      >
+                        {t(`shifts.status.${s}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+                  {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
+                    const active = form.status === s;
+                    const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
+                    const bg = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, status: s }))}
+                        style={{
+                          flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
+                          fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                          border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                          background: active ? bg : 'transparent',
+                          color: active ? color : 'var(--text-muted)',
+                          fontFamily: 'var(--font-body)',
+                        }}
+                      >
+                        {t(`shifts.status.${s}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {/* ─── Notes ──────────────────────── */}

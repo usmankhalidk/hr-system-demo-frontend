@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useEffect, useRef, useState } from 'react';
-import { listMyAttendanceEvents, type AttendanceEvent } from '../../api/attendance';
+import { listMyAttendanceEvents, type AttendanceEvent, type EventType } from '../../api/attendance';
 import { Spinner } from '../../components/ui/Spinner';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { useOfflineSync } from '../../context/OfflineSyncContext';
+import client from '../../api/client';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -31,18 +32,84 @@ type Filter = '7' | '30';
 
 export default function EmployeeCheckinPage() {
   const { t } = useTranslation();
-  const { user } = useAuth();
-  const { lastSyncTime } = useOfflineSync();
+  const { user, permissions } = useAuth();
+  const { lastSyncTime, isOnline, isSyncing, queueLength, enqueue } = useOfflineSync();
 
   const [filter, setFilter] = useState<Filter>('7');
+  const [historyVersion, setHistoryVersion] = useState(0);
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fingerprintRef = useRef<string | null>(null);
 
   const initials = user
     ? `${user.name?.[0] ?? ''}${user.surname ? user.surname[0] : ''}`.toUpperCase()
     : '';
+
+  const CLOCK_ACTIONS: { type: EventType; label: string; color: string }[] = [
+    { type: 'checkin',     label: t('terminal.checkin'),    color: '#16a34a' },
+    { type: 'break_start', label: t('terminal.breakStart'), color: '#d97706' },
+    { type: 'break_end',   label: t('terminal.breakEnd'),   color: '#2563eb' },
+    { type: 'checkout',    label: t('terminal.checkout'),   color: '#dc2626' },
+  ];
+
+  async function handleAction(eventType: EventType) {
+    if (actionLoading) return;
+    setActionLoading(true);
+    setActionMsg(null);
+
+    try {
+      if (!fingerprintRef.current) {
+        const fp = await getDeviceFingerprint();
+        fingerprintRef.current = fp.fingerprint;
+      }
+
+      const eventTime = new Date().toISOString();
+
+      if (!isOnline) {
+        await enqueue({
+          event_type: eventType,
+          event_time: eventTime,
+          unique_id: user?.uniqueId || undefined,
+          user_id: user?.id,
+          device_fingerprint: fingerprintRef.current || undefined,
+        });
+        setActionMsg({ text: 'Timbratura salvata offline — verrà sincronizzata automaticamente', ok: true });
+      } else {
+        // Use /sync endpoint — /checkin requires a QR token and is for terminal use only.
+        // /sync accepts authenticated direct clock-ins without a QR token.
+        const clientUuid: string =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const res = await client.post('/attendance/sync', {
+          events: [{
+            event_type: eventType,
+            event_time: eventTime,
+            unique_id: user?.uniqueId || undefined,
+            user_id: user?.id,
+            device_fingerprint: fingerprintRef.current || undefined,
+            client_uuid: clientUuid,
+          }],
+        });
+        const result = (res.data as any)?.data ?? res.data;
+        if ((result?.failed ?? 0) > 0) {
+          throw new Error(result?.errors?.[0] ?? 'Errore durante la timbratura');
+        }
+        setActionMsg({ text: 'Timbratura registrata con successo', ok: true });
+        // Increment historyVersion to trigger a real re-fetch of attendance history
+        window.setTimeout(() => setHistoryVersion((v) => v + 1), 1500);
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Errore durante la timbratura';
+      setActionMsg({ text: msg, ok: false });
+    } finally {
+      setActionLoading(false);
+      window.setTimeout(() => setActionMsg(null), 4000);
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -69,7 +136,7 @@ export default function EmployeeCheckinPage() {
 
     void load();
     return () => { alive = false; };
-  }, [filter, lastSyncTime]);
+  }, [filter, lastSyncTime, historyVersion]);
 
   // Group events by date
   const grouped: { date: string; items: AttendanceEvent[] }[] = [];
@@ -136,6 +203,94 @@ export default function EmployeeCheckinPage() {
             {t('checkin.subtitle')}
           </div>
         </div>
+      </div>
+
+      {/* Offline / sync status banner */}
+      {(!isOnline || isSyncing || queueLength > 0) && (
+        <div style={{
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 16px',
+          fontSize: 13,
+          fontWeight: 600,
+          fontFamily: 'var(--font-body)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          background: !isOnline ? 'rgba(220,38,38,0.10)' : 'rgba(37,99,235,0.10)',
+          border: `1px solid ${!isOnline ? 'rgba(220,38,38,0.30)' : 'rgba(37,99,235,0.30)'}`,
+          color: !isOnline ? '#dc2626' : '#2563eb',
+        }}>
+          <span style={{ fontSize: 16 }}>{!isOnline ? '📵' : isSyncing ? '🔄' : '⏳'}</span>
+          {!isOnline
+            ? 'Modalità offline — le timbrature verranno sincronizzate automaticamente'
+            : isSyncing
+            ? 'Sincronizzazione in corso...'
+            : `${queueLength} ${queueLength === 1 ? 'timbratura in attesa' : 'timbrature in attesa'} di sincronizzazione`}
+        </div>
+      )}
+
+      {/* Clock-in action buttons */}
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderTop: '3px solid var(--accent)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-sm)',
+        padding: '20px 24px',
+        display: 'flex', flexDirection: 'column', gap: 14,
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+          textTransform: 'uppercase', letterSpacing: '0.08em',
+          fontFamily: 'var(--font-display)', marginBottom: 4,
+        }}>
+          Timbra
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {CLOCK_ACTIONS.map(({ type, label, color }) => (
+            <button
+              key={type}
+              onClick={() => void handleAction(type)}
+              disabled={actionLoading}
+              style={{
+                padding: '14px 10px',
+                borderRadius: 10,
+                border: `1.5px solid ${color}55`,
+                background: `${color}15`,
+                color,
+                fontSize: 13, fontWeight: 800,
+                cursor: actionLoading ? 'not-allowed' : 'pointer',
+                fontFamily: 'var(--font-display)',
+                letterSpacing: 0.5,
+                opacity: actionLoading ? 0.6 : 1,
+                transition: 'all 0.15s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {actionLoading && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
+            <Spinner size="sm" color="var(--accent)" />
+          </div>
+        )}
+
+        {actionMsg && (
+          <div style={{
+            padding: '10px 14px',
+            borderRadius: 8,
+            fontSize: 13, fontWeight: 600,
+            fontFamily: 'var(--font-body)',
+            background: actionMsg.ok ? 'rgba(22,163,74,0.10)' : 'rgba(220,38,38,0.10)',
+            border: `1px solid ${actionMsg.ok ? 'rgba(22,163,74,0.30)' : 'rgba(220,38,38,0.30)'}`,
+            color: actionMsg.ok ? '#16a34a' : '#dc2626',
+          }}>
+            {actionMsg.text}
+          </div>
+        )}
       </div>
 
       {/* Steps card */}
@@ -228,8 +383,8 @@ export default function EmployeeCheckinPage() {
         </div>
       </div>
 
-      {/* Attendance history */}
-      <div style={{
+      {/* Attendance history — only shown when presenze module is enabled */}
+      {permissions['presenze'] !== false && <div style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)',
@@ -346,7 +501,7 @@ export default function EmployeeCheckinPage() {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

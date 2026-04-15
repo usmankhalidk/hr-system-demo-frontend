@@ -1,19 +1,50 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  ArrowRight,
+  BadgeCheck,
+  Bookmark,
+  BriefcaseBusiness,
+  Building2,
+  Clock3,
+  Edit,
+  Eye,
+  FileText,
+  Globe2,
+  Heart,
+  Languages,
+  MapPin,
+  Plus,
+  Sparkles,
+  Store as StoreIcon,
+  Trash2,
+  User2,
+  Wallet,
+} from 'lucide-react';
+import ReactCountryFlag from 'react-country-flag';
+import { Country } from 'country-state-city';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { translateApiError } from '../../utils/apiErrors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { getApiBaseUrl } from '../../api/client';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import { CitySelect, CountrySelect, StateSelect } from '../../components/location';
+import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
+import { getStores } from '../../api/stores';
+import { getCompanies } from '../../api/companies';
+import { Company, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
   getCandidates, createCandidate, updateCandidateStage, deleteCandidate,
-  getInterviews, createInterview,
+  getInterviews, createInterview, updateInterview,
   getAlerts, getRisks,
+  previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
-  CandidateStatus, JobStatus,
+  CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -48,6 +79,103 @@ const STATUS_COLOR: Record<JobStatus, string> = {
   closed:    '#DC2626',
 };
 
+const JOB_TYPE_LABEL: Record<JobType, string> = {
+  fulltime: 'fulltime',
+  parttime: 'parttime',
+  contract: 'contract',
+  internship: 'internship',
+};
+
+const COUNTRY_ROWS = Country.getAllCountries();
+
+function normalizeCountryCode(value: string | null | undefined): string {
+  const raw = (value ?? '').trim();
+  if (!raw) return '';
+  if (/^[A-Za-z]{2}$/.test(raw)) return raw.toUpperCase();
+  const byName = COUNTRY_ROWS.find((country) => country.name.toLowerCase() === raw.toLowerCase());
+  return byName?.isoCode ?? '';
+}
+
+function countryNameFromCode(value: string | null | undefined): string {
+  const code = normalizeCountryCode(value);
+  if (!code) return '-';
+  const found = COUNTRY_ROWS.find((country) => country.isoCode === code);
+  return found?.name ?? code;
+}
+
+type ComplianceCheck = {
+  key: string;
+  label: string;
+  ok: boolean;
+};
+
+function getIndeedComplianceChecks(job: JobPosting): ComplianceCheck[] {
+  const frontendBase = (import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '');
+  const applyUrl = `${frontendBase}/careers/jobs/${job.id}`;
+  const description = job.description ?? '';
+
+  return [
+    {
+      key: 'title',
+      label: 'Title present and under 100 chars',
+      ok: job.title.trim().length > 0 && job.title.trim().length <= 100,
+    },
+    {
+      key: 'description',
+      label: 'Description present and over 150 chars',
+      ok: description.trim().length > 150,
+    },
+    {
+      key: 'entities',
+      label: 'Description has no escaped HTML entities',
+      ok: !/&lt;|&gt;|&amp;/i.test(description),
+    },
+    {
+      key: 'location',
+      label: 'Location fields present or role is remote',
+      ok: job.isRemote || (!!job.city && !!job.state && !!job.country && !!job.postalCode),
+    },
+    {
+      key: 'type',
+      label: 'Job type is mapped',
+      ok: ['fulltime', 'parttime', 'contract', 'internship'].includes(job.jobType),
+    },
+    {
+      key: 'reference',
+      label: 'Reference number format JOB-{id}',
+      ok: /^JOB-\d+$/.test(`JOB-${job.id}`),
+    },
+    {
+      key: 'status',
+      label: 'Job status is published',
+      ok: job.status === 'published',
+    },
+    {
+      key: 'language',
+      label: 'Language field is set',
+      ok: Boolean(job.language),
+    },
+    {
+      key: 'url',
+      label: 'Apply URL points to frontend',
+      ok: !/railway\.app/i.test(applyUrl) && /https?:\/\//i.test(applyUrl),
+    },
+    {
+      key: 'privacy',
+      label: 'Description excludes salary/personal-data requests',
+      ok: !/codice fiscale|partita iva|carta d['’]identità|salary|stipendio/i.test(description),
+    },
+  ];
+}
+
+function complianceScore(job: JobPosting): { passed: number; total: number; percentage: number; checks: ComplianceCheck[] } {
+  const checks = getIndeedComplianceChecks(job);
+  const passed = checks.filter((check) => check.ok).length;
+  const total = checks.length;
+  const percentage = total > 0 ? Math.round((passed / total) * 100) : 0;
+  return { passed, total, percentage, checks };
+}
+
 function initials(name: string) {
   return name.split(' ').map((w) => w[0] ?? '').join('').toUpperCase().slice(0, 2);
 }
@@ -60,10 +188,28 @@ function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+function languageFlagCodes(language: JobLanguage): string[] {
+  if (language === 'en') return ['GB'];
+  if (language === 'both') return ['IT', 'GB'];
+  return ['IT'];
+}
+
+function formatEuroRange(min: number | null, max: number | null, locale: string, fallback: string): string {
+  if (min === null && max === null) return fallback;
+  const formatter = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  });
+  const from = min === null ? '...' : formatter.format(min);
+  const to = max === null ? '...' : formatter.format(max);
+  return `${from} - ${to}`;
+}
+
 // ─── Shared modal backdrop ─────────────────────────────────────────────────────
 
-const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; children: React.ReactNode }> = ({
-  onClose, width = 520, children,
+const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; closeOnBackdropClick?: boolean; children: React.ReactNode }> = ({
+  onClose, width = 520, closeOnBackdropClick = true, children,
 }) =>
   createPortal(
     <div
@@ -72,7 +218,7 @@ const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; children: R
         background: 'rgba(13,33,55,0.55)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
       }}
-      onClick={onClose}
+      onClick={closeOnBackdropClick ? onClose : undefined}
     >
       <div
         style={{
@@ -93,80 +239,1273 @@ const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; children: R
 
 interface JobModalProps {
   job?: JobPosting | null;
-  onSave: (title: string, description: string, tags: string[]) => Promise<void>;
+  stores: Store[];
+  companies: Company[];
+  defaultCompanyId: number | null;
+  onSave: (payload: {
+    title: string;
+    description: string;
+    tags: string[];
+    language: JobLanguage;
+    jobType: JobType;
+    remoteType: RemoteType;
+    locationOverride: {
+      city: string;
+      state: string;
+      country: string;
+      postalCode: string;
+      address: string;
+    };
+    companyId: number;
+    storeId: number | null;
+    department: string;
+    weeklyHours: number | null;
+    contractType: string;
+    status: JobStatus;
+    salaryMin: number | null;
+    salaryMax: number | null;
+  }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
 }
 
-const JobModal: React.FC<JobModalProps> = ({ job, onSave, onClose, saving }) => {
+type JobModalErrors = {
+  title?: string;
+  description?: string;
+  city?: string;
+  country?: string;
+  weeklyHours?: string;
+  salary?: string;
+  companyId?: string;
+};
+
+const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultCompanyId, onSave, onClose, saving }) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const { isMobile, isTablet } = useBreakpoint();
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [title, setTitle] = useState(job?.title ?? '');
   const [description, setDescription] = useState(job?.description ?? '');
-  const [tagInput, setTagInput] = useState(job?.tags.join(', ') ?? '');
+  const [tags, setTags] = useState<string[]>(job?.tags ?? []);
+  const [tagInput, setTagInput] = useState('');
+  const [language, setLanguage] = useState<JobLanguage>(job?.language ?? 'it');
+  const [jobType, setJobType] = useState<JobType>(job?.jobType ?? 'fulltime');
+  const [status, setStatus] = useState<JobStatus>(job?.status ?? 'draft');
+  const [companyId, setCompanyId] = useState<string>(() => {
+    if (job?.companyId) return String(job.companyId);
+    if (defaultCompanyId) return String(defaultCompanyId);
+    if (companies[0]?.id) return String(companies[0].id);
+    return '';
+  });
+  const [storeId, setStoreId] = useState<string>(job?.storeId ? String(job.storeId) : '');
+  const [remoteType, setRemoteType] = useState<RemoteType>(job?.remoteType ?? (job?.isRemote ? 'remote' : 'onsite'));
+  const [locationOverride, setLocationOverride] = useState(() => ({
+    country: normalizeCountryCode(job?.jobCountry ?? ''),
+    state: job?.jobState ?? '',
+    city: job?.jobCity ?? '',
+    postalCode: job?.jobPostalCode ?? '',
+    address: job?.jobAddress ?? '',
+  }));
+  const [department, setDepartment] = useState(job?.department ?? '');
+  const [weeklyHoursInput, setWeeklyHoursInput] = useState(job?.weeklyHours !== null && job?.weeklyHours !== undefined ? String(job.weeklyHours) : '');
+  const [salaryMinInput, setSalaryMinInput] = useState(job?.salaryMin !== null && job?.salaryMin !== undefined ? String(job.salaryMin) : '');
+  const [salaryMaxInput, setSalaryMaxInput] = useState(job?.salaryMax !== null && job?.salaryMax !== undefined ? String(job.salaryMax) : '');
+  const [contractType, setContractType] = useState(job?.contractType ?? '');
+  const [errors, setErrors] = useState<JobModalErrors>({});
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const tags = tagInput.split(',').map((s) => s.trim()).filter(Boolean);
-    onSave(title.trim(), description.trim(), tags);
+  const companyOptions = useMemo(() => {
+    const opts = companies.map((company) => ({
+      id: company.id,
+      name: company.name,
+      groupName: company.groupName ?? null,
+      ownerLabel: [company.ownerName, company.ownerSurname].filter(Boolean).join(' ') || null,
+      storeCount: typeof company.storeCount === 'number' ? company.storeCount : null,
+    }));
+
+    if (opts.length === 0 && defaultCompanyId) {
+      opts.push({
+        id: defaultCompanyId,
+        name: `Company #${defaultCompanyId}`,
+        groupName: null,
+        ownerLabel: null,
+        storeCount: null,
+      });
+    }
+
+    return opts;
+  }, [companies, defaultCompanyId]);
+
+  const storesForSelectedCompany = useMemo(() => {
+    if (!companyId) return [] as Store[];
+    const selectedCompanyId = Number.parseInt(companyId, 10);
+    if (Number.isNaN(selectedCompanyId)) return [] as Store[];
+    return stores.filter((store) => store.companyId === selectedCompanyId);
+  }, [stores, companyId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    const exists = storesForSelectedCompany.some((store) => String(store.id) === storeId);
+    if (!exists) {
+      setStoreId('');
+    }
+  }, [storeId, storesForSelectedCompany]);
+
+  const addTag = (value: string) => {
+    const normalized = value.trim();
+    if (!normalized) return;
+    if (tags.some((tag) => tag.toLowerCase() === normalized.toLowerCase())) return;
+    setTags((prev) => [...prev, normalized]);
+    setTagInput('');
   };
 
+  const removeTag = (value: string) => {
+    setTags((prev) => prev.filter((tag) => tag !== value));
+  };
+
+  const parseOptionalInt = (value: string): number | null => {
+    const normalized = value.trim();
+    if (!normalized) return null;
+    const parsed = Number.parseInt(normalized, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const validateStep1 = (): boolean => {
+    const nextErrors: JobModalErrors = {};
+
+    if (!title.trim()) nextErrors.title = t('common.required', 'Required');
+    if (!description.trim()) nextErrors.description = t('common.required', 'Required');
+
+    const weeklyRaw = weeklyHoursInput.trim();
+    if (weeklyRaw) {
+      const weekly = Number.parseInt(weeklyRaw, 10);
+      if (Number.isNaN(weekly) || weekly < 0 || weekly > 168) {
+        nextErrors.weeklyHours = t('ats.weeklyHoursRangeError', 'Weekly hours must be between 0 and 168');
+      }
+    }
+
+    const salaryMinRaw = salaryMinInput.trim();
+    const salaryMaxRaw = salaryMaxInput.trim();
+    const salaryMin = salaryMinRaw ? Number.parseInt(salaryMinRaw, 10) : null;
+    const salaryMax = salaryMaxRaw ? Number.parseInt(salaryMaxRaw, 10) : null;
+    const invalidSalaryMin = salaryMinRaw !== '' && (Number.isNaN(salaryMin as number) || (salaryMin as number) < 0);
+    const invalidSalaryMax = salaryMaxRaw !== '' && (Number.isNaN(salaryMax as number) || (salaryMax as number) < 0);
+
+    if (invalidSalaryMin || invalidSalaryMax) {
+      nextErrors.salary = t('ats.salaryInvalid', 'Salary values must be valid positive numbers');
+    } else if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) {
+      nextErrors.salary = t('ats.salaryRangeError', 'Salary min must be less than or equal to salary max');
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const validateStep2 = (): boolean => {
+    const nextErrors: JobModalErrors = {};
+
+    if (!companyId) {
+      nextErrors.companyId = t('common.required', 'Required');
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const moveNext = () => {
+    if (step === 1) {
+      if (validateStep1()) setStep(2);
+      return;
+    }
+    if (step === 2) {
+      if (validateStep2()) setStep(3);
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!validateStep1()) {
+      setStep(1);
+      return;
+    }
+    if (!validateStep2()) {
+      setStep(2);
+      return;
+    }
+
+    const parsedCompanyId = Number.parseInt(companyId, 10);
+    if (Number.isNaN(parsedCompanyId)) return;
+
+    await onSave({
+      title: title.trim(),
+      description: description.trim(),
+      tags,
+      language,
+      jobType,
+      remoteType,
+      locationOverride,
+      companyId: parsedCompanyId,
+      storeId: storeId ? Number.parseInt(storeId, 10) : null,
+      department: department.trim(),
+      weeklyHours: parseOptionalInt(weeklyHoursInput),
+      contractType: contractType.trim(),
+      status,
+      salaryMin: parseOptionalInt(salaryMinInput),
+      salaryMax: parseOptionalInt(salaryMaxInput),
+    });
+  };
+
+  const selectedCompanyName = useMemo(() => {
+    if (!companyId) return '-';
+    const selected = companyOptions.find((company) => String(company.id) === companyId);
+    return selected?.name ?? '-';
+  }, [companyId, companyOptions]);
+
+  const selectedCompanyMeta = useMemo(() => {
+    if (!companyId) return null;
+    return companyOptions.find((company) => String(company.id) === companyId) ?? null;
+  }, [companyId, companyOptions]);
+
+  const selectedStoreMeta = useMemo(() => {
+    if (!storeId) return null;
+    return storesForSelectedCompany.find((store) => String(store.id) === storeId) ?? null;
+  }, [storeId, storesForSelectedCompany]);
+
+  const selectedCompanyLogoUrl = useMemo(() => {
+    if (!companyId) return null;
+    const selected = companies.find((item) => String(item.id) === companyId);
+    return getCompanyLogoUrl(selected?.logoFilename);
+  }, [companies, companyId]);
+
+  const formCompletion = useMemo(() => {
+    const checks = [
+      Boolean(title.trim()),
+      Boolean(description.trim()),
+      Boolean(companyId),
+    ];
+    const done = checks.filter(Boolean).length;
+    const total = checks.length;
+    return Math.round((done / total) * 100);
+    }, [title, description, companyId]);
+
+  const companySelectOptions = useMemo<SelectOption[]>(() => {
+    return companyOptions.map((company) => {
+      const logoUrl = getCompanyLogoUrl(companies.find((item) => item.id === company.id)?.logoFilename);
+      const countryCode = normalizeCountryCode(companies.find((item) => item.id === company.id)?.country ?? '');
+
+      const detailRows = [
+        company.groupName
+          ? {
+            key: `group-${company.id}`,
+            icon: <Building2 size={12} color="#64748B" />,
+            text: company.groupName,
+          }
+          : null,
+        company.ownerLabel
+          ? {
+            key: `owner-${company.id}`,
+            icon: <User2 size={12} color="#64748B" />,
+            text: `${t('ats.ownerLabel', 'Owner')}: ${company.ownerLabel}`,
+          }
+          : null,
+        typeof company.storeCount === 'number'
+          ? {
+            key: `stores-${company.id}`,
+            icon: <StoreIcon size={12} color="#64748B" />,
+            text: t('ats.storeCountLabel', '{{count}} stores', { count: company.storeCount }),
+          }
+          : null,
+      ].filter(Boolean) as Array<{ key: string; icon: React.ReactNode; text: string }>;
+
+      return {
+        value: String(company.id),
+        label: company.name,
+        render: (
+            <div style={{ display: 'grid', gap: 5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {logoUrl ? <img src={logoUrl} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Building2 size={14} color="#64748B" />}
+              </div>
+              <div style={{ display: 'grid', gap: 3, minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{company.name}</span>
+                  {countryCode ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: 11 }}>
+                      <ReactCountryFlag countryCode={countryCode} svg style={{ width: '1em', height: '1em' }} />
+                      {countryCode}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: 2, paddingLeft: 36 }}>
+              {detailRows.length > 0 ? detailRows.map((detail) => (
+                <span key={detail.key} style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {detail.icon}
+                  {detail.text}
+                </span>
+              )) : (
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Building2 size={12} color="#64748B" />
+                  {t('ats.standaloneCompany', 'Standalone company')}
+                </span>
+              )}
+            </div>
+          </div>
+        ),
+      };
+    });
+  }, [companyOptions, companies, t]);
+
+  const storeSelectOptions = useMemo<SelectOption[]>(() => {
+    return storesForSelectedCompany.map((store) => {
+      const location = [store.city, store.state, store.country].filter(Boolean).join(', ');
+      const countryCode = normalizeCountryCode(store.country ?? '');
+      const storeLogo = getStoreLogoUrl(store.logoFilename ?? null);
+
+      const detailRows = [
+        store.code
+          ? { key: `code-${store.id}`, icon: <FileText size={12} color="#64748B" />, text: `${t('ats.codeLabel', 'Code')} ${store.code}` }
+          : null,
+        location
+          ? { key: `location-${store.id}`, icon: <MapPin size={12} color="#64748B" />, text: location }
+          : null,
+        typeof store.employeeCount === 'number'
+          ? { key: `staff-${store.id}`, icon: <User2 size={12} color="#64748B" />, text: t('ats.staffCountLabel', '{{count}} staff', { count: store.employeeCount }) }
+          : null,
+      ].filter(Boolean) as Array<{ key: string; icon: React.ReactNode; text: string }>;
+
+      return {
+        value: String(store.id),
+        label: store.name,
+        render: (
+          <div style={{ display: 'grid', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {storeLogo ? <img src={storeLogo} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <StoreIcon size={13} color="#64748B" />}
+              </div>
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{store.name}</span>
+              {countryCode ? <ReactCountryFlag countryCode={countryCode} svg style={{ marginLeft: 'auto', width: '0.95em', height: '0.95em' }} /> : null}
+            </div>
+            <div style={{ display: 'grid', gap: 2, paddingLeft: 32 }}>
+              {detailRows.length > 0 ? detailRows.map((detail) => (
+                <span key={detail.key} style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {detail.icon}
+                  {detail.text}
+                </span>
+              )) : (
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                  {t('common.store', 'Store')}
+                </span>
+              )}
+            </div>
+          </div>
+        ),
+      };
+    });
+  }, [storesForSelectedCompany, t]);
+
+  const jobTypeSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      {
+        value: 'fulltime',
+        label: t('ats.jobType_fulltime'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700 }}>{t('ats.jobType_fulltime')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.fulltimeHint', 'Standard weekly schedule')}</span>
+          </div>
+        ),
+      },
+      {
+        value: 'parttime',
+        label: t('ats.jobType_parttime'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700 }}>{t('ats.jobType_parttime')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.parttimeHint', 'Flexible reduced hours')}</span>
+          </div>
+        ),
+      },
+      {
+        value: 'contract',
+        label: t('ats.jobType_contract'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700 }}>{t('ats.jobType_contract')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.contractHint', 'Fixed term or project scope')}</span>
+          </div>
+        ),
+      },
+      {
+        value: 'internship',
+        label: t('ats.jobType_internship'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700 }}>{t('ats.jobType_internship')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.internshipHint', 'Training and mentorship track')}</span>
+          </div>
+        ),
+      },
+    ];
+  }, [t]);
+
+  const remoteTypeSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      {
+        value: 'onsite',
+        label: t('ats.remoteType_onsite', 'On-site'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Building2 size={13} />{t('ats.remoteType_onsite', 'On-site')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.remoteTypeOnsiteHint', 'Presence required in store or office')}</span>
+          </div>
+        ),
+      },
+      {
+        value: 'hybrid',
+        label: t('ats.remoteType_hybrid', 'Hybrid'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><MapPin size={13} />{t('ats.remoteType_hybrid', 'Hybrid')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.remoteTypeHybridHint', 'Split schedule between remote and on-site')}</span>
+          </div>
+        ),
+      },
+      {
+        value: 'remote',
+        label: t('ats.remoteType_remote', 'Remote'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Globe2 size={13} />{t('ats.remoteType_remote', 'Remote')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.remoteTypeRemoteHint', 'Fully remote collaboration')}</span>
+          </div>
+        ),
+      },
+    ];
+  }, [t]);
+
+  const languageSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      {
+        value: 'it',
+        label: 'Italiano',
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Languages size={13} />Italiano</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Italian-first audience</span>
+          </div>
+        ),
+      },
+      {
+        value: 'en',
+        label: 'English',
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Languages size={13} />English</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>International candidates</span>
+          </div>
+        ),
+      },
+      {
+        value: 'both',
+        label: 'Bilingual',
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Languages size={13} />Bilingual</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Italian and English versions</span>
+          </div>
+        ),
+      },
+    ];
+  }, []);
+
+  const statusSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      {
+        value: 'draft',
+        label: t('ats.status_draft'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><FileText size={13} />{t('ats.status_draft')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.statusDraftHint', 'Visible only to your internal team')}</span>
+          </div>
+        ),
+      },
+      {
+        value: 'published',
+        label: t('ats.status_published'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><BadgeCheck size={13} />{t('ats.status_published')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.statusPublishedHint', 'Visible on careers pages immediately')}</span>
+          </div>
+        ),
+      },
+      {
+        value: 'closed',
+        label: t('ats.status_closed'),
+        render: (
+          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
+            <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Eye size={13} />{t('ats.status_closed')}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.statusClosedHint', 'No longer accepting candidates')}</span>
+          </div>
+        ),
+      },
+    ];
+  }, [t]);
+
+  const stepCards: Array<{ id: 1 | 2 | 3; title: string; subtitle: string; icon: React.ReactNode }> = [
+    { id: 1, title: t('ats.stepDetailsTitle', 'Job details'), subtitle: t('ats.stepDetailsSubtitle', 'Role profile and location'), icon: <BriefcaseBusiness size={14} /> },
+    { id: 2, title: t('ats.stepSettingsTitle', 'Platform settings'), subtitle: t('ats.stepSettingsSubtitle', 'Company, store and visibility'), icon: <Sparkles size={14} /> },
+    { id: 3, title: t('ats.stepReviewTitle', 'Review'), subtitle: t('ats.stepReviewSubtitle', 'Final check before save'), icon: <Eye size={14} /> },
+  ];
+
+  const isCompact = isMobile || isTablet;
+  const departmentLabel = t('common.department', 'Department');
+  const storeLabel = t('common.store', 'Store');
+  const statusLabel = t('common.status', 'Status');
+  const currentUserFullName = user ? `${user.name} ${user.surname ?? ''}`.trim() : t('common.user', 'User');
+  const currentUserInitials = user ? `${user.name?.[0] ?? ''}${user.surname?.[0] ?? ''}`.toUpperCase() : 'U';
+  const currentUserAvatarUrl = user?.avatarFilename ? getAvatarUrl(user.avatarFilename) : null;
+  const currentUserRoleLabel = user ? t(`roles.${user.role}`, user.role) : t('common.user', 'User');
+  const superAdminLabel = t('roles.super_admin', 'Super admin');
+
   return (
-    <ModalBackdrop onClose={onClose}>
-      {/* Header */}
-      <div style={{
-        padding: '20px 28px 18px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <div>
-          <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
-            {job ? t('ats.editJob') : t('ats.newJob')}
-          </h3>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-            {job ? t('ats.jobTitle') : t('ats.jobTitlePlaceholder')}
-          </p>
-        </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>×</button>
-      </div>
+    <ModalBackdrop onClose={onClose} closeOnBackdropClick={Boolean(job)} width={1140}>
 
       {/* Body */}
-      <form onSubmit={handleSubmit} style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <Input
-          label={`${t('ats.jobTitle')} *`}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-          placeholder={t('ats.jobTitlePlaceholder')}
-          autoFocus
-        />
+      <form onSubmit={handleSubmit} style={{ padding: 0, display: 'grid', gap: 0 }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isCompact ? '1fr' : 'minmax(310px, 1fr) minmax(0, 1.85fr)',
+          gap: 0,
+          alignItems: 'stretch',
+        }}>
+          <aside style={{
+            border: 'none',
+            borderRight: isCompact ? 'none' : '1px solid rgba(255,255,255,0.14)',
+            padding: '16px 14px',
+            background: 'var(--sidebar-bg)',
+            display: 'grid',
+            gap: 14,
+            position: 'static',
+            height: '100%',
+            alignContent: 'start',
+            gridColumn: isCompact ? 'auto' : '1 / 2',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              borderRadius: 10,
+              padding: '7px 8px',
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.12)',
+            }}>
+              <div style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.18)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: 11,
+                overflow: 'hidden',
+                flexShrink: 0,
+              }}>
+                {currentUserAvatarUrl
+                  ? <img src={currentUserAvatarUrl} alt={currentUserFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : currentUserInitials}
+              </div>
+              <div style={{ display: 'grid', minWidth: 0 }}>
+                <span style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentUserFullName}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {currentUserRoleLabel}
+                  </span>
+                  {user?.isSuperAdmin && (
+                    <span style={{
+                      fontSize: 9.5,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      fontWeight: 800,
+                      color: '#F8D98B',
+                      border: '1px solid rgba(248,217,139,0.55)',
+                      background: 'rgba(201,151,58,0.18)',
+                      borderRadius: 999,
+                      padding: '1px 6px',
+                      lineHeight: 1.4,
+                    }}>
+                      {superAdminLabel}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
 
-        <div>
-          <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-            {t('ats.jobDescription')}
-          </label>
-          <textarea
-            className="field-input"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            placeholder={t('ats.jobDescriptionPlaceholder')}
-            style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '8px 12px', fontSize: 13.5, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }}
-          />
-        </div>
+            <div style={{
+              borderRadius: 12,
+              border: '1px solid rgba(255,255,255,0.16)',
+              background: 'rgba(255,255,255,0.08)',
+              padding: '12px 11px',
+              display: 'grid',
+              gap: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.22)',
+                  background: 'rgba(255,255,255,0.16)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                }}>
+                  {selectedCompanyLogoUrl
+                    ? <img src={selectedCompanyLogoUrl} alt={selectedCompanyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Building2 size={18} color="#E2E8F0" />}
+                </div>
+                <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                  <strong style={{ color: '#FFFFFF', fontSize: 15, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedCompanyName}
+                  </strong>
+                  <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedCompanyMeta?.groupName ?? t('ats.standaloneCompany', 'Standalone company')}
+                  </span>
+                </div>
+              </div>
 
-        <Input
-          label={t('ats.jobTags')}
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          placeholder={t('ats.jobTagsPlaceholder')}
-          hint="Separate with commas"
-        />
+              <div style={{ display: 'grid', gap: 2 }}>
+                <span style={{ color: '#CBD5E1', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {t('ats.ownerLabel', 'Owner')}
+                </span>
+                <strong style={{ color: '#FFFFFF', fontSize: 20, lineHeight: 1.15, fontFamily: 'var(--font-display)', fontWeight: 800 }}>
+                  {selectedCompanyMeta?.ownerLabel ?? t('ats.ownerNotAssigned', 'Owner not assigned')}
+                </strong>
+              </div>
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
-          <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button variant="primary" type="submit" loading={saving} disabled={!title.trim()}>
-            {t('common.save')}
-          </Button>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.22)' }} />
+
+              <div style={{ display: 'grid', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, fontSize: 12, color: '#E2E8F0' }}>
+                  <span>{t('ats.completionLabel', 'Completion')}</span>
+                  <strong style={{ color: '#F8D98B' }}>{formCompletion}%</strong>
+                </div>
+                <div style={{ height: 7, borderRadius: 999, background: 'rgba(148,163,184,0.4)', overflow: 'hidden' }}>
+                  <div style={{ width: `${formCompletion}%`, height: '100%', background: 'linear-gradient(90deg, #D9AE58, #C9973A)' }} />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#F8FAFC', marginTop: 4 }}>
+                  <StoreIcon size={13} color="#CBD5E1" />
+                  <span>{selectedStoreMeta?.name ?? '-'}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#F8FAFC' }}>
+                  <Languages size={13} color="#CBD5E1" />
+                  <span>{language.toUpperCase()}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#F8FAFC' }}>
+                  <BadgeCheck size={13} color="#CBD5E1" />
+                  <span>{t(`ats.status_${status}`, status)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><BriefcaseBusiness size={13} color="#CBD5E1" />{jobType}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Globe2 size={13} color="#CBD5E1" />{remoteType}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Clock3 size={13} color="#CBD5E1" />{weeklyHoursInput.trim() || '-'} {t('ats.hoursPerWeek', 'hrs/week')}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Wallet size={13} color="#CBD5E1" />{salaryMinInput.trim() || '-'} - {salaryMaxInput.trim() || '-'}</div>
+                {remoteType !== 'remote' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <MapPin size={13} color="#CBD5E1" />
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      {locationOverride.country ? <ReactCountryFlag countryCode={locationOverride.country} svg style={{ width: '0.95em', height: '0.95em' }} /> : null}
+                      {locationOverride.city || '-'}, {countryNameFromCode(locationOverride.country)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ borderRadius: 10, border: '1px dashed rgba(148,163,184,0.55)', background: 'rgba(13,33,55,0.25)', padding: 10, color: '#E2E8F0', fontSize: 12.5, lineHeight: 1.5 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#F8FAFC', marginBottom: 4 }}>
+                <User2 size={13} /> {t('ats.hiringVisibilityTitle', 'Hiring visibility')}
+              </div>
+              {t('ats.hiringVisibilityHint', 'Published jobs become visible in careers and in XML feed. Draft jobs remain internal.')}
+            </div>
+          </aside>
+
+          <div style={{
+            display: 'grid',
+            gap: 12,
+            gridColumn: isCompact ? 'auto' : '2 / 3',
+            background: 'var(--surface)',
+            padding: '18px 20px 16px',
+          }}>
+            <div style={{
+              display: 'grid',
+              gap: 12,
+              paddingBottom: 12,
+              borderBottom: '1px solid var(--border)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {job ? t('ats.editJob') : t('ats.newJob')}
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.stepFlow', 'Complete each section and review the live summary before saving.')}
+                  </p>
+                </div>
+                <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>×</button>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: isCompact ? 8 : 0,
+                flexWrap: isCompact ? 'wrap' : 'nowrap',
+              }}>
+                {stepCards.map((item, index) => {
+                  const isDone = step > item.id;
+                  const isCurrent = step === item.id;
+
+                  return (
+                    <React.Fragment key={item.id}>
+                      <div style={{
+                        minWidth: isCompact ? 'calc(50% - 8px)' : 0,
+                        flex: isCompact ? '1 1 calc(50% - 8px)' : 1,
+                        display: 'grid',
+                        justifyItems: isCompact ? 'start' : 'center',
+                        gap: 6,
+                      }}>
+                        <div style={{ display: 'grid', gap: 2, textAlign: isCompact ? 'left' : 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 800,
+                              fontSize: 11,
+                              color: isDone || isCurrent ? '#ffffff' : '#64748b',
+                              border: isDone || isCurrent ? '1px solid rgba(201,151,58,0.9)' : '1px solid rgba(148,163,184,0.42)',
+                              background: isDone || isCurrent ? '#C9973A' : '#ffffff',
+                              boxShadow: isCurrent ? '0 0 0 3px rgba(201,151,58,0.22)' : 'none',
+                              transition: 'all 0.2s ease',
+                            }}>
+                              {isDone ? '✓' : item.id}
+                            </span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                              <span style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: 8,
+                                border: isCurrent ? '1px solid rgba(201,151,58,0.45)' : '1px solid rgba(148,163,184,0.28)',
+                                background: isCurrent ? 'rgba(201,151,58,0.14)' : '#fff',
+                                color: isCurrent ? '#9A6808' : '#64748b',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}>
+                                {item.icon}
+                              </span>
+                              <span style={{ fontSize: 12.5, fontWeight: 700, color: isCurrent ? '#9A6808' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.title}
+                              </span>
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.subtitle}</span>
+                        </div>
+                      </div>
+
+                      {index < stepCards.length - 1 && !isCompact && (
+                        <div style={{
+                          flex: 1,
+                          margin: '14px 10px 0',
+                          height: 2,
+                          borderRadius: 999,
+                          background: step > item.id ? '#C9973A' : 'rgba(148,163,184,0.38)',
+                          transition: 'background 0.2s ease',
+                        }} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12 }}>
+            {step === 1 && (
+              <>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
+                    <FileText size={14} /> {t('ats.coreRoleDetails', 'Core role details')}
+                  </div>
+
+                  <Input
+                    label={`${t('ats.jobTitle')} *`}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    required
+                    placeholder={t('ats.jobTitlePlaceholder')}
+                    autoFocus
+                  />
+                  {errors.title && <div style={{ marginTop: -8, color: '#B91C1C', fontSize: 12 }}>{errors.title}</div>}
+
+                  <div>
+                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      {t('ats.jobDescription')} *
+                    </label>
+                    <textarea
+                      className="field-input"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={6}
+                      placeholder={t('ats.jobDescriptionPlaceholder')}
+                      style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
+                    />
+                  </div>
+                  {errors.description && <div style={{ marginTop: -8, color: '#B91C1C', fontSize: 12 }}>{errors.description}</div>}
+
+                  <div>
+                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      {t('ats.jobTags')}
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center' }}>
+                      <input
+                        className="field-input"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        placeholder={t('ats.jobTagsInputPlaceholder', 'Type a tag and press Enter')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addTag(tagInput);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '8px 12px',
+                          fontSize: 13.5,
+                          borderRadius: 'var(--radius)',
+                          border: '1px solid var(--border)',
+                          outline: 'none',
+                          display: 'block',
+                          background: '#fff',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addTag(tagInput)}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 10,
+                          border: '1px solid rgba(201,151,58,0.42)',
+                          background: 'rgba(201,151,58,0.14)',
+                          color: '#8a6318',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                        }}
+                        aria-label={t('common.add', 'Add')}
+                      >
+                        <Plus size={15} />
+                      </button>
+                    </div>
+                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {tags.map((tag) => (
+                        <span
+                          key={tag}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 9px',
+                            borderRadius: 999,
+                            fontSize: 12,
+                            background: '#FEF4DA',
+                            color: '#5C3E05',
+                            border: '1px solid #F4DEAB',
+                            fontWeight: 700,
+                          }}
+                        >
+                          <span>{tag}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeTag(tag)}
+                            style={{ border: 'none', background: 'transparent', color: '#7a5715', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}
+                            aria-label={`Remove ${tag}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
+                    <BriefcaseBusiness size={14} /> {t('ats.contractAndSchedule', 'Contract and schedule')}
+                  </div>
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+                    <div>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                        {t('ats.jobType')}
+                      </label>
+                      <CustomSelect
+                        value={jobType}
+                        onChange={(value) => value && setJobType(value as JobType)}
+                        options={jobTypeSelectOptions}
+                        isClearable={false}
+                        searchable={false}
+                        placeholder={t('ats.jobType')}
+                        disabled={saving}
+                        highlightSelected
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                        {t('ats.remoteMode', 'Work arrangement')}
+                      </label>
+                      <CustomSelect
+                        value={remoteType}
+                        onChange={(value) => value && setRemoteType(value as RemoteType)}
+                        options={remoteTypeSelectOptions}
+                        isClearable={false}
+                        searchable={false}
+                        placeholder={t('ats.remoteMode', 'Work arrangement')}
+                        disabled={saving}
+                        highlightSelected
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
+                    <Input
+                      label={t('ats.weeklyHours')}
+                      type="number"
+                      value={weeklyHoursInput}
+                      onChange={(e) => setWeeklyHoursInput(e.target.value)}
+                      placeholder="40"
+                    />
+                    <Input
+                      label={t('ats.salaryMin', 'Salary min')}
+                      type="number"
+                      value={salaryMinInput}
+                      onChange={(e) => setSalaryMinInput(e.target.value)}
+                      placeholder="1200"
+                    />
+                    <Input
+                      label={t('ats.salaryMax', 'Salary max')}
+                      type="number"
+                      value={salaryMaxInput}
+                      onChange={(e) => setSalaryMaxInput(e.target.value)}
+                      placeholder="1800"
+                    />
+                  </div>
+                  {(errors.weeklyHours || errors.salary) && (
+                    <div style={{ marginTop: -6, color: '#B91C1C', fontSize: 12 }}>
+                      {errors.weeklyHours ?? errors.salary}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+                    <Input
+                      label={t('ats.contractType')}
+                      value={contractType}
+                      onChange={(e) => setContractType(e.target.value)}
+                      placeholder={t('ats.contractTypePlaceholder')}
+                    />
+                    <Input
+                      label={departmentLabel}
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      placeholder={t('ats.departmentPlaceholder')}
+                    />
+                  </div>
+                </div>
+
+                {remoteType !== 'remote' && (
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
+                        <MapPin size={14} /> {t('ats.jobLocation', 'Job location')}
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
+                      <CountrySelect
+                        value={locationOverride.country || null}
+                        onChange={(next) => setLocationOverride((prev) => ({ ...prev, country: next ?? '', state: '', city: '' }))}
+                        label={t('ats.jobCountryOverrideLabel', 'Country')}
+                        placeholder={t('ats.jobCountryOverrideLabel', 'Country')}
+                        disabled={saving}
+                        highlightSelected
+                      />
+
+                      <StateSelect
+                        countryCode={locationOverride.country || null}
+                        value={locationOverride.state || null}
+                        onChange={(next) => setLocationOverride((prev) => ({ ...prev, state: next ?? '', city: '' }))}
+                        label={t('ats.jobStateOverrideLabel', 'State')}
+                        placeholder={t('ats.jobStateOverrideLabel', 'State')}
+                        disabled={saving}
+                        highlightSelected
+                      />
+
+                      <div>
+                        <CitySelect
+                          countryCode={locationOverride.country || null}
+                          stateCode={locationOverride.state || null}
+                          value={locationOverride.city || null}
+                          onChange={(next) => setLocationOverride((prev) => ({ ...prev, city: next ?? '' }))}
+                          label={t('ats.jobCityOverrideLabel', 'City')}
+                          placeholder={t('ats.jobCityOverrideLabel', 'City')}
+                          disabled={saving}
+                          highlightSelected
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr' }}>
+                      <Input
+                        label={t('ats.jobPostalCodeOverrideLabel', 'Postal code')}
+                        value={locationOverride.postalCode}
+                        onChange={(e) => setLocationOverride((prev) => ({ ...prev, postalCode: e.target.value }))}
+                        placeholder={t('ats.jobPostalCodeOverrideLabel', 'Postal code')}
+                      />
+                      <Input
+                        label={t('ats.jobAddressOverrideLabel', 'Address')}
+                        value={locationOverride.address}
+                        onChange={(e) => setLocationOverride((prev) => ({ ...prev, address: e.target.value }))}
+                        placeholder={t('ats.jobAddressOverrideLabel', 'Address')}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {step === 2 && (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
+                  <Sparkles size={14} /> {t('ats.platformSettings', 'Platform settings')}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                    {t('nav.companies')} *
+                  </label>
+                  <CustomSelect
+                    value={companyId || null}
+                    onChange={(value) => setCompanyId(value ?? '')}
+                    options={companySelectOptions}
+                    placeholder={t('common.select', 'Select')}
+                    error={errors.companyId}
+                    isClearable
+                    disabled={saving}
+                    highlightSelected
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                    {storeLabel}
+                  </label>
+                  <CustomSelect
+                    value={storeId || null}
+                    onChange={(value) => setStoreId(value ?? '')}
+                    options={storeSelectOptions}
+                    placeholder={t('ats.selectStore')}
+                    disabled={saving || !companyId}
+                    isClearable
+                    highlightSelected
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+                  <div>
+                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      {t('ats.jobPostingLanguage')}
+                    </label>
+                    <CustomSelect
+                      value={language}
+                      onChange={(value) => value && setLanguage(value as JobLanguage)}
+                      options={languageSelectOptions}
+                      isClearable={false}
+                      searchable={false}
+                      disabled={saving}
+                      highlightSelected
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      {statusLabel}
+                    </label>
+                    <CustomSelect
+                      value={status}
+                      onChange={(value) => value && setStatus(value as JobStatus)}
+                      options={statusSelectOptions}
+                      isClearable={false}
+                      searchable={false}
+                      disabled={saving}
+                      highlightSelected
+                    />
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid rgba(13,33,55,0.1)', borderRadius: 10, padding: 10, background: '#F8FBFF', color: '#334155', fontSize: 12.5, lineHeight: 1.55 }}>
+                  <strong>{t('ats.jobLanguageHint')}</strong>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, display: 'grid', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid rgba(201,151,58,0.22)', background: '#fffdf6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {selectedCompanyLogoUrl
+                        ? <img src={selectedCompanyLogoUrl} alt={selectedCompanyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <Building2 size={14} color="#8a6318" />}
+                    </div>
+                    <div style={{ display: 'grid', gap: 2 }}>
+                      <strong style={{ color: '#111827', fontSize: 13 }}>{selectedCompanyName}</strong>
+                      <span style={{ fontSize: 11.5, color: '#64748b' }}>{selectedCompanyMeta?.groupName ?? t('ats.standaloneCompany', 'Standalone company')}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', justifyItems: 'end', gap: 4 }}>
+                    <span style={{ borderRadius: 999, border: '1px solid rgba(13,33,55,0.15)', background: '#fff', color: '#334155', fontSize: 11, fontWeight: 700, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Clock3 size={12} /> {t('common.justNow', 'Just now')}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#9A6808' }}>
+                      0 {t('ats.appliedLabel', 'applied')}
+                    </span>
+                  </div>
+                </div>
+
+                <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
+                <p style={{ margin: 0, color: '#4b5563', fontSize: 13.5, lineHeight: 1.55 }}>{description.trim() || '-'}</p>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {t(`ats.jobType_${JOB_TYPE_LABEL[jobType]}`)}
+                  </span>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {t(`ats.remoteType_${remoteType}`, remoteType)}
+                  </span>
+                  <span style={{ borderRadius: 999, background: status === 'closed' ? 'rgba(239,68,68,0.1)' : 'rgba(22,163,74,0.12)', border: status === 'closed' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(22,163,74,0.22)', color: status === 'closed' ? '#991b1b' : '#166534', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {t(`ats.status_${status}`)}
+                  </span>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                    {language === 'it' ? '🇮🇹 IT' : language === 'en' ? '🇬🇧 EN' : '🇮🇹 🇬🇧 IT + EN'}
+                  </span>
+                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <MapPin size={12} />
+                    {remoteType === 'remote'
+                      ? t('ats.remoteType_remote', 'Remote')
+                      : `${locationOverride.city || '-'}, ${countryNameFromCode(locationOverride.country)}`}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gap: 8, gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', border: '1px dashed rgba(148,163,184,0.38)', borderRadius: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.74)' }}>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.salaryRange', 'Salary range')}</strong>
+                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>€{salaryMinInput.trim() || '-'} - €{salaryMaxInput.trim() || '-'}</span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.weeklyHours')}</strong>
+                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{weeklyHoursInput.trim() || '-'}</span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 2 }}>
+                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{storeLabel}</strong>
+                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{selectedStoreMeta?.name ?? '-'}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {tags.length > 0 ? tags.map((tag) => (
+                    <span key={`preview-${tag}`} style={{ fontSize: 11, borderRadius: 999, padding: '3px 9px', background: '#F8D98B', color: '#5C3E05', border: '1px solid #E7C36A', fontWeight: 600 }}>
+                      {tag}
+                    </span>
+                  )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      type="button"
+                      style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Heart size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Bookmark size={15} />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    style={{ border: 'none', background: 'transparent', color: '#9A6808', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}
+                  >
+                    {t('publicCareers.viewDetails', 'View details')} <ArrowRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+              {step === 1 && (
+                <>
+                  <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
+                  <Button variant="primary" type="button" onClick={moveNext}>
+                    {t('common.next', 'Next')} →
+                  </Button>
+                </>
+              )}
+
+              {step === 2 && (
+                <>
+                  <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
+                  <Button variant="secondary" type="button" onClick={() => setStep(1)}>
+                    ← {t('common.back', 'Back')}
+                  </Button>
+                  <Button variant="secondary" type="button" onClick={moveNext}>
+                    {t('ats.previewStep', 'Preview')} →
+                  </Button>
+                  <Button variant="primary" type="submit" loading={saving} disabled={!title.trim() || !description.trim()}>
+                    {job ? t('ats.savePosition', 'Save position') : t('ats.createPosition', 'Create position')}
+                  </Button>
+                </>
+              )}
+
+              {step === 3 && (
+                <>
+                  <Button variant="secondary" type="button" onClick={() => setStep(2)}>
+                    {t('common.edit', 'Edit')}
+                  </Button>
+                  <Button variant="primary" type="button" onClick={onClose}>
+                    {t('common.close', 'Close')}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </form>
     </ModalBackdrop>
@@ -178,6 +1517,8 @@ const JobModal: React.FC<JobModalProps> = ({ job, onSave, onClose, saving }) => 
 interface CandidateModalProps {
   candidate: Candidate;
   jobs: JobPosting[];
+  canEdit: boolean;
+  canFeedback: boolean;
   onClose: () => void;
   onAdvance: (status: CandidateStatus) => Promise<void>;
   onReject: () => Promise<void>;
@@ -186,7 +1527,7 @@ interface CandidateModalProps {
 }
 
 const CandidateModal: React.FC<CandidateModalProps> = ({
-  candidate, jobs, onClose, onAdvance, onReject, onDelete, saving,
+  candidate, jobs, canEdit, canFeedback, onClose, onAdvance, onReject, onDelete, saving,
 }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
@@ -197,6 +1538,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [intLocation, setIntLocation] = useState('');
   const [intNotes, setIntNotes] = useState('');
   const [savingInt, setSavingInt] = useState(false);
+  const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
+  const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
 
   const jobTitle = jobs.find((j) => j.id === candidate.jobPostingId)?.title;
   const stageColor = STAGE_COLOR[candidate.status];
@@ -204,8 +1547,32 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const next = NEXT_STAGE[candidate.status];
 
   useEffect(() => {
-    getInterviews(candidate.id).then(setInterviews).catch(() => {});
+    getInterviews(candidate.id)
+      .then((items) => {
+        setInterviews(items);
+        setFeedbackDrafts(Object.fromEntries(items.map((iv) => [iv.id, iv.feedback ?? ''])));
+      })
+      .catch(() => {});
   }, [candidate.id]);
+
+  const handleSaveFeedback = async (interviewId: number) => {
+    const value = (feedbackDrafts[interviewId] ?? '').trim();
+    if (!value) {
+      showToast(t('ats.feedbackRequired'), 'error');
+      return;
+    }
+
+    setSavingFeedbackId(interviewId);
+    try {
+      const updated = await updateInterview(interviewId, { feedback: value });
+      setInterviews((prev) => prev.map((iv) => (iv.id === interviewId ? updated : iv)));
+      showToast(t('ats.feedbackSaved'), 'success');
+    } catch {
+      showToast(t('ats.feedbackError'), 'error');
+    } finally {
+      setSavingFeedbackId(null);
+    }
+  };
 
   const handleCreateInterview = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -399,7 +1766,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </span>
                 )}
               </div>
-              {!showInterviewForm && (
+              {canEdit && !showInterviewForm && (
                 <Button variant="secondary" size="sm" onClick={() => setShowInterviewForm(true)}>
                   + {t('ats.addInterview')}
                 </Button>
@@ -438,10 +1805,38 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     "{iv.feedback}"
                   </div>
                 )}
+                {canFeedback && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <textarea
+                      value={feedbackDrafts[iv.id] ?? ''}
+                      onChange={(e) => setFeedbackDrafts((prev) => ({ ...prev, [iv.id]: e.target.value }))}
+                      rows={2}
+                      placeholder={t('ats.feedbackPlaceholder')}
+                      style={{
+                        flex: 1,
+                        fontFamily: 'inherit',
+                        fontSize: 12,
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        padding: '7px 9px',
+                        resize: 'vertical',
+                        background: 'var(--surface)',
+                      }}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleSaveFeedback(iv.id)}
+                      loading={savingFeedbackId === iv.id}
+                    >
+                      {t('common.save')}
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
 
-            {showInterviewForm && (
+            {canEdit && showInterviewForm && (
               <form onSubmit={handleCreateInterview} style={{
                 background: 'var(--background)', borderRadius: 12, padding: '16px',
                 display: 'flex', flexDirection: 'column', gap: 12,
@@ -492,7 +1887,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         )}
 
         {/* Action footer */}
-        {candidate.status !== 'hired' && candidate.status !== 'rejected' && (
+        {canEdit && candidate.status !== 'hired' && candidate.status !== 'rejected' && (
           <div style={{
             display: 'flex', gap: 8, flexWrap: 'wrap',
             paddingTop: 16, borderTop: '1px solid var(--border)',
@@ -533,10 +1928,12 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
 // ─── Jobs Panel ────────────────────────────────────────────────────────────────
 
 const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { user, targetCompanyId } = useAuth();
   const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editJob, setEditJob] = useState<JobPosting | null>(null);
@@ -544,9 +1941,22 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [feedCopied, setFeedCopied] = useState(false);
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
 
-  const feedUrl = user?.companyId
-    ? `${getApiBaseUrl()}/ats/feed/${user.companyId}/jobs.xml`
+  const defaultCompanyId = useMemo(() => {
+    if (targetCompanyId) return targetCompanyId;
+    if (user?.companyId) return user.companyId;
+    return companies[0]?.id ?? null;
+  }, [targetCompanyId, user?.companyId, companies]);
+
+  const feedCompanyId = useMemo(() => {
+    if (targetCompanyId) return targetCompanyId;
+    if (user?.companyId) return user.companyId;
+    return companies.length === 1 ? companies[0].id : null;
+  }, [targetCompanyId, user?.companyId, companies]);
+
+  const feedUrl = feedCompanyId
+    ? `${getApiBaseUrl()}/ats/feed/${feedCompanyId}/jobs.xml`
     : null;
 
   const handleCopyFeed = () => {
@@ -561,28 +1971,111 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      setJobs(await getJobs(filterStatus ? { status: filterStatus } : undefined));
+      const params: { status?: string } = {};
+      if (filterStatus) params.status = filterStatus;
+      setJobs(await getJobs(Object.keys(params).length > 0 ? params : undefined));
     } catch {
       showToast(t('ats.errorLoad'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [filterStatus]);
+  }, [filterStatus, showToast, t]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const handleSave = async (title: string, description: string, tags: string[]) => {
+  useEffect(() => {
+    if (!canEdit) return;
+    Promise.all([
+      getStores().catch(() => [] as Store[]),
+      getCompanies().catch(() => [] as Company[]),
+    ])
+      .then(([storeItems, companyItems]) => {
+        setStores(storeItems);
+        setCompanies(companyItems);
+      })
+      .catch(() => {
+        setStores([]);
+        setCompanies([]);
+      });
+  }, [canEdit]);
+
+  const handleSave = async (payload: {
+    title: string;
+    description: string;
+    tags: string[];
+    language: JobLanguage;
+    jobType: JobType;
+    remoteType: RemoteType;
+    locationOverride: {
+      city: string;
+      state: string;
+      country: string;
+      postalCode: string;
+      address: string;
+    };
+    companyId: number;
+    storeId: number | null;
+    department: string;
+    weeklyHours: number | null;
+    contractType: string;
+    status: JobStatus;
+    salaryMin: number | null;
+    salaryMax: number | null;
+  }) => {
     setSaving(true);
     try {
       if (editJob) {
-        const updated = await updateJob(editJob.id, { title, description, tags });
+        const updated = await updateJob(editJob.id, {
+          title: payload.title,
+          description: payload.description,
+          tags: payload.tags,
+          status: payload.status,
+          companyId: payload.companyId,
+          language: payload.language,
+          jobType: payload.jobType,
+          storeId: payload.storeId,
+          isRemote: payload.remoteType === 'remote',
+          remoteType: payload.remoteType,
+          jobCity: payload.remoteType === 'remote' ? null : (payload.locationOverride.city || null),
+          jobState: payload.remoteType === 'remote' ? null : (payload.locationOverride.state || null),
+          jobCountry: payload.remoteType === 'remote' ? null : (payload.locationOverride.country || null),
+          jobPostalCode: payload.remoteType === 'remote' ? null : (payload.locationOverride.postalCode || null),
+          jobAddress: payload.remoteType === 'remote' ? null : (payload.locationOverride.address || null),
+          department: payload.department || null,
+          weeklyHours: payload.weeklyHours,
+          contractType: payload.contractType || null,
+          salaryMin: payload.salaryMin,
+          salaryMax: payload.salaryMax,
+        });
         setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
         showToast(t('ats.jobUpdated'), 'success');
       } else {
-        const created = await createJob({ title, description, tags });
+        const created = await createJob({
+          title: payload.title,
+          description: payload.description,
+          tags: payload.tags,
+          companyId: payload.companyId,
+          status: payload.status,
+          language: payload.language,
+          jobType: payload.jobType,
+          storeId: payload.storeId ?? undefined,
+          isRemote: payload.remoteType === 'remote',
+          remoteType: payload.remoteType,
+          jobCity: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.city || undefined),
+          jobState: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.state || undefined),
+          jobCountry: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.country || undefined),
+          jobPostalCode: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.postalCode || undefined),
+          jobAddress: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.address || undefined),
+          department: payload.department || undefined,
+          weeklyHours: payload.weeklyHours ?? undefined,
+          contractType: payload.contractType || undefined,
+          salaryMin: payload.salaryMin ?? undefined,
+          salaryMax: payload.salaryMax ?? undefined,
+        });
         setJobs((prev) => [created, ...prev]);
         showToast(t('ats.jobCreated'), 'success');
       }
+      await fetch();
       setShowModal(false); setEditJob(null);
     } catch (err) {
       showToast(translateApiError(err, t, t('ats.errorSave')) ?? t('ats.errorSave'), 'error');
@@ -592,22 +2085,28 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const handleDelete = async (job: JobPosting) => {
     if (!confirm(t('ats.confirmDeleteJob', { title: job.title }))) return;
     try {
-      await deleteJob(job.id);
+      await deleteJob(job.id, { companyId: job.companyId });
       setJobs((prev) => prev.filter((j) => j.id !== job.id));
+      await fetch();
       showToast(t('ats.jobDeleted'), 'success');
     } catch { showToast(t('ats.errorDelete'), 'error'); }
   };
 
   const handlePublish = async (job: JobPosting) => {
     try {
-      const updated = await publishJob(job.id);
+      const updated = await publishJob(job.id, { companyId: job.companyId });
       setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+      await fetch();
       showToast(t('ats.jobPublished'), 'success');
     } catch { showToast(t('ats.errorPublish'), 'error'); }
   };
 
   // Status counts
   const counts = { all: jobs.length, draft: jobs.filter((j) => j.status === 'draft').length, published: jobs.filter((j) => j.status === 'published').length, closed: jobs.filter((j) => j.status === 'closed').length };
+  const careersPreviewUrl = `${window.location.origin}/careers`;
+  const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
+  const companyMap = useMemo(() => new Map(companies.map((company) => [company.id, company])), [companies]);
+  const storeMap = useMemo(() => new Map(stores.map((store) => [store.id, store])), [stores]);
 
   return (
     <div>
@@ -650,10 +2149,34 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         </div>
 
         {canEdit && (
-          <Button variant="primary" size="sm" style={{ marginLeft: 'auto' }} onClick={() => { setEditJob(null); setShowModal(true); }}>
-            <span style={{ fontSize: 16 }}>+</span> {t('ats.newJob')}
-          </Button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                if (!careersPreviewUrl) return;
+                window.open(careersPreviewUrl, '_blank', 'noopener,noreferrer');
+              }}
+              disabled={!careersPreviewUrl}
+            >
+              {t('ats.openCareersPage', 'Open careers page')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowComplianceModal(true)}
+            >
+              {t('ats.complianceCheck')}
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => { setEditJob(null); setShowModal(true); }}>
+              <span style={{ fontSize: 16 }}>+</span> {t('ats.newJob')}
+            </Button>
+          </div>
         )}
+      </div>
+
+      <div style={{ marginBottom: 14, padding: '8px 10px', borderRadius: 9, background: 'rgba(2,132,199,0.08)', border: '1px solid rgba(2,132,199,0.18)', color: '#0F4C81', fontSize: 12.5 }}>
+        Careers preview lists <strong>draft</strong> and <strong>published</strong> jobs. XML feed still exports only <strong>published</strong> jobs for active companies.
       </div>
 
       {/* Feed URL banner */}
@@ -743,6 +2266,14 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           {jobs.map((job) => {
             const sc = STATUS_COLOR[job.status];
             const isHovered = hoveredId === job.id;
+            const company = companyMap.get(job.companyId);
+            const store = job.storeId ? storeMap.get(job.storeId) : null;
+            const companyLogo = getCompanyLogoUrl(company?.logoFilename ?? null);
+            const companyOwnerAvatar = getAvatarUrl(company?.ownerAvatarFilename ?? null);
+            const storeLogo = getStoreLogoUrl(store?.logoFilename ?? null);
+            const languageFlags = languageFlagCodes(job.language);
+            const locationSummary = [job.city, job.state, job.country].filter(Boolean).join(', ') || t('ats.remoteType_remote', 'Remote');
+            const salarySummary = formatEuroRange(job.salaryMin, job.salaryMax, locale, t('common.noData'));
             return (
               <div
                 key={job.id}
@@ -753,78 +2284,175 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   border: '1px solid var(--border)',
                   borderLeft: `4px solid ${sc}`,
                   borderRadius: 14, padding: '16px 20px',
-                  display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+                  display: 'grid', gap: 12,
                   transition: 'box-shadow 0.18s, transform 0.18s',
                   boxShadow: isHovered ? 'var(--shadow)' : 'none',
                   transform: isHovered ? 'translateY(-1px)' : 'none',
                 }}
               >
-                {/* Text block */}
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{job.title}</span>
-                    <span style={{
-                      background: `${sc}14`, color: sc, borderRadius: 99,
-                      padding: '2px 10px', fontSize: 11, fontWeight: 700,
-                      textTransform: 'uppercase', letterSpacing: '0.04em',
-                    }}>
-                      {t(`ats.status_${job.status}`)}
-                    </span>
-                  </div>
-                  {job.description && (
-                    <div style={{
-                      fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 8,
-                      overflow: 'hidden', display: '-webkit-box',
-                      WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
-                    }}>
-                      {job.description}
-                    </div>
-                  )}
-                  {job.tags.length > 0 && (
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                      {job.tags.map((tag) => (
-                        <span key={tag} style={{
-                          background: 'rgba(201,151,58,0.10)', color: 'var(--accent)',
-                          border: '1px solid rgba(201,151,58,0.2)',
-                          borderRadius: 99, padding: '2px 8px', fontSize: 11, fontWeight: 500,
-                        }}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{job.title}</span>
+                  <span style={{
+                    background: `${sc}14`, color: sc, borderRadius: 99,
+                    padding: '2px 10px', fontSize: 11, fontWeight: 700,
+                    textTransform: 'uppercase', letterSpacing: '0.04em',
+                  }}>
+                    {t(`ats.status_${job.status}`)}
+                  </span>
                 </div>
 
-                {/* Meta + actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                  {job.publishedAt && (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                      📅 {fmtDate(job.publishedAt)}
+                {job.description && (
+                  <div style={{
+                    fontSize: 12.5, color: 'var(--text-muted)',
+                    overflow: 'hidden', display: '-webkit-box',
+                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                  }}>
+                    {job.description}
+                  </div>
+                )}
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: 9,
+                }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
+                      {t('nav.companies')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {companyLogo ? <img src={companyLogo} alt={company?.name ?? `Company ${job.companyId}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Building2 size={14} color="#64748B" />}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {company?.name ?? `Company #${job.companyId}`}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                          {company?.groupName ?? '-'}
+                        </div>
+                      </div>
+                      {companyOwnerAvatar ? <img src={companyOwnerAvatar} alt="Owner" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} /> : null}
+                    </div>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
+                      {t('common.store', 'Store')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {storeLogo ? <img src={storeLogo} alt={store?.name ?? 'Store'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <StoreIcon size={14} color="#64748B" />}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {store?.name ?? (job.storeId ? `Store #${job.storeId}` : '-')}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                          {store?.code ? `Code ${store.code}` : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
+                      {t('ats.location', 'Location')}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <MapPin size={13} color="#64748B" />
+                      {locationSummary}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {job.remoteType === 'remote' ? t('ats.remoteType_remote', 'Remote') : t(`ats.remoteType_${job.remoteType}`, job.remoteType)}
+                    </div>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
+                      {t('ats.salaryRange', 'Salary range')}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Wallet size={13} color="#64748B" />
+                      {salarySummary}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {job.weeklyHours ? `${job.weeklyHours}h` : t('common.noData')}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    <span style={{
+                      background: 'rgba(13,33,55,0.08)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid rgba(13,33,55,0.14)',
+                      borderRadius: 99,
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                    }}>
+                      {languageFlags.map((code) => (
+                        <span key={`${job.id}-${code}`} style={{ marginRight: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <ReactCountryFlag countryCode={code} svg style={{ width: '0.95em', height: '0.95em' }} />
+                        </span>
+                      ))}
+                      {job.language}
                     </span>
-                  )}
-                  {canEdit && (
-                    <>
-                      {job.status === 'draft' && (
-                        <Button variant="accent" size="sm" onClick={() => handlePublish(job)}>
-                          {t('ats.publish')}
-                        </Button>
-                      )}
-                      <Button variant="secondary" size="sm" onClick={() => { setEditJob(job); setShowModal(true); }}>
-                        {t('common.edit')}
-                      </Button>
-                      <button
-                        onClick={() => handleDelete(job)}
-                        style={{
-                          background: 'none', border: '1px solid var(--border)',
-                          cursor: 'pointer', color: 'var(--text-muted)', fontSize: 15,
-                          borderRadius: 'var(--radius-sm)', padding: '4px 8px', lineHeight: 1,
-                        }}
-                        title={t('common.delete')}
-                      >
-                        ×
-                      </button>
-                    </>
-                  )}
+                    <span style={{
+                      background: 'rgba(2,132,199,0.10)',
+                      color: '#0369A1',
+                      border: '1px solid rgba(2,132,199,0.22)',
+                      borderRadius: 99,
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}>
+                      {t(`ats.jobType_${JOB_TYPE_LABEL[job.jobType]}`)}
+                    </span>
+                    {job.tags.map((tag) => (
+                      <span key={`${job.id}-${tag}`} style={{
+                        background: 'rgba(201,151,58,0.10)', color: 'var(--accent)',
+                        border: '1px solid rgba(201,151,58,0.2)',
+                        borderRadius: 99, padding: '2px 8px', fontSize: 11, fontWeight: 500,
+                      }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                    {job.publishedAt && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        📅 {fmtDate(job.publishedAt)}
+                      </span>
+                    )}
+                    {canEdit && (
+                      <>
+                        {job.status === 'draft' && (
+                          <Button variant="accent" size="sm" onClick={() => handlePublish(job)}>
+                            {t('ats.publish')}
+                          </Button>
+                        )}
+                        <button
+                          onClick={() => { setEditJob(job); setShowModal(true); }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
+                          title={t('common.edit')}
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(job)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '4px' }}
+                          title={t('common.delete')}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -835,10 +2463,89 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       {showModal && (
         <JobModal
           job={editJob}
+          stores={stores}
+          companies={companies}
+          defaultCompanyId={defaultCompanyId}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditJob(null); }}
           saving={saving}
         />
+      )}
+
+      {showComplianceModal && (
+        <ModalBackdrop onClose={() => setShowComplianceModal(false)} width={980}>
+          <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{t('ats.complianceCheckTitle')}</h3>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                {jobs.length} job postings - each row shows compliance percentage and detailed checks.
+              </p>
+            </div>
+            <button onClick={() => setShowComplianceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+          </div>
+
+          <div style={{ padding: '16px 22px', display: 'grid', gap: 10 }}>
+            {jobs.length === 0 && (
+              <div style={{ borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-muted)' }}>
+                {t('ats.complianceNoPublishedJobs')}
+              </div>
+            )}
+
+            {jobs.map((job) => {
+              const score = complianceScore(job);
+              const barColor = score.percentage >= 80 ? '#15803D' : score.percentage >= 55 ? '#C9973A' : '#DC2626';
+
+              return (
+                <details key={job.id} style={{ border: '1px solid var(--border)', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+                  <summary style={{ listStyle: 'none', cursor: 'pointer', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>{job.title}</strong>
+                      <span style={{ fontSize: 11, borderRadius: 99, padding: '2px 8px', background: 'rgba(13,33,55,0.08)', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
+                        {job.status}
+                      </span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: barColor }}>
+                        {score.percentage}% ({score.passed}/{score.total})
+                      </span>
+                    </div>
+
+                    <div style={{ height: 8, borderRadius: 999, background: '#E2E8F0', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${score.percentage}%`, background: barColor }} />
+                    </div>
+                  </summary>
+
+                  <div style={{ borderTop: '1px solid var(--border)', padding: '10px 12px', display: 'grid', gap: 7 }}>
+                    {score.checks.map((check) => (
+                      <div key={`${job.id}-${check.key}`} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <span style={{ fontWeight: 800, color: check.ok ? '#166534' : '#B91C1C', minWidth: 16 }}>
+                          {check.ok ? '✓' : '✗'}
+                        </span>
+                        <span style={{ color: 'var(--text-primary)', fontSize: 12.5 }}>{check.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+
+            <div style={{
+              marginTop: 4,
+              padding: '10px 12px',
+              borderRadius: 10,
+              border: '1px solid rgba(201,151,58,0.35)',
+              background: 'rgba(201,151,58,0.08)',
+              color: '#5F4308',
+              fontSize: 12.5,
+              lineHeight: 1.5,
+            }}>
+              <div>
+                Note: Indeed deprecated free XML crawling in March 2026. This checker validates feed readiness and field quality.
+              </div>
+              <div>
+                Nota: Indeed ha deprecato il crawling XML gratuito da marzo 2026. Questa verifica controlla completezza e conformita del feed.
+              </div>
+            </div>
+          </div>
+        </ModalBackdrop>
       )}
     </div>
   );
@@ -846,9 +2553,11 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
 // ─── Kanban Panel ─────────────────────────────────────────────────────────────
 
-const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
+const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ canEdit, canFeedback }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { user, targetCompanyId } = useAuth();
+  const { socket } = useSocket();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [loading, setLoading] = useState(true);
@@ -856,25 +2565,67 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [saving, setSaving] = useState(false);
   const [filterJob, setFilterJob] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addName, setAddName] = useState('');
+  const [addStep, setAddStep] = useState<1 | 2>(1);
+  const [addJobId, setAddJobId] = useState<string>('');
+  const [addFirstName, setAddFirstName] = useState('');
+  const [addLastName, setAddLastName] = useState('');
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
-  const [addJobId, setAddJobId] = useState<string>('');
+  const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
+  const [addResumePath, setAddResumePath] = useState('');
+  const [addCoverLetter, setAddCoverLetter] = useState('');
+  const [addTagInput, setAddTagInput] = useState('');
+  const [addTags, setAddTags] = useState<string[]>([]);
+  const [addGdprConsent, setAddGdprConsent] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
+  const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
+  const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
+
+  const effectiveCompanyId = targetCompanyId ?? user?.companyId ?? undefined;
 
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
       const [cands, js] = await Promise.all([
-        getCandidates(filterJob ? { jobId: parseInt(filterJob) } : undefined),
-        getJobs(),
+        getCandidates(filterJob ? { jobId: parseInt(filterJob, 10), companyId: effectiveCompanyId } : { companyId: effectiveCompanyId }),
+        getJobs(effectiveCompanyId ? { companyId: effectiveCompanyId } : undefined),
       ]);
       setCandidates(cands); setJobs(js);
     } catch { showToast(t('ats.errorLoad'), 'error'); }
     finally { setLoading(false); }
-  }, [filterJob]);
+  }, [filterJob, effectiveCompanyId, showToast, t]);
 
   useEffect(() => { fetch(); }, [fetch]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRealtimeCandidate = (payload: { candidate?: Candidate }) => {
+      const incoming = payload?.candidate;
+      if (!incoming || typeof incoming.id !== 'number') return;
+
+      if (user?.role === 'store_manager' && incoming.storeId !== user.storeId) {
+        return;
+      }
+
+      if (filterJob) {
+        const selectedJobId = Number.parseInt(filterJob, 10);
+        if (!Number.isNaN(selectedJobId) && incoming.jobPostingId !== selectedJobId) {
+          return;
+        }
+      }
+
+      setCandidates((prev) => {
+        if (prev.some((c) => c.id === incoming.id)) return prev;
+        return [incoming, ...prev];
+      });
+    };
+
+    socket.on('ATS_CANDIDATE_CREATED', handleRealtimeCandidate);
+    return () => {
+      socket.off('ATS_CANDIDATE_CREATED', handleRealtimeCandidate);
+    };
+  }, [socket, filterJob, user?.role, user?.storeId]);
 
   const byStage = (stage: CandidateStatus) =>
     candidates.filter((c) => c.status === stage).sort((a, b) =>
@@ -882,6 +2633,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     );
 
   const handleAdvance = async (status: CandidateStatus) => {
+    if (!canEdit) return;
     if (!selected) return;
     setSaving(true);
     try {
@@ -895,6 +2647,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   };
 
   const handleReject = async () => {
+    if (!canEdit) return;
     if (!selected) return;
     setSaving(true);
     try {
@@ -907,6 +2660,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   };
 
   const handleDelete = async () => {
+    if (!canEdit) return;
     if (!selected) return;
     if (!confirm(t('ats.confirmDeleteCandidate', { name: selected.fullName }))) return;
     setSaving(true);
@@ -921,17 +2675,35 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const handleAddCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!addJobId) {
+      showToast(t('ats.noPosition', 'No position selected'), 'error');
+      return;
+    }
+
+    const normalizedName = [addFirstName.trim(), addLastName.trim()]
+      .filter(Boolean)
+      .join(' ')
+      || addEmail.trim()
+      || t('ats.defaultCandidateName', 'Candidate');
+
     setAddSaving(true);
     try {
       const c = await createCandidate({
-        fullName: addName.trim(),
+        fullName: normalizedName,
         email: addEmail.trim() || undefined,
         phone: addPhone.trim() || undefined,
-        jobPostingId: addJobId ? parseInt(addJobId) : undefined,
+        jobPostingId: Number.parseInt(addJobId, 10),
+        linkedinUrl: addLinkedinUrl.trim() || undefined,
+        resumePath: addResumePath.trim() || undefined,
+        cvPath: addResumePath.trim() || undefined,
+        coverLetter: addCoverLetter.trim() || undefined,
+        gdprConsent: addGdprConsent,
+        tags: addTags.length > 0 ? addTags : undefined,
+        source: 'internal_manual',
+        appliedAt: new Date().toISOString(),
       });
       setCandidates((prev) => [c, ...prev]);
-      setShowAddModal(false);
-      setAddName(''); setAddEmail(''); setAddPhone(''); setAddJobId('');
+      closeAddCandidateModal();
       showToast(t('ats.candidateAdded'), 'success');
     } catch { showToast(t('ats.errorSave'), 'error'); }
     finally { setAddSaving(false); }
@@ -953,7 +2725,73 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     rejected:  '✕',
   };
 
-  const publishedJobs = jobs.filter((j) => j.status === 'published');
+  const addSelectionJobs = addModalJobs.length > 0 ? addModalJobs : jobs;
+  const publishedJobs = addSelectionJobs.filter((j) => String(j.status).toLowerCase() === 'published');
+  const closedJobs = addSelectionJobs.filter((j) => String(j.status).toLowerCase() === 'closed');
+  const addSelectedJob = addSelectionJobs.find((job) => String(job.id) === addJobId) ?? null;
+
+  const resetAddCandidateForm = useCallback(() => {
+    setAddStep(1);
+    setAddJobId('');
+    setAddFirstName('');
+    setAddLastName('');
+    setAddEmail('');
+    setAddPhone('');
+    setAddLinkedinUrl('');
+    setAddResumePath('');
+    setAddCoverLetter('');
+    setAddTagInput('');
+    setAddTags([]);
+    setAddGdprConsent(false);
+  }, []);
+
+  const loadAddModalJobs = useCallback(async () => {
+    setAddModalJobsLoading(true);
+    try {
+      const [published, closed] = await Promise.all([
+        getJobs(effectiveCompanyId ? { status: 'published', companyId: effectiveCompanyId } : { status: 'published' }),
+        getJobs(effectiveCompanyId ? { status: 'closed', companyId: effectiveCompanyId } : { status: 'closed' }),
+      ]);
+
+      const publishedIds = new Set(published.map((item) => item.id));
+      const merged = [...published, ...closed.filter((item) => !publishedIds.has(item.id))];
+      setAddModalJobs(merged);
+    } catch {
+      setAddModalJobs([]);
+    } finally {
+      setAddModalJobsLoading(false);
+    }
+  }, [effectiveCompanyId]);
+
+  useEffect(() => {
+    if (!showAddModal) return;
+    void loadAddModalJobs();
+  }, [showAddModal, loadAddModalJobs]);
+
+  const openAddCandidateModal = () => {
+    resetAddCandidateForm();
+    setShowAddModal(true);
+  };
+
+  const closeAddCandidateModal = () => {
+    setShowAddModal(false);
+    setAddModalJobs([]);
+    resetAddCandidateForm();
+  };
+
+  const appendCandidateTag = (rawTag: string) => {
+    const tag = rawTag.trim();
+    if (!tag) return;
+    setAddTags((prev) => {
+      if (prev.some((existing) => existing.toLowerCase() === tag.toLowerCase())) return prev;
+      return [...prev, tag];
+    });
+    setAddTagInput('');
+  };
+
+  const removeCandidateTag = (tag: string) => {
+    setAddTags((prev) => prev.filter((current) => current !== tag));
+  };
 
   return (
     <div>
@@ -995,7 +2833,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         )}
 
         {canEdit && (
-          <Button variant="primary" size="sm" style={{ marginLeft: 'auto' }} onClick={() => setShowAddModal(true)}>
+          <Button variant="primary" size="sm" style={{ marginLeft: 'auto' }} onClick={openAddCandidateModal}>
             <span style={{ fontSize: 16 }}>+</span> {t('ats.addCandidate')}
           </Button>
         )}
@@ -1168,61 +3006,355 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
       {/* Add Candidate Modal */}
       {showAddModal && (
-        <ModalBackdrop onClose={() => setShowAddModal(false)} width={480}>
+        <ModalBackdrop onClose={closeAddCandidateModal} width={760}>
           <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
                 {t('ats.addCandidate')}
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                {t('ats.candidateName')}
+                {addStep === 1
+                  ? t('ats.selectPositionStepHint', 'Step 1 of 2: choose the job post first.')
+                  : t('ats.optionalCandidateStepHint', 'Step 2 of 2: add candidate details (all optional).')}
               </p>
             </div>
-            <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, padding: '2px 6px' }}>×</button>
+            <button onClick={closeAddCandidateModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, padding: '2px 6px' }}>×</button>
           </div>
 
-          <form onSubmit={handleAddCandidate} style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Input
-              label={`${t('ats.candidateName')} *`}
-              value={addName}
-              onChange={(e) => setAddName(e.target.value)}
-              required
-              placeholder="Mario Rossi"
-              autoFocus
-            />
+          <div style={{
+            padding: '14px 28px 12px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-warm)',
+            display: 'flex',
+            alignItems: 'center',
+          }}>
+            {[1, 2].map((currentStep, index) => (
+              <React.Fragment key={currentStep}>
+                <div style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
+                  <div style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-display)',
+                    border: addStep >= currentStep ? '1px solid rgba(201,151,58,0.9)' : '1px solid rgba(148,163,184,0.4)',
+                    color: addStep >= currentStep ? '#ffffff' : '#64748b',
+                    background: addStep >= currentStep ? '#C9973A' : '#fff',
+                  }}>
+                    {addStep > currentStep ? '✓' : currentStep}
+                  </div>
+                  <span style={{
+                    fontSize: 10,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: addStep === currentStep ? '#9A6808' : 'var(--text-muted)',
+                    fontWeight: addStep === currentStep ? 700 : 500,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {currentStep === 1 ? t('ats.position', 'Position') : t('ats.candidateProfile', 'Candidate profile')}
+                  </span>
+                </div>
+                {index === 0 && (
+                  <div style={{
+                    flex: 1,
+                    height: 2,
+                    borderRadius: 999,
+                    margin: '0 12px 18px',
+                    background: addStep > 1 ? '#C9973A' : 'rgba(148,163,184,0.36)',
+                  }} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Input label="Email" type="email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="mario@email.com" />
-              <Input label={t('ats.phone')} type="tel" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="+39 345..." />
-            </div>
+          <form onSubmit={handleAddCandidate} style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {addStep === 1 ? (
+              <>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: '#fff', display: 'grid', gap: 10 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    {t('ats.selectPositionStepBody', 'Select the role for this candidate. You can add profile details in the next step.')}
+                  </div>
 
-            <div>
-              <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                {t('ats.position')}
-              </label>
-              <select
-                value={addJobId}
-                onChange={(e) => setAddJobId(e.target.value)}
-                style={{
-                  width: '100%', padding: '8px 12px', fontSize: 13.5,
-                  background: 'var(--surface)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius)', color: 'var(--text-primary)',
-                  outline: 'none', cursor: 'pointer', boxSizing: 'border-box',
-                }}
-              >
-                <option value="">{t('ats.noPosition')}</option>
-                {publishedJobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
-                {publishedJobs.length === 0 && jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
-              </select>
-            </div>
+                  {addModalJobsLoading ? (
+                    <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '14px 12px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                      {t('common.loading', 'Loading...')}
+                    </div>
+                  ) : publishedJobs.length === 0 && closedJobs.length === 0 ? (
+                    <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '14px 12px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                      {t('ats.noPosition')}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 12, maxHeight: 340, overflowY: 'auto', paddingRight: 2 }}>
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <BadgeCheck size={13} /> {t('ats.status_published', 'Published')}
+                        </div>
+
+                        {publishedJobs.length === 0 ? (
+                          <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '10px 11px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                            {t('ats.noPublishedPositions', 'No published positions available.')}
+                          </div>
+                        ) : publishedJobs.map((jobOption) => {
+                          const isSelected = String(jobOption.id) === addJobId;
+                          const locationLabel = [jobOption.city, jobOption.state, jobOption.country].filter(Boolean).join(', ')
+                            || t(`ats.remoteType_${jobOption.remoteType}`, jobOption.remoteType);
+
+                          return (
+                            <button
+                              key={jobOption.id}
+                              type="button"
+                              onClick={() => setAddJobId(String(jobOption.id))}
+                              style={{
+                                border: isSelected ? '1px solid rgba(201,151,58,0.62)' : '1px solid var(--border)',
+                                borderRadius: 10,
+                                padding: '10px 11px',
+                                background: isSelected ? 'rgba(201,151,58,0.12)' : '#fff',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                textAlign: 'left',
+                              }}
+                            >
+                              <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                                <strong style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {jobOption.title}
+                                </strong>
+                                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{locationLabel}</span>
+                              </div>
+                              <span style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                border: isSelected ? '1px solid rgba(201,151,58,0.9)' : '1px solid rgba(148,163,184,0.4)',
+                                background: isSelected ? '#C9973A' : '#fff',
+                                color: '#fff',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}>
+                                {isSelected ? '✓' : ''}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#991B1B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <Eye size={13} /> {t('ats.status_closed', 'Closed')}
+                        </div>
+
+                        {closedJobs.length === 0 ? (
+                          <div style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '10px 11px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                            {t('ats.noClosedPositions', 'No closed positions available.')}
+                          </div>
+                        ) : closedJobs.map((jobOption) => {
+                          const locationLabel = [jobOption.city, jobOption.state, jobOption.country].filter(Boolean).join(', ')
+                            || t(`ats.remoteType_${jobOption.remoteType}`, jobOption.remoteType);
+
+                          return (
+                            <div
+                              key={`closed-${jobOption.id}`}
+                              style={{
+                                border: '1px solid rgba(239,68,68,0.24)',
+                                borderRadius: 10,
+                                padding: '10px 11px',
+                                background: 'rgba(239,68,68,0.06)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                                <strong style={{ fontSize: 13, color: '#7F1D1D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {jobOption.title}
+                                </strong>
+                                <span style={{ fontSize: 11.5, color: '#991B1B' }}>{locationLabel}</span>
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#991B1B' }}>
+                                {t('ats.closedSelectionDisabled', 'Closed')}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ border: '1px solid rgba(201,151,58,0.35)', borderRadius: 10, padding: '9px 11px', background: 'rgba(201,151,58,0.09)', color: '#5F4308', fontSize: 12.5 }}>
+                  <strong>{t('ats.position', 'Position')}:</strong> {addSelectedJob?.title ?? '-'}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                  <Input
+                    label={t('employees.firstName', 'First name')}
+                    value={addFirstName}
+                    onChange={(e) => setAddFirstName(e.target.value)}
+                    placeholder="Mario"
+                    autoFocus
+                  />
+                  <Input
+                    label={t('employees.lastName', 'Last name')}
+                    value={addLastName}
+                    onChange={(e) => setAddLastName(e.target.value)}
+                    placeholder="Rossi"
+                  />
+                  <Input
+                    label="Email"
+                    type="email"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    placeholder="mario@email.com"
+                  />
+                  <Input
+                    label={t('ats.phone')}
+                    type="tel"
+                    value={addPhone}
+                    onChange={(e) => setAddPhone(e.target.value)}
+                    placeholder="+39 345..."
+                  />
+                  <Input
+                    label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
+                    type="url"
+                    value={addLinkedinUrl}
+                    onChange={(e) => setAddLinkedinUrl(e.target.value)}
+                    placeholder="https://linkedin.com/in/..."
+                  />
+                  <Input
+                    label={t('publicCareers.cvLabel', 'CV / Resume URL')}
+                    value={addResumePath}
+                    onChange={(e) => setAddResumePath(e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                    {t('publicCareers.coverLetterLabel', 'Cover letter')}
+                  </label>
+                  <textarea
+                    className="field-input"
+                    value={addCoverLetter}
+                    onChange={(e) => setAddCoverLetter(e.target.value)}
+                    rows={4}
+                    maxLength={1000}
+                    placeholder={t('publicCareers.coverLetterPlaceholder', 'Tell us a bit about this candidate profile')}
+                    style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
+                  />
+                  <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{addCoverLetter.length}/1000</div>
+                </div>
+
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: '#fff', display: 'grid', gap: 8 }}>
+                  <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    {t('ats.jobTags')}
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8 }}>
+                    <input
+                      className="field-input"
+                      value={addTagInput}
+                      onChange={(e) => setAddTagInput(e.target.value)}
+                      placeholder={t('ats.jobTagsInputPlaceholder', 'Type a tag and press Enter')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          appendCandidateTag(addTagInput);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => appendCandidateTag(addTagInput)}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        border: '1px solid rgba(201,151,58,0.42)',
+                        background: 'rgba(201,151,58,0.14)',
+                        color: '#8a6318',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {addTags.length > 0 ? addTags.map((tag) => (
+                      <span
+                        key={`candidate-tag-${tag}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '4px 9px',
+                          borderRadius: 999,
+                          fontSize: 12,
+                          background: '#FEF4DA',
+                          color: '#5C3E05',
+                          border: '1px solid #F4DEAB',
+                          fontWeight: 700,
+                        }}
+                      >
+                        <span>{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeCandidateTag(tag)}
+                          style={{ border: 'none', background: 'transparent', color: '#7a5715', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
+                  </div>
+                </div>
+
+                <label style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={addGdprConsent}
+                    onChange={(e) => setAddGdprConsent(e.target.checked)}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span>{t('publicCareers.privacyConsent', 'Privacy consent collected')}</span>
+                </label>
+              </>
+            )}
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
-              <Button variant="secondary" type="button" onClick={() => setShowAddModal(false)}>
+              <Button variant="secondary" type="button" onClick={closeAddCandidateModal}>
                 {t('common.cancel')}
               </Button>
-              <Button variant="primary" type="submit" loading={addSaving} disabled={!addName.trim()}>
-                {t('ats.addCandidate')}
-              </Button>
+
+              {addStep === 2 && (
+                <Button variant="secondary" type="button" onClick={() => setAddStep(1)}>
+                  ← {t('common.back', 'Back')}
+                </Button>
+              )}
+
+              {addStep === 1 ? (
+                <Button variant="primary" type="button" onClick={() => setAddStep(2)} disabled={!addJobId}>
+                  {t('common.next', 'Next')} →
+                </Button>
+              ) : (
+                <Button variant="primary" type="submit" loading={addSaving} disabled={!addJobId}>
+                  {t('ats.addCandidate')}
+                </Button>
+              )}
             </div>
           </form>
         </ModalBackdrop>
@@ -1232,6 +3364,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         <CandidateModal
           candidate={selected}
           jobs={jobs}
+          canEdit={canEdit}
+          canFeedback={canFeedback}
           onClose={() => setSelected(null)}
           onAdvance={handleAdvance}
           onReject={handleReject}
@@ -1245,18 +3379,42 @@ const KanbanPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
 // ─── Alerts Panel ─────────────────────────────────────────────────────────────
 
-const AlertsPanel: React.FC = () => {
+const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
   const { t } = useTranslation();
   const [alerts, setAlerts] = useState<HRAlert[]>([]);
   const [risks, setRisks] = useState<JobRisk[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getAlerts(), getRisks()])
-      .then(([a, r]) => { setAlerts(a); setRisks(r); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    let isMounted = true;
+
+    Promise.allSettled([
+      getAlerts(),
+      canViewRisks ? getRisks() : Promise.resolve([] as JobRisk[]),
+    ])
+      .then(([alertsResult, risksResult]) => {
+        if (!isMounted) return;
+
+        if (alertsResult.status === 'fulfilled') {
+          setAlerts(alertsResult.value);
+        } else {
+          setAlerts([]);
+        }
+
+        if (risksResult.status === 'fulfilled') {
+          setRisks(risksResult.value as JobRisk[]);
+        } else {
+          setRisks([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [canViewRisks]);
 
   const ALERT_ICON: Record<string, string> = {
     new_candidates:     '👤',
@@ -1371,7 +3529,7 @@ const AlertsPanel: React.FC = () => {
       </div>
 
       {/* At-risk positions */}
-      {atRiskJobs.length > 0 && (
+      {canViewRisks && atRiskJobs.length > 0 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -1447,6 +3605,8 @@ export default function ATSPage() {
   const { t } = useTranslation();
 
   const canEdit = !!user && ['admin', 'hr'].includes(user.role);
+  const canViewRisks = !!user && ['admin', 'hr'].includes(user.role);
+  const canFeedback = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
   const [tab, setTab] = useState<'jobs' | 'candidates' | 'alerts'>('candidates');
 
   const tabs = [
@@ -1544,8 +3704,8 @@ export default function ATSPage() {
       </div>
 
       {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} />}
-      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} />}
-      {tab === 'alerts' && <AlertsPanel />}
+      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} />}
+      {tab === 'alerts' && <AlertsPanel canViewRisks={canViewRisks} />}
     </div>
   );
 }

@@ -64,6 +64,12 @@ const IconMessage = () => (
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
+const IconMail = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
+    <polyline points="22,6 12,13 2,6" />
+  </svg>
+);
 const IconLogout = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
@@ -170,7 +176,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
   if (!user || user.role === 'store_terminal') return null;
 
-  type NavItem = { labelKey: string; path: string; icon: React.ReactNode; permissionKey?: string; superAdminOnly?: boolean };
+  type NavItem = {
+    labelKey: string;
+    path: string;
+    icon: React.ReactNode;
+    permissionKey?: string;
+    superAdminOnly?: boolean;
+    badgeKey?: string;
+  };
 
   const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     admin: [
@@ -189,6 +202,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -208,6 +222,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -418,6 +433,22 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
             >
               <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
               {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(item.labelKey)}</span>}
+              {!collapsed && !!item.badgeKey && (
+                <span style={{
+                  marginLeft: 'auto',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.03em',
+                  borderRadius: 999,
+                  padding: '1px 6px',
+                  border: '1px solid rgba(201,151,58,0.4)',
+                  color: '#F3D48D',
+                  background: 'rgba(201,151,58,0.15)',
+                }}>
+                  {t(item.badgeKey)}
+                </span>
+              )}
               {!collapsed && item.labelKey === 'nav.messaggi' && unreadMessages > 0 && (
                 <span style={{
                   background: 'var(--accent)',

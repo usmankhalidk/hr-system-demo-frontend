@@ -36,6 +36,9 @@ import DocumentsPage from './modules/documents/DocumentsPage';
 import TransfersPage from './modules/transfers/TransfersPage';
 import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
 import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
+import EmailSettingsPage from './modules/email/EmailSettingsPage';
+import PublicCareersPage from './modules/publicCareers/PublicCareersPage';
+import PublicJobDetailPage from './modules/publicCareers/PublicJobDetailPage';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 
 // Refresh permissions whenever the user navigates to a new route.
@@ -76,6 +79,10 @@ function AppRoutes() {
     <PermissionsRefresher />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/careers" element={<PublicCareersPage />} />
+      <Route path="/careers/:companySlug" element={<PublicCareersPage />} />
+      <Route path="/careers/jobs/:jobId" element={<PublicJobDetailPage />} />
+      <Route path="/careers/:companySlug/jobs/:jobId" element={<PublicJobDetailPage />} />
 
       <Route path="/" element={
         <ProtectedRoute>
@@ -233,6 +240,12 @@ function AppRoutes() {
       <Route path="/documenti" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="documenti">
           <Layout title={t('nav.documenti')}><DocumentsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/impostazioni/email" element={
+        <ProtectedRoute roles={['admin', 'hr']}>
+          <Layout title={t('nav.email')}><EmailSettingsPage /></Layout>
         </ProtectedRoute>
       } />
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays, AlertTriangle } from 'lucide-react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { useAuth } from '../../context/AuthContext';
 
 interface StoreInfo {
   id: number;
@@ -121,7 +122,9 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
   const { store, employeeCount, todayShifts = [], todayAttendance = {} } = data;
   const { t, i18n } = useTranslation();
   const { isMobile } = useBreakpoint();
+  const { permissions } = useAuth();
   const EVENT_META = getEventMeta(t);
+  const showAttendance = permissions['presenze'] !== false;
 
   const available = store.maxStaff ? Math.max(0, store.maxStaff - employeeCount) : null;
   const currentDay = new Date().getDay();
@@ -222,7 +225,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
       </div>
 
       {/* Today's shifts + attendance */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (showAttendance ? '1fr 1fr' : '1fr'), gap: '16px' }}>
 
         {/* Today's shifts */}
         <div style={{
@@ -300,6 +303,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
         </div>
 
         {/* Today's attendance summary */}
+        {showAttendance && (
         <div style={{
           background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
@@ -347,6 +351,7 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
             })}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
