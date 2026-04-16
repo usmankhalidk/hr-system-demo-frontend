@@ -117,10 +117,13 @@ export async function deleteDocument(id: number): Promise<void> {
   await apiClient.delete(`/documents/${id}`);
 }
 
-export async function getDeletedDocuments(): Promise<EmployeeDocument[]> {
-  const { data } = await apiClient.get('/documents/trash');
+export async function getDeletedDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
+  const { data } = await apiClient.get('/documents/trash', {
+    params: { employee_id: employeeId }
+  });
   return data.data as EmployeeDocument[];
 }
+
 
 export async function restoreDocument(id: number, source: 'documents' | 'employee_documents'): Promise<void> {
   await apiClient.post(`/documents/${source}/${id}/restore`);
@@ -187,6 +190,7 @@ export async function uploadDocumentUnified(
     requiresSignature?: boolean;
     expiresAt?: string | null;
     visibleToRoles?: string[];
+    employeeId?: number | null;
   }
 ): Promise<any> {
   const formData = new FormData();
@@ -195,6 +199,7 @@ export async function uploadDocumentUnified(
   if (options?.requiresSignature) formData.append('requires_signature', 'true');
   if (options?.expiresAt) formData.append('expires_at', options.expiresAt);
   if (options?.visibleToRoles) formData.append('visible_to_roles', JSON.stringify(options.visibleToRoles));
+  if (options?.employeeId != null) formData.append('employee_id', String(options.employeeId));
 
   const { data } = await apiClient.post('/documents/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

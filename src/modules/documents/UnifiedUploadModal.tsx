@@ -59,10 +59,11 @@ const labelStyle: React.CSSProperties = {
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
-  targetEmployee?: Employee | null;
+  targetEmployeeId?: number | null;
+  targetEmployeeName?: string | null;
 }
 
-export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targetEmployee }) => {
+export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targetEmployeeId, targetEmployeeName }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { user } = useAuth();
@@ -114,6 +115,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
         requiresSignature,
         expiresAt: expiresAt || null,
         visibleToRoles,
+        employeeId: targetEmployeeId
       });
 
       showToast(t('documents.uploaded'), 'success');
@@ -142,10 +144,16 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
         <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
           {step === 1 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {targetEmployeeName && (
+                <div style={{ padding: '10px 14px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)' }} />
+                  {t('documents.assignedTo', 'Assigned to')}: <strong>{targetEmployeeName}</strong>
+                </div>
+              )}
               <label 
                 style={{ 
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
-                  height: 200, border: '2px dashed var(--border)', borderRadius: 12, cursor: 'pointer',
+                  height: 180, border: '2px dashed var(--border)', borderRadius: 12, cursor: 'pointer',
                   transition: 'all 0.2s', background: 'var(--background)'
                 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}

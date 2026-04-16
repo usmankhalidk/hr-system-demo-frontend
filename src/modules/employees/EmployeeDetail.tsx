@@ -28,6 +28,8 @@ import { EmployeeForm } from './EmployeeForm';
 import { MessageBoard } from '../messages/MessageBoard';
 import { ComposeMessage } from '../messages/ComposeMessage';
 import { getEmployeeTasks, assignTasks, OnboardingProgress } from '../../api/onboarding';
+import { DocumentManager } from '../documents/components/DocumentManager';
+
 
 // ── Types & constants ──────────────────────────────────────────────────────────
 const ROLE_BADGE_VARIANT: Record<UserRole, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -329,6 +331,8 @@ export function EmployeeDetail() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'documents'>('overview');
+
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -757,8 +761,45 @@ export function EmployeeDetail() {
         )}
       </div>
 
-      {/* Detail cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: (canViewSensitive && !isMobile) ? '1fr 1fr' : '1fr', gap: '20px' }}>
+      {/* Tabs Navigation */}
+      <div style={{
+        display: 'flex', gap: '32px', marginBottom: '24px',
+        borderBottom: '1px solid var(--border)', padding: '0 4px',
+      }}>
+        <button
+          onClick={() => setActiveTab('overview')}
+          style={{
+            padding: '12px 4px', fontSize: '14px', fontWeight: 700,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: activeTab === 'overview' ? 'var(--primary)' : 'var(--text-muted)',
+            borderBottom: activeTab === 'overview' ? '3px solid var(--primary)' : '3px solid transparent',
+            fontFamily: 'var(--font-display)', transition: 'all 0.2s ease',
+            textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}
+        >
+          {t('common.overview', 'Overview')}
+        </button>
+        <button
+          onClick={() => setActiveTab('documents')}
+          style={{
+            padding: '12px 4px', fontSize: '14px', fontWeight: 700,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: activeTab === 'documents' ? 'var(--primary)' : 'var(--text-muted)',
+            borderBottom: activeTab === 'documents' ? '3px solid var(--primary)' : '3px solid transparent',
+            fontFamily: 'var(--font-display)', transition: 'all 0.2s ease',
+            textTransform: 'uppercase', letterSpacing: '0.04em',
+            display: 'flex', alignItems: 'center', gap: '8px'
+          }}
+        >
+          <IconFile /> {t('documents.title')}
+        </button>
+      </div>
+
+      {activeTab === 'overview' ? (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: (canViewSensitive && !isMobile) ? '1fr 1fr' : '1fr', gap: '20px' }}>
+
+
 
         {/* General info */}
         <SectionPanel title={t('employees.generalInfo')} icon={<IconUser />}>
@@ -1119,6 +1160,19 @@ export function EmployeeDetail() {
           )}
         </SectionPanel>
       </div>
+    </>
+  ) : (
+
+
+
+        <DocumentManager 
+          employeeId={Number(employeeId)} 
+          employeeName={`${employee.name} ${employee.surname}`} 
+          isTrashEnabled={isAdminOrHr}
+        />
+      )}
+
+
 
       {/* Training Edit Modal */}
       <Modal
