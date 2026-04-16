@@ -43,14 +43,28 @@ export default function ConfirmModal({
 
   return createPortal(
     <>
+      <style>{`
+        @keyframes modal-icon-pulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220,53,69,0.2); }
+          70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(220,53,69,0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220,53,69,0); }
+        }
+        @keyframes modal-icon-pulse-warning {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(201,151,58,0.2); }
+          70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(201,151,58,0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(201,151,58,0); }
+        }
+      `}</style>
       {/* Backdrop */}
       <div
         onClick={onCancel}
         style={{
           position: 'fixed', inset: 0,
-          background: 'rgba(13,33,55,0.55)',
-          backdropFilter: 'blur(4px)',
-          zIndex: 1200,
+          background: 'rgba(13,33,55,0.45)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 10000,
+          transition: 'all 0.3s ease',
+          animation: 'fadeIn 0.2s ease forwards'
         }}
       />
 
@@ -63,68 +77,76 @@ export default function ConfirmModal({
           position: 'fixed',
           top: '50%', left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: 'min(440px, 92vw)',
+          width: 'min(320px, 92vw)',
           background: 'var(--surface)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.22)',
-          zIndex: 1201,
+          borderRadius: 16,
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          zIndex: 10001,
           overflow: 'hidden',
+          animation: 'popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards'
         }}
       >
-        {/* Accent stripe */}
-        <div style={{ height: 3, background: `linear-gradient(90deg, ${variantColor} 0%, var(--primary) 100%)` }} />
-
         {/* Icon + title */}
-        <div style={{ padding: '24px 24px 16px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <div style={{ padding: '24px 24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 16 }}>
           <div style={{
-            width: 40, height: 40, borderRadius: '50%',
-            background: variant === 'danger' ? 'rgba(220,53,69,0.1)' : variant === 'warning' ? 'rgba(201,151,58,0.1)' : 'rgba(13,33,55,0.08)',
+            width: 54, height: 54, borderRadius: 16,
+            background: variant === 'danger' ? 'rgba(220,53,69,0.08)' : variant === 'warning' ? 'rgba(201,151,58,0.08)' : 'rgba(13,33,55,0.04)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
+            animation: variant === 'danger' ? 'modal-icon-pulse 2s infinite' : variant === 'warning' ? 'modal-icon-pulse-warning 2s infinite' : 'none'
           }}>
             {variant === 'danger' ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={variantColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={variantColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
               </svg>
             ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={variantColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={variantColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
             )}
           </div>
           <div>
             <h3 id="confirm-modal-title" style={{
-              fontFamily: 'var(--font-display)', fontWeight: 700,
-              fontSize: '1rem', color: 'var(--primary)', margin: '0 0 6px',
+              fontFamily: 'var(--font-display)', fontWeight: 800,
+              fontSize: '1.15rem', color: 'var(--primary)', margin: '0 0 8px',
+              letterSpacing: '-0.02em'
             }}>
               {title}
             </h3>
             <p style={{
               fontSize: '0.875rem', color: 'var(--text-secondary)',
-              margin: 0, lineHeight: 1.55,
+              margin: 0, lineHeight: 1.5, fontWeight: 500
             }}>
               {message}
             </p>
           </div>
         </div>
 
-        {children ? (
+        {children && (
           <div style={{ padding: '0 24px 12px' }}>
             {children}
           </div>
-        ) : null}
+        )}
 
         {/* Footer */}
         <div style={{
-          padding: '12px 24px 20px',
-          display: 'flex', justifyContent: 'flex-end', gap: 8,
+          padding: '12px 24px 24px',
+          display: 'flex', justifyContent: 'stretch', gap: 10,
         }}>
-          <button className="btn btn-secondary" onClick={onCancel} style={{ fontSize: 13 }}>
-            {cancelLabel ?? t('common.cancel', 'Annulla')}
+          <button 
+            className="btn btn-secondary" 
+            onClick={onCancel} 
+            style={{ flex: 1, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 700 }}
+          >
+            {cancelLabel ?? t('common.cancel', 'Cancel')}
           </button>
-          <button className={confirmBtnClass} onClick={onConfirm} style={{ fontSize: 13 }}>
-            {confirmLabel ?? t('common.confirm', 'Conferma')}
+          <button 
+            className={confirmBtnClass} 
+            onClick={onConfirm} 
+            style={{ flex: 1, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 700 }}
+          >
+            {confirmLabel ?? t('common.confirm', 'Confirm')}
           </button>
         </div>
       </div>

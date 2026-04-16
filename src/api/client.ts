@@ -60,8 +60,13 @@ export function snakeKeys(obj: any): any {
 
 const client = axios.create({ baseURL: BASE_URL });
 
-// Request: convert camelCase body + params → snake_case
+// Request: convert camelCase body + params → snake_case + Add language headers
 client.interceptors.request.use((config) => {
+  // Add language headers
+  const lang = localStorage.getItem('hr_lang') || 'it';
+  config.headers['x-lang'] = lang;
+  config.headers['Accept-Language'] = lang === 'it' ? 'it-IT,it;q=0.9' : 'en-US,en;q=0.9';
+
   if (config.data !== undefined && config.data !== null) {
     config.data = snakeKeys(config.data);
   }

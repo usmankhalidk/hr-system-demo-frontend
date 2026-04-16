@@ -20,11 +20,16 @@ export interface EmployeeDocument {
   signedByUserId: number | null;
   expiresAt: string | null;
   isVisibleToRoles: string[];
+  isDeleted: boolean;
   deletedAt: string | null;
+  restoredAt: string | null;
+  restoredBy: number | null;
   uploadedByUserId: number;
   createdAt: string;
   updatedAt: string;
   categoryName?: string | null;
+  sourceTable?: 'documents' | 'employee_documents';
+  employeeName?: string;
 }
 
 export interface BulkUploadResult {
@@ -60,6 +65,12 @@ export async function updateCategory(id: number, payload: { name?: string; isAct
     current_company_id: payload.currentCompanyId,
   });
   return data.data as DocumentCategory;
+}
+
+export async function deleteCategory(id: number, currentCompanyId?: number): Promise<void> {
+  await apiClient.delete(`/documents/categories/${id}`, { 
+    params: { current_company_id: currentCompanyId } 
+  });
 }
 
 export async function getEmployeeDocuments(employeeId: number): Promise<EmployeeDocument[]> {
@@ -106,12 +117,21 @@ export async function deleteDocument(id: number): Promise<void> {
   await apiClient.delete(`/documents/${id}`);
 }
 
+export async function getDeletedDocuments(): Promise<EmployeeDocument[]> {
+  const { data } = await apiClient.get('/documents/trash');
+  return data.data as EmployeeDocument[];
+}
+
+export async function restoreDocument(id: number, source: 'documents' | 'employee_documents'): Promise<void> {
+  await apiClient.post(`/documents/${source}/${id}/restore`);
+}
+
 export async function updateDocumentVisibility(id: number, roles: string[]): Promise<void> {
   await apiClient.patch(`/documents/${id}/visibility`, { roles });
 }
 
-export async function signDocument(id: number, lang?: string): Promise<EmployeeDocument> {
-  const { data } = await apiClient.post(`/documents/${id}/sign`, {}, {
+export async function signDocument(id: number, lang?: string, signedAt?: string, signedAtDisplay?: string): Promise<EmployeeDocument> {
+  const { data } = await apiClient.post(`/documents/${id}/sign`, { signedAt, signedAtDisplay }, {
     headers: lang ? { 'x-lang': lang } : undefined
   });
   return data.data as EmployeeDocument;

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
-import { uploadDocumentUnified, DocumentCategory } from '../../api/documents';
+import { useAuth } from '../../context/AuthContext';
+import { uploadDocumentUnified } from '../../api/documents';
 import { Employee } from '../../types';
 import { createPortal } from 'react-dom';
 
@@ -63,6 +64,7 @@ interface Props {
 export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targetEmployee }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { user } = useAuth();
   
   const [step, setStep] = useState<1 | 2>(1);
   const [file, setFile] = useState<File | null>(null);
@@ -72,6 +74,8 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [expiresAt, setExpiresAt] = useState('');
   const [visibility, setVisibility] = useState<'everyone' | 'hr'>('everyone');
+
+  const isHrOrAdmin = user && ['admin', 'hr'].includes(user.role);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -92,6 +96,12 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
   const handleSubmit = async () => {
     if (!file) return;
+
+    if (isHrOrAdmin && !expiresAt) {
+      showToast(t('employees.fieldRequired'), 'error');
+      return;
+    }
+
     setUploading(true);
     
     try {
@@ -203,7 +213,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   </div>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>{t('documents.expiryDate')}</label>
+                  <label style={labelStyle}>
+                    {t('documents.expiryDate')} {isHrOrAdmin && <span style={{ color: '#DC2626' }}>*</span>}
+                  </label>
                   <input 
                     type="date" 
                     value={expiresAt} 

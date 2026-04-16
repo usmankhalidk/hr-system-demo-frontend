@@ -17,6 +17,7 @@ export interface CompanyGrid {
   impostazioni: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   gestione_accessi?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   terminali?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  documenti?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
 }
 
 export interface CompanyPermissions {
@@ -44,7 +45,8 @@ export interface SystemPermissionUpdate {
     | 'messaggi'
     | 'impostazioni'
     | 'gestione_accessi'
-    | 'terminali';
+    | 'terminali'
+    | 'documenti';
   enabled: boolean;
 }
 
