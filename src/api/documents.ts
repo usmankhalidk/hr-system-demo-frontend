@@ -20,11 +20,16 @@ export interface EmployeeDocument {
   signedByUserId: number | null;
   expiresAt: string | null;
   isVisibleToRoles: string[];
+  isDeleted: boolean;
   deletedAt: string | null;
+  restoredAt: string | null;
+  restoredBy: number | null;
   uploadedByUserId: number;
   createdAt: string;
   updatedAt: string;
   categoryName?: string | null;
+  sourceTable?: 'documents' | 'employee_documents';
+  employeeName?: string;
 }
 
 export interface BulkUploadResult {
@@ -47,14 +52,25 @@ export async function getCategories(includeInactive = false): Promise<DocumentCa
   return data.data as DocumentCategory[];
 }
 
-export async function createCategory(name: string): Promise<DocumentCategory> {
-  const { data } = await apiClient.post('/documents/categories', { name });
+export async function createCategory(name: string, companyId: number): Promise<DocumentCategory> {
+  const { data } = await apiClient.post('/documents/categories', { name, company_id: companyId });
   return data.data as DocumentCategory;
 }
 
-export async function updateCategory(id: number, payload: { name?: string; isActive?: boolean }): Promise<DocumentCategory> {
-  const { data } = await apiClient.patch(`/documents/categories/${id}`, payload);
+export async function updateCategory(id: number, payload: { name?: string; isActive?: boolean; companyId: number; currentCompanyId: number }): Promise<DocumentCategory> {
+  const { data } = await apiClient.patch(`/documents/categories/${id}`, {
+    name: payload.name,
+    is_active: payload.isActive,
+    company_id: payload.companyId,
+    current_company_id: payload.currentCompanyId,
+  });
   return data.data as DocumentCategory;
+}
+
+export async function deleteCategory(id: number, currentCompanyId?: number): Promise<void> {
+  await apiClient.delete(`/documents/categories/${id}`, { 
+    params: { current_company_id: currentCompanyId } 
+  });
 }
 
 export async function getEmployeeDocuments(employeeId: number): Promise<EmployeeDocument[]> {
@@ -101,12 +117,26 @@ export async function deleteDocument(id: number): Promise<void> {
   await apiClient.delete(`/documents/${id}`);
 }
 
+export async function getDeletedDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
+  const { data } = await apiClient.get('/documents/trash', {
+    params: { employee_id: employeeId }
+  });
+  return data.data as EmployeeDocument[];
+}
+
+
+export async function restoreDocument(id: number, source: 'documents' | 'employee_documents'): Promise<void> {
+  await apiClient.post(`/documents/${source}/${id}/restore`);
+}
+
 export async function updateDocumentVisibility(id: number, roles: string[]): Promise<void> {
   await apiClient.patch(`/documents/${id}/visibility`, { roles });
 }
 
-export async function signDocument(id: number): Promise<EmployeeDocument> {
-  const { data } = await apiClient.post(`/documents/${id}/sign`);
+export async function signDocument(id: number, lang?: string, signedAt?: string, signedAtDisplay?: string): Promise<EmployeeDocument> {
+  const { data } = await apiClient.post(`/documents/${id}/sign`, { signedAt, signedAtDisplay }, {
+    headers: lang ? { 'x-lang': lang } : undefined
+  });
   return data.data as EmployeeDocument;
 }
 
@@ -149,4 +179,53 @@ export async function getNotificationSettings(): Promise<NotificationSetting[]> 
 export async function updateNotificationSetting(eventKey: string, enabled: boolean, roles?: string[]): Promise<NotificationSetting> {
   const { data } = await apiClient.patch(`/notifications/settings/${eventKey}`, { enabled, roles });
   return data.data.setting as NotificationSetting;
+}
+
+// --- Step 1 & 2 Unified Upload ---
+
+export async function uploadDocumentUnified(
+  file: File,
+  options?: {
+    categoryId?: number | null;
+    requiresSignature?: boolean;
+    expiresAt?: string | null;
+    visibleToRoles?: string[];
+    employeeId?: number | null;
+  }
+): Promise<any> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (options?.categoryId != null) formData.append('category_id', String(options.categoryId));
+  if (options?.requiresSignature) formData.append('requires_signature', 'true');
+  if (options?.expiresAt) formData.append('expires_at', options.expiresAt);
+  if (options?.visibleToRoles) formData.append('visible_to_roles', JSON.stringify(options.visibleToRoles));
+  if (options?.employeeId != null) formData.append('employee_id', String(options.employeeId));
+
+  const { data } = await apiClient.post('/documents/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+
+export async function updateDocumentGeneric(id: number, payload: { title: string; employee_id: number | null }): Promise<void> {
+  await apiClient.put(`/documents/${id}`, payload);
+}
+
+export async function getDocumentsGeneric(): Promise<any[]> {
+  const { data } = await apiClient.get('/documents');
+  return data.data;
+}
+
+export async function downloadDocumentGeneric(id: number, filename: string): Promise<void> {
+  const response = await apiClient.get(`/documents/${id}/download`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
