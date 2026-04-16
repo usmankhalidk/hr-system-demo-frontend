@@ -4,7 +4,9 @@ import { ArrowLeftRight, Clock3, Moon, Palmtree, Store, Thermometer, Users } fro
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
+import { WindowDisplayActivity } from '../../api/windowDisplay';
 import { getAvatarUrl } from '../../api/client';
+import { getActivityIcon, getActivityPalette, getActivityTypeLabel } from './storeActivityCatalog';
 
 interface MonthlyCalendarProps {
   shifts: Shift[];
@@ -12,6 +14,8 @@ interface MonthlyCalendarProps {
   onDayClick: (date: string) => void;
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
+  windowDisplayActivities?: WindowDisplayActivity[];
+  onWindowDisplayClick?: (date: string) => void;
 }
 
 function formatDate(date: Date): string {
@@ -34,7 +38,26 @@ function initialsFromName(fullName: string): string {
   return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
 }
 
-export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leaveBlocks, transferBlocks }: MonthlyCalendarProps) {
+function activityVisual(activity: WindowDisplayActivity): { icon: string; background: string; border: string; accentBorder: string; color: string } {
+  const palette = getActivityPalette(activity.activityType);
+  return {
+    icon: getActivityIcon(activity.activityType, activity.activityIcon),
+    background: palette.background,
+    border: palette.border,
+    accentBorder: palette.accentBorder,
+    color: palette.color,
+  };
+}
+
+export default function MonthlyCalendar({
+  shifts,
+  currentDate,
+  onDayClick,
+  leaveBlocks,
+  transferBlocks,
+  windowDisplayActivities,
+  onWindowDisplayClick,
+}: MonthlyCalendarProps) {
   const { t } = useTranslation();
   const MAX_VISIBLE_AVATARS = 4;
   const DAY_LABELS = [
@@ -49,6 +72,12 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+  const windowDisplayByDate = new Map<string, WindowDisplayActivity[]>();
+  for (const item of windowDisplayActivities ?? []) {
+    const rows = windowDisplayByDate.get(item.date) ?? [];
+    rows.push(item);
+    windowDisplayByDate.set(item.date, rows);
+  }
 
   // Build monthly aggregates per date.
   const shiftCountMap = new Map<string, number>();
@@ -143,6 +172,7 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
   while (cells.length % 7 !== 0) cells.push(null);
 
   const today = formatDate(new Date());
+  const [hoveredActivityId, setHoveredActivityId] = React.useState<number | null>(null);
 
   return (
     <div style={{ padding: 16 }}>
@@ -177,6 +207,7 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
           const transferCounts = transferMap.get(dateStr) ?? { active: 0, completed: 0, cancelled: 0 };
           const transferCount = transferCounts.active + transferCounts.completed + transferCounts.cancelled;
           const isToday = dateStr === today;
+          const dayActivities = windowDisplayByDate.get(dateStr) ?? [];
           const hasTransfer = transferCount > 0;
           const hasStoreShiftSummary = storeCount > 0 || shiftCount > 0;
           const hasSummaryTags = hasTransfer || vacationApprovedUsers > 0 || sickApprovedUsers > 0 || offDayUserCount > 0;
@@ -200,25 +231,142 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)';
+                setHoveredActivityId(null);
               }}
             >
               <div style={{
-                fontWeight: isToday ? 700 : 500,
-                color: isToday ? 'var(--accent)' : 'var(--text)',
-                fontFamily: 'var(--font-display)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 6,
                 marginBottom: 6,
-                fontSize: '0.9rem',
               }}>
-                {isToday ? (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 26, height: 26, borderRadius: '50%',
-                    background: 'var(--accent)', color: '#fff', fontWeight: 700,
-                    boxShadow: '0 0 0 3px rgba(201,151,58,0.16)',
-                  }}>
-                    {date.getDate()}
-                  </span>
-                ) : date.getDate()}
+                <div style={{
+                  fontWeight: isToday ? 700 : 500,
+                  color: isToday ? 'var(--accent)' : 'var(--text)',
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '0.9rem',
+                  lineHeight: 1,
+                }}>
+                  {isToday ? (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 26, height: 26, borderRadius: '50%',
+                      background: 'var(--accent)', color: '#fff', fontWeight: 700,
+                      boxShadow: '0 0 0 3px rgba(201,151,58,0.16)',
+                    }}>
+                      {date.getDate()}
+                    </span>
+                  ) : date.getDate()}
+                </div>
+
+                {dayActivities.length > 0 && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {dayActivities.slice(0, 3).map((item) => {
+                      const visual = activityVisual(item);
+                      const activityLabel = getActivityTypeLabel(t, item.activityType, item.customActivityName);
+                      const hoursLabel = item.durationHours != null ? `${item.durationHours}h` : null;
+                      const isHovered = hoveredActivityId === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+                          onMouseEnter={() => setHoveredActivityId(item.id)}
+                          onMouseLeave={() => setHoveredActivityId((current) => (current === item.id ? null : current))}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onWindowDisplayClick?.(dateStr);
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: 6,
+                              border: 'none',
+                              background: 'transparent',
+                              color: visual.color,
+                              padding: '0 1px',
+                              fontSize: '0.95rem',
+                              fontWeight: 800,
+                              lineHeight: 1,
+                              cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                            }}
+                          >
+                            {visual.icon}
+                          </button>
+
+                          {isHovered && (
+                            <div style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 2px)',
+                              right: 0,
+                              minWidth: 190,
+                              maxWidth: 250,
+                              borderRadius: 8,
+                              border: `1px solid ${visual.border}`,
+                              borderLeft: `3px solid ${visual.accentBorder}`,
+                              background: visual.background,
+                              boxShadow: 'var(--shadow-lg)',
+                              padding: '7px 8px',
+                              zIndex: 80,
+                            }}>
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                                lineHeight: 1.2,
+                                color: visual.color,
+                              }}>
+                                <span style={{ fontSize: '0.92rem', lineHeight: 1 }}>{visual.icon}</span>
+                                <span>{activityLabel}</span>
+                              </div>
+                              {hoursLabel && (
+                                <div style={{ marginTop: 4, fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                                  {t('shifts.activityDuration', 'Duration')}: {hoursLabel}
+                                </div>
+                              )}
+                              {item.notes && (
+                                <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 600, color: 'var(--text-secondary)', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                                  {item.notes}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {dayActivities.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onWindowDisplayClick?.(dateStr);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          borderRadius: 999,
+                          border: '1px solid rgba(71,85,105,0.28)',
+                          background: 'rgba(226,232,240,0.9)',
+                          color: '#334155',
+                          padding: '1px 6px',
+                          fontSize: '0.56rem',
+                          fontWeight: 900,
+                          lineHeight: 1.2,
+                          cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                        }}
+                      >
+                        +{dayActivities.length - 3}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {hasStoreShiftSummary && (
