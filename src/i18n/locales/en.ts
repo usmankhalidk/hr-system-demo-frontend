@@ -1164,8 +1164,12 @@ const en = {
     // Anomaly table columns
     col_anomaly: 'Anomaly',
     col_severity: 'Severity',
+    col_origin: 'Origin',
     col_details: 'Details',
     // Anomaly list
+    anomalies_title: 'Attendance Anomalies',
+    anomalies_subtitle: 'Detect late arrivals, no-shows, long breaks, and early exits',
+    date_range_limit: 'Date range cannot exceed 14 days',
     no_anomalies: 'No anomalies detected',
     error_load_anomalies: 'Error loading anomalies',
     anomalies_count: '{{count}} anomalies detected',

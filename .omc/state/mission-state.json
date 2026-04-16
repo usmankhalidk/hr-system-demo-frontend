@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-04-14T01:57:00.867Z",
+  "updatedAt": "2026-04-16T05:27:57.128Z",
   "missions": [
     {
       "id": "session:2bb9dce5-7a99-4b6d-8c4e-c9abee5ab469:none",
@@ -120,6 +120,62 @@
           "agent": "verifier:a7240de",
           "detail": "completed",
           "sourceKey": "session-stop:a7240ded9d74f6cf4"
+        }
+      ]
+    },
+    {
+      "id": "session:7364588e-3f5f-4e23-be21-07c3e80941b3:none",
+      "source": "session",
+      "name": "none",
+      "objective": "Session mission",
+      "createdAt": "2026-04-16T05:23:59.323Z",
+      "updatedAt": "2026-04-16T05:27:57.128Z",
+      "status": "done",
+      "workerCount": 1,
+      "taskCounts": {
+        "total": 1,
+        "pending": 0,
+        "blocked": 0,
+        "inProgress": 0,
+        "completed": 1,
+        "failed": 0
+      },
+      "agents": [
+        {
+          "name": "code-reviewer:a81b9dd",
+          "role": "code-reviewer",
+          "ownership": "a81b9dd1ca4cb6136",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-04-16T05:27:57.128Z"
+        }
+      ],
+      "timeline": [
+        {
+          "id": "session-start:a81b9dd1ca4cb6136:2026-04-16T05:23:59.323Z",
+          "at": "2026-04-16T05:23:59.323Z",
+          "kind": "update",
+          "agent": "code-reviewer:a81b9dd",
+          "detail": "started code-reviewer:a81b9dd",
+          "sourceKey": "session-start:a81b9dd1ca4cb6136"
+        },
+        {
+          "id": "session-stop:a81b9dd1ca4cb6136:2026-04-16T05:26:08.889Z",
+          "at": "2026-04-16T05:26:08.889Z",
+          "kind": "completion",
+          "agent": "code-reviewer:a81b9dd",
+          "detail": "completed",
+          "sourceKey": "session-stop:a81b9dd1ca4cb6136"
+        },
+        {
+          "id": "session-stop:af5a2c57e228ea646:2026-04-16T05:27:57.128Z",
+          "at": "2026-04-16T05:27:57.128Z",
+          "kind": "completion",
+          "agent": "code-reviewer:a81b9dd",
+          "detail": "completed",
+          "sourceKey": "session-stop:af5a2c57e228ea646"
         }
       ]
     }

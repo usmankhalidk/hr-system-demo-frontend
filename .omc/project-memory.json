@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775820465854,
+  "lastScanned": 1776317278295,
   "projectRoot": "/Users/user/hr-software/hr-system-demo-frontend",
   "techStack": {
     "languages": [
@@ -84,7 +84,7 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 2,
-      "lastAccessed": 1775820465835,
+      "lastAccessed": 1776317278276,
       "keyFiles": [
         "favicon.png",
         "index.html"
@@ -94,7 +94,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 1,
-      "lastAccessed": 1775820465836,
+      "lastAccessed": 1776317278282,
       "keyFiles": [
         "favicon.png"
       ]
@@ -103,7 +103,7 @@
       "path": "src",
       "purpose": "Source code",
       "fileCount": 3,
-      "lastAccessed": 1775820465842,
+      "lastAccessed": 1776317278282,
       "keyFiles": [
         "App.tsx",
         "index.css",
@@ -114,7 +114,7 @@
       "path": "dist/assets",
       "purpose": "Static assets",
       "fileCount": 3,
-      "lastAccessed": 1775820465843,
+      "lastAccessed": 1776317278283,
       "keyFiles": [
         "fusaro-logo-BjyBPVsQ.png",
         "index-CMVKs2Pn.css",
@@ -124,8 +124,8 @@
     "src/api": {
       "path": "src/api",
       "purpose": "API routes",
-      "fileCount": 21,
-      "lastAccessed": 1775820465844,
+      "fileCount": 22,
+      "lastAccessed": 1776317278284,
       "keyFiles": [
         "ats.ts",
         "attendance.ts",
@@ -136,7 +136,7 @@
       "path": "src/assets",
       "purpose": "Static assets",
       "fileCount": 1,
-      "lastAccessed": 1775820465845,
+      "lastAccessed": 1776317278284,
       "keyFiles": [
         "fusaro-logo.png"
       ]
@@ -145,7 +145,7 @@
       "path": "src/components",
       "purpose": "UI components",
       "fileCount": 1,
-      "lastAccessed": 1775820465845,
+      "lastAccessed": 1776317278285,
       "keyFiles": [
         "ProtectedRoute.tsx"
       ]
@@ -154,8 +154,8 @@
   "hotPaths": [
     {
       "path": "src/i18n/locales/en.ts",
-      "accessCount": 35,
-      "lastAccessed": 1776131986619,
+      "accessCount": 38,
+      "lastAccessed": 1776318239458,
       "type": "directory"
     },
     {
@@ -166,8 +166,8 @@
     },
     {
       "path": "src/i18n/locales/it.ts",
-      "accessCount": 23,
-      "lastAccessed": 1776131987795,
+      "accessCount": 26,
+      "lastAccessed": 1776318241668,
       "type": "file"
     },
     {
@@ -213,6 +213,12 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 11,
+      "lastAccessed": 1776318196992,
+      "type": "directory"
+    },
+    {
       "path": "src/modules/documents/DocumentsPage.tsx",
       "accessCount": 10,
       "lastAccessed": 1775650513094,
@@ -225,10 +231,10 @@
       "type": "file"
     },
     {
-      "path": "src",
+      "path": "src/modules/attendance/AnomalyList.tsx",
       "accessCount": 8,
-      "lastAccessed": 1776131836665,
-      "type": "directory"
+      "lastAccessed": 1776318360046,
+      "type": "file"
     },
     {
       "path": "src/api/onboarding.ts",
@@ -241,6 +247,12 @@
       "accessCount": 7,
       "lastAccessed": 1776131699516,
       "type": "file"
+    },
+    {
+      "path": "src/i18n/locales",
+      "accessCount": 7,
+      "lastAccessed": 1776318232527,
+      "type": "directory"
     },
     {
       "path": "src/modules/shifts/AffluencePanel.tsx",
@@ -345,6 +357,12 @@
       "type": "file"
     },
     {
+      "path": "src/i18n",
+      "accessCount": 2,
+      "lastAccessed": 1776317976725,
+      "type": "directory"
+    },
+    {
       "path": "src/api/stores.ts",
       "accessCount": 1,
       "lastAccessed": 1775668347696,
@@ -375,12 +393,6 @@
       "type": "file"
     },
     {
-      "path": "src/i18n/locales",
-      "accessCount": 1,
-      "lastAccessed": 1775820479844,
-      "type": "directory"
-    },
-    {
       "path": "src/test/offlineSync.test.ts",
       "accessCount": 1,
       "lastAccessed": 1775881361428,
@@ -393,10 +405,10 @@
       "type": "directory"
     },
     {
-      "path": "src/i18n",
+      "path": "src/modules/attendance/AnomaliesPage.tsx",
       "accessCount": 1,
-      "lastAccessed": 1776131832867,
-      "type": "directory"
+      "lastAccessed": 1776318212065,
+      "type": "file"
     }
   ],
   "userDirectives": []
