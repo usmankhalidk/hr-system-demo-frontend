@@ -1224,8 +1224,12 @@ const it = {
     // Anomaly table columns
     col_anomaly: 'Anomalia',
     col_severity: 'Gravità',
+    col_origin: 'Origine',
     col_details: 'Dettagli',
     // Anomaly list
+    anomalies_title: 'Anomalie Presenze',
+    anomalies_subtitle: 'Rileva ritardi, assenze, pause lunghe e uscite anticipate',
+    date_range_limit: "L'intervallo di date non può superare 14 giorni",
     no_anomalies: 'Nessuna anomalia rilevata',
     error_load_anomalies: 'Errore nel caricamento delle anomalie',
     anomalies_count: '{{count}} anomalie rilevate',

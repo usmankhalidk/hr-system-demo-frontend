@@ -16,6 +16,7 @@ interface Anomaly {
   details: string;
   detailsKey?: string;
   detailsParams?: Record<string, string | number>;
+  checkinSource: 'qr' | 'manual' | 'sync' | null;
 }
 
 interface Props {
@@ -84,6 +85,12 @@ const ANOMALY_META: Record<string, { Icon: () => JSX.Element; color: string; bg:
   early_exit:   { Icon: IconLogOut,  color: '#0369a1', bg: 'rgba(3,105,161,0.08)',   border: 'rgba(3,105,161,0.20)' },
 };
 
+const SOURCE_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  qr:     { label: 'QR',     color: '#15803d', bg: 'rgba(21,128,61,0.08)',   border: 'rgba(21,128,61,0.25)' },
+  manual: { label: 'MANUAL', color: '#0369a1', bg: 'rgba(3,105,161,0.08)',   border: 'rgba(3,105,161,0.25)' },
+  sync:   { label: 'SYNC',   color: '#92400e', bg: 'rgba(217,119,6,0.12)',   border: 'rgba(217,119,6,0.45)' },
+};
+
 const SEVERITY_META: Record<string, { color: string; bg: string; border: string; dot: string }> = {
   low:    { color: '#15803d', bg: 'rgba(21,128,61,0.08)',   border: 'rgba(21,128,61,0.20)',   dot: '#22c55e' },
   medium: { color: '#b45309', bg: 'rgba(180,83,9,0.08)',    border: 'rgba(180,83,9,0.20)',    dot: '#f59e0b' },
@@ -130,17 +137,18 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
       // axios interceptor already camelizes all keys (snake_case → camelCase)
       const raw = (res.data.data.anomalies ?? []) as any[];
       setAnomalies(raw.map((a) => ({
-        shiftId:      a.shiftId,
-        userId:       a.userId,
-        userName:     a.userName ?? '',
-        userSurname:  a.userSurname ?? '',
-        storeName:    a.storeName,
-        date:         a.date,
-        anomalyType:  a.anomalyType,
-        severity:     a.severity,
-        details:      a.details,
-        detailsKey:   a.detailsKey,
+        shiftId:       a.shiftId,
+        userId:        a.userId,
+        userName:      a.userName ?? '',
+        userSurname:   a.userSurname ?? '',
+        storeName:     a.storeName,
+        date:          a.date,
+        anomalyType:   a.anomalyType,
+        severity:      a.severity,
+        details:       a.details,
+        detailsKey:    a.detailsKey,
         detailsParams: a.detailsParams,
+        checkinSource: a.checkinSource ?? null,
       })));
     } catch (err: any) {
       setError(err?.response?.data?.error ?? t('attendance.error_load_anomalies'));
@@ -163,7 +171,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
           color: '#b45309', fontSize: 13,
         }}>
           <IconAlertTriangle />
-          {"L'intervallo di date non può superare 14 giorni"}
+          {t('attendance.date_range_limit')}
         </div>
       </div>
     );
@@ -324,8 +332,8 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                     {t(`attendance.severity_${a.severity}`)}
                   </span>
                 </div>
-                {/* Row 2: anomaly badge */}
-                <div style={{ marginBottom: a.details ? 8 : 0 }}>
+                {/* Row 2: anomaly badge + origin badge */}
+                <div style={{ marginBottom: a.details ? 8 : 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     padding: '4px 10px', borderRadius: 6,
@@ -337,6 +345,21 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                     <Icon />
                     {t(`attendance.anomaly_${a.anomalyType}`)}
                   </span>
+                  {a.checkinSource && (() => {
+                    const sm = SOURCE_META[a.checkinSource] ?? { label: '?', color: '#64748b', bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.25)' };
+                    return (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center',
+                        padding: '3px 8px', borderRadius: 4,
+                        fontSize: 10, fontWeight: 800, letterSpacing: '0.8px',
+                        textTransform: 'uppercase',
+                        background: sm.bg, color: sm.color, border: `1px solid ${sm.border}`,
+                        ...(a.checkinSource === 'sync' ? { outline: `2px solid ${sm.border}`, outlineOffset: '1px' } : {}),
+                      }}>
+                        {sm.label}
+                      </span>
+                    );
+                  })()}
                 </div>
                 {/* Row 3: details */}
                 {(a.detailsKey || a.details) && (
@@ -374,6 +397,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                     { label: t('common.date'),             icon: <IconCalendar /> },
                     { label: t('attendance.col_anomaly'),  icon: <IconAlertTriangle /> },
                     { label: t('attendance.col_severity'), icon: null },
+                    { label: t('attendance.col_origin', 'Origin'),   icon: null },
                     { label: t('attendance.col_details'),  icon: null },
                   ].map(({ label, icon }) => (
                     <th key={label} style={{
@@ -460,6 +484,25 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                           <span style={{ width: 6, height: 6, borderRadius: '50%', background: sevMeta.dot, flexShrink: 0 }} />
                           {t(`attendance.severity_${a.severity}`)}
                         </span>
+                      </td>
+                      <td style={{ padding: '11px 16px' }}>
+                        {a.checkinSource ? (() => {
+                          const sm = SOURCE_META[a.checkinSource] ?? { label: '?', color: '#64748b', bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.25)' };
+                          return (
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '3px 8px', borderRadius: 4,
+                              fontSize: 10, fontWeight: 800, letterSpacing: '0.8px',
+                              textTransform: 'uppercase',
+                              background: sm.bg, color: sm.color, border: `1px solid ${sm.border}`,
+                              ...(a.checkinSource === 'sync' ? { outline: `2px solid ${sm.border}`, outlineOffset: '1px' } : {}),
+                            }}>
+                              {sm.label}
+                            </span>
+                          );
+                        })() : (
+                          <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>—</span>
+                        )}
                       </td>
                       <td style={{ padding: '11px 16px', fontSize: 12, color: 'var(--text-muted)', maxWidth: 260, lineHeight: 1.5 }}>
                         {a.detailsKey ? t(a.detailsKey, a.detailsParams) : a.details}
