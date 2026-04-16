@@ -1,7 +1,7 @@
 {
-  "tool_name": "Read",
-  "tool_input_preview": "{\"file_path\":\"/Users/user/hr-software/hr-system-demo-frontend/src/i18n/locales/it.ts\"}",
-  "error": "File content (30343 tokens) exceeds maximum allowed tokens (25000). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
-  "timestamp": "2026-04-14T01:58:47.389Z",
+  "tool_name": "mcp__plugin_playwright_playwright__browser_click",
+  "tool_input_preview": "{\"ref\":\"e237\",\"element\":\"previous month ‹\"}",
+  "error": "### Error\nError: Ref e237 not found in the current page snapshot. Try capturing new snapshot.",
+  "timestamp": "2026-04-16T05:41:49.212Z",
   "retry_count": 1
 }
