@@ -136,11 +136,16 @@ export interface ExternalDepositoRow {
   mappedLocalStoreId: number | null;
   mappedLocalStoreName: string | null;
   mappedLocalStoreCode: string | null;
+  availableDays: number;
+  availableFromDate: string | null;
+  availableToDate: string | null;
 }
 
 export interface ExternalStoreMapping {
   id: number;
   companyId: number;
+  companyName: string;
+  externalCompanyName: string | null;
   localStoreId: number;
   localStoreName: string;
   localStoreCode: string;
@@ -149,6 +154,14 @@ export interface ExternalStoreMapping {
   notes: string | null;
   isActive: boolean;
   sourceTable: string;
+  createdBy: number | null;
+  createdByName: string | null;
+  createdBySurname: string | null;
+  createdByAvatarFilename: string | null;
+  updatedBy: number | null;
+  updatedByName: string | null;
+  updatedBySurname: string | null;
+  updatedByAvatarFilename: string | null;
   createdAt: string;
   updatedAt: string;
 }

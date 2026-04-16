@@ -88,7 +88,7 @@ const en = {
     appName: 'HR Management',
     appVersion: 'HR System',
     turni: 'Shifts',
-    externalAffluence: 'External Database',
+    externalAffluence: 'Database Integration',
     trasferimenti: 'Transfers',
     presenze: 'Attendance',
     anomalies: 'Anomalies',

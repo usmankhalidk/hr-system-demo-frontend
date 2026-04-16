@@ -248,6 +248,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   const [applyStartDate, setApplyStartDate] = useState('');
   const [applyEndDate, setApplyEndDate] = useState('');
   const [applyEmployeeIds, setApplyEmployeeIds] = useState<number[]>([]);
+  const [applyEmployeeSearch, setApplyEmployeeSearch] = useState('');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [applyTransfers, setApplyTransfers] = useState<TransferAssignment[]>([]);
   const [applyRangeShifts, setApplyRangeShifts] = useState<Shift[]>([]);
@@ -326,6 +327,23 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name) || a.surname.localeCompare(b.surname));
   }, [employees, applyTransfers, applyTemplate]);
+
+  const filteredApplyEmployees = useMemo(() => {
+    const q = applyEmployeeSearch.trim().toLowerCase();
+    if (!q) return applyEmployees;
+    return applyEmployees.filter((employee) => {
+      const fullName = `${employee.name} ${employee.surname}`.toLowerCase();
+      return fullName.includes(q)
+        || (employee.email ?? '').toLowerCase().includes(q)
+        || (employee.storeName ?? '').toLowerCase().includes(q)
+        || (employee.role ?? '').toLowerCase().includes(q);
+    });
+  }, [applyEmployees, applyEmployeeSearch]);
+
+  const allFilteredSelected = useMemo(() => {
+    if (filteredApplyEmployees.length === 0) return false;
+    return filteredApplyEmployees.every((employee) => applyEmployeeIds.includes(employee.id));
+  }, [filteredApplyEmployees, applyEmployeeIds]);
 
   // Confirm delete
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -517,6 +535,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     setApplyStartDate(today);
     setApplyEndDate(today);
     setApplyEmployeeIds([]);
+    setApplyEmployeeSearch('');
     setEmployees([]);
     setApplyTransfers([]);
     setEmployeesLoading(true);
@@ -598,6 +617,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
   const applyContextByEmployee = useMemo(() => {
     const result = new Map<number, {
+      shiftCount: number;
       offDayDates: number;
       vacationDays: number;
       sickDays: number;
@@ -610,6 +630,10 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
           .filter((shift) => shift.userId === emp.id && shift.isOffDay)
           .map((shift) => shift.date.split('T')[0]),
       );
+
+      const shiftCount = applyRangeShifts
+        .filter((shift) => shift.userId === emp.id && !shift.isOffDay)
+        .length;
 
       let vacationDays = 0;
       let sickDays = 0;
@@ -630,6 +654,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
       }
 
       result.set(emp.id, {
+        shiftCount,
         offDayDates: offDayDates.size,
         vacationDays,
         sickDays,
@@ -1320,16 +1345,39 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
                   {t('shifts.applyEmployees', 'Employees')}
-                  {applyEmployees.length > 0 && (
+                  {filteredApplyEmployees.length > 0 && (
                     <button type="button" onClick={() =>
-                      setApplyEmployeeIds(applyEmployeeIds.length === applyEmployees.length ? [] : applyEmployees.map(e => e.id))
+                      setApplyEmployeeIds((prev) => {
+                        const visibleIds = filteredApplyEmployees.map((employee) => employee.id);
+                        if (allFilteredSelected) {
+                          return prev.filter((id) => !visibleIds.includes(id));
+                        }
+                        const merged = new Set(prev);
+                        for (const id of visibleIds) merged.add(id);
+                        return Array.from(merged);
+                      })
                     } style={{
                       marginLeft: 10, fontSize: 11, background: 'none', border: 'none',
                       color: 'var(--accent)', cursor: 'pointer', fontWeight: 600,
                     }}>
-                      {applyEmployeeIds.length === applyEmployees.length ? t('common.none', 'None') : t('common.all', 'All')}
+                      {allFilteredSelected ? t('common.none', 'None') : t('common.all', 'All')}
                     </button>
                   )}
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <input
+                    type="text"
+                    value={applyEmployeeSearch}
+                    onChange={(event) => setApplyEmployeeSearch(event.target.value)}
+                    placeholder={t('common.search', 'Search')}
+                    style={{
+                      ...inputStyle,
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      fontSize: 12,
+                      padding: '7px 9px',
+                    }}
+                  />
                 </div>
                 {!employeesLoading && applyContextLoading && (
                   <div style={{
@@ -1346,11 +1394,11 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                 )}
                 {employeesLoading ? (
                   <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Loading...')}</p>
-                ) : applyEmployees.length === 0 ? (
+                ) : filteredApplyEmployees.length === 0 ? (
                   <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.noData', 'No data available')}</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {applyEmployees.map((emp) => {
+                    {filteredApplyEmployees.map((emp) => {
                       const selected = applyEmployeeIds.includes(emp.id);
                       const fullName = `${emp.name} ${emp.surname}`.trim();
                       const initials = `${emp.name?.[0] ?? ''}${emp.surname?.[0] ?? ''}`.toUpperCase() || 'U';
@@ -1359,10 +1407,12 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                       const isTransferred = Boolean(emp.isTransferredForApply);
                       const homeStoreName = transfer?.originStoreName ?? emp.storeName;
                       const context = applyContextByEmployee.get(emp.id);
+                      const shiftCount = context?.shiftCount ?? 0;
                       const offDayDates = context?.offDayDates ?? 0;
                       const vacationDays = context?.vacationDays ?? 0;
                       const sickDays = context?.sickDays ?? 0;
                       const hasPendingLeave = Boolean(context?.hasPendingLeave);
+                      const roleLabel = (emp.role ?? 'employee').replace(/_/g, ' ');
                       return (
                         <label key={emp.id} style={{
                           display: 'flex', alignItems: 'flex-start', gap: 8,
@@ -1401,6 +1451,22 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {fullName}
                                 </div>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '1px 6px',
+                                  borderRadius: 999,
+                                  border: '1px solid rgba(100,116,139,0.35)',
+                                  background: 'rgba(241,245,249,0.9)',
+                                  color: '#475569',
+                                  fontSize: 9,
+                                  fontWeight: 800,
+                                  textTransform: 'uppercase',
+                                  lineHeight: 1.3,
+                                  flexShrink: 0,
+                                }}>
+                                  {roleLabel}
+                                </span>
                                 {isTransferred && (
                                   <span style={{
                                     display: 'inline-flex',
@@ -1467,8 +1533,27 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 </span>
                               )}
                             </div>
-                            {!applyContextLoading && (offDayDates > 0 || vacationDays > 0 || sickDays > 0) && (
+                            {!applyContextLoading && (
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '2px 7px 2px 6px',
+                                  borderRadius: 999,
+                                  borderLeft: '3px solid rgba(13,33,55,0.52)',
+                                  borderTop: '1px solid rgba(13,33,55,0.22)',
+                                  borderRight: '1px solid rgba(13,33,55,0.22)',
+                                  borderBottom: '1px solid rgba(13,33,55,0.22)',
+                                  background: 'rgba(13,33,55,0.06)',
+                                  color: '#0f172a',
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  lineHeight: 1.2,
+                                }}>
+                                  <PlayCircle size={10} />
+                                  {t('shifts.shifts', 'Shifts')} · {shiftCount}
+                                </span>
                                 {offDayDates > 0 && (
                                   <span style={{
                                     display: 'inline-flex',

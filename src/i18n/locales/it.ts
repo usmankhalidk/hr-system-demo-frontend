@@ -88,7 +88,7 @@ const it = {
     appName: 'Gestione HR',
     appVersion: 'Sistema HR',
     turni: 'Turni',
-    externalAffluence: 'Database Esterno',
+    externalAffluence: 'Integrazione Database',
     trasferimenti: 'Trasferimenti',
     presenze: 'Presenze',
     anomalies: 'Anomalie',
