@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { uploadDocumentUnified } from '../../api/documents';
 import { Employee } from '../../types';
 import { createPortal } from 'react-dom';
+import { DatePicker } from '../../components/ui/DatePicker';
 
 // ── Components & Icons ──
 
@@ -216,11 +217,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   <label style={labelStyle}>
                     {t('documents.expiryDate')} {isHrOrAdmin && <span style={{ color: '#DC2626' }}>*</span>}
                   </label>
-                  <input 
-                    type="date" 
+                  <DatePicker 
                     value={expiresAt} 
-                    onChange={e => setExpiresAt(e.target.value)} 
-                    style={inputStyle} 
+                    onChange={setExpiresAt} 
                   />
                 </div>
               </div>

@@ -27,6 +27,7 @@ import { getEmployees } from '../../api/employees';
 import { getCompanies } from '../../api/companies';
 import { Employee, Company } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import { DatePicker } from '../../components/ui/DatePicker';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ const UploadModal: React.FC<{ employeeId: number; employeeName: string; onClose:
         </div>
         <div>
           <label style={labelStyle}>{t('documents.expiresAtLabel')}</label>
-          <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} style={inputStyle} />
+          <DatePicker value={expiresAt} onChange={setExpiresAt} />
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}>
           <input type="checkbox" checked={requiresSignature} onChange={(e) => setRequiresSignature(e.target.checked)} />
@@ -661,9 +662,11 @@ const DocumentsTable: React.FC<{
             <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {isTrash ? t('documents.deletedOn', 'Deleted On') : t('documents.expiresOn')}
             </th>
-            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              {isTrash ? t('documents.restoredBy', 'Last Restoration') : t('documents.signature')}
-            </th>
+            {!isTrash && (
+              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {t('documents.signature')}
+              </th>
+            )}
             <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {t('common.actions')}
             </th>
@@ -731,22 +734,17 @@ const DocumentsTable: React.FC<{
                   <span style={{ color: 'var(--text-muted)' }}>—</span>
                 )}
               </td>
-              <td style={{ padding: '12px 14px' }}>
-                {isTrash ? (
-                   doc.restoredAt ? (
-                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <span style={{ fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>{formatDate(doc.restoredAt)}</span>
-                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>ID {doc.restoredBy}</span>
-                     </div>
-                   ) : <span style={{ color: 'var(--text-muted)' }}>—</span>
-                ) : !doc.requiresSignature ? (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('documents.notRequired')}</span>
-                ) : doc.signedAt ? (
-                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(21,128,61,0.1)', color: '#15803D', fontWeight: 600 }}>✓ {t('documents.signed')}</span>
-                ) : (
-                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(201,151,58,0.1)', color: '#C9973A', fontWeight: 600 }}>{t('documents.required')}</span>
-                )}
-              </td>
+              {!isTrash && (
+                <td style={{ padding: '12px 14px' }}>
+                  {!doc.requiresSignature ? (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('documents.notRequired')}</span>
+                  ) : doc.signedAt ? (
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(21,128,61,0.1)', color: '#15803D', fontWeight: 600 }}>✓ {t('documents.signed')}</span>
+                  ) : (
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(201,151,58,0.1)', color: '#C9973A', fontWeight: 600 }}>{t('documents.required')}</span>
+                  )}
+                </td>
+              )}
               <td style={{ padding: '12px 14px' }}>
                 <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   {isTrash ? (
@@ -976,27 +974,27 @@ const DocumentsPage: React.FC = () => {
   const [docs, setDocs] = useState<any[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
   const [viewingTrash, setViewingTrash] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     getCategories(false).then(setCategories).catch(() => {});
   }, []);
 
   const loadDocs = useCallback(async () => {
+    setDocs([]); // Clear previous data to avoid flickering or "unnecessary" data showing
     setLoading(true);
     try {
       if (viewingTrash) {
         setDocs(await getDeletedDocuments());
       } else if (isEmployee) {
         setDocs(await getMyDocuments());
-      } else if (selectedEmployee) {
-        setDocs(await getEmployeeDocuments(selectedEmployee.id));
       } else if (canViewAll) {
+        // Fetch all documents for managers/admins to allow wide filtering
         const globalDocs = await getDocumentsGeneric();
         setDocs(globalDocs);
       } else {
@@ -1007,23 +1005,16 @@ const DocumentsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [isEmployee, selectedEmployee]);
-
+  }, [isEmployee, viewingTrash, canViewAll, showToast, t]);
   useEffect(() => { loadDocs(); }, [loadDocs]);
 
-  const handleSelectEmployee = (emp: Employee) => {
-    setSelectedEmployee(emp);
-    setDocs([]);
-  };
-
-  const clearEmployee = () => {
-    setSelectedEmployee(null);
-    setDocs([]);
-  };
-
-  const employeeName = selectedEmployee
-    ? `${selectedEmployee.name} ${selectedEmployee.surname ?? ''}`.trim()
-    : '';
+  const filteredDocs = docs.filter(doc => {
+    if (!searchQuery.trim()) return true;
+    const name = (doc.employeeName || doc.employee_name || '').toLowerCase();
+    const id = String(doc.employeeId || doc.employee_id || '').toLowerCase();
+    const query = searchQuery.toLowerCase();
+    return name.includes(query) || id.includes(query);
+  });
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }} className="page-enter">
@@ -1069,14 +1060,25 @@ const DocumentsPage: React.FC = () => {
         {/* Panel toolbar */}
         {canViewAll && (
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'var(--background)' }}>
-            <EmployeeCombobox onSelect={handleSelectEmployee} />
-            {selectedEmployee && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 99, background: 'rgba(2,132,199,0.08)', border: '1px solid rgba(2,132,199,0.2)', fontSize: 13 }}>
-                <span style={{ fontWeight: 600, color: '#0284C7' }}>{employeeName}</span>
-                <span style={{ color: '#0284C780', fontSize: 11 }}>ID {selectedEmployee.id}</span>
-                <button onClick={clearEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0284C7', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
-              </div>
-            )}
+            <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+              <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}>
+                <IconSearch />
+              </span>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('documents.searchEmployee')}
+                style={{ ...inputStyle, paddingLeft: 32 }}
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -1093,9 +1095,9 @@ const DocumentsPage: React.FC = () => {
               </div>
             ))}
           </div>
-        ) : (isEmployee || selectedEmployee || canViewAll) ? (
+        ) : (isEmployee || canViewAll) ? (
           <DocumentsTable
-            docs={docs}
+            docs={filteredDocs}
             categories={categories}
             canManage={canManage}
             isEmployee={isEmployee}
@@ -1117,7 +1119,6 @@ const DocumentsPage: React.FC = () => {
         <UnifiedUploadWizard 
           onClose={() => setShowUploadModal(false)} 
           onSuccess={loadDocs} 
-          targetEmployee={selectedEmployee}
         />
       )}
       {showCatModal && <CategoriesModal onClose={() => { setShowCatModal(false); getCategories(false).then(setCategories).catch(() => {}); }} />}
