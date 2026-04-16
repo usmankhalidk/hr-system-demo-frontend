@@ -23,10 +23,10 @@ import {
   PublicJob,
 } from '../../api/publicCareers';
 import {
-  getAvatarUrl,
   getCompanyBannerUrl,
   getCompanyLogoUrl,
-  getStoreLogoUrl,
+  getPublicAvatarUrl,
+  getPublicStoreLogoUrl,
 } from '../../api/client';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import { useAuth } from '../../context/AuthContext';
@@ -497,7 +497,7 @@ export default function PublicJobDetailPage() {
   const languageMismatch = !!job && job.language === 'it' && browserLanguage === 'en';
   const companyLogoUrl = getCompanyLogoUrl(companyMeta?.logoFilename ?? job?.companyLogoFilename);
   const companyBannerUrl = getCompanyBannerUrl(companyMeta?.bannerFilename ?? job?.companyBannerFilename);
-  const storeLogoUrl = getStoreLogoUrl(job?.storeLogoFilename);
+  const storeLogoUrl = getPublicStoreLogoUrl(job?.storeLogoFilename);
   const remoteFallback = uiLanguage === 'it' ? 'Remoto / Flessibile' : 'Remote / Flexible';
   const fallbackBackPath = effectiveCompanySlug ? `/careers/${encodeURIComponent(effectiveCompanySlug)}` : '/careers';
   const careersBackPath = companyMeta?.slug
@@ -996,8 +996,8 @@ export default function PublicJobDetailPage() {
                 <div className="careers-hiring-list" style={{ marginBottom: 2 }}>
                   <article className="careers-hiring-item">
                     <div className="careers-hiring-avatar">
-                      {getAvatarUrl(job.postedBy.avatarFilename)
-                        ? <img src={getAvatarUrl(job.postedBy.avatarFilename) ?? ''} alt={formatPersonName(job.postedBy)} />
+                      {getPublicAvatarUrl(job.postedBy.avatarFilename)
+                        ? <img src={getPublicAvatarUrl(job.postedBy.avatarFilename) ?? ''} alt={formatPersonName(job.postedBy)} />
                         : toInitials(formatPersonName(job.postedBy))}
                     </div>
                     <div>
@@ -1011,7 +1011,7 @@ export default function PublicJobDetailPage() {
               {hiringTeam.length > 0 ? (
                 <div className="careers-hiring-list">
                   {hiringTeam.map((contact) => {
-                    const avatarUrl = getAvatarUrl(contact.avatarFilename);
+                    const avatarUrl = getPublicAvatarUrl(contact.avatarFilename);
                     const name = formatPersonName(contact);
                     return (
                       <article key={contact.id} className="careers-hiring-item">

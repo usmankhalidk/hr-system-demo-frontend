@@ -1,9 +1,12 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Moon } from 'lucide-react';
+import { ArrowLeftRight, Clock3, Moon, Palmtree, Store, Thermometer, Users } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
+import { WindowDisplayActivity } from '../../api/windowDisplay';
+import { getAvatarUrl } from '../../api/client';
+import { getActivityIcon, getActivityPalette, getActivityTypeLabel } from './storeActivityCatalog';
 
 interface MonthlyCalendarProps {
   shifts: Shift[];
@@ -11,6 +14,8 @@ interface MonthlyCalendarProps {
   onDayClick: (date: string) => void;
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
+  windowDisplayActivities?: WindowDisplayActivity[];
+  onWindowDisplayClick?: (date: string) => void;
 }
 
 function formatDate(date: Date): string {
@@ -20,8 +25,41 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leaveBlocks, transferBlocks }: MonthlyCalendarProps) {
+function addUserToDateSet(map: Map<string, Set<number>>, dateKey: string, userId: number): void {
+  const set = map.get(dateKey) ?? new Set<number>();
+  set.add(userId);
+  map.set(dateKey, set);
+}
+
+function initialsFromName(fullName: string): string {
+  const parts = fullName.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
+}
+
+function activityVisual(activity: WindowDisplayActivity): { icon: string; background: string; border: string; accentBorder: string; color: string } {
+  const palette = getActivityPalette(activity.activityType);
+  return {
+    icon: getActivityIcon(activity.activityType, activity.activityIcon),
+    background: palette.background,
+    border: palette.border,
+    accentBorder: palette.accentBorder,
+    color: palette.color,
+  };
+}
+
+export default function MonthlyCalendar({
+  shifts,
+  currentDate,
+  onDayClick,
+  leaveBlocks,
+  transferBlocks,
+  windowDisplayActivities,
+  onWindowDisplayClick,
+}: MonthlyCalendarProps) {
   const { t } = useTranslation();
+  const MAX_VISIBLE_AVATARS = 4;
   const DAY_LABELS = [
     t('shifts.dayMon', 'Lun'),
     t('shifts.dayTue', 'Mar'),
@@ -34,34 +72,68 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+  const windowDisplayByDate = new Map<string, WindowDisplayActivity[]>();
+  for (const item of windowDisplayActivities ?? []) {
+    const rows = windowDisplayByDate.get(item.date) ?? [];
+    rows.push(item);
+    windowDisplayByDate.set(item.date, rows);
+  }
 
-  // Build shift count map by date
-  const countMap = new Map<string, number>();
-  const offDayMap = new Map<string, number>();
+  // Build monthly aggregates per date.
+  const shiftCountMap = new Map<string, number>();
+  const storesByDate = new Map<string, Set<number>>();
+  const employeesByDate = new Map<string, Set<number>>();
+  const offDayUsersByDate = new Map<string, Set<number>>();
+  const scheduledUsersByDate = new Map<string, Map<number, { fullName: string; avatarFilename: string | null }>>();
   for (const shift of shifts) {
     const dateKey = shift.date.split('T')[0];
     if (shift.isOffDay) {
-      offDayMap.set(dateKey, (offDayMap.get(dateKey) ?? 0) + 1);
+      addUserToDateSet(offDayUsersByDate, dateKey, shift.userId);
       continue;
     }
     if (shift.status !== 'cancelled') {
-      countMap.set(dateKey, (countMap.get(dateKey) ?? 0) + 1);
+      shiftCountMap.set(dateKey, (shiftCountMap.get(dateKey) ?? 0) + 1);
+      addUserToDateSet(employeesByDate, dateKey, shift.userId);
+      const stores = storesByDate.get(dateKey) ?? new Set<number>();
+      stores.add(shift.storeId);
+      storesByDate.set(dateKey, stores);
+
+      const users = scheduledUsersByDate.get(dateKey) ?? new Map<number, { fullName: string; avatarFilename: string | null }>();
+      const existingUser = users.get(shift.userId);
+      const fullName = `${shift.userName ?? ''} ${shift.userSurname ?? ''}`.trim() || `${t('shifts.employee', 'Employee')} ${shift.userId}`;
+      if (existingUser) {
+        if (!existingUser.avatarFilename && shift.userAvatarFilename) {
+          existingUser.avatarFilename = shift.userAvatarFilename;
+          users.set(shift.userId, existingUser);
+        }
+      } else {
+        users.set(shift.userId, {
+          fullName,
+          avatarFilename: shift.userAvatarFilename ?? null,
+        });
+      }
+      scheduledUsersByDate.set(dateKey, users);
     }
   }
 
-  // Build leave indicator map: date → array of {type, pending}
-  interface LeaveDot { type: string; pending: boolean; }
-  const leaveMap = new Map<string, LeaveDot[]>();
+  // Build approved leave user maps: date → distinct users on approved vacation/sick.
+  const approvedVacationUsersByDate = new Map<string, Set<number>>();
+  const approvedSickUsersByDate = new Map<string, Set<number>>();
   if (leaveBlocks) {
     for (const lb of leaveBlocks) {
+      const normalizedStatus = String(lb.status ?? '').toLowerCase().replace(/\s+/g, '_');
+      const isApproved = normalizedStatus === 'hr_approved' || normalizedStatus === 'approved';
+      if (!isApproved) continue;
+
       const start = new Date(lb.startDate + 'T12:00:00');
       const end   = new Date(lb.endDate   + 'T12:00:00');
-      const isPending = lb.status !== 'hr_approved';
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const key = formatDate(d);
-        const arr = leaveMap.get(key) ?? [];
-        arr.push({ type: lb.leaveType, pending: isPending });
-        leaveMap.set(key, arr);
+        if (lb.leaveType === 'vacation') {
+          addUserToDateSet(approvedVacationUsersByDate, key, lb.userId);
+        } else {
+          addUserToDateSet(approvedSickUsersByDate, key, lb.userId);
+        }
       }
     }
   }
@@ -100,6 +172,7 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
   while (cells.length % 7 !== 0) cells.push(null);
 
   const today = formatDate(new Date());
+  const [hoveredActivityId, setHoveredActivityId] = React.useState<number | null>(null);
 
   return (
     <div style={{ padding: 16 }}>
@@ -120,152 +193,389 @@ export default function MonthlyCalendar({ shifts, currentDate, onDayClick, leave
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
         {cells.map((date, idx) => {
           if (!date) {
-            return <div key={`empty-${idx}`} style={{ minHeight: 80 }} />;
+            return <div key={`empty-${idx}`} style={{ minHeight: 104 }} />;
           }
           const dateStr = formatDate(date);
-          const count = countMap.get(dateStr) ?? 0;
-          const offDayCount = offDayMap.get(dateStr) ?? 0;
-          const leaveDots = leaveMap.get(dateStr) ?? [];
+          const shiftCount = shiftCountMap.get(dateStr) ?? 0;
+          const storeCount = storesByDate.get(dateStr)?.size ?? 0;
+          const employeeCount = employeesByDate.get(dateStr)?.size ?? 0;
+          const offDayUserCount = offDayUsersByDate.get(dateStr)?.size ?? 0;
+          const vacationApprovedUsers = approvedVacationUsersByDate.get(dateStr)?.size ?? 0;
+          const sickApprovedUsers = approvedSickUsersByDate.get(dateStr)?.size ?? 0;
+          const usersForDay = Array.from(scheduledUsersByDate.get(dateStr)?.values() ?? []);
+          const visibleUsers = usersForDay.slice(0, MAX_VISIBLE_AVATARS);
           const transferCounts = transferMap.get(dateStr) ?? { active: 0, completed: 0, cancelled: 0 };
           const transferCount = transferCounts.active + transferCounts.completed + transferCounts.cancelled;
           const isToday = dateStr === today;
-          const hasLeave = leaveDots.length > 0;
+          const dayActivities = windowDisplayByDate.get(dateStr) ?? [];
           const hasTransfer = transferCount > 0;
-          const hasOffDay = offDayCount > 0;
+          const hasStoreShiftSummary = storeCount > 0 || shiftCount > 0;
+          const hasSummaryTags = hasTransfer || vacationApprovedUsers > 0 || sickApprovedUsers > 0 || offDayUserCount > 0;
 
           return (
             <div
               key={dateStr}
               onClick={() => onDayClick(dateStr)}
               style={{
-                minHeight: 80,
+                minHeight: 92,
                 borderRadius: 6,
                 border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
-                padding: 6,
+                padding: 7,
                 cursor: 'pointer',
-                background: hasOffDay
-                  ? 'rgba(241,245,249,0.92)'
-                  : (isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)'),
+                background: isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)',
                 transition: 'background 0.15s',
-                boxShadow: (count > 0 || hasLeave || hasTransfer) ? 'var(--shadow-xs)' : undefined,
+                boxShadow: (shiftCount > 0 || vacationApprovedUsers > 0 || sickApprovedUsers > 0 || offDayUserCount > 0 || hasTransfer)
+                  ? 'var(--shadow-xs)'
+                  : undefined,
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = hasOffDay ? 'rgba(226,232,240,0.95)' : 'var(--background)')}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = hasOffDay
-                  ? 'rgba(241,245,249,0.92)'
-                  : (isToday ? 'rgba(201, 151, 58, 0.05)' : 'var(--surface)');
+                e.currentTarget.style.background = isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)';
+                setHoveredActivityId(null);
               }}
             >
               <div style={{
-                fontWeight: isToday ? 700 : 500,
-                color: isToday ? 'var(--accent)' : 'var(--text)',
-                fontFamily: 'var(--font-display)',
-                marginBottom: 4,
-                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 6,
+                marginBottom: 6,
               }}>
-                {isToday ? (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 26, height: 26, borderRadius: '50%',
-                    background: 'var(--accent)', color: '#fff', fontWeight: 700,
-                  }}>
-                    {date.getDate()}
-                  </span>
-                ) : date.getDate()}
+                <div style={{
+                  fontWeight: isToday ? 700 : 500,
+                  color: isToday ? 'var(--accent)' : 'var(--text)',
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '0.9rem',
+                  lineHeight: 1,
+                }}>
+                  {isToday ? (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 26, height: 26, borderRadius: '50%',
+                      background: 'var(--accent)', color: '#fff', fontWeight: 700,
+                      boxShadow: '0 0 0 3px rgba(201,151,58,0.16)',
+                    }}>
+                      {date.getDate()}
+                    </span>
+                  ) : date.getDate()}
+                </div>
+
+                {dayActivities.length > 0 && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {dayActivities.slice(0, 3).map((item) => {
+                      const visual = activityVisual(item);
+                      const activityLabel = getActivityTypeLabel(t, item.activityType, item.customActivityName);
+                      const hoursLabel = item.durationHours != null ? `${item.durationHours}h` : null;
+                      const isHovered = hoveredActivityId === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+                          onMouseEnter={() => setHoveredActivityId(item.id)}
+                          onMouseLeave={() => setHoveredActivityId((current) => (current === item.id ? null : current))}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onWindowDisplayClick?.(dateStr);
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: 6,
+                              border: 'none',
+                              background: 'transparent',
+                              color: visual.color,
+                              padding: '0 1px',
+                              fontSize: '0.95rem',
+                              fontWeight: 800,
+                              lineHeight: 1,
+                              cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                            }}
+                          >
+                            {visual.icon}
+                          </button>
+
+                          {isHovered && (
+                            <div style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 2px)',
+                              right: 0,
+                              minWidth: 190,
+                              maxWidth: 250,
+                              borderRadius: 8,
+                              border: `1px solid ${visual.border}`,
+                              borderLeft: `3px solid ${visual.accentBorder}`,
+                              background: visual.background,
+                              boxShadow: 'var(--shadow-lg)',
+                              padding: '7px 8px',
+                              zIndex: 80,
+                            }}>
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                                lineHeight: 1.2,
+                                color: visual.color,
+                              }}>
+                                <span style={{ fontSize: '0.92rem', lineHeight: 1 }}>{visual.icon}</span>
+                                <span>{activityLabel}</span>
+                              </div>
+                              {hoursLabel && (
+                                <div style={{ marginTop: 4, fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                                  {t('shifts.activityDuration', 'Duration')}: {hoursLabel}
+                                </div>
+                              )}
+                              {item.notes && (
+                                <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 600, color: 'var(--text-secondary)', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                                  {item.notes}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {dayActivities.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onWindowDisplayClick?.(dateStr);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          borderRadius: 999,
+                          border: '1px solid rgba(71,85,105,0.28)',
+                          background: 'rgba(226,232,240,0.9)',
+                          color: '#334155',
+                          padding: '1px 6px',
+                          fontSize: '0.56rem',
+                          fontWeight: 900,
+                          lineHeight: 1.2,
+                          cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                        }}
+                      >
+                        +{dayActivities.length - 3}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              {count > 0 && (
+
+              {hasStoreShiftSummary && (
                 <div style={{
-                  background: 'var(--primary)',
-                  color: '#fff',
-                  borderRadius: 10,
-                  padding: '2px 6px',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  letterSpacing: 0.3,
-                  display: 'inline-block',
-                  marginBottom: hasLeave ? 4 : 0,
-                }}>
-                  {count} {count === 1 ? t('shifts.shiftCount', 'turno') : t('shifts.shiftCountPlural', 'turni')}
-                </div>
-              )}
-              {hasOffDay && (
-                <div style={{
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
-                  marginTop: count > 0 ? 0 : 2,
-                  marginBottom: (hasLeave || hasTransfer) ? 4 : 0,
-                  background: 'rgba(241,245,249,0.96)',
-                  borderTop: '1px solid rgba(148,163,184,0.42)',
-                  borderRight: '1px solid rgba(148,163,184,0.42)',
-                  borderBottom: '1px solid rgba(148,163,184,0.42)',
-                  borderLeft: '3px solid rgba(100,116,139,0.62)',
-                  color: '#475569',
-                  borderRadius: 6,
-                  padding: '1px 7px 1px 5px',
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  letterSpacing: 0.2,
+                  justifyContent: 'space-between',
+                  gap: 6,
+                  borderRadius: 5,
+                  border: '1px solid rgba(58,123,213,0.34)',
+                  borderLeft: '3px solid #1e4a7a',
+                  background: 'linear-gradient(135deg, rgba(30,74,122,0.14), rgba(13,33,55,0.08))',
+                  padding: '3px 6px',
                 }}>
-                  <Moon size={10} strokeWidth={2.5} />
-                  {t('shifts.form.offDay', 'Off day')}
-                  {offDayCount > 1 ? `×${offDayCount}` : ''}
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    borderRadius: 4,
+                    color: '#12345a',
+                    padding: '0 2px',
+                    fontSize: '0.64rem',
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                  }} title={t('shifts.monthlyStores', 'Stores')}>
+                    <Store size={10} strokeWidth={2.4} />
+                    {t('shifts.monthlyStores', 'Stores')} {storeCount}
+                  </span>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    borderRadius: 4,
+                    border: '1px solid rgba(58,123,213,0.55)',
+                    background: 'linear-gradient(135deg, #1E4A7A, #0D2137)',
+                    color: '#f8fbff',
+                    padding: '2px 7px',
+                    fontSize: '0.64rem',
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                  }}
+                  title={t('shifts.shiftCountPlural', 'Shifts')}
+                  >
+                    <Clock3 size={10} strokeWidth={2.4} />
+                    {t('shifts.shiftCountPlural', 'Shifts')} {shiftCount}
+                  </span>
                 </div>
               )}
-              {hasLeave && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: count > 0 ? 0 : 2 }}>
-                  {leaveDots.slice(0, 4).map((dot, di) => (
-                    <span
-                      key={di}
-                      title={dot.type === 'vacation' ? t('leave.type_vacation') : t('leave.type_sick')}
-                      style={{
-                        width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                        background: dot.type === 'vacation' ? '#1d4ed8' : '#b45309',
-                        opacity: dot.pending ? 0.45 : 0.85,
-                        border: dot.pending ? '1px dashed currentColor' : 'none',
-                      }}
-                    />
-                  ))}
-                  {leaveDots.length > 4 && (
-                    <span style={{ fontSize: 8, color: 'var(--text-muted)', fontWeight: 700, lineHeight: '8px' }}>
-                      +{leaveDots.length - 4}
+
+              {employeeCount > 0 && (
+                <div style={{ marginTop: 5, minHeight: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontSize: '0.63rem',
+                    fontWeight: 700,
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.2,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.2,
+                  }}>
+                    <Users size={10} strokeWidth={2.4} />
+                    {t('shifts.monthlyEmployees', 'Employees')}
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      borderRadius: 999,
+                      border: '1px solid rgba(100,116,139,0.34)',
+                      background: 'rgba(248,250,252,0.94)',
+                      color: '#334155',
+                      padding: '1px 6px',
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                    }}>
+                      {employeeCount}
                     </span>
-                  )}
+                  </span>
+
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto' }}>
+                    {visibleUsers.map((user, index) => {
+                      const avatarUrl = getAvatarUrl(user.avatarFilename);
+                      const initials = initialsFromName(user.fullName);
+                      return (
+                        <div
+                          key={`${user.fullName}-${index}`}
+                          title={user.fullName}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            marginLeft: index === 0 ? 0 : -8,
+                            border: '1.5px solid #fff',
+                            background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                            color: '#fff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.56rem',
+                            fontWeight: 800,
+                            boxShadow: '0 1px 2px rgba(15,23,42,0.16)',
+                            zIndex: 20 - index,
+                          }}
+                        >
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={user.fullName}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : initials}
+                        </div>
+                      );
+                    })}
+
+                    {employeeCount > MAX_VISIBLE_AVATARS && (
+                      <span
+                        title={t('shifts.monthlyEmployeesOverflow', 'More employees')}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginLeft: visibleUsers.length > 0 ? -8 : 0,
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          border: '1.5px solid #fff',
+                          background: 'linear-gradient(135deg, rgba(15,23,42,0.78), rgba(51,65,85,0.76))',
+                          color: '#e2e8f0',
+                          fontSize: '0.54rem',
+                          fontWeight: 900,
+                          lineHeight: 1,
+                          boxShadow: '0 1px 2px rgba(15,23,42,0.16)',
+                          zIndex: 30,
+                        }}
+                      >
+                        4+
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
-              {hasTransfer && (
-                <div style={{ marginTop: hasLeave ? 4 : 2, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                  {transferCounts.active > 0 && (
+
+              {hasSummaryTags && (
+                <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {hasTransfer && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', gap: 3,
-                      padding: '1px 4px', borderRadius: 999,
-                      border: '1px solid rgba(15,118,110,0.32)',
-                      background: 'rgba(240,253,250,0.95)',
-                    }} title={t('transfers.status.active', 'active')}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0f766e', display: 'inline-block' }} />
-                      <span style={{ fontSize: 8, color: '#0f766e', fontWeight: 800 }}>{transferCounts.active}</span>
-                    </span>
-                  )}
-                  {transferCounts.completed > 0 && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                      padding: '1px 4px', borderRadius: 999,
+                      borderRadius: 6,
                       border: '1px solid rgba(30,64,175,0.28)',
-                      background: 'rgba(239,246,255,0.95)',
-                    }} title={t('transfers.status.completed', 'completed')}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1e40af', display: 'inline-block' }} />
-                      <span style={{ fontSize: 8, color: '#1e40af', fontWeight: 800 }}>{transferCounts.completed}</span>
+                      borderLeft: '3px solid #1e40af',
+                      background: 'rgba(239,246,255,0.92)',
+                      color: '#1e40af',
+                      padding: '1px 6px',
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                    }} title={t('shifts.monthlyTransfers', 'Transfers')}>
+                      <ArrowLeftRight size={9} strokeWidth={2.5} />
+                      {t('shifts.monthlyTransfers', 'Transfers')} {transferCount}
                     </span>
                   )}
-                  {transferCounts.cancelled > 0 && (
+                  {vacationApprovedUsers > 0 && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', gap: 3,
-                      padding: '1px 4px', borderRadius: 999,
-                      border: '1px solid rgba(185,28,28,0.28)',
-                      background: 'rgba(254,242,242,0.95)',
-                    }} title={t('transfers.status.cancelled', 'cancelled')}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#b91c1c', display: 'inline-block' }} />
-                      <span style={{ fontSize: 8, color: '#b91c1c', fontWeight: 800 }}>{transferCounts.cancelled}</span>
+                      borderRadius: 6,
+                      border: '1px solid rgba(37,99,235,0.22)',
+                      borderLeft: '3px solid #2563eb',
+                      background: 'rgba(219,234,254,0.76)',
+                      color: '#1e40af',
+                      padding: '1px 6px',
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                    }} title={t('leave.type_vacation', 'Vacation')}>
+                      <Palmtree size={9} strokeWidth={2.4} />
+                      {t('leave.type_vacation', 'Vacation')} {vacationApprovedUsers}
+                    </span>
+                  )}
+                  {sickApprovedUsers > 0 && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      borderRadius: 6,
+                      border: '1px solid rgba(217,119,6,0.22)',
+                      borderLeft: '3px solid #d97706',
+                      background: 'rgba(254,243,199,0.78)',
+                      color: '#92400e',
+                      padding: '1px 6px',
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                    }} title={t('leave.type_sick', 'Leave')}>
+                      <Thermometer size={9} strokeWidth={2.4} />
+                      {t('leave.type_sick', 'Leave')} {sickApprovedUsers}
+                    </span>
+                  )}
+                  {offDayUserCount > 0 && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      borderRadius: 6,
+                      border: '1px solid rgba(100,116,139,0.24)',
+                      borderLeft: '3px solid #64748b',
+                      background: 'rgba(241,245,249,0.92)',
+                      color: '#475569',
+                      padding: '1px 6px',
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                    }} title={t('shifts.form.offDay', 'Off day')}>
+                      <Moon size={9} strokeWidth={2.4} />
+                      {t('shifts.form.offDay', 'Off day')} {offDayUserCount}
                     </span>
                   )}
                 </div>

@@ -4,7 +4,9 @@ import { ArrowLeftRight, Moon, Palmtree, Thermometer, Store } from 'lucide-react
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
+import { WindowDisplayActivity } from '../../api/windowDisplay';
 import { getAvatarUrl } from '../../api/client';
+import { getActivityIcon, getActivityPalette, getActivityTypeLabel } from './storeActivityCatalog';
 
 const STATUS_META: Record<string, {
   bg: string; color: string; dot: string;
@@ -64,6 +66,8 @@ interface WeeklyCalendarProps {
   canEdit: boolean;
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
+  windowDisplayActivities?: WindowDisplayActivity[];
+  onWindowDisplayClick?: (date: string) => void;
   /** Admin / HR / Area manager: show weekly approve control per row */
   canApproveWeek?: boolean;
   onApproveWeekForUser?: (userId: number) => void;
@@ -147,6 +151,8 @@ export default function WeeklyCalendar({
   canEdit,
   leaveBlocks,
   transferBlocks,
+  windowDisplayActivities,
+  onWindowDisplayClick,
   canApproveWeek = false,
   onApproveWeekForUser,
   approvingUserId = null,
@@ -163,6 +169,12 @@ export default function WeeklyCalendar({
     t('shifts.daySun', 'Sun'),
   ];
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const windowDisplayMap = new Map<string, WindowDisplayActivity[]>();
+  for (const item of windowDisplayActivities ?? []) {
+    const dateItems = windowDisplayMap.get(item.date) ?? [];
+    dateItems.push(item);
+    windowDisplayMap.set(item.date, dateItems);
+  }
 
   function getLeaveForUserDate(userId: number, dateStr: string): LeaveBlock | null {
     if (!leaveBlocks) return null;
@@ -275,7 +287,8 @@ export default function WeeklyCalendar({
               {t('shifts.employee', 'Dipendente')}
             </th>
             {days.map((day, i) => {
-              const isToday = formatDate(day) === todayStr();
+              const dayStr = formatDate(day);
+              const isToday = dayStr === todayStr();
               return (
                 <th key={i} style={{
                   padding: '10px 8px', textAlign: 'center', minWidth: 110,
@@ -423,6 +436,13 @@ export default function WeeklyCalendar({
                   const isToday = dateStr === todayStr();
                   const leave = getLeaveForUserDate(userId, dateStr);
                   const transfer = getTransferForUserDate(userId, dateStr);
+                  const activityStoreIds = new Set<number>(dayShifts.map((shift) => shift.storeId));
+                  if (transfer) {
+                    activityStoreIds.add(transfer.originStoreId);
+                    activityStoreIds.add(transfer.targetStoreId);
+                  }
+                  const dayActivities = (windowDisplayMap.get(dateStr) ?? [])
+                    .filter((item) => activityStoreIds.has(item.storeId));
                   const transferVm = transferVisualMeta(transfer?.status ?? 'active');
                   const lvVacation = leave?.leaveType === 'vacation';
                   const lvPending = leave ? leave.status !== 'hr_approved' : false;
@@ -572,6 +592,68 @@ export default function WeeklyCalendar({
                       }}
                       onClick={() => canEdit && !hasVisibleShift && onCellClick(userId, dateStr)}
                     >
+                      {dayActivities.map((activity) => {
+                        const iconText = getActivityIcon(activity.activityType, activity.activityIcon);
+                        const activityLabel = getActivityTypeLabel(t, activity.activityType, activity.customActivityName);
+                        const hoursLabel = activity.durationHours != null ? `${activity.durationHours}h` : null;
+                        const palette = getActivityPalette(activity.activityType);
+
+                        return (
+                          <button
+                            key={`activity-${activity.id}`}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onWindowDisplayClick?.(dateStr);
+                            }}
+                            style={{
+                              marginBottom: 4,
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              borderRadius: 5,
+                              border: `1px solid ${palette.border}`,
+                              borderLeft: `3px solid ${palette.accentBorder}`,
+                              background: palette.background,
+                              color: palette.color,
+                              padding: '4px 6px 4px 5px',
+                              fontSize: '0.66rem',
+                              fontWeight: 800,
+                              lineHeight: 1.2,
+                              cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                              textAlign: 'left',
+                            }}
+                            title={`${iconText} ${activityLabel}${hoursLabel ? ` · ${hoursLabel}` : ''}${activity.notes ? ` · ${activity.notes}` : ''}`}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+                              <span style={{
+                                display: 'inline-flex',
+                                color: palette.color,
+                                fontSize: '0.94rem',
+                                fontWeight: 800,
+                                lineHeight: 1,
+                                flexShrink: 0,
+                              }}>
+                                {iconText}
+                              </span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                                {activityLabel}
+                              </span>
+                            </span>
+                            {hoursLabel && (
+                              <span style={{
+                                fontSize: '0.63rem',
+                                opacity: 0.88,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                              }}>
+                                {hoursLabel}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
 
                       {showDualLane ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

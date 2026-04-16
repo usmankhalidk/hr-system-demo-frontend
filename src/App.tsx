@@ -20,6 +20,7 @@ import SystemPermissionsPanel from './modules/permissions/SystemPermissionsPanel
 import PermissionsPanel from './modules/permissions/PermissionsPanel';
 import ProfilePage from './modules/profile/ProfilePage';
 import ShiftsPage from './modules/shifts/ShiftsPage';
+import ExternalAffluencePage from './modules/externalAffluence/ExternalAffluencePage';
 import AttendanceLogsPage from './modules/attendance/AttendanceLogsPage';
 import AnomaliesPage from './modules/attendance/AnomaliesPage';
 import QRPage from './modules/attendance/QRPage';
@@ -169,6 +170,14 @@ function AppRoutes() {
           <Layout title={t('nav.turni')}><ShiftsPage /></Layout>
         </ProtectedRoute>
       } />
+
+      <Route path="/integrazioni/database-esterno" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="turni">
+          <Layout title={t('nav.externalAffluence', 'Database Integration')}><ExternalAffluencePage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/affluenza-esterna" element={<Navigate to="/integrazioni/database-esterno" replace />} />
 
       <Route path="/trasferimenti" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="trasferimenti">

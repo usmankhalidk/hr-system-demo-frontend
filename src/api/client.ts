@@ -122,4 +122,16 @@ export function getStoreLogoUrl(filename: string | null | undefined): string | n
   return `${base}/uploads/store-logos/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 }
 
+export function getPublicAvatarUrl(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  const base = apiBase;
+  return `${base}/uploads/public-avatars/${filename}`;
+}
+
+export function getPublicStoreLogoUrl(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  const base = apiBase;
+  return `${base}/uploads/public-store-logos/${filename}`;
+}
+
 export default client;

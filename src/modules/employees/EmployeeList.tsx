@@ -41,6 +41,16 @@ function getAvatarColor(name: string): string {
   return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
 }
 
+function formatTransferDate(value: string): string {
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
 export function EmployeeList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -55,6 +65,7 @@ export function EmployeeList() {
   const [stores, setStores] = useState<Store[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [activeTransfersByUser, setActiveTransfersByUser] = useState<Record<number, TransferAssignment>>({});
+  const [hoveredTransferUserId, setHoveredTransferUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
@@ -220,39 +231,89 @@ export function EmployeeList() {
       render: (row) => {
         const transfer = activeTransfersByUser[row.id];
         if (transfer) {
+          const showPopover = hoveredTransferUserId === row.id;
           return (
             <div style={{
               display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 5,
+              position: 'relative',
             }}>
               <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '2px 8px',
-                borderRadius: 999,
-                border: '1px solid var(--border)',
-                background: 'rgba(13,33,55,0.06)',
-                color: 'var(--text-muted)',
-                fontSize: 11,
-                fontWeight: 700,
+                fontSize: '13px',
+                color: 'var(--text-secondary)',
               }}>
-                {transfer.originStoreName}
+                {transfer.originStoreName || row.storeName || '—'}
               </span>
-              <ArrowLeftRight size={11} strokeWidth={2.3} color="#0f766e" />
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '2px 8px',
-                borderRadius: 999,
-                border: '1px solid rgba(15,118,110,0.3)',
-                background: 'rgba(13,148,136,0.1)',
-                color: '#115e59',
-                fontSize: 11,
-                fontWeight: 700,
-              }}>
-                {transfer.targetStoreName}
-              </span>
+
+              <button
+                type="button"
+                onMouseEnter={() => setHoveredTransferUserId(row.id)}
+                onMouseLeave={() => setHoveredTransferUserId((prev) => (prev === row.id ? null : prev))}
+                onFocus={() => setHoveredTransferUserId(row.id)}
+                onBlur={() => setHoveredTransferUserId((prev) => (prev === row.id ? null : prev))}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(15,118,110,0.35)',
+                  background: 'rgba(13,148,136,0.12)',
+                  color: '#115e59',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  cursor: 'help',
+                }}
+                title={`${transfer.originStoreName} -> ${transfer.targetStoreName}`}
+              >
+                <ArrowLeftRight size={11} strokeWidth={2.3} />
+                {t('transfers.transfer', 'Transfer')}
+              </button>
+
+              {showPopover && (
+                <div
+                  onMouseEnter={() => setHoveredTransferUserId(row.id)}
+                  onMouseLeave={() => setHoveredTransferUserId((prev) => (prev === row.id ? null : prev))}
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: 0,
+                    minWidth: 250,
+                    maxWidth: 320,
+                    zIndex: 15,
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: '#fff',
+                    boxShadow: '0 14px 30px rgba(0,0,0,0.16)',
+                    padding: '10px 11px',
+                    display: 'grid',
+                    gap: 5,
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)' }}>
+                    {transfer.originStoreName}{' -> '}{transfer.targetStoreName}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    {t('transfers.form.startDate', 'Start date')}: <strong>{formatTransferDate(transfer.startDate)}</strong>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    {t('transfers.form.endDate', 'End date')}: <strong>{formatTransferDate(transfer.endDate)}</strong>
+                  </div>
+                  {transfer.reason && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      {t('transfers.form.reason', 'Reason')}: {transfer.reason}
+                    </div>
+                  )}
+                  {transfer.notes && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {t('common.notes', 'Notes')}: {transfer.notes}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         }

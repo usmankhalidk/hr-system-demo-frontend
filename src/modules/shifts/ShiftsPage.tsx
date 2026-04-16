@@ -6,6 +6,7 @@ import { listShifts, Shift, copyWeek, exportShifts, importShifts, downloadImport
 import { getLeaveBlocks, LeaveBlock } from '../../api/leave';
 import { getTransferBlocks, TransferAssignment } from '../../api/transfers';
 import { getStores } from '../../api/stores';
+import { createWindowDisplay, deleteWindowDisplay, listWindowDisplayActivities, StoreActivityType, updateWindowDisplay, WindowDisplayActivity } from '../../api/windowDisplay';
 import { Store } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import WeeklyCalendar from './WeeklyCalendar';
@@ -14,6 +15,7 @@ import DayCalendar from './DayCalendar';
 import ShiftDrawer from './ShiftDrawer';
 import ShiftTemplatesPanel from './ShiftTemplatesPanel';
 import AffluencePanel from './AffluencePanel';
+import CalendarActivitiesModal from './CalendarActivitiesModal';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -154,10 +156,15 @@ export default function ShiftsPage() {
   const [leaveBlocks, setLeaveBlocks] = useState<LeaveBlock[]>([]);
   const [transferBlocks, setTransferBlocks] = useState<TransferAssignment[]>([]);
   const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
+  const [windowDisplayActivities, setWindowDisplayActivities] = useState<WindowDisplayActivity[]>([]);
+  const [windowDisplaySaving, setWindowDisplaySaving] = useState(false);
+  const [activitiesModalOpen, setActivitiesModalOpen] = useState(false);
+  const [activitiesModalDate, setActivitiesModalDate] = useState<string | null>(null);
 
-  const canEdit = user ? MANAGEMENT_ROLES.includes(user.role) : false;
+  const canEdit = user ? (user.isSuperAdmin || MANAGEMENT_ROLES.includes(user.role)) : false;
   const isStoreManager = user?.role === 'store_manager';
-  const canApproveWeek = Boolean(user && ['admin', 'hr', 'area_manager'].includes(user.role));
+  const canApproveWeek = Boolean(user && (user.isSuperAdmin || ['admin', 'hr', 'area_manager'].includes(user.role)));
+  const canManageWindowDisplay = Boolean(user && (user.isSuperAdmin || ['admin', 'area_manager'].includes(user.role)));
 
   // Load stores for admin/hr/area_manager store filter (not for store_manager or employee)
   useEffect(() => {
@@ -165,6 +172,36 @@ export default function ShiftsPage() {
       getStores().then(setStores).catch(() => {});
     }
   }, [canEdit, isStoreManager]);
+
+  const getVisibleWindowDisplayMonths = useCallback((): string[] => {
+    if (viewMode === 'month' || viewMode === 'day') {
+      return [formatIsoMonth(currentDate)];
+    }
+
+    const weekStart = getWeekStart(currentDate);
+    const monthSet = new Set<string>();
+    for (let i = 0; i < 7; i += 1) {
+      monthSet.add(formatIsoMonth(addDays(weekStart, i)));
+    }
+    return Array.from(monthSet);
+  }, [viewMode, currentDate]);
+
+  const fetchWindowDisplayActivities = useCallback(async () => {
+    const months = getVisibleWindowDisplayMonths();
+    const results = await Promise.all(months.map((month) =>
+      listWindowDisplayActivities(month).catch(() => [] as WindowDisplayActivity[]),
+    ));
+
+    const activities = results
+      .flat()
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    setWindowDisplayActivities(activities);
+  }, [getVisibleWindowDisplayMonths]);
+
+  useEffect(() => {
+    void fetchWindowDisplayActivities();
+  }, [fetchWindowDisplayActivities]);
 
   const fetchShifts = useCallback(async () => {
     setLoading(true);
@@ -363,6 +400,79 @@ export default function ShiftsPage() {
       const code: string | undefined = err?.response?.data?.code;
       setError(code ? t(`errors.${code}`, t('errors.DEFAULT')) : t('errors.DEFAULT'));
     }
+  }
+
+  async function handleWindowDisplaySave(payload: {
+    id?: number;
+    storeId: number;
+    date: string;
+    activityType: StoreActivityType;
+    activityIcon: string | null;
+    customActivityName: string | null;
+    durationHours: number | null;
+    notes: string | null;
+    companyId?: number | null;
+  }) {
+    setWindowDisplaySaving(true);
+    setError(null);
+    try {
+      if (payload.id) {
+        await updateWindowDisplay(payload.id, {
+          date: payload.date,
+          activityType: payload.activityType,
+          activityIcon: payload.activityIcon,
+          customActivityName: payload.customActivityName,
+          durationHours: payload.durationHours,
+          notes: payload.notes,
+          companyId: payload.companyId,
+        });
+      } else {
+        await createWindowDisplay({
+          storeId: payload.storeId,
+          date: payload.date,
+          activityType: payload.activityType,
+          activityIcon: payload.activityIcon,
+          customActivityName: payload.customActivityName,
+          durationHours: payload.durationHours,
+          notes: payload.notes,
+          companyId: payload.companyId,
+        });
+      }
+
+      await fetchWindowDisplayActivities();
+      setSuccess(t('shifts.windowDisplaySaved', 'Window display activity saved.'));
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { code?: string; error?: string } } };
+      const code = axiosErr?.response?.data?.code;
+      setError(code ? t(`errors.${code}`, axiosErr?.response?.data?.error ?? t('errors.DEFAULT')) : (axiosErr?.response?.data?.error ?? t('errors.DEFAULT')));
+      throw err;
+    } finally {
+      setWindowDisplaySaving(false);
+    }
+  }
+
+  async function handleWindowDisplayDelete(id: number, companyId?: number | null) {
+    setWindowDisplaySaving(true);
+    setError(null);
+    try {
+      await deleteWindowDisplay(id, companyId ?? undefined);
+      await fetchWindowDisplayActivities();
+      setSuccess(t('shifts.windowDisplayRemoved', 'Window display activity removed.'));
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { code?: string; error?: string } } };
+      const code = axiosErr?.response?.data?.code;
+      setError(code ? t(`errors.${code}`, axiosErr?.response?.data?.error ?? t('errors.DEFAULT')) : (axiosErr?.response?.data?.error ?? t('errors.DEFAULT')));
+      throw err;
+    } finally {
+      setWindowDisplaySaving(false);
+    }
+  }
+
+  function openActivitiesModal(date?: string) {
+    setActivitiesModalDate(date ?? formatDateDisplay(currentDate));
+    setActivitiesModalOpen(true);
   }
 
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
@@ -566,6 +676,17 @@ export default function ShiftsPage() {
 
           {/* ── RIGHT: store filter + loading indicator ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <button
+              className={`btn ${activitiesModalOpen ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => openActivitiesModal()}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+              </svg>
+              {t('shifts.windowDisplayAction', 'Activity')}
+            </button>
+
             {!isStoreManager && stores.length > 0 && (
               <select
                 value={storeFilter ?? ''}
@@ -658,6 +779,8 @@ export default function ShiftsPage() {
               canEdit={canEdit}
               leaveBlocks={leaveBlocks}
               transferBlocks={transferBlocks}
+              windowDisplayActivities={windowDisplayActivities}
+              onWindowDisplayClick={(date) => openActivitiesModal(date)}
             />
           ) : viewMode === 'week' ? (
             <WeeklyCalendar
@@ -668,6 +791,8 @@ export default function ShiftsPage() {
               canEdit={canEdit}
               leaveBlocks={leaveBlocks}
               transferBlocks={transferBlocks}
+              windowDisplayActivities={windowDisplayActivities}
+              onWindowDisplayClick={(date) => openActivitiesModal(date)}
               canApproveWeek={canApproveWeek}
               onApproveWeekForUser={handleApproveWeekForUser}
               approvingUserId={approvingUserId}
@@ -678,6 +803,8 @@ export default function ShiftsPage() {
               currentDate={currentDate}
               leaveBlocks={leaveBlocks}
               transferBlocks={transferBlocks}
+              windowDisplayActivities={windowDisplayActivities}
+              onWindowDisplayClick={(date) => openActivitiesModal(date)}
               onDayClick={(date) => {
                 setCurrentDate(new Date(date + 'T12:00:00'));
                 setViewMode('day');
@@ -944,6 +1071,19 @@ export default function ShiftsPage() {
         variant="primary"
         onConfirm={doCopyWeek}
         onCancel={() => setCopyConfirmOpen(false)}
+      />
+      <CalendarActivitiesModal
+        open={activitiesModalOpen}
+        onClose={() => setActivitiesModalOpen(false)}
+        viewMode={viewMode}
+        currentDate={currentDate}
+        initialDate={activitiesModalDate}
+        stores={stores}
+        canManage={canManageWindowDisplay}
+        activities={windowDisplayActivities}
+        saving={windowDisplaySaving}
+        onSave={handleWindowDisplaySave}
+        onDelete={handleWindowDisplayDelete}
       />
     </div>
   );
