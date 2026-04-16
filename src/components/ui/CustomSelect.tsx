@@ -18,9 +18,25 @@ interface CustomSelectProps {
   isClearable?: boolean;
   searchable?: boolean;
   highlightSelected?: boolean;
+  searchPlaceholder?: string;
+  noOptionsMessage?: string;
+  menuMaxHeight?: number;
 }
 
-export default function CustomSelect({ value, onChange, options, placeholder = 'Select...', disabled = false, error, isClearable = true, searchable = true, highlightSelected = false }: CustomSelectProps) {
+export default function CustomSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select...',
+  disabled = false,
+  error,
+  isClearable = true,
+  searchable = true,
+  highlightSelected = false,
+  searchPlaceholder = 'Search...',
+  noOptionsMessage = 'No options found',
+  menuMaxHeight = 280,
+}: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -115,7 +131,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             boxShadow: 'var(--shadow-lg)',
-            maxHeight: 280,
+            maxHeight: menuMaxHeight,
             display: 'flex',
             flexDirection: 'column',
             zIndex: 100,
@@ -128,7 +144,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
                  ref={searchInputRef}
                  value={query}
                  onChange={e => setQuery(e.target.value)}
-                 placeholder="Search..."
+                 placeholder={searchPlaceholder}
                  style={{ border: 'none', outline: 'none', background: 'transparent', width: '100%', color: 'var(--text-primary)', fontSize: 13 }}
                />
              </div>
@@ -136,7 +152,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
           <div style={{ overflowY: 'auto', padding: 4, flex: 1 }}>
             {visibleOptions.length === 0 ? (
               <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>
-                No options found
+                {noOptionsMessage}
               </div>
             ) : (
               visibleOptions.map((opt) => (

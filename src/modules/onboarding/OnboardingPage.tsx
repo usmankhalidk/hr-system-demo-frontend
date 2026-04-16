@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -9,7 +9,7 @@ import { translateApiError } from '../../utils/apiErrors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import { getAvatarUrl } from '../../api/client';
+import { getAvatarUrl, getCompanyLogoUrl } from '../../api/client';
 import { getCompanies } from '../../api/companies';
 import { getStores } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
@@ -372,12 +372,61 @@ const TemplatesPanel: React.FC = () => {
   const [assignSelected, setAssignSelected] = useState<Set<number>>(new Set());
   const [assignLoading, setAssignLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [assignCompanyPickerOpen, setAssignCompanyPickerOpen] = useState(false);
+  const [assignEmployeePickerOpen, setAssignEmployeePickerOpen] = useState(false);
+  const [assignCompanyQuery, setAssignCompanyQuery] = useState('');
+  const [assignEmployeeQuery, setAssignEmployeeQuery] = useState('');
+  const assignCompanyPickerRef = useRef<HTMLDivElement | null>(null);
+  const assignEmployeePickerRef = useRef<HTMLDivElement | null>(null);
 
   const companyMap = useMemo(() => {
     const map = new Map<number, string>();
     companies.forEach((company) => map.set(company.id, company.name));
     return map;
   }, [companies]);
+
+  const selectedAssignCompany = useMemo(
+    () => companies.find((company) => String(company.id) === assignCompanyId) ?? null,
+    [companies, assignCompanyId],
+  );
+
+  const selectedAssignEmployee = useMemo(
+    () => assignEmployees.find((employee) => String(employee.id) === assignEmployeeId) ?? null,
+    [assignEmployees, assignEmployeeId],
+  );
+
+  const filteredAssignCompanies = useMemo(() => {
+    const q = assignCompanyQuery.trim().toLowerCase();
+    if (!q) return companies;
+    return companies.filter((company) => {
+      const owner = `${company.ownerName ?? ''} ${company.ownerSurname ?? ''}`.trim();
+      return (
+        company.name.toLowerCase().includes(q)
+        || (company.groupName ?? '').toLowerCase().includes(q)
+        || owner.toLowerCase().includes(q)
+        || String(company.storeCount ?? 0).includes(q)
+      );
+    });
+  }, [companies, assignCompanyQuery]);
+
+  const filteredAssignEmployees = useMemo(() => {
+    const q = assignEmployeeQuery.trim().toLowerCase();
+    if (!q) return assignEmployees;
+    return assignEmployees.filter((employee) => {
+      const haystack = [
+        employee.name,
+        employee.surname,
+        employee.email,
+        employee.role,
+        employee.storeName,
+        employee.companyName,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [assignEmployees, assignEmployeeQuery]);
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -415,6 +464,32 @@ const TemplatesPanel: React.FC = () => {
   }, [assignDrawerOpen, companyFilter, companies]);
 
   useEffect(() => {
+    if (!assignDrawerOpen) {
+      setAssignCompanyPickerOpen(false);
+      setAssignEmployeePickerOpen(false);
+      setAssignCompanyQuery('');
+      setAssignEmployeeQuery('');
+    }
+  }, [assignDrawerOpen]);
+
+  useEffect(() => {
+    if (!assignCompanyPickerOpen && !assignEmployeePickerOpen) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (assignCompanyPickerRef.current && !assignCompanyPickerRef.current.contains(target)) {
+        setAssignCompanyPickerOpen(false);
+      }
+      if (assignEmployeePickerRef.current && !assignEmployeePickerRef.current.contains(target)) {
+        setAssignEmployeePickerOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [assignCompanyPickerOpen, assignEmployeePickerOpen]);
+
+  useEffect(() => {
     if (!assignDrawerOpen || !assignCompanyId) {
       setAssignEmployees([]);
       setAssignTemplates([]);
@@ -435,9 +510,7 @@ const TemplatesPanel: React.FC = () => {
         setAssignEmployees(employeeRows);
         setAssignTemplates(templatesResponse);
         setAssignSelected(new Set(templatesResponse.map((template) => template.id)));
-        if (!employeeRows.some((employee) => String(employee.id) === assignEmployeeId)) {
-          setAssignEmployeeId('');
-        }
+        setAssignEmployeeId((prev) => (employeeRows.some((employee) => String(employee.id) === prev) ? prev : ''));
       })
       .catch(() => {
         setAssignEmployees([]);
@@ -446,7 +519,7 @@ const TemplatesPanel: React.FC = () => {
         showToast(t('onboarding.errorLoad', 'Error loading data'), 'error');
       })
       .finally(() => setAssignLoading(false));
-  }, [assignDrawerOpen, assignCompanyId, assignEmployeeId, showToast, t]);
+  }, [assignDrawerOpen, assignCompanyId, showToast, t]);
 
   const openCreate = () => {
     setEditing(null);
@@ -584,6 +657,21 @@ const TemplatesPanel: React.FC = () => {
     }
   };
 
+  const handleAssignCompanySelect = (company: Company) => {
+    setAssignCompanyId(String(company.id));
+    setAssignEmployeeId('');
+    setAssignCompanyPickerOpen(false);
+    setAssignEmployeePickerOpen(false);
+    setAssignCompanyQuery('');
+    setAssignEmployeeQuery('');
+  };
+
+  const handleAssignEmployeeSelect = (employee: Employee) => {
+    setAssignEmployeeId(String(employee.id));
+    setAssignEmployeePickerOpen(false);
+    setAssignEmployeeQuery('');
+  };
+
   const visible = useMemo(() => {
     const list = showInactive ? templates : templates.filter((t) => t.isActive);
     const q = search.toLowerCase();
@@ -601,31 +689,52 @@ const TemplatesPanel: React.FC = () => {
   const activeCount = templates.filter((t) => t.isActive).length;
   const inactiveCount = templates.filter((t) => !t.isActive).length;
 
+  const assignGroupedTemplates = useMemo(() => {
+    const map = new Map<Phase, OnboardingTemplate[]>();
+    PHASE_ORDER.forEach((phase) => map.set(phase, []));
+    assignTemplates.forEach((template) => {
+      map.get(getPhase(template.sortOrder))?.push(template);
+    });
+    return map;
+  }, [assignTemplates]);
+
   return (
     <div>
       {/* Header bar */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Input
-          value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('common.search')} style={{ maxWidth: 240 }}
-        />
-        <select
-          value={companyFilter}
-          onChange={(e) => setCompanyFilter(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 170 }}
-        >
-          <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
-          {companies.map((company) => (
-            <option key={company.id} value={String(company.id)}>{company.name}</option>
-          ))}
-        </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)}
-            style={{ width: 15, height: 15, accentColor: 'var(--primary)' }} />
-          {t('onboarding.showInactive', 'Show inactive')}
-          {inactiveCount > 0 && <span style={{ background: 'var(--border)', borderRadius: 99, fontSize: 10, padding: '0 5px', color: 'var(--text-muted)' }}>{inactiveCount}</span>}
-        </label>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+      <div style={{ display: 'flex', marginBottom: 16, alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 520px', minWidth: 300, flexWrap: 'wrap' }}>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('common.search')}
+            style={{ minWidth: 220, maxWidth: 280 }}
+          />
+          <select
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 180 }}
+          >
+            <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
+            {companies.map((company) => (
+              <option key={company.id} value={String(company.id)}>{company.name}</option>
+            ))}
+          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none', padding: '0 2px' }}>
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              style={{ width: 15, height: 15, accentColor: 'var(--primary)' }}
+            />
+            {t('onboarding.showInactive', 'Show inactive')}
+            {inactiveCount > 0 && (
+              <span style={{ background: 'var(--border)', borderRadius: 99, fontSize: 10, padding: '0 5px', color: 'var(--text-muted)' }}>
+                {inactiveCount}
+              </span>
+            )}
+          </label>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {activeCount} {t('onboarding.activeTasksCount', 'active tasks')}
           </span>
@@ -955,61 +1064,382 @@ const TemplatesPanel: React.FC = () => {
             <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
               <Building2 size={13} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} /> {t('nav.companies', 'Companies')}
             </label>
-            <select
-              value={assignCompanyId}
-              onChange={(e) => setAssignCompanyId(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13.5 }}
-            >
-              <option value="">{t('employees.selectCompany', 'Select company')}</option>
-              {companies.map((company) => (
-                <option key={company.id} value={String(company.id)}>{company.name}</option>
-              ))}
-            </select>
+            <div ref={assignCompanyPickerRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignCompanyPickerOpen((prev) => !prev);
+                  setAssignEmployeePickerOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--surface)',
+                  minHeight: 52,
+                  padding: selectedAssignCompany ? '8px 10px' : '0 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                {selectedAssignCompany ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                    <span style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      border: '1px solid var(--border)',
+                      background: 'rgba(13,33,55,0.08)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      {getCompanyLogoUrl(selectedAssignCompany.logoFilename) ? (
+                        <img
+                          src={getCompanyLogoUrl(selectedAssignCompany.logoFilename) ?? ''}
+                          alt={selectedAssignCompany.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)' }}>
+                          {selectedAssignCompany.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </span>
+                    <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedAssignCompany.name}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedAssignCompany.groupName || t('common.none', 'None')}</span>
+                        <span style={{ opacity: 0.45 }}>•</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {selectedAssignCompany.ownerName
+                            ? `${selectedAssignCompany.ownerName}${selectedAssignCompany.ownerSurname ? ` ${selectedAssignCompany.ownerSurname}` : ''}`
+                            : t('companies.ownerMissing', 'No owner assigned')}
+                        </span>
+                        <span style={{ opacity: 0.45 }}>•</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          {`${selectedAssignCompany.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                        </span>
+                      </span>
+                    </span>
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('employees.selectCompany', 'Select company')}</span>
+                )}
+                <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              </button>
+
+              {assignCompanyPickerOpen && (
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 'calc(100% + 6px)',
+                  zIndex: 35,
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--surface)',
+                  boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
+                  maxHeight: 300,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}>
+                  <div style={{ padding: 8, borderBottom: '1px solid var(--border)' }}>
+                    <input
+                      value={assignCompanyQuery}
+                      onChange={(e) => setAssignCompanyQuery(e.target.value)}
+                      placeholder={t('common.search')}
+                      style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--background)', padding: '7px 9px', fontSize: 12, color: 'var(--text-primary)', outline: 'none' }}
+                    />
+                  </div>
+                  <div style={{ overflowY: 'auto', maxHeight: 236 }}>
+                    {filteredAssignCompanies.length === 0 ? (
+                      <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>{t('common.noResults', 'No results')}</div>
+                    ) : (
+                      filteredAssignCompanies.map((company) => (
+                        <button
+                          key={company.id}
+                          type="button"
+                          onClick={() => handleAssignCompanySelect(company)}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderBottom: '1px solid var(--border)',
+                            background: assignCompanyId === String(company.id) ? 'var(--surface-warm)' : 'var(--surface)',
+                            padding: '9px 10px',
+                            textAlign: 'left',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 9,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{ width: 28, height: 28, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {getCompanyLogoUrl(company.logoFilename) ? (
+                              <img src={getCompanyLogoUrl(company.logoFilename) ?? ''} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)' }}>{company.name.slice(0, 2).toUpperCase()}</span>
+                            )}
+                          </span>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {company.name}
+                            </span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{company.groupName || t('common.none', 'None')}</span>
+                              <span style={{ opacity: 0.45 }}>•</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {company.ownerName
+                                  ? `${company.ownerName}${company.ownerSurname ? ` ${company.ownerSurname}` : ''}`
+                                  : t('companies.ownerMissing', 'No owner assigned')}
+                              </span>
+                              <span style={{ opacity: 0.45 }}>•</span>
+                              <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>
+                                {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                              </span>
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
             <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
               <Users size={13} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} /> {t('onboarding.employeeIdLabel', 'Employee')}
             </label>
-            <select
-              value={assignEmployeeId}
-              onChange={(e) => setAssignEmployeeId(e.target.value)}
-              disabled={assignLoading || assignEmployees.length === 0}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13.5 }}
-            >
-              <option value="">{assignLoading ? t('common.loading') : t('onboarding.searchEmployeePlaceholder', 'Search employee...')}</option>
-              {assignEmployees.map((employee) => (
-                <option key={employee.id} value={String(employee.id)}>{employee.name} {employee.surname} ({employee.email})</option>
-              ))}
-            </select>
+            <div ref={assignEmployeePickerRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                disabled={!assignCompanyId || assignLoading}
+                onClick={() => {
+                  if (!assignCompanyId || assignLoading) return;
+                  setAssignEmployeePickerOpen((prev) => !prev);
+                  setAssignCompanyPickerOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--surface)',
+                  minHeight: 50,
+                  padding: selectedAssignEmployee ? '8px 10px' : '0 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  cursor: !assignCompanyId || assignLoading ? 'not-allowed' : 'pointer',
+                  opacity: !assignCompanyId || assignLoading ? 0.6 : 1,
+                }}
+              >
+                {selectedAssignEmployee ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, flex: 1 }}>
+                    <span style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.14)', color: '#0D2137', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {getAvatarUrl(selectedAssignEmployee.avatarFilename) ? (
+                        <img src={getAvatarUrl(selectedAssignEmployee.avatarFilename) ?? ''} alt={`${selectedAssignEmployee.name} ${selectedAssignEmployee.surname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : initials(selectedAssignEmployee.name, selectedAssignEmployee.surname)}
+                    </span>
+                    <span style={{ minWidth: 0, textAlign: 'left' }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedAssignEmployee.name} {selectedAssignEmployee.surname}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t(`roles.${selectedAssignEmployee.role}`, selectedAssignEmployee.role)}
+                        {selectedAssignEmployee.storeName ? ` · ${selectedAssignEmployee.storeName}` : ''}
+                      </span>
+                    </span>
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    {!assignCompanyId
+                      ? t('employees.selectCompanyFirst', 'Select company first')
+                      : (assignLoading ? t('common.loading') : t('onboarding.searchEmployeePlaceholder', 'Search employee...'))}
+                  </span>
+                )}
+                <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              </button>
+
+              {assignEmployeePickerOpen && (
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 'calc(100% + 6px)',
+                  zIndex: 35,
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--surface)',
+                  boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
+                  maxHeight: 300,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}>
+                  <div style={{ padding: 8, borderBottom: '1px solid var(--border)' }}>
+                    <input
+                      value={assignEmployeeQuery}
+                      onChange={(e) => setAssignEmployeeQuery(e.target.value)}
+                      placeholder={t('common.search')}
+                      style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--background)', padding: '7px 9px', fontSize: 12, color: 'var(--text-primary)', outline: 'none' }}
+                    />
+                  </div>
+                  <div style={{ overflowY: 'auto', maxHeight: 236 }}>
+                    {filteredAssignEmployees.length === 0 ? (
+                      <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>{t('common.noResults', 'No results')}</div>
+                    ) : (
+                      filteredAssignEmployees.map((employee) => (
+                        <button
+                          key={employee.id}
+                          type="button"
+                          onClick={() => handleAssignEmployeeSelect(employee)}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderBottom: '1px solid var(--border)',
+                            background: assignEmployeeId === String(employee.id) ? 'var(--surface-warm)' : 'var(--surface)',
+                            padding: '8px 10px',
+                            textAlign: 'left',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', background: 'rgba(13,33,55,0.14)', color: '#0D2137', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {getAvatarUrl(employee.avatarFilename) ? (
+                              <img src={getAvatarUrl(employee.avatarFilename) ?? ''} alt={`${employee.name} ${employee.surname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : initials(employee.name, employee.surname)}
+                          </span>
+                          <span style={{ minWidth: 0 }}>
+                            <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {employee.name} {employee.surname}
+                            </span>
+                            <span style={{ display: 'block', fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t(`roles.${employee.role}`, employee.role)}
+                              {employee.storeName ? ` · ${employee.storeName}` : ''}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: 'var(--background)' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: 'var(--background)' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
               {t('onboarding.tabTemplates', 'Tasks')} ({assignTemplates.length})
             </div>
-            {assignTemplates.length === 0 ? (
+            {!assignCompanyId ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('employees.selectCompanyFirst', 'Select company first')}</div>
+            ) : assignLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Skel w={18} h={18} r={4} />
+                    <Skel w={24} h={24} r={6} />
+                    <div style={{ flex: 1 }}>
+                      <Skel w="40%" h={12} />
+                      <div style={{ marginTop: 5 }}><Skel w="68%" h={10} /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : assignTemplates.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('onboarding.noTemplates', 'No onboarding tasks configured')}</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-                {assignTemplates.map((template) => (
-                  <label key={template.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-primary)' }}>
-                    <input
-                      type="checkbox"
-                      checked={assignSelected.has(template.id)}
-                      onChange={() => {
-                        setAssignSelected((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(template.id)) next.delete(template.id);
-                          else next.add(template.id);
-                          return next;
-                        });
-                      }}
-                      style={{ accentColor: 'var(--primary)' }}
-                    />
-                    <span>{template.name}</span>
-                  </label>
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 340, overflowY: 'auto', paddingRight: 2 }}>
+                {PHASE_ORDER.map((phase) => {
+                  const phaseTemplates = (assignGroupedTemplates.get(phase) ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+                  if (phaseTemplates.length === 0) return null;
+                  const meta = PHASE_META[phase];
+
+                  return (
+                    <div key={phase}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 7, background: meta.bg, border: `1px solid ${meta.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
+                          {meta.icon}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: meta.color, fontFamily: 'var(--font-display)' }}>{t(meta.labelKey)}</div>
+                        <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '1px 8px' }}>
+                          {phaseTemplates.length}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                        {phaseTemplates.map((template) => (
+                          <label
+                            key={template.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 10,
+                              background: 'var(--surface)',
+                              border: `1px solid ${meta.border}`,
+                              borderLeft: `4px solid ${meta.color}`,
+                              borderRadius: 10,
+                              padding: '10px 10px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={assignSelected.has(template.id)}
+                              onChange={() => {
+                                setAssignSelected((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(template.id)) next.delete(template.id);
+                                  else next.add(template.id);
+                                  return next;
+                                });
+                              }}
+                              style={{ marginTop: 2, accentColor: 'var(--primary)' }}
+                            />
+                            <div style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0, background: meta.bg, border: `1px solid ${meta.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 800, color: meta.color, fontFamily: 'var(--font-display)' }}>
+                              {template.sortOrder}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {template.name}
+                              </div>
+                              {template.description && (
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {template.description}
+                                </div>
+                              )}
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 5 }}>
+                                <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 6px', color: 'var(--text-muted)', background: 'var(--background)' }}>
+                                  {CATEGORY_ICONS[template.category] ?? '📌'} {t(`onboarding.category${template.category === 'hr_docs' ? 'HrDocs' : template.category === 'it_setup' ? 'ItSetup' : template.category === 'training' ? 'Training' : template.category === 'meeting' ? 'Meeting' : 'Other'}`)}
+                                </span>
+                                {template.dueDays != null && template.dueDays > 0 && (
+                                  <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 6px', color: 'var(--text-muted)', background: 'var(--background)' }}>
+                                    D+{template.dueDays}
+                                  </span>
+                                )}
+                                <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[template.priority] ?? 'var(--text-muted)' }}>
+                                  {t(`onboarding.priority${template.priority === 'high' ? 'High' : template.priority === 'medium' ? 'Medium' : 'Low'}`)}
+                                </span>
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1427,34 +1857,45 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
       </div>
 
       {/* Filter bar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('common.search')} style={{ maxWidth: 220 }} />
-        <select
-          value={companyFilter}
-          onChange={(e) => setCompanyFilter(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 170 }}
-        >
-          <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
-          {companies.map((company) => (
-            <option key={company.id} value={String(company.id)}>{company.name}</option>
-          ))}
-        </select>
-        {stores.length > 0 && (
+      <div style={{ display: 'flex', marginBottom: 10, alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: '1 1 520px', minWidth: 300, flexWrap: 'wrap' }}>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('common.search')} style={{ minWidth: 220, maxWidth: 280 }} />
           <select
-            value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none' }}
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 170 }}
           >
-            <option value="">All stores</option>
-            {stores.map((store) => (
-              <option key={store.id} value={String(store.id)}>{store.name}</option>
+            <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
+            {companies.map((company) => (
+              <option key={company.id} value={String(company.id)}>{company.name}</option>
             ))}
           </select>
+          {stores.length > 0 && (
+            <select
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 140 }}
+            >
+              <option value="">All stores</option>
+              {stores.map((store) => (
+                <option key={store.id} value={String(store.id)}>{store.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        {isAdmin && counts.not_started > 0 && (
+          <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={() => setBulkConfirmOpen(true)}>
+            📋 {t('onboarding.bulkAssignBtn', { count: counts.not_started })}
+          </Button>
         )}
-        {/* Status pills */}
-        <div style={{ display: 'flex', gap: 5, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4 }}>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 5, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, flexWrap: 'wrap' }}>
           {statusOpts.map((opt) => (
             <button
-              key={opt.key} onClick={() => setStatusFilter(opt.key)}
+              key={opt.key}
+              onClick={() => setStatusFilter(opt.key)}
               style={{
                 padding: '4px 10px', border: 'none', borderRadius: 7, cursor: 'pointer',
                 background: statusFilter === opt.key ? opt.color : 'transparent',
@@ -1467,11 +1908,6 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             </button>
           ))}
         </div>
-        {isAdmin && counts.not_started > 0 && (
-          <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={() => setBulkConfirmOpen(true)} style={{ marginLeft: 'auto' }}>
-            📋 {t('onboarding.bulkAssignBtn', { count: counts.not_started })}
-          </Button>
-        )}
       </div>
 
       {loading ? (

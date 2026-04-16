@@ -151,6 +151,13 @@ const IconClipboard = () => (
     <line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" />
   </svg>
 );
+const IconDatabase = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <ellipse cx="12" cy="5" rx="8" ry="3" />
+    <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+    <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
+  </svg>
+);
 
 const ROLE_ACCENT: Record<UserRole, string> = {
   admin: '#C9973A', hr: '#0284C7', area_manager: '#15803D',
@@ -203,6 +210,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -223,6 +231,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -241,6 +250,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -258,6 +268,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.stores', path: '/negozi', icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.terminals', path: '/terminali', icon: <IconTerminal />, permissionKey: 'terminali' },
+      { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
     employee: [

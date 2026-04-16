@@ -4,7 +4,9 @@ import { ArrowLeftRight, CalendarDays, Moon, Palmtree, Thermometer, Coffee, Stor
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
+import { WindowDisplayActivity } from '../../api/windowDisplay';
 import { getAvatarUrl } from '../../api/client';
+import { getActivityIcon, getActivityPalette, getActivityTypeLabel } from './storeActivityCatalog';
 
 interface DayCalendarProps {
   shifts: Shift[];
@@ -14,6 +16,8 @@ interface DayCalendarProps {
   canEdit: boolean;
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
+  windowDisplayActivities?: WindowDisplayActivity[];
+  onWindowDisplayClick?: (date: string) => void;
 }
 
 const START_HOUR = 7;   // 07:00
@@ -107,12 +111,23 @@ function transferVisualMeta(status: TransferAssignment['status']): {
   };
 }
 
-export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, canEdit, leaveBlocks, transferBlocks }: DayCalendarProps) {
+export default function DayCalendar({
+  shifts,
+  date,
+  onShiftClick,
+  onSlotClick,
+  canEdit,
+  leaveBlocks,
+  transferBlocks,
+  windowDisplayActivities,
+  onWindowDisplayClick,
+}: DayCalendarProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
   const dateStr = formatDate(date);
   const today = formatDate(new Date());
   const isToday = dateStr === today;
+  const dailyActivities = (windowDisplayActivities ?? []).filter((item) => item.date === dateStr);
 
   // Group shifts by user
   const userMap = new Map<number, { name: string; surname: string; avatarFilename: string | null; shifts: Shift[] }>();
@@ -252,6 +267,15 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
             const targetStoreName = rowTransfer?.targetStoreName ?? t('transfers.table.target', 'Destinazione');
             const transferVm = transferVisualMeta(rowTransfer?.status ?? 'active');
             const rowHasOffDay = userData.shifts.some((shift) => shift.isOffDay);
+            const rowActivityStoreIds = new Set<number>(userData.shifts.map((shift) => shift.storeId));
+            if (rowTransfer) {
+              rowActivityStoreIds.add(rowTransfer.originStoreId);
+              rowActivityStoreIds.add(rowTransfer.targetStoreId);
+            }
+            const rowActivities = dailyActivities.filter((item) => rowActivityStoreIds.has(item.storeId));
+            const firstActivityPalette = rowActivities.length > 0
+              ? getActivityPalette(rowActivities[0].activityType)
+              : null;
 
             const renderIdentityRow = (opts: {
               storeName: string;
@@ -615,6 +639,44 @@ export default function DayCalendar({ shifts, date, onShiftClick, onSlotClick, c
                   </div>
                 ) : (
                   renderIdentityRow({ storeName: rowStoreNames[0] ?? originStoreName, isTransfer: false })
+                )}
+                {rowActivities.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onWindowDisplayClick?.(dateStr);
+                    }}
+                    style={{
+                      margin: '4px 8px 0',
+                      borderRadius: 6,
+                      border: `1px solid ${firstActivityPalette?.border ?? 'rgba(71,85,105,0.34)'}`,
+                      borderLeft: `3px solid ${firstActivityPalette?.accentBorder ?? '#475569'}`,
+                      background: firstActivityPalette?.background ?? 'rgba(226,232,240,0.9)',
+                      color: firstActivityPalette?.color ?? '#334155',
+                      padding: '3px 7px',
+                      fontSize: 9,
+                      fontWeight: 800,
+                      textAlign: 'left',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                    }}
+                    title={rowActivities.map((item) => {
+                      const bits = [
+                        getActivityIcon(item.activityType, item.activityIcon),
+                        getActivityTypeLabel(t, item.activityType, item.customActivityName),
+                        item.durationHours != null ? `${item.durationHours}h` : '',
+                        item.notes ?? '',
+                      ].filter(Boolean);
+                      return bits.join(' · ');
+                    }).join('\n')}
+                  >
+                    {rowActivities.length === 1
+                      ? `${getActivityIcon(rowActivities[0].activityType, rowActivities[0].activityIcon)} ${getActivityTypeLabel(t, rowActivities[0].activityType, rowActivities[0].customActivityName)}${rowActivities[0].durationHours != null ? ` · ${rowActivities[0].durationHours}h` : ''}`
+                      : t('shifts.dailyActivities', { count: rowActivities.length, defaultValue: `${rowActivities.length} activities` })}
+                  </button>
                 )}
                 {rowLeave && (
                   <div style={{
