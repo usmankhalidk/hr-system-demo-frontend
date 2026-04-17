@@ -204,7 +204,7 @@ export async function uploadDocumentUnified(
   const { data } = await apiClient.post('/documents/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
-  return data;
+  return data.data;
 }
 
 

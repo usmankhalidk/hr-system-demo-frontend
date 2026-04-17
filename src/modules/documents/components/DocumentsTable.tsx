@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
@@ -12,6 +12,7 @@ import {
 } from '../../../api/documents';
 import { IconDownload, IconPen, IconTrash, IconRestore, mimeIcon } from './DocUtils';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
+import { Pagination } from '../../../components/ui/Pagination';
 
 interface DocumentsTableProps {
   docs: EmployeeDocument[];
@@ -39,6 +40,13 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const [deletingDoc, setDeletingDoc] = useState<any | null>(null);
   const [signing, setSigning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
+  // Reset to page 1 when docs change (e.g. search or filter)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [docs]);
 
   function formatDate(iso: string | null | undefined): string {
     if (!iso) return '—';
@@ -110,6 +118,10 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
     }
   };
 
+  const totalDocs = docs.length;
+  const totalPages = Math.ceil(totalDocs / pageSize);
+  const currentDocs = docs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   if (docs.length === 0) {
     return (
       <div style={{ padding: '56px 24px', display: 'flex', justifyContent: 'center' }}>
@@ -156,7 +168,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
           </tr>
         </thead>
         <tbody>
-          {docs.map((doc: any) => (
+          {currentDocs.map((doc: any) => (
             <tr key={doc.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.12s' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -283,6 +295,18 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
         </tbody>
       </table>
     </div>
+
+    {totalPages > 1 && (
+      <div style={{ padding: '0 24px' }}>
+        <Pagination 
+          page={currentPage}
+          pages={totalPages}
+          total={totalDocs}
+          limit={pageSize}
+          onPageChange={setCurrentPage}
+        />
+      </div>
+    )}
 
     <ConfirmModal
       open={!!deletingDoc}

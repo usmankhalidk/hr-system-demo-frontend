@@ -1958,6 +1958,9 @@ const it = {
     expiryDate: 'Data di scadenza',
     expiresAtLabel: 'Data di scadenza (opzionale)',
     uploading: 'Caricamento...',
+    manualAssignmentTitle: 'Assegnazione Manuale',
+    noAutoMatchFound: 'Nessuna corrispondenza trovata. Assegna manualmente.',
+    noEmployeesAvailable: 'Nessun dipendente disponibile',
     // Bulk upload
     bulkTitle: 'Caricamento Massivo',
     bulkDesc: 'Carica un file ZIP contenente documenti PDF/immagini. I file vengono abbinati ai dipendenti tramite il nome file (COGNOME_NOME o ID univoco).',

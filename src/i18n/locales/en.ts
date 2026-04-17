@@ -1850,6 +1850,8 @@ const en = {
     searchEmployee: 'Search employee...',
     inbox: 'Messages',
     compose: 'New Message',
+    searchResults: 'Search Results',
+    searchResultsDesc: 'Showing matches from all accessible companies',
   },
 
   // ─── Notifications ───────────────────────────────────────────────────────
@@ -1940,6 +1942,9 @@ const en = {
     requiresSignatureLabel: 'Requires employee signature',
     expiresAtLabel: 'Expiry date (optional)',
     uploading: 'Uploading...',
+    manualAssignmentTitle: 'Manual Assignment',
+    noAutoMatchFound: 'No auto-match found. Please assign manually.',
+    noEmployeesAvailable: 'No employees available',
     bulkTitle: 'Bulk Upload',
     bulkDesc: 'Upload a ZIP file containing PDF/image documents. Files are matched to employees by filename (SURNAME_NAME or unique ID).',
     bulkSelect: 'Select ZIP file (max 50MB)',

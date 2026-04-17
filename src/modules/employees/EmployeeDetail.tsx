@@ -779,20 +779,22 @@ export function EmployeeDetail() {
         >
           {t('common.overview', 'Overview')}
         </button>
-        <button
-          onClick={() => setActiveTab('documents')}
-          style={{
-            padding: '12px 4px', fontSize: '14px', fontWeight: 700,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: activeTab === 'documents' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'documents' ? '3px solid var(--primary)' : '3px solid transparent',
-            fontFamily: 'var(--font-display)', transition: 'all 0.2s ease',
-            textTransform: 'uppercase', letterSpacing: '0.04em',
-            display: 'flex', alignItems: 'center', gap: '8px'
-          }}
-        >
-          <IconFile /> {t('documents.title')}
-        </button>
+        {employee.role !== 'admin' && (
+          <button
+            onClick={() => setActiveTab('documents')}
+            style={{
+              padding: '12px 4px', fontSize: '14px', fontWeight: 700,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: activeTab === 'documents' ? 'var(--primary)' : 'var(--text-muted)',
+              borderBottom: activeTab === 'documents' ? '3px solid var(--primary)' : '3px solid transparent',
+              fontFamily: 'var(--font-display)', transition: 'all 0.2s ease',
+              textTransform: 'uppercase', letterSpacing: '0.04em',
+              display: 'flex', alignItems: 'center', gap: '8px'
+            }}
+          >
+            <IconFile /> {t('documents.title')}
+          </button>
+        )}
       </div>
 
       {activeTab === 'overview' ? (
