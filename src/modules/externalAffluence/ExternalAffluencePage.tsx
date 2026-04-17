@@ -23,11 +23,13 @@ import {
   ExternalDepositoRow,
   ExternalIngressiResponse,
   ExternalStoreMapping,
+  ExternalTableDataResponse,
   ExternalTableCatalogItem,
   getExternalAffluencePreview,
   getExternalCatalog,
   getExternalIngressi,
   getExternalOverview,
+  getExternalTableData,
   listExternalDepositi,
   listExternalMappings,
   syncExternalAffluence,
@@ -46,7 +48,7 @@ type WriterRole = typeof WRITER_ROLES[number];
 
 type PanelKey = 'companies' | 'stores' | 'employees' | 'internalDb' | 'externalDb';
 
-const DICTIONARY_TRANSLATIONS_STORAGE_KEY = 'external_affluence_dictionary_en_fields_v1';
+const DICTIONARY_TRANSLATIONS_STORAGE_KEY = 'external_affluence_dictionary_en_fields_v2';
 
 const FLAG_IT = () => (
   <svg width="18" height="13" viewBox="0 0 18 13" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ borderRadius: 2, flexShrink: 0 }}>
@@ -66,35 +68,174 @@ const FLAG_EN = () => (
   </svg>
 );
 
+const TABLE_NAME_TRANSLATIONS: Record<string, string> = {
+  depositi: 'Stores Registry',
+  ingressi: 'Daily Foot Traffic',
+  artmaster: 'Products Master',
+  chiusure: 'Store Closures',
+};
+
+const TABLE_FIELD_TRANSLATIONS: Record<string, Record<string, string>> = {
+  depositi: {
+    coddep: 'external_store_code',
+    deposito: 'store_name',
+    user: 'source_user',
+    listino: 'price_list',
+    azienda: 'company_name',
+    indirizzo: 'store_address',
+    cap: 'postal_code',
+    citta: 'city',
+    provincia: 'province',
+    regione: 'region',
+    nazione: 'country',
+    telefono: 'phone',
+    email: 'email',
+    gruppo: 'group_name',
+    tipo: 'store_type',
+    zona: 'area',
+    attivo: 'is_active',
+    data_apertura: 'opening_date',
+    data_chiusura: 'closing_date',
+    orario_apertura: 'opening_time',
+    orario_chiusura: 'closing_time',
+    codice_fiscale: 'tax_code',
+    piva: 'vat_number',
+  },
+  ingressi: {
+    id: 'row_id',
+    deposito: 'external_store_code',
+    data: 'date',
+    valore: 'visitors',
+    ingressi: 'visitors',
+    uscite: 'exits',
+    utente: 'source_user',
+    user: 'source_user',
+    ora: 'hour',
+    fascia: 'time_slot',
+    giorno: 'day',
+    settimana: 'iso_week',
+    mese: 'month',
+    anno: 'year',
+    promozione: 'promotion_flag',
+    evento: 'event_name',
+    note: 'notes',
+    totale: 'total',
+  },
+  artmaster: {
+    codart: 'article_code',
+    descart: 'article_description',
+    articolo: 'article_name',
+    desart: 'article_description',
+    descrizione: 'article_description',
+    famiglia: 'family',
+    sottofamiglia: 'subfamily',
+    reparto: 'department',
+    sottoreparto: 'subdepartment',
+    linea: 'line',
+    marca: 'brand',
+    stagione: 'season',
+    colore: 'color',
+    taglia: 'size',
+    fornitore: 'supplier',
+    prezzo: 'price',
+    prezzo_lordo: 'gross_price',
+    prezzo_netto: 'net_price',
+    iva: 'vat_rate',
+    barcode: 'barcode',
+    ean: 'ean',
+    um: 'unit_of_measure',
+    categoria: 'category',
+    sottocategoria: 'subcategory',
+    modello: 'model',
+    model: 'model',
+    target: 'target',
+    gender: 'gender',
+    attivo: 'is_active',
+    note: 'notes',
+  },
+  chiusure: {
+    id: 'row_id',
+    data: 'date',
+    deposito: 'external_store_code',
+    coddep: 'external_store_code',
+    tipopagamento: 'payment_type',
+    importo: 'amount',
+    user: 'source_user',
+    chiuso: 'is_closed',
+    chiusura: 'closure_flag',
+    causale: 'reason',
+    motivo: 'reason',
+    tipo: 'closure_type',
+    stato: 'status',
+    note: 'notes',
+    ora_apertura: 'opening_time',
+    ora_chiusura: 'closing_time',
+    apertura: 'opening_time',
+    chiusura_da: 'closure_start',
+    chiusura_a: 'closure_end',
+    giorno: 'day',
+    settimana: 'iso_week',
+    mese: 'month',
+    anno: 'year',
+    festivo: 'holiday_flag',
+    straordinario: 'exceptional_closure',
+  },
+};
+
 const WHOLE_FIELD_TRANSLATIONS: Record<string, string> = {
   coddep: 'external_store_code',
-  deposito: 'store',
-  azienda: 'company',
-  valore: 'value',
+  deposito: 'store_name',
+  azienda: 'company_name',
+  valore: 'visitors',
   data: 'date',
-  utente: 'user',
+  utente: 'source_user',
+  user: 'source_user',
+  codart: 'article_code',
+  descart: 'article_description',
+  desart: 'article_description',
+  listino: 'price_list',
+  codfor: 'supplier_code',
+  colli: 'packages',
+  costo: 'cost',
+  codsam: 'sample_code',
+  tipopagamento: 'payment_type',
+  importo: 'amount',
 };
 
 const FIELD_TOKEN_TRANSLATIONS: Record<string, string> = {
   id: 'id',
   codice: 'code',
   cod: 'code',
+  coddep: 'external_store_code',
+  codart: 'article_code',
+  articolo: 'article',
   nome: 'name',
   cognome: 'surname',
   azienda: 'company',
   gruppo: 'group',
   negozio: 'store',
   deposito: 'store',
+  indirizzo: 'address',
+  cap: 'postal_code',
+  citta: 'city',
+  provincia: 'province',
+  regione: 'region',
+  nazione: 'country',
+  telefono: 'phone',
   data: 'date',
   ora: 'time',
+  orario: 'time',
   inizio: 'start',
   fine: 'end',
   ingresso: 'entry',
+  ingressi: 'visitors',
   uscita: 'exit',
+  uscite: 'exits',
   valore: 'value',
   stato: 'status',
   tipo: 'type',
   descrizione: 'description',
+  des: 'description',
   note: 'notes',
   giorno: 'day',
   settimana: 'week',
@@ -103,8 +244,38 @@ const FIELD_TOKEN_TRANSLATIONS: Record<string, string> = {
   quantita: 'quantity',
   numero: 'number',
   tot: 'total',
+  totale: 'total',
   utente: 'user',
   user: 'user',
+  attivo: 'active',
+  chiuso: 'closed',
+  chiusura: 'closure',
+  apertura: 'opening',
+  causale: 'reason',
+  motivo: 'reason',
+  reparto: 'department',
+  sotto: 'sub',
+  famiglia: 'family',
+  marca: 'brand',
+  stagione: 'season',
+  colore: 'color',
+  taglia: 'size',
+  fornitore: 'supplier',
+  prezzo: 'price',
+  listino: 'price_list',
+  codfor: 'supplier_code',
+  colli: 'packages',
+  costo: 'cost',
+  codsam: 'sample_code',
+  pagamento: 'payment',
+  importo: 'amount',
+  netto: 'net',
+  lordo: 'gross',
+  iva: 'vat',
+  ean: 'ean',
+  barcode: 'barcode',
+  festivo: 'holiday',
+  straordinario: 'exceptional',
 };
 
 function loadDictionaryTranslations(): Record<string, string> {
@@ -128,9 +299,15 @@ function persistDictionaryTranslations(map: Record<string, string>): void {
   }
 }
 
-function autoTranslateFieldToEnglish(rawField: string): string {
+function autoTranslateFieldToEnglish(rawField: string, tableName?: string): string {
   const lowered = rawField.trim().toLowerCase();
   if (!lowered) return rawField;
+
+  const loweredTable = (tableName ?? '').trim().toLowerCase();
+  const tableMap = TABLE_FIELD_TRANSLATIONS[loweredTable];
+  if (tableMap?.[lowered]) {
+    return tableMap[lowered];
+  }
 
   if (WHOLE_FIELD_TRANSLATIONS[lowered]) {
     return WHOLE_FIELD_TRANSLATIONS[lowered];
@@ -248,6 +425,7 @@ const EN = {
   minMax: 'Min - Max',
   date: 'Date',
   visitors: 'Visitors',
+  trafficRawFields: 'Raw fields from INGRESSI',
   noTrafficRows: 'No traffic rows found for selected range.',
 
   step3Title: '3) Affluence Preview and Recommendation',
@@ -291,6 +469,11 @@ const EN = {
   enField: 'English label',
   fieldType: 'Type',
   fieldDescription: 'Description',
+  fieldsView: 'Fields',
+  dataView: 'Data',
+  loadingTableData: 'Loading table data...',
+  noTableData: 'No table data available for this table.',
+  tableDataLoadError: 'Unable to load table data.',
 
   stepError: 'Step error',
 };
@@ -394,6 +577,7 @@ const IT = {
   minMax: 'Min - Max',
   date: 'Data',
   visitors: 'Visitatori',
+  trafficRawFields: 'Campi grezzi da INGRESSI',
   noTrafficRows: 'Nessun record traffico nel periodo selezionato.',
 
   step3Title: '3) Anteprima Affluenza e Raccomandazioni',
@@ -437,6 +621,11 @@ const IT = {
   enField: 'Etichetta inglese',
   fieldType: 'Tipo',
   fieldDescription: 'Descrizione',
+  fieldsView: 'Campi',
+  dataView: 'Dati',
+  loadingTableData: 'Caricamento dati tabella...',
+  noTableData: 'Nessun dato disponibile per questa tabella.',
+  tableDataLoadError: 'Impossibile caricare i dati tabella.',
 
   stepError: 'Errore step',
 };
@@ -483,6 +672,46 @@ function formatDateOnly(value: string | null | undefined): string {
   return parsed.toLocaleDateString();
 }
 
+function normalizeDateCellToIso(value: string | number | boolean | null | undefined): string | null {
+  if (value == null) return null;
+  if (typeof value === 'boolean') return null;
+
+  const asString = String(value).trim();
+  if (!asString) return null;
+
+  const directMatch = asString.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (directMatch) {
+    return directMatch[1];
+  }
+
+  const parsed = new Date(asString);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const y = parsed.getUTCFullYear();
+  const m = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(parsed.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatDynamicCell(value: string | number | boolean | null | undefined, columnName: string): string {
+  if (value == null || value === '') return '-';
+
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value.toLocaleString() : '-';
+  }
+
+  const normalizedColumn = columnName.toLowerCase();
+  if (normalizedColumn.includes('data') || normalizedColumn.includes('date')) {
+    return formatDateOnly(value);
+  }
+
+  return String(value);
+}
+
 function formatOwnerDisplayName(companyProfile: Company | null | undefined): string {
   if (!companyProfile) return '-';
   const fullName = `${companyProfile.ownerName ?? ''} ${companyProfile.ownerSurname ?? ''}`.trim();
@@ -492,6 +721,15 @@ function formatOwnerDisplayName(companyProfile: Company | null | undefined): str
 
 function toMonthKey(dateValue: string): string {
   return dateValue.slice(0, 7);
+}
+
+function normalizeFieldTranslationKey(fieldName: string): string {
+  return (fieldName ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 function formatMonthKey(monthKey: string, isItalian: boolean): string {
@@ -574,8 +812,42 @@ export default function ExternalAffluencePage() {
   const isItalian = i18n.language.startsWith('it');
   const tx = isItalian ? IT : EN;
   const canWrite = Boolean(user && WRITER_ROLES.includes(user.role as WriterRole));
+  const tEn = useMemo(() => i18n.getFixedT('en'), [i18n]);
+  const tIt = useMemo(() => i18n.getFixedT('it'), [i18n]);
+
+  const getLocaleFieldLabel = (
+    tableName: string,
+    fieldName: string,
+    lang: 'en' | 'it',
+  ): string | null => {
+    const normalizedTable = (tableName ?? '').trim().toLowerCase();
+    const normalizedField = normalizeFieldTranslationKey(fieldName);
+    if (!normalizedTable || !normalizedField) return null;
+
+    const key = `externalAffluenceFields.${normalizedTable}.${normalizedField}`;
+    const translator = lang === 'en' ? tEn : tIt;
+    const label = translator(key, { defaultValue: '' }).trim();
+    return label || null;
+  };
+
+  const getDisplayFieldLabel = (tableName: string, fieldName: string): string => {
+    const currentLang: 'en' | 'it' = isItalian ? 'it' : 'en';
+    const localized = getLocaleFieldLabel(tableName, fieldName, currentLang);
+    if (localized) return localized;
+
+    if (!isItalian) {
+      return autoTranslateFieldToEnglish(fieldName, tableName);
+    }
+
+    return fieldName;
+  };
+
   const [dictionaryTranslations, setDictionaryTranslations] = useState<Record<string, string>>(() => loadDictionaryTranslations());
   const [openDictionaryTables, setOpenDictionaryTables] = useState<string[]>([]);
+  const [dictionaryViewByTable, setDictionaryViewByTable] = useState<Record<string, 'fields' | 'data'>>({});
+  const [dictionaryDataByTable, setDictionaryDataByTable] = useState<Record<string, ExternalTableDataResponse>>({});
+  const [dictionaryDataLoadingByTable, setDictionaryDataLoadingByTable] = useState<Record<string, boolean>>({});
+  const [dictionaryDataErrorByTable, setDictionaryDataErrorByTable] = useState<Record<string, string | null>>({});
 
   const [overview, setOverview] = useState<ExternalDbOverview | null>(null);
   const [catalog, setCatalog] = useState<ExternalTableCatalogItem[]>([]);
@@ -761,6 +1033,38 @@ export default function ExternalAffluencePage() {
     return trafficRowsBySelectedMonth;
   }, [trafficData, selectedTrafficMonth, trafficRowsBySelectedMonth]);
 
+  const trafficDetailDateColumn = useMemo(() => {
+    if (!trafficData || trafficData.detailColumns.length === 0) return null;
+    const preferred = ['data', 'date', 'giorno', 'dt'];
+    const loweredMap = new Map<string, string>();
+    for (const column of trafficData.detailColumns) {
+      loweredMap.set(column.toLowerCase(), column);
+    }
+    for (const key of preferred) {
+      const found = loweredMap.get(key);
+      if (found) return found;
+    }
+    const fallback = trafficData.detailColumns.find((column) => {
+      const lowered = column.toLowerCase();
+      return lowered.includes('data') || lowered.includes('date');
+    });
+    return fallback ?? null;
+  }, [trafficData]);
+
+  const trafficDetailRowsVisible = useMemo(() => {
+    if (!trafficData) return [] as ExternalIngressiResponse['detailRows'];
+    if (!selectedTrafficMonth || !trafficDetailDateColumn) {
+      return trafficData.detailRows;
+    }
+
+    return trafficData.detailRows.filter((row) => {
+      const rawDate = row[trafficDetailDateColumn];
+      const normalizedDate = normalizeDateCellToIso(rawDate);
+      if (!normalizedDate) return true;
+      return toMonthKey(normalizedDate) === selectedTrafficMonth;
+    });
+  }, [trafficData, selectedTrafficMonth, trafficDetailDateColumn]);
+
   const previewRowsSorted = useMemo(() => {
     if (!previewData) return [] as ExternalAffluencePreviewResponse['recommendations'];
     return [...previewData.recommendations].sort((a, b) => {
@@ -807,20 +1111,29 @@ export default function ExternalAffluencePage() {
         description: string;
       }>;
     }> = (overview?.externalTableDetails ?? []).map((table) => {
-      const match = catalogByTable.get(table.tableName.toLowerCase());
+      const loweredTableName = table.tableName.toLowerCase();
+      const match = catalogByTable.get(loweredTableName);
+      const tableFieldTranslations = TABLE_FIELD_TRANSLATIONS[loweredTableName];
       const matchFieldMap = new Map((match?.columns ?? []).map((col) => [col.field.toLowerCase(), col]));
 
       return {
         tableName: table.tableName,
-        englishName: match?.englishName ?? table.tableName,
-        used: usedNames.has(table.tableName.toLowerCase()),
+        englishName: match?.englishName ?? TABLE_NAME_TRANSLATIONS[loweredTableName] ?? table.tableName,
+        used: usedNames.has(loweredTableName),
         rowEstimate: table.rowEstimate,
         totalSizePretty: table.totalSizePretty,
         fieldCount: table.columns.length,
         columns: table.columns.map((column) => {
-          const known = matchFieldMap.get(column.columnName.toLowerCase());
-          const translationKey = `${table.tableName.toLowerCase()}.${column.columnName.toLowerCase()}`;
-          const fallbackEnField = dictionaryTranslations[translationKey] ?? autoTranslateFieldToEnglish(column.columnName);
+          const loweredColumn = column.columnName.toLowerCase();
+          const normalizedColumn = normalizeFieldTranslationKey(column.columnName);
+          const known = matchFieldMap.get(loweredColumn);
+          const translationKey = `${table.tableName.toLowerCase()}.${normalizedColumn}`;
+          const localeEnField = getLocaleFieldLabel(table.tableName, column.columnName, 'en');
+          const forcedEnField = tableFieldTranslations?.[loweredColumn] ?? tableFieldTranslations?.[normalizedColumn];
+          const fallbackEnField = forcedEnField
+            ?? localeEnField
+            ?? dictionaryTranslations[translationKey]
+            ?? autoTranslateFieldToEnglish(column.columnName, table.tableName);
           return {
             itField: column.columnName,
             enField: known?.englishLabel ?? fallbackEnField,
@@ -843,7 +1156,7 @@ export default function ExternalAffluencePage() {
         fieldCount: table.columns.length,
         columns: table.columns.map((column) => ({
           itField: column.field,
-          enField: column.englishLabel,
+          enField: getLocaleFieldLabel(table.table, column.field, 'en') ?? column.englishLabel,
           type: column.type,
           description: column.description,
         })),
@@ -854,7 +1167,7 @@ export default function ExternalAffluencePage() {
       if (a.used !== b.used) return a.used ? -1 : 1;
       return a.tableName.localeCompare(b.tableName);
     });
-  }, [catalog, dictionaryTranslations, overview]);
+  }, [catalog, dictionaryTranslations, overview, tEn]);
 
   useEffect(() => {
     if (!overview?.externalTableDetails || overview.externalTableDetails.length === 0) return;
@@ -866,15 +1179,35 @@ export default function ExternalAffluencePage() {
 
     const additions: Record<string, string> = {};
     for (const table of overview.externalTableDetails) {
-      const match = catalogByTable.get(table.tableName.toLowerCase());
+      const loweredTableName = table.tableName.toLowerCase();
+      const match = catalogByTable.get(loweredTableName);
+      const forcedTranslations = TABLE_FIELD_TRANSLATIONS[loweredTableName];
       const knownFields = new Set((match?.columns ?? []).map((column) => column.field.toLowerCase()));
 
       for (const column of table.columns) {
         const loweredColumn = column.columnName.toLowerCase();
+        const normalizedColumn = normalizeFieldTranslationKey(column.columnName);
+        const key = `${table.tableName.toLowerCase()}.${normalizedColumn}`;
+
+        const localeEnField = getLocaleFieldLabel(table.tableName, column.columnName, 'en');
+        if (localeEnField) {
+          if (dictionaryTranslations[key] !== localeEnField) {
+            additions[key] = localeEnField;
+          }
+          continue;
+        }
+
+        const forcedTranslation = forcedTranslations?.[loweredColumn] ?? forcedTranslations?.[normalizedColumn];
+        if (forcedTranslation) {
+          if (dictionaryTranslations[key] !== forcedTranslation) {
+            additions[key] = forcedTranslation;
+          }
+          continue;
+        }
+
         if (knownFields.has(loweredColumn)) continue;
-        const key = `${table.tableName.toLowerCase()}.${loweredColumn}`;
         if (dictionaryTranslations[key]) continue;
-        additions[key] = autoTranslateFieldToEnglish(column.columnName);
+        additions[key] = autoTranslateFieldToEnglish(column.columnName, table.tableName);
       }
     }
 
@@ -886,7 +1219,7 @@ export default function ExternalAffluencePage() {
     };
     setDictionaryTranslations(merged);
     persistDictionaryTranslations(merged);
-  }, [catalog, dictionaryTranslations, overview]);
+  }, [catalog, dictionaryTranslations, overview, tEn]);
 
   useEffect(() => {
     if (dictionaryTables.length === 0) {
@@ -907,6 +1240,55 @@ export default function ExternalAffluencePage() {
         ? prev.filter((name) => name !== tableName)
         : [...prev, tableName]
     ));
+  };
+
+  const loadDictionaryTableData = async (tableName: string) => {
+    if (dictionaryDataLoadingByTable[tableName]) return;
+
+    setDictionaryDataLoadingByTable((prev) => ({
+      ...prev,
+      [tableName]: true,
+    }));
+    setDictionaryDataErrorByTable((prev) => ({
+      ...prev,
+      [tableName]: null,
+    }));
+
+    try {
+      const data = await getExternalTableData({
+        tableName,
+        limit: 80,
+        targetCompanyId: selectedCompanyIdNum ?? targetCompanyId ?? undefined,
+      });
+
+      setDictionaryDataByTable((prev) => ({
+        ...prev,
+        [tableName]: data,
+      }));
+    } catch (err) {
+      const message = parseApiError(err);
+      setDictionaryDataErrorByTable((prev) => ({
+        ...prev,
+        [tableName]: message,
+      }));
+      showToast(message || tx.tableDataLoadError, 'error');
+    } finally {
+      setDictionaryDataLoadingByTable((prev) => ({
+        ...prev,
+        [tableName]: false,
+      }));
+    }
+  };
+
+  const setDictionaryTableView = (tableName: string, view: 'fields' | 'data') => {
+    setDictionaryViewByTable((prev) => ({
+      ...prev,
+      [tableName]: view,
+    }));
+
+    if (view === 'data' && !dictionaryDataByTable[tableName] && !dictionaryDataLoadingByTable[tableName]) {
+      void loadDictionaryTableData(tableName);
+    }
   };
 
   const openPanel = (key: PanelKey) => {
@@ -2209,25 +2591,70 @@ export default function ExternalAffluencePage() {
             </div>
 
             <div style={{ ...panelShellStyle, background: '#fff' }}>
+              <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-light)', fontSize: 11, color: 'var(--text-muted)' }}>
+                {tx.trafficRawFields}
+              </div>
               <div style={{ maxHeight: 260, overflow: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
-                      <th style={{ textAlign: 'left', padding: 9, fontSize: 12 }}>{tx.date}</th>
-                      <th style={{ textAlign: 'left', padding: 9, fontSize: 12 }}>{tx.externalCode}</th>
-                      <th style={{ textAlign: 'left', padding: 9, fontSize: 12 }}>{tx.visitors}</th>
-                    </tr>
+                    {trafficData.detailColumns.length > 0 ? (
+                      <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
+                        {trafficData.detailColumns.map((column) => (
+                          <th key={`ingressi-col-${column}`} style={{ textAlign: 'left', padding: 9, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {getDisplayFieldLabel('ingressi', column)}
+                          </th>
+                        ))}
+                      </tr>
+                    ) : (
+                      <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
+                        <th style={{ textAlign: 'left', padding: 9, fontSize: 12 }}>{tx.date}</th>
+                        <th style={{ textAlign: 'left', padding: 9, fontSize: 12 }}>{tx.externalCode}</th>
+                        <th style={{ textAlign: 'left', padding: 9, fontSize: 12 }}>{tx.visitors}</th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody>
-                    {trafficRowsVisible.map((row) => (
-                      <tr key={`${row.externalStoreCode}-${row.date}`} style={{ borderTop: '1px solid var(--border-light)' }}>
-                        <td style={{ padding: 9, fontSize: 13 }}>{row.date}</td>
-                        <td style={{ padding: 9, fontSize: 13, fontFamily: 'monospace' }}>{row.externalStoreCode}</td>
-                        <td style={{ padding: 9, fontSize: 13 }}>{row.visitors.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                    {trafficRowsVisible.length === 0 && (
-                      <tr><td colSpan={3} style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTrafficRows}</td></tr>
+                    {trafficData.detailColumns.length > 0 ? (
+                      <>
+                        {trafficDetailRowsVisible.map((row, rowIndex) => (
+                          <tr key={`ingressi-detail-${rowIndex}`} style={{ borderTop: '1px solid var(--border-light)' }}>
+                            {trafficData.detailColumns.map((column) => (
+                              <td
+                                key={`ingressi-detail-${rowIndex}-${column}`}
+                                style={{
+                                  padding: 9,
+                                  fontSize: 12,
+                                  color: 'var(--text-secondary)',
+                                  fontFamily: /(^id$|cod|code|ean|barcode)/i.test(column) ? 'monospace' : undefined,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {formatDynamicCell(row[column], column)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                        {trafficDetailRowsVisible.length === 0 && (
+                          <tr>
+                            <td colSpan={Math.max(1, trafficData.detailColumns.length)} style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>
+                              {tx.noTrafficRows}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {trafficRowsVisible.map((row) => (
+                          <tr key={`${row.externalStoreCode}-${row.date}`} style={{ borderTop: '1px solid var(--border-light)' }}>
+                            <td style={{ padding: 9, fontSize: 13 }}>{row.date}</td>
+                            <td style={{ padding: 9, fontSize: 13, fontFamily: 'monospace' }}>{row.externalStoreCode}</td>
+                            <td style={{ padding: 9, fontSize: 13 }}>{row.visitors.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                        {trafficRowsVisible.length === 0 && (
+                          <tr><td colSpan={3} style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTrafficRows}</td></tr>
+                        )}
+                      </>
                     )}
                   </tbody>
                 </table>
@@ -2390,76 +2817,156 @@ export default function ExternalAffluencePage() {
         <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.dictionaryTitle}</h3>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{tx.dictionaryHint}</p>
 
-        {dictionaryTables.map((table) => (
-          <div key={table.tableName} style={{ ...panelShellStyle, background: '#fff' }}>
-            <button
-              type="button"
-              onClick={() => toggleDictionaryTable(table.tableName)}
-              style={{
-                width: '100%',
-                border: 'none',
-                borderBottom: '1px solid var(--border)',
-                background: '#fff',
-                cursor: 'pointer',
-                textAlign: 'left',
-                padding: '10px 12px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <div style={{ display: 'grid', gap: 5 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>
-                    {table.tableName.toUpperCase()} - {table.englishName}
-                  </span>
-                  <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 8 }}>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colRows}: {table.rowEstimate ?? '-'}</span>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colFields}: {table.fieldCount}</span>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colSize}: {table.totalSizePretty ?? '-'}</span>
-                  </span>
-                </div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  {table.used && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: 'rgba(22,163,74,0.12)', color: '#166534', fontSize: 10, fontWeight: 700 }}>
-                      <CheckCircle2 size={12} /> {tx.usedTag}
+        {dictionaryTables.map((table) => {
+          const tableView = dictionaryViewByTable[table.tableName] ?? 'fields';
+          const tableData = dictionaryDataByTable[table.tableName];
+          const tableDataLoading = Boolean(dictionaryDataLoadingByTable[table.tableName]);
+          const tableDataError = dictionaryDataErrorByTable[table.tableName];
+
+          return (
+            <div key={table.tableName} style={{ ...panelShellStyle, background: '#fff' }}>
+              <button
+                type="button"
+                onClick={() => toggleDictionaryTable(table.tableName)}
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  borderBottom: '1px solid var(--border)',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>
+                      {table.tableName.toUpperCase()} - {table.englishName}
                     </span>
-                  )}
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{openDictionaryTables.includes(table.tableName) ? '▲' : '▼'}</span>
+                    <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 8 }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colRows}: {table.rowEstimate ?? '-'}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colFields}: {table.fieldCount}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colSize}: {table.totalSizePretty ?? '-'}</span>
+                    </span>
+                  </div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    {table.used && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: 'rgba(22,163,74,0.12)', color: '#166534', fontSize: 10, fontWeight: 700 }}>
+                        <CheckCircle2 size={12} /> {tx.usedTag}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{openDictionaryTables.includes(table.tableName) ? '▲' : '▼'}</span>
+                  </div>
                 </div>
-              </div>
-            </button>
-            {openDictionaryTables.includes(table.tableName) && (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
-                    <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        <FLAG_IT /> {tx.itField}
-                      </span>
-                    </th>
-                    <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        <FLAG_EN /> {tx.enField}
-                      </span>
-                    </th>
-                    <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>{tx.fieldType}</th>
-                    <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>{tx.fieldDescription}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {table.columns.map((column) => (
-                    <tr key={`${table.tableName}-${column.itField}`} style={{ borderTop: '1px solid var(--border-light)' }}>
-                      <td style={{ ...tinyCell, padding: 8, fontFamily: 'monospace' }}>{column.itField}</td>
-                      <td style={{ ...tinyCell, padding: 8, fontFamily: 'monospace' }}>{column.enField}</td>
-                      <td style={{ ...tinyCell, padding: 8 }}>{column.type}</td>
-                      <td style={{ ...tinyCell, padding: 8 }}>{column.description}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              </button>
+
+              {openDictionaryTables.includes(table.tableName) && (
+                <>
+                  <div style={{ display: 'flex', gap: 8, padding: '8px 10px', borderBottom: '1px solid var(--border-light)' }}>
+                    <button
+                      type="button"
+                      className={tableView === 'fields' ? 'btn btn-primary' : 'btn btn-secondary'}
+                      onClick={() => setDictionaryTableView(table.tableName, 'fields')}
+                      style={{ padding: '4px 10px', fontSize: 11 }}
+                    >
+                      {tx.fieldsView}
+                    </button>
+                    <button
+                      type="button"
+                      className={tableView === 'data' ? 'btn btn-primary' : 'btn btn-secondary'}
+                      onClick={() => setDictionaryTableView(table.tableName, 'data')}
+                      style={{ padding: '4px 10px', fontSize: 11 }}
+                    >
+                      {tx.dataView}
+                    </button>
+                  </div>
+
+                  {tableView === 'fields' ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
+                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                <FLAG_IT /> {tx.itField}
+                              </span>
+                            </th>
+                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                <FLAG_EN /> {tx.enField}
+                              </span>
+                            </th>
+                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>{tx.fieldType}</th>
+                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>{tx.fieldDescription}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {table.columns.map((column) => (
+                            <tr key={`${table.tableName}-${column.itField}`} style={{ borderTop: '1px solid var(--border-light)' }}>
+                              <td style={{ ...tinyCell, padding: 8, fontFamily: 'monospace' }}>{column.itField}</td>
+                              <td style={{ ...tinyCell, padding: 8, fontFamily: 'monospace' }}>{column.enField}</td>
+                              <td style={{ ...tinyCell, padding: 8 }}>{column.type}</td>
+                              <td style={{ ...tinyCell, padding: 8 }}>{column.description}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto', maxHeight: 320 }}>
+                      {tableDataLoading && (
+                        <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.loadingTableData}</div>
+                      )}
+
+                      {!tableDataLoading && tableDataError && (
+                        <div style={{ margin: 10, border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 8, padding: 8, fontSize: 12 }}>
+                          {tableDataError}
+                        </div>
+                      )}
+
+                      {!tableDataLoading && !tableDataError && (!tableData || tableData.columns.length === 0 || tableData.rows.length === 0) && (
+                        <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTableData}</div>
+                      )}
+
+                      {!tableDataLoading && !tableDataError && tableData && tableData.columns.length > 0 && tableData.rows.length > 0 && (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
+                              {tableData.columns.map((column) => (
+                                <th key={`${table.tableName}-data-head-${column}`} style={{ textAlign: 'left', padding: 8, fontSize: 11, whiteSpace: 'nowrap' }}>
+                                  {getDisplayFieldLabel(table.tableName, column)}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tableData.rows.map((row, rowIndex) => (
+                              <tr key={`${table.tableName}-data-row-${rowIndex}`} style={{ borderTop: '1px solid var(--border-light)' }}>
+                                {tableData.columns.map((column) => (
+                                  <td
+                                    key={`${table.tableName}-data-row-${rowIndex}-${column}`}
+                                    style={{
+                                      ...tinyCell,
+                                      padding: 8,
+                                      fontFamily: /(^id$|cod|code|ean|barcode)/i.test(column) ? 'monospace' : undefined,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {formatDynamicCell(row[column], column)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
         {dictionaryTables.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTables}</div>
         )}
