@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CheckCircle2,
   Building2,
   Database,
   Eye,
@@ -50,23 +49,39 @@ type PanelKey = 'companies' | 'stores' | 'employees' | 'internalDb' | 'externalD
 
 const DICTIONARY_TRANSLATIONS_STORAGE_KEY = 'external_affluence_dictionary_en_fields_v2';
 
-const FLAG_IT = () => (
-  <svg width="18" height="13" viewBox="0 0 18 13" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ borderRadius: 2, flexShrink: 0 }}>
-    <rect width="6" height="13" fill="#009246" />
-    <rect x="6" width="6" height="13" fill="#FFFFFF" />
-    <rect x="12" width="6" height="13" fill="#CE2B37" />
-  </svg>
-);
+type DictionaryTableModel = {
+  tableName: string;
+  englishName: string;
+  used: boolean;
+  rowEstimate: number | null;
+  totalSizePretty: string | null;
+  fieldCount: number;
+  columns: Array<{
+    itField: string;
+    enField: string;
+    type: string;
+    description: string;
+  }>;
+};
 
-const FLAG_EN = () => (
-  <svg width="18" height="13" viewBox="0 0 18 13" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ borderRadius: 2, flexShrink: 0 }}>
-    <rect width="18" height="13" fill="#012169" />
-    <path d="M0 0L18 13M18 0L0 13" stroke="white" strokeWidth="2.5" />
-    <path d="M0 0L18 13M18 0L0 13" stroke="#C8102E" strokeWidth="1.5" />
-    <path d="M9 0V13M0 6.5H18" stroke="white" strokeWidth="3.5" />
-    <path d="M9 0V13M0 6.5H18" stroke="#C8102E" strokeWidth="2" />
-  </svg>
-);
+type DictionaryViewByTable = Record<string, 'fields' | 'data'>;
+
+type LocalDictionaryPanelProps = {
+  tx: Record<string, string>;
+  sectionStyle: React.CSSProperties;
+  panelShellStyle: React.CSSProperties;
+  tinyCell: React.CSSProperties;
+  dictionaryTables: DictionaryTableModel[];
+  openDictionaryTables: string[];
+  toggleDictionaryTable: (tableName: string) => void;
+  dictionaryViewByTable: DictionaryViewByTable;
+  setDictionaryTableView: (tableName: string, view: 'fields' | 'data') => void;
+  dictionaryDataByTable: Record<string, ExternalTableDataResponse>;
+  dictionaryDataLoadingByTable: Record<string, boolean>;
+  dictionaryDataErrorByTable: Record<string, string | null>;
+  getDisplayFieldLabel: (tableName: string, fieldName: string) => string;
+  formatDynamicCell: (value: string | number | boolean | null | undefined, columnName: string) => string;
+};
 
 const TABLE_NAME_TRANSLATIONS: Record<string, string> = {
   depositi: 'Stores Registry',
@@ -338,7 +353,9 @@ const EN = {
   employees: 'Employees',
   internalDb: 'Internal Database',
   externalDb: 'External Database',
+  connecting: 'Connecting...',
   connected: 'Connected',
+  failed: 'Failed',
   disconnected: 'Disconnected',
   configured: 'Configured',
   notConfigured: 'Not configured',
@@ -372,6 +389,7 @@ const EN = {
   noStores: 'No stores available in your scope.',
   noEmployees: 'No employees available in your scope.',
   noTables: 'No table metadata available.',
+  metadataHiddenLive: 'Table metadata is intentionally hidden in live mode.',
 
   step1Title: '1) Local Store and External Store Configuration',
   step1Hint: 'Select local company and store, search external stores, then save integration to local DB.',
@@ -490,7 +508,9 @@ const IT = {
   employees: 'Dipendenti',
   internalDb: 'Database Interno',
   externalDb: 'Database Esterno',
+  connecting: 'Connessione in corso...',
   connected: 'Connesso',
+  failed: 'Fallita',
   disconnected: 'Disconnesso',
   configured: 'Configurato',
   notConfigured: 'Non configurato',
@@ -524,6 +544,7 @@ const IT = {
   noStores: 'Nessun negozio disponibile nel tuo perimetro.',
   noEmployees: 'Nessun dipendente disponibile nel tuo perimetro.',
   noTables: 'Nessun metadato tabella disponibile.',
+  metadataHiddenLive: 'I metadati delle tabelle sono nascosti intenzionalmente in ambiente live.',
 
   step1Title: '1) Configurazione Negozio Locale e Negozio Esterno',
   step1Hint: 'Seleziona azienda e negozio locale, cerca negozio esterno, poi salva integrazione nel DB locale.',
@@ -732,6 +753,11 @@ function normalizeFieldTranslationKey(fieldName: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
+function isLocalHostname(hostname: string): boolean {
+  const host = (hostname ?? '').trim().toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+}
+
 function formatMonthKey(monthKey: string, isItalian: boolean): string {
   const [yy, mm] = monthKey.split('-').map((part) => parseInt(part, 10));
   if (!Number.isFinite(yy) || !Number.isFinite(mm)) return monthKey;
@@ -784,7 +810,40 @@ const tinyCell: React.CSSProperties = {
   verticalAlign: 'top',
 };
 
-function StatusPill({ ok, yes, no }: { ok: boolean; yes: string; no: string }) {
+type ConnectionBadgeStatus = 'connecting' | 'connected' | 'failed';
+
+function StatusPill({
+  status,
+  connecting,
+  connected,
+  failed,
+}: {
+  status: ConnectionBadgeStatus;
+  connecting: string;
+  connected: string;
+  failed: string;
+}) {
+  const palette = status === 'connected'
+    ? {
+      background: 'rgba(22,163,74,0.14)',
+      color: '#166534',
+      border: 'rgba(22,163,74,0.3)',
+      label: connected,
+    }
+    : status === 'connecting'
+      ? {
+        background: 'rgba(245,158,11,0.16)',
+        color: '#92400e',
+        border: 'rgba(245,158,11,0.35)',
+        label: connecting,
+      }
+      : {
+        background: 'rgba(220,38,38,0.12)',
+        color: '#991b1b',
+        border: 'rgba(220,38,38,0.3)',
+        label: failed,
+      };
+
   return (
     <span
       style={{
@@ -794,12 +853,12 @@ function StatusPill({ ok, yes, no }: { ok: boolean; yes: string; no: string }) {
         padding: '3px 8px',
         fontSize: 11,
         fontWeight: 700,
-        background: ok ? 'rgba(22,163,74,0.14)' : 'rgba(220,38,38,0.12)',
-        color: ok ? '#166534' : '#991b1b',
-        border: `1px solid ${ok ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'}`,
+        background: palette.background,
+        color: palette.color,
+        border: `1px solid ${palette.border}`,
       }}
     >
-      {ok ? yes : no}
+      {palette.label}
     </span>
   );
 }
@@ -814,6 +873,10 @@ export default function ExternalAffluencePage() {
   const canWrite = Boolean(user && WRITER_ROLES.includes(user.role as WriterRole));
   const tEn = useMemo(() => i18n.getFixedT('en'), [i18n]);
   const tIt = useMemo(() => i18n.getFixedT('it'), [i18n]);
+  const isLocalRuntime = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return isLocalHostname(window.location.hostname);
+  }, []);
 
   const getLocaleFieldLabel = (
     tableName: string,
@@ -848,6 +911,7 @@ export default function ExternalAffluencePage() {
   const [dictionaryDataByTable, setDictionaryDataByTable] = useState<Record<string, ExternalTableDataResponse>>({});
   const [dictionaryDataLoadingByTable, setDictionaryDataLoadingByTable] = useState<Record<string, boolean>>({});
   const [dictionaryDataErrorByTable, setDictionaryDataErrorByTable] = useState<Record<string, string | null>>({});
+  const [LocalDictionaryPanel, setLocalDictionaryPanel] = useState<React.ComponentType<LocalDictionaryPanelProps> | null>(null);
 
   const [overview, setOverview] = useState<ExternalDbOverview | null>(null);
   const [catalog, setCatalog] = useState<ExternalTableCatalogItem[]>([]);
@@ -1032,6 +1096,16 @@ export default function ExternalAffluencePage() {
     if (!selectedTrafficMonth) return trafficData.rows;
     return trafficRowsBySelectedMonth;
   }, [trafficData, selectedTrafficMonth, trafficRowsBySelectedMonth]);
+
+  const internalConnectionStatus = useMemo<ConnectionBadgeStatus>(() => {
+    if (loadingOverview || !overview) return 'connecting';
+    return overview.connections.internal.ok ? 'connected' : 'failed';
+  }, [loadingOverview, overview]);
+
+  const externalConnectionStatus = useMemo<ConnectionBadgeStatus>(() => {
+    if (loadingOverview || !overview) return 'connecting';
+    return overview.connections.external.ok ? 'connected' : 'failed';
+  }, [loadingOverview, overview]);
 
   const trafficDetailDateColumn = useMemo(() => {
     if (!trafficData || trafficData.detailColumns.length === 0) return null;
@@ -1327,11 +1401,21 @@ export default function ExternalAffluencePage() {
   };
 
   const loadCatalog = async () => {
+    if (!isLocalRuntime) {
+      setCatalog([]);
+      return;
+    }
+
     setLoadingCatalog(true);
     try {
       const rows = await getExternalCatalog(targetCompanyId ?? undefined);
       setCatalog(rows);
     } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        setCatalog([]);
+        return;
+      }
       showToast(parseApiError(err), 'error');
     } finally {
       setLoadingCatalog(false);
@@ -1391,8 +1475,42 @@ export default function ExternalAffluencePage() {
   };
 
   useEffect(() => {
-    void Promise.all([loadOverview(), loadCatalog(), loadCompanyStoreProfiles(), loadMappings(null)]);
-  }, []);
+    if (!isLocalRuntime) {
+      setLocalDictionaryPanel(null);
+      return;
+    }
+
+    const moduleCandidates = [
+      '/src/modules/externalAffluence/local-only/ExternalAffluenceDictionary.local.tsx',
+      '/src/modules/externalAffluence/local-only/ExternalAffluenceDictionary.local',
+    ];
+
+    const tryLoadModule = async () => {
+      for (const modulePath of moduleCandidates) {
+        try {
+          const mod = await import(/* @vite-ignore */ modulePath);
+          const dynamicModule = mod as { default?: React.ComponentType<LocalDictionaryPanelProps> };
+          if (dynamicModule.default) {
+            setLocalDictionaryPanel(() => dynamicModule.default as React.ComponentType<LocalDictionaryPanelProps>);
+            return;
+          }
+        } catch {
+          // Try next candidate path.
+        }
+      }
+      setLocalDictionaryPanel(null);
+    };
+
+    void tryLoadModule();
+  }, [isLocalRuntime]);
+
+  useEffect(() => {
+    const tasks = [loadOverview(), loadCompanyStoreProfiles(), loadMappings(null)] as Promise<unknown>[];
+    if (isLocalRuntime) {
+      tasks.push(loadCatalog());
+    }
+    void Promise.all(tasks);
+  }, [isLocalRuntime]);
 
   useEffect(() => {
     setSelectedStoreId('');
@@ -1444,13 +1562,18 @@ export default function ExternalAffluencePage() {
   }, [companyPickerOpen, storePickerOpen]);
 
   const refreshAll = async () => {
-    await Promise.all([
+    const tasks = [
       loadOverview(),
-      loadCatalog(),
       loadCompanyStoreProfiles(),
       loadMappings(null),
       loadDepositi(externalSearch, selectedCompanyIdNum),
-    ]);
+    ] as Promise<unknown>[];
+
+    if (isLocalRuntime) {
+      tasks.push(loadCatalog());
+    }
+
+    await Promise.all(tasks);
   };
 
   const handleMapStore = async (externalStoreCode: string) => {
@@ -1758,7 +1881,12 @@ export default function ExternalAffluencePage() {
               <div>{tx.engine}: {overview?.databases.internal.engine ?? 'PostgreSQL'}</div>
               <div>{tx.tableCount}: {overview?.databases.internal.tableCount ?? 0}</div>
               <div>{tx.checkedAt}: {formatDateTime(overview?.databases.internal.checkedAt)}</div>
-              <StatusPill ok={overview?.connections.internal.ok === true} yes={tx.connected} no={tx.disconnected} />
+              <StatusPill
+                status={internalConnectionStatus}
+                connecting={tx.connecting}
+                connected={tx.connected}
+                failed={tx.failed}
+              />
             </div>
             <button
               type="button"
@@ -1803,7 +1931,12 @@ export default function ExternalAffluencePage() {
               <div>{tx.engine}: {overview?.databases.external.engine ?? 'MySQL'}</div>
               <div>{tx.tableCount}: {overview?.databases.external.tableCount ?? 0}</div>
               <div>{tx.checkedAt}: {formatDateTime(overview?.databases.external.checkedAt)}</div>
-              <StatusPill ok={overview?.connections.external.ok === true} yes={tx.connected} no={tx.disconnected} />
+              <StatusPill
+                status={externalConnectionStatus}
+                connecting={tx.connecting}
+                connected={tx.connected}
+                failed={tx.failed}
+              />
             </div>
             <button
               type="button"
@@ -1951,7 +2084,7 @@ export default function ExternalAffluencePage() {
               </button>
             </div>
             <div style={{ padding: 10, fontSize: 12, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-light)' }}>
-              {tx.engine}: PostgreSQL | {tx.dbName}: {overview?.databases.internal.databaseName ?? '-'} | {tx.tableCount}: {overview?.databases.internal.tableCount ?? 0} | {tx.checkedAt}: {formatDateTime(overview?.databases.internal.checkedAt)}
+              {tx.engine}: PostgreSQL | {tx.dbName}: {overview?.databases.internal.databaseName ?? '-'} | {tx.tableCount}: {isLocalRuntime ? (overview?.databases.internal.tableCount ?? 0) : 0} | {tx.checkedAt}: {formatDateTime(overview?.databases.internal.checkedAt)}
             </div>
             <div style={{ maxHeight: 270, overflow: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1965,7 +2098,10 @@ export default function ExternalAffluencePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(overview?.localTableDetails ?? []).map((table) => (
+                  {!isLocalRuntime && (
+                    <tr><td colSpan={5} style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.metadataHiddenLive}</td></tr>
+                  )}
+                  {isLocalRuntime && (overview?.localTableDetails ?? []).map((table) => (
                     <tr key={`local-${table.tableName}`} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={{ ...tinyCell, padding: 7, fontFamily: 'monospace' }}>{table.tableName}</td>
                       <td style={{ ...tinyCell, padding: 7 }}>{table.rowEstimate}</td>
@@ -1974,7 +2110,7 @@ export default function ExternalAffluencePage() {
                       <td style={{ ...tinyCell, padding: 7 }}>{table.columns.map((column) => column.columnName).join(', ')}</td>
                     </tr>
                   ))}
-                  {(overview?.localTableDetails ?? []).length === 0 && (
+                  {isLocalRuntime && (overview?.localTableDetails ?? []).length === 0 && (
                     <tr><td colSpan={5} style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTables}</td></tr>
                   )}
                 </tbody>
@@ -1992,7 +2128,7 @@ export default function ExternalAffluencePage() {
               </button>
             </div>
             <div style={{ padding: 10, fontSize: 12, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-light)' }}>
-              {tx.engine}: MySQL | {tx.dbName}: {overview?.databases.external.databaseName ?? '-'} | {tx.tableCount}: {overview?.databases.external.tableCount ?? 0} | {tx.checkedAt}: {formatDateTime(overview?.databases.external.checkedAt)}
+              {tx.engine}: MySQL | {tx.dbName}: {overview?.databases.external.databaseName ?? '-'} | {tx.tableCount}: {isLocalRuntime ? (overview?.databases.external.tableCount ?? 0) : 0} | {tx.checkedAt}: {formatDateTime(overview?.databases.external.checkedAt)}
             </div>
             <div style={{ maxHeight: 270, overflow: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -2006,7 +2142,10 @@ export default function ExternalAffluencePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(overview?.externalTableDetails ?? []).map((table) => (
+                  {!isLocalRuntime && (
+                    <tr><td colSpan={5} style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.metadataHiddenLive}</td></tr>
+                  )}
+                  {isLocalRuntime && (overview?.externalTableDetails ?? []).map((table) => (
                     <tr key={`external-${table.tableName}`} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={{ ...tinyCell, padding: 7, fontFamily: 'monospace' }}>{table.tableName}</td>
                       <td style={{ ...tinyCell, padding: 7 }}>{table.rowEstimate}</td>
@@ -2015,7 +2154,7 @@ export default function ExternalAffluencePage() {
                       <td style={{ ...tinyCell, padding: 7 }}>{table.columns.map((column) => column.columnName).join(', ')}</td>
                     </tr>
                   ))}
-                  {(overview?.externalTableDetails ?? []).length === 0 && (
+                  {isLocalRuntime && (overview?.externalTableDetails ?? []).length === 0 && (
                     <tr><td colSpan={5} style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTables}</td></tr>
                   )}
                 </tbody>
@@ -2813,164 +2952,24 @@ export default function ExternalAffluencePage() {
         )}
       </section>
 
-      <section style={sectionStyle}>
-        <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.dictionaryTitle}</h3>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{tx.dictionaryHint}</p>
-
-        {dictionaryTables.map((table) => {
-          const tableView = dictionaryViewByTable[table.tableName] ?? 'fields';
-          const tableData = dictionaryDataByTable[table.tableName];
-          const tableDataLoading = Boolean(dictionaryDataLoadingByTable[table.tableName]);
-          const tableDataError = dictionaryDataErrorByTable[table.tableName];
-
-          return (
-            <div key={table.tableName} style={{ ...panelShellStyle, background: '#fff' }}>
-              <button
-                type="button"
-                onClick={() => toggleDictionaryTable(table.tableName)}
-                style={{
-                  width: '100%',
-                  border: 'none',
-                  borderBottom: '1px solid var(--border)',
-                  background: '#fff',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  padding: '10px 12px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ display: 'grid', gap: 5 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>
-                      {table.tableName.toUpperCase()} - {table.englishName}
-                    </span>
-                    <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 8 }}>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colRows}: {table.rowEstimate ?? '-'}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colFields}: {table.fieldCount}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.colSize}: {table.totalSizePretty ?? '-'}</span>
-                    </span>
-                  </div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    {table.used && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: 'rgba(22,163,74,0.12)', color: '#166534', fontSize: 10, fontWeight: 700 }}>
-                        <CheckCircle2 size={12} /> {tx.usedTag}
-                      </span>
-                    )}
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{openDictionaryTables.includes(table.tableName) ? '▲' : '▼'}</span>
-                  </div>
-                </div>
-              </button>
-
-              {openDictionaryTables.includes(table.tableName) && (
-                <>
-                  <div style={{ display: 'flex', gap: 8, padding: '8px 10px', borderBottom: '1px solid var(--border-light)' }}>
-                    <button
-                      type="button"
-                      className={tableView === 'fields' ? 'btn btn-primary' : 'btn btn-secondary'}
-                      onClick={() => setDictionaryTableView(table.tableName, 'fields')}
-                      style={{ padding: '4px 10px', fontSize: 11 }}
-                    >
-                      {tx.fieldsView}
-                    </button>
-                    <button
-                      type="button"
-                      className={tableView === 'data' ? 'btn btn-primary' : 'btn btn-secondary'}
-                      onClick={() => setDictionaryTableView(table.tableName, 'data')}
-                      style={{ padding: '4px 10px', fontSize: 11 }}
-                    >
-                      {tx.dataView}
-                    </button>
-                  </div>
-
-                  {tableView === 'fields' ? (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
-                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                <FLAG_IT /> {tx.itField}
-                              </span>
-                            </th>
-                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                <FLAG_EN /> {tx.enField}
-                              </span>
-                            </th>
-                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>{tx.fieldType}</th>
-                            <th style={{ textAlign: 'left', padding: 8, fontSize: 11 }}>{tx.fieldDescription}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {table.columns.map((column) => (
-                            <tr key={`${table.tableName}-${column.itField}`} style={{ borderTop: '1px solid var(--border-light)' }}>
-                              <td style={{ ...tinyCell, padding: 8, fontFamily: 'monospace' }}>{column.itField}</td>
-                              <td style={{ ...tinyCell, padding: 8, fontFamily: 'monospace' }}>{column.enField}</td>
-                              <td style={{ ...tinyCell, padding: 8 }}>{column.type}</td>
-                              <td style={{ ...tinyCell, padding: 8 }}>{column.description}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto', maxHeight: 320 }}>
-                      {tableDataLoading && (
-                        <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.loadingTableData}</div>
-                      )}
-
-                      {!tableDataLoading && tableDataError && (
-                        <div style={{ margin: 10, border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 8, padding: 8, fontSize: 12 }}>
-                          {tableDataError}
-                        </div>
-                      )}
-
-                      {!tableDataLoading && !tableDataError && (!tableData || tableData.columns.length === 0 || tableData.rows.length === 0) && (
-                        <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTableData}</div>
-                      )}
-
-                      {!tableDataLoading && !tableDataError && tableData && tableData.columns.length > 0 && tableData.rows.length > 0 && (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
-                            <tr style={{ background: 'rgba(13,33,55,0.04)' }}>
-                              {tableData.columns.map((column) => (
-                                <th key={`${table.tableName}-data-head-${column}`} style={{ textAlign: 'left', padding: 8, fontSize: 11, whiteSpace: 'nowrap' }}>
-                                  {getDisplayFieldLabel(table.tableName, column)}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tableData.rows.map((row, rowIndex) => (
-                              <tr key={`${table.tableName}-data-row-${rowIndex}`} style={{ borderTop: '1px solid var(--border-light)' }}>
-                                {tableData.columns.map((column) => (
-                                  <td
-                                    key={`${table.tableName}-data-row-${rowIndex}-${column}`}
-                                    style={{
-                                      ...tinyCell,
-                                      padding: 8,
-                                      fontFamily: /(^id$|cod|code|ean|barcode)/i.test(column) ? 'monospace' : undefined,
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {formatDynamicCell(row[column], column)}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
-        {dictionaryTables.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tx.noTables}</div>
-        )}
-      </section>
+      {isLocalRuntime && LocalDictionaryPanel ? (
+        <LocalDictionaryPanel
+          tx={tx}
+          sectionStyle={sectionStyle}
+          panelShellStyle={panelShellStyle}
+          tinyCell={tinyCell}
+          dictionaryTables={dictionaryTables}
+          openDictionaryTables={openDictionaryTables}
+          toggleDictionaryTable={toggleDictionaryTable}
+          dictionaryViewByTable={dictionaryViewByTable}
+          setDictionaryTableView={setDictionaryTableView}
+          dictionaryDataByTable={dictionaryDataByTable}
+          dictionaryDataLoadingByTable={dictionaryDataLoadingByTable}
+          dictionaryDataErrorByTable={dictionaryDataErrorByTable}
+          getDisplayFieldLabel={getDisplayFieldLabel}
+          formatDynamicCell={formatDynamicCell}
+        />
+      ) : null}
 
       {(showLoading || loadingMappings || loadingDepositi) && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tx.loading}</div>
