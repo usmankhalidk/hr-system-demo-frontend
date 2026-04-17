@@ -1,12 +1,13 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Clock3, Moon, Palmtree, Store, Thermometer, Users } from 'lucide-react';
+import { ArrowLeftRight, Clock3, Moon, Palmtree, Store as StoreIcon, Thermometer, Users } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
 import { WindowDisplayActivity } from '../../api/windowDisplay';
 import { getAvatarUrl } from '../../api/client';
 import { getActivityIcon, getActivityPalette, getActivityTypeLabel } from './storeActivityCatalog';
+import { Store as StoreModel } from '../../types';
 
 interface MonthlyCalendarProps {
   shifts: Shift[];
@@ -16,6 +17,7 @@ interface MonthlyCalendarProps {
   transferBlocks?: TransferAssignment[];
   windowDisplayActivities?: WindowDisplayActivity[];
   onWindowDisplayClick?: (date: string) => void;
+  stores?: StoreModel[];
 }
 
 function formatDate(date: Date): string {
@@ -49,6 +51,59 @@ function activityVisual(activity: WindowDisplayActivity): { icon: string; backgr
   };
 }
 
+function solidColor(color: string, fallback: string): string {
+  const match = color.match(/^rgba?\(([^)]+)\)$/i);
+  if (!match) return color;
+  const parts = match[1].split(',').map((part) => part.trim());
+  if (parts.length < 3) return fallback;
+  return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+}
+
+function formatDateRange(startDate: string, endDate: string): string {
+  return startDate === endDate ? startDate : `${startDate} -> ${endDate}`;
+}
+
+function userDisplayName(name: string | null | undefined, surname: string | null | undefined, fallback: string): string {
+  const full = `${name ?? ''} ${surname ?? ''}`.trim();
+  return full || fallback;
+}
+
+interface HoverPersonInfo {
+  id: number;
+  fullName: string;
+  avatarFilename: string | null;
+}
+
+interface MonthlyLeaveEntry {
+  id: number;
+  user: HoverPersonInfo;
+  leaveType: 'vacation' | 'sick';
+  startDate: string;
+  endDate: string;
+  status: string;
+  storeName: string;
+  companyName: string;
+}
+
+interface MonthlyOffDayEntry {
+  key: string;
+  user: HoverPersonInfo;
+  storeName: string;
+  companyName: string;
+}
+
+interface MonthlyTransferEntry {
+  id: number;
+  user: HoverPersonInfo;
+  companyName: string;
+  originStoreName: string;
+  targetStoreName: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  notes: string | null;
+}
+
 export default function MonthlyCalendar({
   shifts,
   currentDate,
@@ -57,9 +112,49 @@ export default function MonthlyCalendar({
   transferBlocks,
   windowDisplayActivities,
   onWindowDisplayClick,
+  stores,
 }: MonthlyCalendarProps) {
   const { t } = useTranslation();
   const MAX_VISIBLE_AVATARS = 4;
+  const MAX_VISIBLE_DETAIL_ROWS = 4;
+  const [hoveredActivityId, setHoveredActivityId] = React.useState<number | null>(null);
+  const [hoveredSummaryTag, setHoveredSummaryTag] = React.useState<string | null>(null);
+
+  const storeFallbackLabel = t('common.store', 'Store');
+  const companyFallbackLabel = t('common.company', 'Company');
+  const noStoreLabel = t('employees.noStore', 'No store');
+
+  const storeNamesById = new Map<number, string>();
+  const companyNamesByStoreId = new Map<number, string>();
+  for (const store of stores ?? []) {
+    storeNamesById.set(store.id, store.name);
+    if (store.companyName) companyNamesByStoreId.set(store.id, store.companyName);
+  }
+
+  const resolveStoreName = (storeId: number | null | undefined, preferredName?: string | null): string => {
+    if (preferredName && preferredName.trim()) return preferredName.trim();
+    if (storeId != null) {
+      const known = storeNamesById.get(storeId);
+      if (known) return known;
+      return `${storeFallbackLabel} #${storeId}`;
+    }
+    return noStoreLabel;
+  };
+
+  const resolveCompanyName = (
+    storeId: number | null | undefined,
+    preferredName?: string | null,
+    companyId?: number | null,
+  ): string => {
+    if (preferredName && preferredName.trim()) return preferredName.trim();
+    if (storeId != null) {
+      const known = companyNamesByStoreId.get(storeId);
+      if (known) return known;
+    }
+    if (companyId != null) return `${companyFallbackLabel} #${companyId}`;
+    return companyFallbackLabel;
+  };
+
   const DAY_LABELS = [
     t('shifts.dayMon', 'Lun'),
     t('shifts.dayTue', 'Mar'),
@@ -84,13 +179,33 @@ export default function MonthlyCalendar({
   const storesByDate = new Map<string, Set<number>>();
   const employeesByDate = new Map<string, Set<number>>();
   const offDayUsersByDate = new Map<string, Set<number>>();
-  const scheduledUsersByDate = new Map<string, Map<number, { fullName: string; avatarFilename: string | null }>>();
+  const offDayDetailsByDate = new Map<string, MonthlyOffDayEntry[]>();
+  const scheduledUsersByDate = new Map<string, Map<number, HoverPersonInfo>>();
+
   for (const shift of shifts) {
     const dateKey = shift.date.split('T')[0];
+    storeNamesById.set(shift.storeId, shift.storeName);
+
     if (shift.isOffDay) {
       addUserToDateSet(offDayUsersByDate, dateKey, shift.userId);
+      const offDayRows = offDayDetailsByDate.get(dateKey) ?? [];
+      const dedupKey = `${shift.userId}-${shift.storeId}`;
+      if (!offDayRows.some((row) => row.key === dedupKey)) {
+        offDayRows.push({
+          key: dedupKey,
+          user: {
+            id: shift.userId,
+            fullName: userDisplayName(shift.userName, shift.userSurname, `${t('shifts.employee', 'Employee')} ${shift.userId}`),
+            avatarFilename: shift.userAvatarFilename ?? null,
+          },
+          storeName: resolveStoreName(shift.storeId, shift.storeName),
+          companyName: resolveCompanyName(shift.storeId, null, shift.companyId),
+        });
+      }
+      offDayDetailsByDate.set(dateKey, offDayRows);
       continue;
     }
+
     if (shift.status !== 'cancelled') {
       shiftCountMap.set(dateKey, (shiftCountMap.get(dateKey) ?? 0) + 1);
       addUserToDateSet(employeesByDate, dateKey, shift.userId);
@@ -98,9 +213,9 @@ export default function MonthlyCalendar({
       stores.add(shift.storeId);
       storesByDate.set(dateKey, stores);
 
-      const users = scheduledUsersByDate.get(dateKey) ?? new Map<number, { fullName: string; avatarFilename: string | null }>();
+      const users = scheduledUsersByDate.get(dateKey) ?? new Map<number, HoverPersonInfo>();
       const existingUser = users.get(shift.userId);
-      const fullName = `${shift.userName ?? ''} ${shift.userSurname ?? ''}`.trim() || `${t('shifts.employee', 'Employee')} ${shift.userId}`;
+      const fullName = userDisplayName(shift.userName, shift.userSurname, `${t('shifts.employee', 'Employee')} ${shift.userId}`);
       if (existingUser) {
         if (!existingUser.avatarFilename && shift.userAvatarFilename) {
           existingUser.avatarFilename = shift.userAvatarFilename;
@@ -108,6 +223,7 @@ export default function MonthlyCalendar({
         }
       } else {
         users.set(shift.userId, {
+          id: shift.userId,
           fullName,
           avatarFilename: shift.userAvatarFilename ?? null,
         });
@@ -119,20 +235,51 @@ export default function MonthlyCalendar({
   // Build approved leave user maps: date → distinct users on approved vacation/sick.
   const approvedVacationUsersByDate = new Map<string, Set<number>>();
   const approvedSickUsersByDate = new Map<string, Set<number>>();
+  const approvedVacationDetailsByDate = new Map<string, MonthlyLeaveEntry[]>();
+  const approvedSickDetailsByDate = new Map<string, MonthlyLeaveEntry[]>();
+
   if (leaveBlocks) {
     for (const lb of leaveBlocks) {
       const normalizedStatus = String(lb.status ?? '').toLowerCase().replace(/\s+/g, '_');
       const isApproved = normalizedStatus === 'hr_approved' || normalizedStatus === 'approved';
       if (!isApproved) continue;
 
+      if (lb.storeId != null && lb.storeName) storeNamesById.set(lb.storeId, lb.storeName);
+      if (lb.storeId != null && lb.companyName) companyNamesByStoreId.set(lb.storeId, lb.companyName);
+
+      const leaveEntry: MonthlyLeaveEntry = {
+        id: lb.id,
+        user: {
+          id: lb.userId,
+          fullName: userDisplayName(lb.userName, lb.userSurname, `${t('shifts.employee', 'Employee')} ${lb.userId}`),
+          avatarFilename: lb.userAvatarFilename ?? null,
+        },
+        leaveType: lb.leaveType,
+        startDate: lb.startDate,
+        endDate: lb.endDate,
+        status: lb.status,
+        storeName: resolveStoreName(lb.storeId, lb.storeName),
+        companyName: resolveCompanyName(lb.storeId, lb.companyName, lb.companyId),
+      };
+
       const start = new Date(lb.startDate + 'T12:00:00');
-      const end   = new Date(lb.endDate   + 'T12:00:00');
+      const end = new Date(lb.endDate + 'T12:00:00');
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const key = formatDate(d);
         if (lb.leaveType === 'vacation') {
           addUserToDateSet(approvedVacationUsersByDate, key, lb.userId);
+          const vacationRows = approvedVacationDetailsByDate.get(key) ?? [];
+          if (!vacationRows.some((row) => row.id === leaveEntry.id)) {
+            vacationRows.push(leaveEntry);
+          }
+          approvedVacationDetailsByDate.set(key, vacationRows);
         } else {
           addUserToDateSet(approvedSickUsersByDate, key, lb.userId);
+          const sickRows = approvedSickDetailsByDate.get(key) ?? [];
+          if (!sickRows.some((row) => row.id === leaveEntry.id)) {
+            sickRows.push(leaveEntry);
+          }
+          approvedSickDetailsByDate.set(key, sickRows);
         }
       }
     }
@@ -143,9 +290,32 @@ export default function MonthlyCalendar({
     completed: number;
     cancelled: number;
   }
+
   const transferMap = new Map<string, TransferDayCounts>();
+  const transferDetailsByDate = new Map<string, MonthlyTransferEntry[]>();
+
   if (transferBlocks) {
     for (const tb of transferBlocks) {
+      if (tb.originStoreName) storeNamesById.set(tb.originStoreId, tb.originStoreName);
+      if (tb.targetStoreName) storeNamesById.set(tb.targetStoreId, tb.targetStoreName);
+      if (tb.companyName) companyNamesByStoreId.set(tb.targetStoreId, tb.companyName);
+
+      const transferEntry: MonthlyTransferEntry = {
+        id: tb.id,
+        user: {
+          id: tb.userId,
+          fullName: userDisplayName(tb.userName, tb.userSurname, `${t('shifts.employee', 'Employee')} ${tb.userId}`),
+          avatarFilename: tb.userAvatarFilename ?? null,
+        },
+        companyName: resolveCompanyName(tb.targetStoreId, tb.companyName, tb.companyId),
+        originStoreName: resolveStoreName(tb.originStoreId, tb.originStoreName),
+        targetStoreName: resolveStoreName(tb.targetStoreId, tb.targetStoreName),
+        startDate: tb.startDate,
+        endDate: tb.endDate,
+        status: tb.status,
+        notes: tb.notes ?? null,
+      };
+
       const start = new Date(tb.startDate + 'T12:00:00');
       const end = new Date(tb.endDate + 'T12:00:00');
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -155,6 +325,12 @@ export default function MonthlyCalendar({
         else if (tb.status === 'cancelled') existing.cancelled += 1;
         else existing.active += 1;
         transferMap.set(key, existing);
+
+        const transferRows = transferDetailsByDate.get(key) ?? [];
+        if (!transferRows.some((row) => row.id === transferEntry.id)) {
+          transferRows.push(transferEntry);
+        }
+        transferDetailsByDate.set(key, transferRows);
       }
     }
   }
@@ -172,7 +348,66 @@ export default function MonthlyCalendar({
   while (cells.length % 7 !== 0) cells.push(null);
 
   const today = formatDate(new Date());
-  const [hoveredActivityId, setHoveredActivityId] = React.useState<number | null>(null);
+
+  const formatLeaveStatus = (status: string): string => {
+    const normalized = String(status ?? '').toLowerCase().replace(/\s+/g, '_');
+    return t(`leave.status_${normalized}`, status || t('leave.status_pending', 'Pending'));
+  };
+
+  const formatTransferStatus = (status: string): string => {
+    const normalized = String(status ?? '').toLowerCase();
+    if (normalized === 'completed') return t('common.completed', 'Completed');
+    if (normalized === 'cancelled') return t('common.cancelled', 'Cancelled');
+    return t('common.active', 'Active');
+  };
+
+  const summaryHoverCardStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 'calc(100% + 4px)',
+    right: 0,
+    minWidth: 220,
+    maxWidth: 280,
+    borderRadius: 10,
+    border: '1px solid rgba(148,163,184,0.44)',
+    background: '#ffffff',
+    boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
+    padding: '8px 9px',
+    zIndex: 90,
+  };
+
+  const renderAvatar = (person: HoverPersonInfo): React.ReactNode => {
+    const avatarUrl = getAvatarUrl(person.avatarFilename);
+    const initials = initialsFromName(person.fullName);
+    if (avatarUrl) {
+      return (
+        <img
+          src={avatarUrl}
+          alt={person.fullName}
+          style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(148,163,184,0.45)' }}
+        />
+      );
+    }
+
+    return (
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
+          color: '#fff',
+          fontSize: '0.52rem',
+          fontWeight: 800,
+          border: '1px solid rgba(148,163,184,0.45)',
+        }}
+      >
+        {initials}
+      </span>
+    );
+  };
 
   return (
     <div style={{ padding: 16 }}>
@@ -208,9 +443,17 @@ export default function MonthlyCalendar({
           const transferCount = transferCounts.active + transferCounts.completed + transferCounts.cancelled;
           const isToday = dateStr === today;
           const dayActivities = windowDisplayByDate.get(dateStr) ?? [];
+          const transferDetailsForDate = transferDetailsByDate.get(dateStr) ?? [];
+          const vacationDetailsForDate = approvedVacationDetailsByDate.get(dateStr) ?? [];
+          const sickDetailsForDate = approvedSickDetailsByDate.get(dateStr) ?? [];
+          const offDayDetailsForDate = offDayDetailsByDate.get(dateStr) ?? [];
           const hasTransfer = transferCount > 0;
           const hasStoreShiftSummary = storeCount > 0 || shiftCount > 0;
           const hasSummaryTags = hasTransfer || vacationApprovedUsers > 0 || sickApprovedUsers > 0 || offDayUserCount > 0;
+          const transferTagKey = `transfer-${dateStr}`;
+          const vacationTagKey = `vacation-${dateStr}`;
+          const sickTagKey = `sick-${dateStr}`;
+          const offDayTagKey = `offday-${dateStr}`;
 
           return (
             <div
@@ -232,6 +475,7 @@ export default function MonthlyCalendar({
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)';
                 setHoveredActivityId(null);
+                setHoveredSummaryTag(null);
               }}
             >
               <div style={{
@@ -267,6 +511,12 @@ export default function MonthlyCalendar({
                       const activityLabel = getActivityTypeLabel(t, item.activityType, item.customActivityName);
                       const hoursLabel = item.durationHours != null ? `${item.durationHours}h` : null;
                       const isHovered = hoveredActivityId === item.id;
+                      const storeName = resolveStoreName(item.storeId, item.storeName);
+                      const posterName = userDisplayName(
+                        item.flaggedByName,
+                        item.flaggedBySurname,
+                        item.flaggedBy ? `${t('shifts.employee', 'Employee')} #${item.flaggedBy}` : t('common.not_available', 'Not available'),
+                      );
                       return (
                         <div
                           key={item.id}
@@ -303,12 +553,12 @@ export default function MonthlyCalendar({
                               position: 'absolute',
                               top: 'calc(100% + 2px)',
                               right: 0,
-                              minWidth: 190,
-                              maxWidth: 250,
+                              minWidth: 170,
+                              maxWidth: 220,
                               borderRadius: 8,
                               border: `1px solid ${visual.border}`,
                               borderLeft: `3px solid ${visual.accentBorder}`,
-                              background: visual.background,
+                              background: solidColor(visual.background, '#f8fafc'),
                               boxShadow: 'var(--shadow-lg)',
                               padding: '7px 8px',
                               zIndex: 80,
@@ -330,6 +580,12 @@ export default function MonthlyCalendar({
                                   {t('shifts.activityDuration', 'Duration')}: {hoursLabel}
                                 </div>
                               )}
+                              <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {t('common.store', 'Store')}: {storeName}
+                              </div>
+                              <div style={{ marginTop: 2, fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {t('shifts.activityPostedBy', 'Posted by')}: {posterName}
+                              </div>
                               {item.notes && (
                                 <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 600, color: 'var(--text-secondary)', lineHeight: 1.3, wordBreak: 'break-word' }}>
                                   {item.notes}
@@ -390,7 +646,7 @@ export default function MonthlyCalendar({
                     fontWeight: 800,
                     lineHeight: 1.2,
                   }} title={t('shifts.monthlyStores', 'Stores')}>
-                    <Store size={10} strokeWidth={2.4} />
+                    <StoreIcon size={10} strokeWidth={2.4} />
                     {t('shifts.monthlyStores', 'Stores')} {storeCount}
                   </span>
                   <span style={{
@@ -511,72 +767,255 @@ export default function MonthlyCalendar({
               {hasSummaryTags && (
                 <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {hasTransfer && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                      borderRadius: 6,
-                      border: '1px solid rgba(30,64,175,0.28)',
-                      borderLeft: '3px solid #1e40af',
-                      background: 'rgba(239,246,255,0.92)',
-                      color: '#1e40af',
-                      padding: '1px 6px',
-                      fontSize: '0.6rem',
-                      fontWeight: 800,
-                      lineHeight: 1.2,
-                    }} title={t('shifts.monthlyTransfers', 'Transfers')}>
-                      <ArrowLeftRight size={9} strokeWidth={2.5} />
-                      {t('shifts.monthlyTransfers', 'Transfers')} {transferCount}
-                    </span>
+                    <div
+                      style={{ position: 'relative', display: 'inline-flex' }}
+                      onMouseEnter={() => setHoveredSummaryTag(transferTagKey)}
+                      onMouseLeave={() => setHoveredSummaryTag((current) => (current === transferTagKey ? null : current))}
+                    >
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        borderRadius: 6,
+                        border: '1px solid rgba(30,64,175,0.28)',
+                        borderLeft: '3px solid #1e40af',
+                        background: 'rgba(239,246,255,0.92)',
+                        color: '#1e40af',
+                        padding: '1px 6px',
+                        fontSize: '0.6rem',
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                      }}>
+                        <ArrowLeftRight size={9} strokeWidth={2.5} />
+                        {t('shifts.monthlyTransfers', 'Transfers')} {transferCount}
+                      </span>
+
+                      {hoveredSummaryTag === transferTagKey && (
+                        <div style={summaryHoverCardStyle}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#1e40af', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                            <ArrowLeftRight size={11} strokeWidth={2.5} />
+                            <span>{t('shifts.monthlyTransfers', 'Transfers')} {transferDetailsForDate.length}</span>
+                          </div>
+
+                          {transferDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((transfer, index) => (
+                            <div
+                              key={transfer.id}
+                              style={{
+                                paddingTop: index === 0 ? 0 : 6,
+                                marginTop: index === 0 ? 0 : 6,
+                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {renderAvatar(transfer.user)}
+                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{transfer.user.fullName}</span>
+                              </div>
+                              <div style={{ marginTop: 3, fontSize: '0.57rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {`${transfer.originStoreName} -> ${transfer.targetStoreName}`}
+                              </div>
+                              <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {transfer.companyName} • {formatDateRange(transfer.startDate, transfer.endDate)}
+                              </div>
+                              <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(30,64,175,0.3)', background: 'rgba(219,234,254,0.75)', color: '#1e40af', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
+                                {formatTransferStatus(transfer.status)}
+                              </div>
+                              {transfer.notes && (
+                                <div style={{ marginTop: 3, fontSize: '0.54rem', color: 'var(--text-secondary)', lineHeight: 1.25, wordBreak: 'break-word' }}>
+                                  {transfer.notes}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
+                          {transferDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                              +{transferDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                   {vacationApprovedUsers > 0 && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                      borderRadius: 6,
-                      border: '1px solid rgba(37,99,235,0.22)',
-                      borderLeft: '3px solid #2563eb',
-                      background: 'rgba(219,234,254,0.76)',
-                      color: '#1e40af',
-                      padding: '1px 6px',
-                      fontSize: '0.6rem',
-                      fontWeight: 800,
-                      lineHeight: 1.2,
-                    }} title={t('leave.type_vacation', 'Vacation')}>
-                      <Palmtree size={9} strokeWidth={2.4} />
-                      {t('leave.type_vacation', 'Vacation')} {vacationApprovedUsers}
-                    </span>
+                    <div
+                      style={{ position: 'relative', display: 'inline-flex' }}
+                      onMouseEnter={() => setHoveredSummaryTag(vacationTagKey)}
+                      onMouseLeave={() => setHoveredSummaryTag((current) => (current === vacationTagKey ? null : current))}
+                    >
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        borderRadius: 6,
+                        border: '1px solid rgba(37,99,235,0.22)',
+                        borderLeft: '3px solid #2563eb',
+                        background: 'rgba(219,234,254,0.76)',
+                        color: '#1e40af',
+                        padding: '1px 6px',
+                        fontSize: '0.6rem',
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                      }}>
+                        <Palmtree size={9} strokeWidth={2.4} />
+                        {t('leave.type_vacation', 'Vacation')} {vacationApprovedUsers}
+                      </span>
+
+                      {hoveredSummaryTag === vacationTagKey && (
+                        <div style={summaryHoverCardStyle}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#1e40af', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                            <Palmtree size={11} strokeWidth={2.4} />
+                            <span>{t('leave.type_vacation', 'Vacation')} {vacationDetailsForDate.length}</span>
+                          </div>
+
+                          {vacationDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((leaveRow, index) => (
+                            <div
+                              key={leaveRow.id}
+                              style={{
+                                paddingTop: index === 0 ? 0 : 6,
+                                marginTop: index === 0 ? 0 : 6,
+                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {renderAvatar(leaveRow.user)}
+                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{leaveRow.user.fullName}</span>
+                              </div>
+                              <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {leaveRow.storeName} • {leaveRow.companyName}
+                              </div>
+                              <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {formatDateRange(leaveRow.startDate, leaveRow.endDate)}
+                              </div>
+                              <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(37,99,235,0.3)', background: 'rgba(219,234,254,0.7)', color: '#1e40af', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
+                                {formatLeaveStatus(leaveRow.status)}
+                              </div>
+                            </div>
+                          ))}
+
+                          {vacationDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                              +{vacationDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                   {sickApprovedUsers > 0 && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                      borderRadius: 6,
-                      border: '1px solid rgba(217,119,6,0.22)',
-                      borderLeft: '3px solid #d97706',
-                      background: 'rgba(254,243,199,0.78)',
-                      color: '#92400e',
-                      padding: '1px 6px',
-                      fontSize: '0.6rem',
-                      fontWeight: 800,
-                      lineHeight: 1.2,
-                    }} title={t('leave.type_sick', 'Leave')}>
-                      <Thermometer size={9} strokeWidth={2.4} />
-                      {t('leave.type_sick', 'Leave')} {sickApprovedUsers}
-                    </span>
+                    <div
+                      style={{ position: 'relative', display: 'inline-flex' }}
+                      onMouseEnter={() => setHoveredSummaryTag(sickTagKey)}
+                      onMouseLeave={() => setHoveredSummaryTag((current) => (current === sickTagKey ? null : current))}
+                    >
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        borderRadius: 6,
+                        border: '1px solid rgba(217,119,6,0.22)',
+                        borderLeft: '3px solid #d97706',
+                        background: 'rgba(254,243,199,0.78)',
+                        color: '#92400e',
+                        padding: '1px 6px',
+                        fontSize: '0.6rem',
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                      }}>
+                        <Thermometer size={9} strokeWidth={2.4} />
+                        {t('leave.type_sick', 'Leave')} {sickApprovedUsers}
+                      </span>
+
+                      {hoveredSummaryTag === sickTagKey && (
+                        <div style={summaryHoverCardStyle}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#92400e', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                            <Thermometer size={11} strokeWidth={2.4} />
+                            <span>{t('leave.type_sick', 'Leave')} {sickDetailsForDate.length}</span>
+                          </div>
+
+                          {sickDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((leaveRow, index) => (
+                            <div
+                              key={leaveRow.id}
+                              style={{
+                                paddingTop: index === 0 ? 0 : 6,
+                                marginTop: index === 0 ? 0 : 6,
+                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {renderAvatar(leaveRow.user)}
+                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{leaveRow.user.fullName}</span>
+                              </div>
+                              <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {leaveRow.storeName} • {leaveRow.companyName}
+                              </div>
+                              <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {formatDateRange(leaveRow.startDate, leaveRow.endDate)}
+                              </div>
+                              <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(217,119,6,0.28)', background: 'rgba(254,243,199,0.7)', color: '#92400e', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
+                                {formatLeaveStatus(leaveRow.status)}
+                              </div>
+                            </div>
+                          ))}
+
+                          {sickDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                              +{sickDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                   {offDayUserCount > 0 && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                      borderRadius: 6,
-                      border: '1px solid rgba(100,116,139,0.24)',
-                      borderLeft: '3px solid #64748b',
-                      background: 'rgba(241,245,249,0.92)',
-                      color: '#475569',
-                      padding: '1px 6px',
-                      fontSize: '0.6rem',
-                      fontWeight: 800,
-                      lineHeight: 1.2,
-                    }} title={t('shifts.form.offDay', 'Off day')}>
-                      <Moon size={9} strokeWidth={2.4} />
-                      {t('shifts.form.offDay', 'Off day')} {offDayUserCount}
-                    </span>
+                    <div
+                      style={{ position: 'relative', display: 'inline-flex' }}
+                      onMouseEnter={() => setHoveredSummaryTag(offDayTagKey)}
+                      onMouseLeave={() => setHoveredSummaryTag((current) => (current === offDayTagKey ? null : current))}
+                    >
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        borderRadius: 6,
+                        border: '1px solid rgba(100,116,139,0.24)',
+                        borderLeft: '3px solid #64748b',
+                        background: 'rgba(241,245,249,0.92)',
+                        color: '#475569',
+                        padding: '1px 6px',
+                        fontSize: '0.6rem',
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                      }}>
+                        <Moon size={9} strokeWidth={2.4} />
+                        {t('shifts.form.offDay', 'Off day')} {offDayUserCount}
+                      </span>
+
+                      {hoveredSummaryTag === offDayTagKey && (
+                        <div style={summaryHoverCardStyle}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#475569', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                            <Moon size={11} strokeWidth={2.4} />
+                            <span>{t('shifts.form.offDay', 'Off day')} {offDayDetailsForDate.length}</span>
+                          </div>
+
+                          {offDayDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((offDayRow, index) => (
+                            <div
+                              key={offDayRow.key}
+                              style={{
+                                paddingTop: index === 0 ? 0 : 6,
+                                marginTop: index === 0 ? 0 : 6,
+                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {renderAvatar(offDayRow.user)}
+                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{offDayRow.user.fullName}</span>
+                              </div>
+                              <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {offDayRow.storeName} • {offDayRow.companyName}
+                              </div>
+                            </div>
+                          ))}
+
+                          {offDayDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                              +{offDayDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

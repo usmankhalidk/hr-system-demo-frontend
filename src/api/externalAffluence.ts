@@ -192,6 +192,14 @@ export interface ExternalIngressiResponse {
     visitors: number;
   }>;
   summary: ExternalIngressiSummary;
+  detailColumns: string[];
+  detailRows: Array<Record<string, string | number | boolean | null>>;
+}
+
+export interface ExternalTableDataResponse {
+  tableName: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
 }
 
 export interface ExternalAffluencePreviewRow {
@@ -325,6 +333,22 @@ export async function getExternalAffluencePreview(params: {
       store_id: params.storeId,
       ...(params.fromDate ? { from_date: params.fromDate } : {}),
       ...(params.toDate ? { to_date: params.toDate } : {}),
+      ...(params.targetCompanyId ? { target_company_id: params.targetCompanyId } : {}),
+    },
+  });
+
+  return data.data;
+}
+
+export async function getExternalTableData(params: {
+  tableName: string;
+  limit?: number;
+  targetCompanyId?: number;
+}): Promise<ExternalTableDataResponse> {
+  const { data } = await client.get('/external-affluence/table-data', {
+    params: {
+      table_name: params.tableName,
+      ...(params.limit ? { limit: params.limit } : {}),
       ...(params.targetCompanyId ? { target_company_id: params.targetCompanyId } : {}),
     },
   });

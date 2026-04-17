@@ -178,7 +178,7 @@ function AppRoutes() {
       } />
 
       <Route path="/integrazioni/database-esterno" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="turni">
+        <ProtectedRoute roles={['admin']} permissionKey="turni">
           <Layout title={t('nav.externalAffluence', 'Database Integration')}><ExternalAffluencePage /></Layout>
         </ProtectedRoute>
       } />

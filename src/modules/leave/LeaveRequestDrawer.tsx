@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { submitLeaveRequest, LeaveType } from '../../api/leave';
+import { submitLeaveRequest, LeaveDurationType, LeaveType } from '../../api/leave';
 import { useToast } from '../../context/ToastContext';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatLocalDate } from '../../utils/date';
@@ -17,9 +17,14 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
   const { t } = useTranslation();
   const { showToast } = useToast();
 
+  const today = useMemo(() => formatLocalDate(new Date()), []);
+
   const [leaveType, setLeaveType] = useState<LeaveType>('vacation');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [leaveDurationType, setLeaveDurationType] = useState<LeaveDurationType>('full_day');
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+  const [shortStartTime, setShortStartTime] = useState('');
+  const [shortEndTime, setShortEndTime] = useState('');
   const [notes, setNotes] = useState('');
   const [certificate, setCertificate] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,12 +39,42 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
 
   function reset() {
     setLeaveType('vacation');
-    setStartDate('');
-    setEndDate('');
+    setLeaveDurationType('full_day');
+    setStartDate(today);
+    setEndDate(today);
+    setShortStartTime('');
+    setShortEndTime('');
     setNotes('');
     setCertificate(null);
     setError(null);
   }
+
+  useEffect(() => {
+    if (leaveType !== 'vacation') {
+      setLeaveDurationType('full_day');
+      setShortStartTime('');
+      setShortEndTime('');
+    }
+  }, [leaveType]);
+
+  useEffect(() => {
+    if (leaveDurationType === 'short_leave') {
+      setEndDate(startDate);
+    }
+  }, [leaveDurationType, startDate]);
+
+  const shortLeaveHours = useMemo(() => {
+    if (!shortStartTime || !shortEndTime) return null;
+    const [startHour, startMinute] = shortStartTime.split(':').map(Number);
+    const [endHour, endMinute] = shortEndTime.split(':').map(Number);
+    if ([startHour, startMinute, endHour, endMinute].some((value) => Number.isNaN(value))) {
+      return null;
+    }
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    if (endMinutes <= startMinutes) return null;
+    return Number(((endMinutes - startMinutes) / 60).toFixed(2));
+  }, [shortEndTime, shortStartTime]);
 
   function handleClose() {
     reset();
@@ -54,7 +89,7 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
       setError(t('leave.error_dates_required'));
       return;
     }
-    const todayStr = formatLocalDate(new Date()); // YYYY-MM-DD in local timezone
+    const todayStr = formatLocalDate(new Date());
     if (startDate < todayStr) {
       setError(t('leave.error_past_date'));
       return;
@@ -64,12 +99,38 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
       return;
     }
 
+    if (leaveDurationType === 'short_leave') {
+      if (leaveType !== 'vacation') {
+        setError(t('leave.error_short_vacation_only', 'Short leave is available only for vacation.'));
+        return;
+      }
+      if (startDate !== endDate) {
+        setError(t('leave.error_short_same_day', 'Short leave must start and end on the same day.'));
+        return;
+      }
+      if (!shortStartTime || !shortEndTime) {
+        setError(t('leave.error_short_time_required', 'Start and end time are required for short leave.'));
+        return;
+      }
+      if (shortLeaveHours == null || shortLeaveHours <= 0) {
+        setError(t('leave.error_short_time_range', 'End time must be after start time.'));
+        return;
+      }
+      if (shortLeaveHours >= 24) {
+        setError(t('leave.error_short_duration', 'Short leave must be less than 24 hours.'));
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       await submitLeaveRequest({
         leaveType,
         startDate,
         endDate,
+        leaveDurationType,
+        shortStartTime: leaveDurationType === 'short_leave' ? shortStartTime : undefined,
+        shortEndTime: leaveDurationType === 'short_leave' ? shortEndTime : undefined,
         notes: notes || undefined,
         certificate: leaveType === 'sick' && certificate ? certificate : undefined,
       });
@@ -93,8 +154,7 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
         className="drawer-backdrop"
         style={{
           position: 'fixed', inset: 0,
-          background: 'rgba(13,33,55,0.48)',
-          backdropFilter: 'blur(3px)',
+          background: 'rgba(13,33,55,0.34)',
           zIndex: 1000,
         }}
       />
@@ -110,8 +170,6 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
           display: 'flex', flexDirection: 'column',
         }}
       >
-        {/* Gold accent stripe */}
-        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%)', flexShrink: 0 }} />
         {/* Header */}
         <div style={{
           padding: '20px 24px',
@@ -148,7 +206,7 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
 
           {/* Leave type toggle */}
           <div style={{ marginBottom: 18 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
               {t('leave.type_label')}
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -160,11 +218,9 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
                   style={{
                     flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
                     cursor: 'pointer', transition: 'all 0.15s',
-                    background: leaveType === type ? 'var(--primary)' : 'transparent',
-                    color: leaveType === type ? '#fff' : 'var(--text-secondary)',
-                    border: `1.5px solid ${leaveType === type ? 'var(--primary)' : 'var(--border)'}`,
-                    boxShadow: leaveType === type ? '0 2px 8px rgba(13,33,55,0.2)' : 'none',
-                    transform: leaveType === type ? 'translateY(-1px)' : 'none',
+                    background: '#ffffff',
+                    color: leaveType === type ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    border: `1px solid ${leaveType === type ? 'var(--primary)' : '#d1d5db'}`,
                   }}
                 >
                   {t(`leave.type_${type}`)}
@@ -172,6 +228,46 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
               ))}
             </div>
           </div>
+
+          {leaveType === 'vacation' ? (
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                {t('leave.duration_mode_label', 'Duration')}
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {([
+                  { key: 'full_day', label: t('leave.duration_full_day', 'Full day leave') },
+                  { key: 'short_leave', label: t('leave.duration_short_leave', 'Short leave') },
+                ] as const).map((option) => {
+                  const selected = leaveDurationType === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setLeaveDurationType(option.key)}
+                      style={{
+                        borderRadius: 8,
+                        border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`,
+                        background: '#ffffff',
+                        color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 18, fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('leave.sick_full_day_hint', 'Sick leave is managed as full day leave.')}
+            </div>
+          )}
 
           {/* Start date */}
           <div style={{ marginBottom: 18 }}>
@@ -188,12 +284,58 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
               label={t('leave.end_date')}
               value={endDate}
               onChange={setEndDate}
+              disabled={leaveDurationType === 'short_leave'}
             />
           </div>
 
+          {leaveDurationType === 'short_leave' && (
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                {t('leave.short_leave_time_range', 'Time range')}
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <input
+                  type="time"
+                  value={shortStartTime}
+                  onChange={(e) => setShortStartTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: 'var(--text-primary)',
+                    padding: '9px 10px',
+                    fontSize: 13,
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <input
+                  type="time"
+                  value={shortEndTime}
+                  onChange={(e) => setShortEndTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: 'var(--text-primary)',
+                    padding: '9px 10px',
+                    fontSize: 13,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                {shortLeaveHours != null
+                  ? t('leave.short_leave_hours', { hours: shortLeaveHours })
+                  : t('leave.short_leave_hint', 'Select start and end time for a short leave.')}
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
               {t('leave.notes_label')} <span style={{ fontWeight: 400 }}>({t('common.optional')})</span>
             </label>
             <textarea
@@ -204,7 +346,7 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
               placeholder={t('leave.notes_placeholder')}
               style={{
                 width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 14,
-                border: '1.5px solid var(--border)', background: 'var(--surface)',
+                border: '1px solid #d1d5db', background: '#ffffff',
                 color: 'var(--text-primary)', resize: 'vertical', fontFamily: 'inherit',
                 boxSizing: 'border-box',
               }}
@@ -216,7 +358,7 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
             <div style={{ marginBottom: 16 }}>
               <label style={{
                 display: 'block', marginBottom: 6,
-                fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)',
+                fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.03em', textTransform: 'uppercase',
               }}>
                 {t('leave.medical_certificate')}{' '}
                 <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>
@@ -226,9 +368,8 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
               <label style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
-                border: `2px dashed ${certificate ? '#22c55e' : 'var(--border)'}`,
-                background: certificate ? 'rgba(34,197,94,0.06)' : 'var(--background)',
-                transition: 'border-color 0.15s, background 0.15s',
+                border: '1px dashed #d1d5db',
+                background: '#ffffff',
               }}>
                 <input
                   type="file"
@@ -236,11 +377,13 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
                   style={{ display: 'none' }}
                   onChange={(e) => { const f = e.target.files?.[0]; setCertificate(f ?? null); }}
                 />
-                <span style={{ fontSize: 20 }}>{certificate ? '✅' : '📎'}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+                  PDF
+                </span>
                 <span style={{
                   fontSize: 13,
-                  color: certificate ? '#16a34a' : 'var(--text-muted)',
-                  fontWeight: certificate ? 700 : 400,
+                  color: 'var(--text-secondary)',
+                  fontWeight: 500,
                   flex: 1,
                 }}>
                   {certificate ? certificate.name : t('leave.certificate_upload')}

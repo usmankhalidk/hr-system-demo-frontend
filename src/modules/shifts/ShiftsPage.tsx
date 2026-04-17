@@ -804,6 +804,7 @@ export default function ShiftsPage() {
               leaveBlocks={leaveBlocks}
               transferBlocks={transferBlocks}
               windowDisplayActivities={windowDisplayActivities}
+              stores={stores}
               onWindowDisplayClick={(date) => openActivitiesModal(date)}
               onDayClick={(date) => {
                 setCurrentDate(new Date(date + 'T12:00:00'));

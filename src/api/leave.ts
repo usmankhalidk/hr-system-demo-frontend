@@ -5,6 +5,7 @@ import apiClient from './client';
 // ---------------------------------------------------------------------------
 
 export type LeaveType = 'vacation' | 'sick';
+export type LeaveDurationType = 'full_day' | 'short_leave';
 
 export type LeaveStatus =
   | 'pending'
@@ -26,6 +27,9 @@ export interface LeaveRequest {
   leaveType: LeaveType;
   startDate: string;       // ISO date YYYY-MM-DD
   endDate: string;         // ISO date YYYY-MM-DD
+  leaveDurationType?: LeaveDurationType;
+  shortStartTime?: string | null;
+  shortEndTime?: string | null;
   status: LeaveStatus;
   currentApproverRole: string | null;
   notes: string | null;
@@ -34,10 +38,16 @@ export interface LeaveRequest {
   userName?: string;
   userSurname?: string;
   userAvatarFilename?: string | null;
+  storeName?: string | null;
+  storeLogoFilename?: string | null;
+  companyName?: string | null;
   medicalCertificateName?: string | null;
   skippedApprovers?: string[];
   escalated?: boolean;
   isEmergencyOverride?: boolean;
+  lastActionAt?: string | null;
+  latestAction?: 'approved' | 'rejected' | null;
+  latestActionAt?: string | null;
 }
 
 export interface LeaveBalance {
@@ -56,6 +66,9 @@ export interface SubmitLeavePayload {
   leaveType: LeaveType;
   startDate: string;
   endDate: string;
+  leaveDurationType?: LeaveDurationType;
+  shortStartTime?: string;
+  shortEndTime?: string;
   notes?: string;
   certificate?: File;   // optional medical certificate (sick leave only)
 }
@@ -91,6 +104,9 @@ export async function submitLeaveRequest(payload: SubmitLeavePayload): Promise<L
     form.append('leave_type', payload.leaveType);
     form.append('start_date', payload.startDate);
     form.append('end_date', payload.endDate);
+    if (payload.leaveDurationType) form.append('leave_duration_type', payload.leaveDurationType);
+    if (payload.shortStartTime) form.append('short_start_time', payload.shortStartTime);
+    if (payload.shortEndTime) form.append('short_end_time', payload.shortEndTime);
     if (payload.notes) form.append('notes', payload.notes);
     form.append('certificate', payload.certificate);
     const { data } = await apiClient.post('/leave', form, {
@@ -102,6 +118,9 @@ export async function submitLeaveRequest(payload: SubmitLeavePayload): Promise<L
     leave_type: payload.leaveType,
     start_date: payload.startDate,
     end_date: payload.endDate,
+    leave_duration_type: payload.leaveDurationType,
+    short_start_time: payload.shortStartTime,
+    short_end_time: payload.shortEndTime,
     notes: payload.notes,
   });
   return data.data as LeaveRequest;
@@ -162,9 +181,15 @@ export async function downloadCertificate(leaveId: number): Promise<Blob> {
 }
 
 export interface LeaveBlock {
+  id: number;
+  companyId: number;
+  companyName?: string | null;
   userId: number;
   userName: string;
   userSurname: string;
+  userAvatarFilename?: string | null;
+  storeId: number | null;
+  storeName?: string | null;
   leaveType: 'vacation' | 'sick';
   startDate: string;
   endDate: string;
@@ -176,6 +201,9 @@ export interface AdminCreateLeavePayload {
   leaveType: LeaveType;
   startDate: string;
   endDate: string;
+  leaveDurationType?: LeaveDurationType;
+  shortStartTime?: string;
+  shortEndTime?: string;
   notes?: string;
 }
 
@@ -186,6 +214,9 @@ export async function createLeaveOnBehalf(payload: AdminCreateLeavePayload): Pro
     leave_type: payload.leaveType,
     start_date: payload.startDate,
     end_date:   payload.endDate,
+    leave_duration_type: payload.leaveDurationType,
+    short_start_time: payload.shortStartTime,
+    short_end_time: payload.shortEndTime,
     notes:      payload.notes,
   });
   return data.data as LeaveRequest;
@@ -202,9 +233,15 @@ export async function getLeaveBlocks(dateFrom: string, dateTo: string): Promise<
   return res.requests
     .filter((r) => r.status !== 'rejected')
     .map((r) => ({
+      id:          r.id,
+      companyId:   r.companyId,
+      companyName: (r as LeaveRequest & { companyName?: string | null }).companyName ?? null,
       userId:      r.userId,
       userName:    r.userName ?? '',
       userSurname: r.userSurname ?? '',
+      userAvatarFilename: r.userAvatarFilename ?? null,
+      storeId:     r.storeId ?? null,
+      storeName:   (r as LeaveRequest & { storeName?: string | null }).storeName ?? null,
       leaveType:   r.leaveType,
       startDate:   r.startDate,
       endDate:     r.endDate,
