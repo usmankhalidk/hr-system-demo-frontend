@@ -119,6 +119,10 @@ export default function EmployeeCheckinPage() {
     let alive = true;
 
     async function load() {
+      if (permissions['presenze'] === false) {
+        setLoading(false);
+        return;
+      }
       try {
         if (!fingerprintRef.current) {
           const fp = await getDeviceFingerprint();
@@ -136,7 +140,7 @@ export default function EmployeeCheckinPage() {
 
     void load();
     return () => { alive = false; };
-  }, [filter, lastSyncTime, historyVersion]);
+  }, [filter, lastSyncTime, historyVersion, permissions['presenze']]);
 
   // Group events by date
   const grouped: { date: string; items: AttendanceEvent[] }[] = [];
