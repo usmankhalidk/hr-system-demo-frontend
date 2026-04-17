@@ -10,21 +10,21 @@ export const MANAGED_ROLE_KEYS = [
 export type ManagedRoleKey = typeof MANAGED_ROLE_KEYS[number];
 
 export const MODULE_KEYS = [
+  'negozi',
   'dipendenti',
+  'ats',
+  'documenti',
+  'terminali',
   'turni',
   'trasferimenti',
   'presenze',
   'anomalie',
   'permessi',
   'saldi',
-  'negozi',
   'messaggi',
-  'impostazioni',
-  'documenti',
-  'ats',
-  'report',
   'gestione_accessi',
-  'terminali',
+  'impostazioni',
+  'report',
 ] as const;
 
 export type ModuleKey = typeof MODULE_KEYS[number];
@@ -39,19 +39,19 @@ export const ROLE_COLORS: Record<ManagedRoleKey, string> = {
 };
 
 export const SYSTEM_MODULE_KEYS = [
+  'negozi',
   'dipendenti',
+  'documenti',
+  'terminali',
   'turni',
   'trasferimenti',
   'presenze',
   'anomalie',
   'permessi',
   'saldi',
-  'negozi',
   'messaggi',
-  'documenti',
-  'impostazioni',
   'gestione_accessi',
-  'terminali',
+  'impostazioni',
 ] as const;
 
 export type SystemModuleKey = typeof SYSTEM_MODULE_KEYS[number];

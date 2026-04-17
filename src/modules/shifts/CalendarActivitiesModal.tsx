@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Store } from '../../types';
@@ -86,6 +86,26 @@ function normalizeNumberInput(value: string): number | null {
   return parsed;
 }
 
+function shiftIsoMonth(month: string, offset: number): string {
+  const [yearStr, monthStr] = month.split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return month;
+  const shifted = new Date(year, monthIndex + offset, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function parseIsoMonth(month: string): { year: number; monthIndex: number } {
+  const [yearStr, monthStr] = month.split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    const fallback = new Date();
+    return { year: fallback.getFullYear(), monthIndex: fallback.getMonth() };
+  }
+  return { year, monthIndex };
+}
+
 function humanName(name: string | null | undefined, surname: string | null | undefined): string | null {
   const value = `${name ?? ''} ${surname ?? ''}`.trim();
   return value || null;
@@ -114,6 +134,9 @@ export default function CalendarActivitiesModal({
 }: CalendarActivitiesModalProps) {
   const { t, i18n } = useTranslation();
   const [selectedMonth, setSelectedMonth] = useState(formatIsoMonth(currentDate));
+  const monthPickerRef = useRef<HTMLDivElement | null>(null);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [monthPickerYear, setMonthPickerYear] = useState(currentDate.getFullYear());
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [formDate, setFormDate] = useState('');
@@ -138,14 +161,36 @@ export default function CalendarActivitiesModal({
   }>>([]);
 
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
+  const monthPickerLabels = useMemo(() => (
+    Array.from({ length: 12 }, (_, idx) => (
+      new Date(2000, idx, 1).toLocaleDateString(locale, { month: 'short' })
+    ))
+  ), [locale]);
+  const selectedMonthParts = useMemo(() => parseIsoMonth(selectedMonth), [selectedMonth]);
 
   useEffect(() => {
     if (!open) return;
     const month = initialDate?.slice(0, 7) ?? formatIsoMonth(currentDate);
     setSelectedMonth(month);
+    setMonthPickerOpen(false);
     setSelectedCompanyId(null);
     setLocalError(null);
   }, [open, initialDate, currentDate]);
+
+  useEffect(() => {
+    setMonthPickerYear(selectedMonthParts.year);
+  }, [selectedMonthParts.year]);
+
+  useEffect(() => {
+    if (!monthPickerOpen) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (!monthPickerRef.current?.contains(event.target as Node)) {
+        setMonthPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [monthPickerOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -512,11 +557,11 @@ export default function CalendarActivitiesModal({
               onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
               style={{
                 borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.3)',
+                border: '1px solid rgba(255,255,255,0.28)',
                 background: 'rgba(255,255,255,0.12)',
                 color: '#fff',
                 fontSize: 12,
-                padding: '6px 8px',
+                padding: '7px 10px',
                 fontWeight: 700,
                 minWidth: 190,
               }}
@@ -528,20 +573,193 @@ export default function CalendarActivitiesModal({
                 </option>
               ))}
             </select>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+
+            <div
+              ref={monthPickerRef}
               style={{
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.3)',
-                background: 'rgba(255,255,255,0.12)',
-                color: '#fff',
-                fontSize: 12,
-                padding: '6px 8px',
-                fontWeight: 700,
+                position: 'relative',
               }}
-            />
+            >
+              <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              borderRadius: 9,
+              border: '1px solid rgba(255,255,255,0.28)',
+              background: 'rgba(255,255,255,0.12)',
+              padding: '3px 6px',
+              }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMonth((prev) => shiftIsoMonth(prev, -1));
+                  setMonthPickerOpen(false);
+                }}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.26)',
+                  background: 'rgba(255,255,255,0.12)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                }}
+                aria-label={t('common.previous', 'Previous')}
+              >
+                ‹
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMonthPickerOpen((prev) => !prev)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  borderRadius: 7,
+                  border: '1px solid rgba(255,255,255,0.28)',
+                  background: 'rgba(255,255,255,0.2)',
+                  color: '#fff',
+                  fontSize: 12,
+                  padding: '6px 10px',
+                  fontWeight: 700,
+                  minWidth: 186,
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{monthLabel}</span>
+                <span style={{ fontSize: 10, opacity: 0.9 }}>{monthPickerOpen ? '▲' : '▼'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMonth((prev) => shiftIsoMonth(prev, 1));
+                  setMonthPickerOpen(false);
+                }}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.26)',
+                  background: 'rgba(255,255,255,0.12)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                }}
+                aria-label={t('common.next', 'Next')}
+              >
+                ›
+              </button>
+              </div>
+
+              {monthPickerOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  width: 258,
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  background: '#ffffff',
+                  overflow: 'hidden',
+                  boxShadow: '0 18px 42px rgba(15,23,42,0.35)',
+                  zIndex: 40,
+                }}>
+                  <div style={{
+                    background: 'var(--primary)',
+                    padding: '8px 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setMonthPickerYear((prev) => prev - 1)}
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        border: '1px solid rgba(255,255,255,0.24)',
+                        background: 'rgba(255,255,255,0.12)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 800,
+                        lineHeight: 1,
+                      }}
+                      aria-label={t('common.previous', 'Previous')}
+                    >
+                      ‹
+                    </button>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, color: '#fff', letterSpacing: 0.2 }}>
+                      {monthPickerYear}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setMonthPickerYear((prev) => prev + 1)}
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        border: '1px solid rgba(255,255,255,0.24)',
+                        background: 'rgba(255,255,255,0.12)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 800,
+                        lineHeight: 1,
+                      }}
+                      aria-label={t('common.next', 'Next')}
+                    >
+                      ›
+                    </button>
+                  </div>
+
+                  <div style={{ background: 'var(--surface-warm)', padding: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                      {monthPickerLabels.map((label, idx) => {
+                        const today = new Date();
+                        const isSelected = monthPickerYear === selectedMonthParts.year && idx === selectedMonthParts.monthIndex;
+                        const isCurrentMonth = monthPickerYear === today.getFullYear() && idx === today.getMonth();
+
+                        return (
+                          <button
+                            key={`${label}-${idx}`}
+                            type="button"
+                            onClick={() => {
+                              setSelectedMonth(`${monthPickerYear}-${String(idx + 1).padStart(2, '0')}`);
+                              setMonthPickerOpen(false);
+                            }}
+                            style={{
+                              borderRadius: 7,
+                              border: isCurrentMonth && !isSelected ? '1.5px solid var(--primary)' : '1.5px solid transparent',
+                              background: isSelected ? 'var(--accent)' : 'transparent',
+                              color: isSelected ? '#fff' : isCurrentMonth ? 'var(--primary)' : 'var(--text-primary)',
+                              fontSize: 12,
+                              fontWeight: isSelected ? 800 : 700,
+                              padding: '8px 6px',
+                              textTransform: 'capitalize',
+                              cursor: 'pointer',
+                              boxShadow: isSelected ? '0 2px 8px rgba(201,151,58,0.35)' : 'none',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={onClose}
@@ -921,7 +1139,20 @@ export default function CalendarActivitiesModal({
                       onChange={(e) => setFormNotes(e.target.value)}
                       rows={4}
                       className="field-input"
-                      style={{ resize: 'vertical', minHeight: 92 }}
+                      style={{
+                        resize: 'vertical',
+                        minHeight: 92,
+                        width: '100%',
+                        padding: '8px 12px',
+                        fontSize: '13.5px',
+                        color: 'var(--text-primary)',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius)',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        fontFamily: 'inherit',
+                      }}
                       placeholder={t('shifts.activityNotesPlaceholder', 'Optional notes for this activity')}
                     />
                   </div>

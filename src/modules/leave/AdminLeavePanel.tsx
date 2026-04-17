@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { CheckCheck, FileText, Palmtree, Thermometer, Trash2, XCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
   getLeaveRequests,
@@ -19,13 +20,16 @@ import {
   LeaveStatus,
   LeaveBalance,
   LeaveType,
+  LeaveDurationType,
 } from '../../api/leave';
 import { getEmployees } from '../../api/employees';
-import { getAvatarUrl } from '../../api/client';
+import { getStores } from '../../api/stores';
+import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatLocalDate } from '../../utils/date';
 import { LeaveRequestDrawer } from './LeaveRequestDrawer';
 import { translateApiError } from '../../utils/apiErrors';
+import { Store as StoreModel } from '../../types';
 
 // ── Status badge ───────────────────────────────────────────────────────────
 
@@ -76,6 +80,20 @@ function countWorkingDays(isoStart: string, isoEnd: string): number {
   return n;
 }
 
+function parseIsoDate(iso: string): Date {
+  const match = (iso ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return new Date();
+  return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+}
+
+function rangesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+  const aStart = parseIsoDate(startA).getTime();
+  const aEnd = parseIsoDate(endA).getTime();
+  const bStart = parseIsoDate(startB).getTime();
+  const bEnd = parseIsoDate(endB).getTime();
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
 // ── Format date range nicely ───────────────────────────────────────────────
 
 function fmtDate(iso: string, locale: string): string {
@@ -87,6 +105,50 @@ function fmtDate(iso: string, locale: string): string {
   return dateObj.toLocaleDateString(locale === 'en' ? 'en-GB' : 'it-IT', {
     day: '2-digit', month: 'short',
   });
+}
+
+function shortLeaveHours(startTime?: string | null, endTime?: string | null): number | null {
+  if (!startTime || !endTime) return null;
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  if ([sh, sm, eh, em].some((value) => Number.isNaN(value))) return null;
+  const startMinutes = sh * 60 + sm;
+  const endMinutes = eh * 60 + em;
+  if (endMinutes <= startMinutes) return null;
+  return Number(((endMinutes - startMinutes) / 60).toFixed(2));
+}
+
+function fmtDateTime(iso: string | null | undefined, locale: string): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const lang = locale === 'en' ? 'en-GB' : 'it-IT';
+  return date.toLocaleString(lang, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function avatarColorFromName(name: string): string {
+  if (!name) return 'linear-gradient(135deg, var(--primary), var(--accent))';
+  return 'linear-gradient(135deg, var(--primary), var(--accent))';
+}
+
+function initialsForPerson(name: string | null | undefined, surname: string | null | undefined): string {
+  return `${(name?.[0] ?? '').toUpperCase()}${(surname?.[0] ?? '').toUpperCase()}` || 'U';
+}
+
+function recentUniqueUsers(rows: LeaveRequest[], limit: number): LeaveRequest[] {
+  const byUser = new Map<number, LeaveRequest>();
+  const sorted = [...rows].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  for (const req of sorted) {
+    if (!byUser.has(req.userId)) byUser.set(req.userId, req);
+    if (byUser.size >= limit) break;
+  }
+  return Array.from(byUser.values());
 }
 
 // ── BalancesTab ────────────────────────────────────────────────────────────
@@ -102,7 +164,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   const yearOptions: number[] = [];
   for (let y = 2024; y <= currentYear + 2; y++) yearOptions.push(y);
 
-  const [employees, setEmployees] = useState<Array<{ id: number; name: string; surname: string }>>([]);
+  const [employees, setEmployees] = useState<Array<{ id: number; name: string; surname: string; avatarFilename?: string | null }>>([]);
   const [balances, setBalances] = useState<Record<number, LeaveBalance[]>>({});
   const [year, setYear] = useState(currentYear);
   const [loading, setLoading] = useState(false);
@@ -136,8 +198,8 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
 
   const selectStyle = {
     padding: '8px 12px', borderRadius: 8,
-    border: '1.5px solid var(--border)', background: 'var(--background)',
-    color: 'var(--text)', fontSize: 13, outline: 'none', cursor: 'pointer',
+    border: '1.5px solid #d1d5db', background: '#ffffff',
+    color: '#111827', fontSize: 13, outline: 'none', cursor: 'pointer',
   };
 
   const [empError, setEmpError] = useState<string | null>(null);
@@ -146,7 +208,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   useEffect(() => {
     setEmpError(null);
     getEmployees({ limit: 200, status: 'active' })
-      .then((r) => setEmployees(r.employees.map((e) => ({ id: e.id, name: e.name, surname: e.surname }))))
+      .then((r) => setEmployees(r.employees.map((e) => ({ id: e.id, name: e.name, surname: e.surname, avatarFilename: e.avatarFilename ?? null }))))
       .catch(() => {
         setEmpError(t('common.error'));
         setEmployees([]);
@@ -154,7 +216,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   }, [t]);
 
   // Load balances when employees or year changes
-  const loadBalances = useCallback(async (emps: Array<{ id: number; name: string; surname: string }>, selectedYear: number) => {
+  const loadBalances = useCallback(async (emps: Array<{ id: number; name: string; surname: string; avatarFilename?: string | null }>, selectedYear: number) => {
     if (emps.length === 0) return;
     setLoading(true);
     const balanceMap: Record<number, LeaveBalance[]> = {};
@@ -408,7 +470,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
               <thead>
-                <tr style={{ background: 'var(--surface)' }}>
+                <tr style={{ background: 'var(--primary)' }}>
                   {[
                     t('leave.col_employee'),
                     t('leave.balance_vacation'),
@@ -417,9 +479,9 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                   ].map((h, i) => (
                     <th key={`${h}-${i}`} style={{
                       padding: '10px 16px', textAlign: 'left',
-                      fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                      fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.84)',
                       textTransform: 'uppercase', letterSpacing: '1.5px',
-                      borderBottom: '2px solid var(--border)',
+                      borderBottom: '1px solid rgba(255,255,255,0.22)',
                       ...(i === 0 ? { paddingLeft: 20 } : {}),
                     }}>
                       {h}
@@ -428,7 +490,11 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                 </tr>
               </thead>
               <tbody>
-                {employees.slice(0, 50).map((emp) => (
+                {employees.slice(0, 50).map((emp) => {
+                  const avatarUrl = getAvatarUrl(emp.avatarFilename ?? null);
+                  const initials = initialsForPerson(emp.name, emp.surname);
+                  const fallbackColor = avatarColorFromName(`${emp.name ?? ''} ${emp.surname ?? ''}`.trim() || String(emp.id));
+                  return (
                   <tr
                     key={emp.id}
                     style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.1s' }}
@@ -436,8 +502,29 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                     onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                   >
                     <td style={{ padding: '12px 16px 12px 20px' }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                        {emp.surname} {emp.name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                        <span style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          border: '1px solid rgba(148,163,184,0.4)',
+                          background: avatarUrl ? 'transparent' : fallbackColor,
+                          color: '#fff',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt={`${emp.surname ?? ''} ${emp.name ?? ''}`.trim()} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : initials}
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {emp.surname} {emp.name}
+                        </span>
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
@@ -460,7 +547,8 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -791,6 +879,7 @@ export default function AdminLeavePanel() {
   const [panelTab, setPanelTab] = useState<PanelTab>('requests');
 
   const [requests, setRequests]       = useState<LeaveRequest[]>([]);
+  const [stores, setStores]           = useState<StoreModel[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
 
@@ -805,6 +894,7 @@ export default function AdminLeavePanel() {
   const [dateTo,   setDateTo]       = useState(monthEnd);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType]     = useState('');
+  const [filterStoreId, setFilterStoreId] = useState('');
   const [search, setSearch]             = useState('');
 
   // ── Create modal ───────────────────────────────────────────────────────────
@@ -813,14 +903,20 @@ export default function AdminLeavePanel() {
   const [cUserId,  setCUserId]          = useState('');
   const [cEmployeeOpen, setCEmployeeOpen] = useState(false);
   const [cType,    setCType]            = useState('vacation');
+  const [cDurationType, setCDurationType] = useState<LeaveDurationType>('full_day');
   const [cStart,   setCStart]           = useState(today);
   const [cEnd,     setCEnd]             = useState(today);
+  const [cShortStartTime, setCShortStartTime] = useState('');
+  const [cShortEndTime, setCShortEndTime] = useState('');
   const [cNotes,   setCNotes]           = useState('');
   const [cSaving,  setCSaving]          = useState(false);
   const [cError,   setCError]           = useState<string | null>(null);
+  const [cOverlapLoading, setCOverlapLoading] = useState(false);
+  const [cOverlappingLeaves, setCOverlappingLeaves] = useState<LeaveRequest[]>([]);
   const cEmployeePickerRef = useRef<HTMLDivElement | null>(null);
 
   // ── Reject modal ───────────────────────────────────────────────────────────
+  const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [rejectNotes,  setRejectNotes]  = useState('');
   const [rejectSaving, setRejectSaving] = useState(false);
@@ -863,6 +959,21 @@ export default function AdminLeavePanel() {
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
   useEffect(() => {
+    let active = true;
+    getStores()
+      .then((rows) => {
+        if (active) setStores(rows);
+      })
+      .catch(() => {
+        if (active) setStores([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!cEmployeeOpen) return;
     const onMouseDown = (event: MouseEvent) => {
       if (!cEmployeePickerRef.current?.contains(event.target as Node)) {
@@ -873,17 +984,111 @@ export default function AdminLeavePanel() {
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [cEmployeeOpen]);
 
+  useEffect(() => {
+    if (cType !== 'vacation') {
+      setCDurationType('full_day');
+      setCShortStartTime('');
+      setCShortEndTime('');
+    }
+  }, [cType]);
+
+  useEffect(() => {
+    if (cDurationType === 'short_leave') {
+      setCEnd(cStart);
+    }
+  }, [cDurationType, cStart]);
+
+  useEffect(() => {
+    let active = true;
+    if (!createOpen || !cUserId || !cStart || !cEnd) {
+      setCOverlappingLeaves([]);
+      setCOverlapLoading(false);
+      return;
+    }
+
+    setCOverlapLoading(true);
+    getLeaveRequests({ dateFrom: cStart, dateTo: cEnd })
+      .then((res) => {
+        if (!active) return;
+        const userId = parseInt(cUserId, 10);
+        const overlaps = res.requests.filter((req) => {
+          if (req.userId !== userId) return false;
+          if (req.status.includes('rejected') || req.status === 'cancelled') return false;
+          return rangesOverlap(req.startDate, req.endDate, cStart, cEnd);
+        });
+        setCOverlappingLeaves(overlaps);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCOverlappingLeaves([]);
+      })
+      .finally(() => {
+        if (!active) return;
+        setCOverlapLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [createOpen, cUserId, cStart, cEnd]);
+
   // ── Stats ──────────────────────────────────────────────────────────────────
-  const pendingCount  = requests.filter((r) => r.status === 'pending' || r.status.includes('approved') && r.status !== 'approved').length;
+  const isPendingWorkflowStatus = (status: LeaveStatus): boolean => (
+    status === 'pending' || (status.includes('approved') && status !== 'approved')
+  );
+
+  const pendingCount  = requests.filter((r) => isPendingWorkflowStatus(r.status)).length;
   const approvedCount = requests.filter((r) => r.status === 'approved').length;
+  const pendingVacationCount = requests.filter((r) => isPendingWorkflowStatus(r.status) && r.leaveType === 'vacation').length;
+  const pendingSickCount = requests.filter((r) => isPendingWorkflowStatus(r.status) && r.leaveType === 'sick').length;
+  const approvedVacationCount = requests.filter((r) => r.status === 'approved' && r.leaveType === 'vacation').length;
+  const approvedSickCount = requests.filter((r) => r.status === 'approved' && r.leaveType === 'sick').length;
+  const totalVacationCount = requests.filter((r) => r.leaveType === 'vacation').length;
+  const totalSickCount = requests.filter((r) => r.leaveType === 'sick').length;
+
+  const pendingPeople = useMemo(
+    () => recentUniqueUsers(requests.filter((r) => isPendingWorkflowStatus(r.status)), 20),
+    [requests],
+  );
+  const approvedPeople = useMemo(
+    () => recentUniqueUsers(requests.filter((r) => r.status === 'approved'), 20),
+    [requests],
+  );
 
   // ── Filtered rows ──────────────────────────────────────────────────────────
-  const filtered = search
-    ? requests.filter((r) => {
-        const full = `${r.userSurname ?? ''} ${r.userName ?? ''}`.toLowerCase();
-        return full.includes(search.toLowerCase());
-      })
-    : requests;
+  const storeLookup = new Map<number, StoreModel>();
+  for (const store of stores) storeLookup.set(store.id, store);
+
+  const resolveRequestStoreMeta = (req: LeaveRequest): { storeName: string; companyName: string; storeLogoFilename: string | null } => {
+    const fallbackCompany = t('common.company', 'Company');
+    if (req.storeId != null) {
+      const known = storeLookup.get(req.storeId);
+      const storeName = known?.name ?? `${t('common.store', 'Store')} #${req.storeId}`;
+      const companyName = known?.companyName ?? (req.companyId != null ? `${fallbackCompany} #${req.companyId}` : fallbackCompany);
+      return {
+        storeName,
+        companyName,
+        storeLogoFilename: known?.logoFilename ?? req.storeLogoFilename ?? null,
+      };
+    }
+    return {
+      storeName: t('employees.noStore', 'No store'),
+      companyName: req.companyId != null ? `${fallbackCompany} #${req.companyId}` : fallbackCompany,
+      storeLogoFilename: req.storeLogoFilename ?? null,
+    };
+  };
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const filtered = requests.filter((req) => {
+    const storeMeta = resolveRequestStoreMeta(req);
+    const fullName = `${req.userSurname ?? ''} ${req.userName ?? ''}`.trim().toLowerCase();
+    const matchesSearch = !normalizedSearch
+      || fullName.includes(normalizedSearch)
+      || storeMeta.storeName.toLowerCase().includes(normalizedSearch)
+      || storeMeta.companyName.toLowerCase().includes(normalizedSearch);
+    const matchesStore = !filterStoreId || String(req.storeId ?? '') === filterStoreId;
+    return matchesSearch && matchesStore;
+  });
 
   // ── Download certificate ────────────────────────────────────────────────────
   async function handleDownloadCertificate(req: LeaveRequest) {
@@ -949,7 +1154,17 @@ export default function AdminLeavePanel() {
 
   // ── Create ─────────────────────────────────────────────────────────────────
   function openCreate() {
-    setCUserId(''); setCType('vacation'); setCStart(today); setCEnd(today); setCNotes(''); setCError(null);
+    setCUserId('');
+    setCType('vacation');
+    setCDurationType('full_day');
+    setCStart(today);
+    setCEnd(today);
+    setCShortStartTime('');
+    setCShortEndTime('');
+    setCNotes('');
+    setCError(null);
+    setCOverlappingLeaves([]);
+    setCOverlapLoading(false);
     setCEmployeeOpen(false);
     setCreateOpen(true);
     if (empList.length === 0) {
@@ -975,6 +1190,44 @@ export default function AdminLeavePanel() {
     if (!cUserId) { setCError(t('common.required')); return; }
     if (user?.id && parseInt(cUserId, 10) === user.id) { setCError(t('leave.admin_cannot_create_self')); return; }
     if (new Date(cStart) > new Date(cEnd)) { setCError(t('leave.error_date_range')); return; }
+
+    if (cOverlappingLeaves.length > 0) {
+      setCError(t('leave.error_employee_has_leave_same_day', 'This user already has leave on the same day.'));
+      return;
+    }
+
+    if (cDurationType === 'short_leave') {
+      if (cType !== 'vacation') {
+        setCError(t('leave.error_short_vacation_only', 'Short leave is available only for vacation.'));
+        return;
+      }
+      if (cStart !== cEnd) {
+        setCError(t('leave.error_short_same_day', 'Short leave must start and end on the same day.'));
+        return;
+      }
+      if (!cShortStartTime || !cShortEndTime) {
+        setCError(t('leave.error_short_time_required', 'Start and end time are required for short leave.'));
+        return;
+      }
+      const [startHour, startMinute] = cShortStartTime.split(':').map(Number);
+      const [endHour, endMinute] = cShortEndTime.split(':').map(Number);
+      if ([startHour, startMinute, endHour, endMinute].some((value) => Number.isNaN(value))) {
+        setCError(t('leave.error_short_time_required', 'Start and end time are required for short leave.'));
+        return;
+      }
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
+      if (endMinutes <= startMinutes) {
+        setCError(t('leave.error_short_time_range', 'End time must be after start time.'));
+        return;
+      }
+      const shortHours = Number(((endMinutes - startMinutes) / 60).toFixed(2));
+      if (shortHours >= 24) {
+        setCError(t('leave.error_short_duration', 'Short leave must be less than 24 hours.'));
+        return;
+      }
+    }
+
     setCSaving(true);
     setCError(null);
     try {
@@ -983,6 +1236,9 @@ export default function AdminLeavePanel() {
         leaveType: cType as 'vacation' | 'sick',
         startDate: cStart,
         endDate: cEnd,
+        leaveDurationType: cDurationType,
+        shortStartTime: cDurationType === 'short_leave' ? cShortStartTime : undefined,
+        shortEndTime: cDurationType === 'short_leave' ? cShortEndTime : undefined,
         notes: cNotes || undefined,
       });
       showFlash(t('leave.admin_create_success'));
@@ -1000,8 +1256,15 @@ export default function AdminLeavePanel() {
 
   const selectStyle = {
     padding: '8px 12px', borderRadius: 8,
-    border: '1.5px solid var(--border)', background: 'var(--background)',
-    color: 'var(--text)', fontSize: 13, outline: 'none', cursor: 'pointer',
+    border: '1.5px solid #d1d5db', background: '#ffffff',
+    color: '#111827', fontSize: 13, outline: 'none', cursor: 'pointer',
+  };
+
+  const filterControlStyle = {
+    ...selectStyle,
+    border: '1.5px solid #dfd2c2',
+    background: '#fffdfa',
+    color: '#374151',
   };
 
   const labelStyle = {
@@ -1028,147 +1291,313 @@ export default function AdminLeavePanel() {
   return (
     <div style={{ padding: 0, minHeight: '100%' }}>
 
-      {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <div style={{ background: 'var(--primary)', padding: '28px 32px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2.5px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: 8 }}>
-              {t('leave.page_title')}
+      {/* ── Header Summary ────────────────────────────────────────────────── */}
+      <div style={{ padding: '20px 24px 0' }}>
+        <div style={{
+          background: 'var(--primary)',
+          border: '1px solid rgba(13,33,55,0.9)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 16px 36px rgba(13,33,55,0.28)',
+          padding: '20px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.7px', color: 'rgba(255,255,255,0.72)', textTransform: 'uppercase', marginBottom: 6 }}>
+                {t('leave.page_title')}
+              </div>
+              <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.45rem', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.02em' }}>
+                {t('leave.admin_title')}
+              </h1>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.82)', margin: '4px 0 0' }}>
+                {t('leave.admin_subtitle')}
+              </p>
             </div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.5 }}>
-              {t('leave.admin_title')}
-            </h1>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', margin: '6px 0 0' }}>
-              {t('leave.admin_subtitle')}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setMyLeaveOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '9px 16px', borderRadius: 8,
-                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
-                color: '#fff', fontWeight: 600, fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              {t('leave.my_leave_btn')}
-            </button>
-            <button
-              onClick={openCreate}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '9px 16px', borderRadius: 8,
-                background: 'var(--accent)', border: 'none',
-                color: '#fff', fontWeight: 700, fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-              {t('leave.admin_new')}
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setMyLeaveOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '9px 14px', borderRadius: 9,
+                  border: '1px solid rgba(255,255,255,0.32)',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: '#fff', fontWeight: 600, fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                {t('leave.my_leave_btn')}
+              </button>
+              <button
+                onClick={openCreate}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '9px 14px', borderRadius: 9,
+                  background: 'var(--accent)', border: 'none',
+                  color: '#fff', fontWeight: 700, fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+                {t('leave.admin_new')}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, paddingBottom: 0 }}>
-          {[
-            { label: t('leave.admin_stat_pending'),  value: loading ? '—' : pendingCount,          color: '#f59e0b' },
-            { label: t('leave.admin_stat_approved'), value: loading ? '—' : approvedCount,         color: '#22c55e' },
-            { label: t('leave.admin_stat_total'),    value: loading ? '—' : requests.length,       color: 'var(--accent)' },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '8px 8px 0 0', padding: '12px 16px',
-            }}>
-              <div style={{ fontSize: 24, fontWeight: 800, color, fontFamily: 'var(--font-display)', lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 }}>{label}</div>
-            </div>
-          ))}
+        <div style={{
+          marginTop: 12,
+          background: '#ffffff',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-xs)',
+          padding: '14px',
+        }}>
+          {(() => {
+            const summaryMaxAvatars = 5;
+            return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
+            {[
+              {
+                key: 'pending',
+                label: t('leave.admin_stat_pending'),
+                value: loading ? '—' : pendingCount,
+                color: '#b45309',
+                bg: 'rgba(245,158,11,0.10)',
+                vacation: pendingVacationCount,
+                sick: pendingSickCount,
+                people: pendingPeople,
+              },
+              {
+                key: 'approved',
+                label: t('leave.admin_stat_approved'),
+                value: loading ? '—' : approvedCount,
+                color: '#15803d',
+                bg: 'rgba(22,163,74,0.10)',
+                vacation: approvedVacationCount,
+                sick: approvedSickCount,
+                people: approvedPeople,
+              },
+              {
+                key: 'total',
+                label: t('leave.admin_stat_total'),
+                value: loading ? '—' : requests.length,
+                color: '#0D2137',
+                bg: 'rgba(13,33,55,0.08)',
+                vacation: totalVacationCount,
+                sick: totalSickCount,
+                people: [] as LeaveRequest[],
+              },
+            ].map(({ key, label, value, color, bg, vacation, sick, people }) => {
+              const strips = [
+                {
+                  key: 'vacation',
+                  count: vacation,
+                  icon: <Palmtree size={10} strokeWidth={2.5} />,
+                  border: '1px solid rgba(37,99,235,0.26)',
+                  left: '#2563eb',
+                  background: 'rgba(219,234,254,0.86)',
+                  color: '#1e40af',
+                  label: t('leave.type_vacation'),
+                },
+                {
+                  key: 'sick',
+                  count: sick,
+                  icon: <Thermometer size={10} strokeWidth={2.5} />,
+                  border: '1px solid rgba(217,119,6,0.26)',
+                  left: '#d97706',
+                  background: 'rgba(254,243,199,0.86)',
+                  color: '#92400e',
+                  label: t('leave.type_sick'),
+                },
+              ].filter((item) => loading || item.count > 0);
+              const visiblePeople = people.slice(0, summaryMaxAvatars);
+              const showOverflow = people.length > summaryMaxAvatars;
+
+              return (
+              <div key={label} style={{ background: bg, border: '1px solid rgba(148,163,184,0.25)', borderRadius: 12, padding: '12px 14px', minHeight: 120, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color, fontFamily: 'var(--font-display)', lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px', marginTop: 5 }}>{label}</div>
+                <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {strips.map((strip) => (
+                      <span
+                        key={strip.key}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          borderRadius: 999,
+                          border: strip.border,
+                          borderLeft: `3px solid ${strip.left}`,
+                          background: strip.background,
+                          color: strip.color,
+                          padding: '2px 8px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {strip.icon}
+                        {strip.label} {loading ? '—' : strip.count}
+                      </span>
+                    ))}
+                  </div>
+
+                  {(key === 'pending' || key === 'approved') && visiblePeople.length > 0 && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto' }}>
+                      {visiblePeople.map((person, index) => {
+                        const avatarUrl = getAvatarUrl(person.userAvatarFilename);
+                        const fullName = `${person.userSurname ?? ''} ${person.userName ?? ''}`.trim();
+                        const initials = initialsForPerson(person.userName, person.userSurname);
+                        const fallbackColor = avatarColorFromName(fullName || String(person.userId));
+                        return (
+                          <span
+                            key={`${person.userId}-${index}`}
+                            title={fullName}
+                            style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              overflow: 'hidden',
+                              border: '1.5px solid #fff',
+                              background: avatarUrl ? 'transparent' : fallbackColor,
+                              color: '#fff',
+                              fontSize: '0.58rem',
+                              fontWeight: 800,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginLeft: index === 0 ? 0 : -8,
+                              boxShadow: '0 1px 2px rgba(15,23,42,0.16)',
+                              zIndex: 25 - index,
+                            }}
+                          >
+                            {avatarUrl ? (
+                              <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : initials}
+                          </span>
+                        );
+                      })}
+
+                      {showOverflow && (
+                        <span
+                          title={t('shifts.monthlyEmployeesOverflow', 'More employees')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginLeft: visiblePeople.length > 0 ? -8 : 0,
+                            width: 24,
+                            height: 24,
+                            borderRadius: '50%',
+                            border: '1.5px solid #fff',
+                            background: 'linear-gradient(135deg, rgba(15,23,42,0.78), rgba(51,65,85,0.76))',
+                            color: '#e2e8f0',
+                            fontSize: '0.55rem',
+                            fontWeight: 900,
+                            lineHeight: 1,
+                            boxShadow: '0 1px 2px rgba(15,23,42,0.16)',
+                            zIndex: 30,
+                          }}
+                        >
+                          5+
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              );
+            })}
+          </div>
+            );
+          })()}
         </div>
       </div>
 
-      {/* ── Tab bar ───────────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', gap: 0,
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--surface)',
-        padding: '0 32px',
-      }}>
-        {((['requests', 'balances'] as PanelTab[]).filter(t => t === 'requests' || permissions?.saldi || user?.isSuperAdmin)).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setPanelTab(tab)}
-            style={{
-              padding: '12px 20px',
-              fontSize: 14,
-              fontWeight: panelTab === tab ? 700 : 500,
-              color: panelTab === tab ? 'var(--primary)' : 'var(--text-secondary)',
-              background: 'none',
-              border: 'none',
-              borderBottom: panelTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            {tab === 'requests' ? t('leave.admin_title') : t('leave.balance_tab')}
-          </button>
-        ))}
+      {/* ── Tabs + Filters bar ───────────────────────────────────────────── */}
+      <div style={{ padding: '14px 24px 0' }}>
+        <div style={{
+          background: '#f8f3ec',
+          border: '1px solid #e3d7c8',
+          borderRadius: 14,
+          padding: '10px 12px 12px',
+          boxShadow: '0 4px 12px rgba(15,23,42,0.06)',
+        }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {((['requests', 'balances'] as PanelTab[]).filter((tab) => tab === 'requests' || permissions?.saldi || user?.isSuperAdmin)).map((tab) => {
+              const selected = panelTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setPanelTab(tab)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 999,
+                    border: `1px solid ${selected ? '#b68c56' : '#d8c7b3'}`,
+                    background: selected ? '#fff8ef' : '#ffffff',
+                    color: selected ? '#6b4b22' : '#6f5a41',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {tab === 'requests' ? t('leave.admin_title') : t('leave.balance_tab')}
+                </button>
+              );
+            })}
+          </div>
+
+          {panelTab === 'requests' && (
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                placeholder={t('common.search')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ ...filterControlStyle, flex: '1 1 180px', minWidth: 150, cursor: 'text' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 180px', minWidth: 150 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#6f5a41', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateFrom')}</span>
+                <div style={{ flex: 1 }}><DatePicker value={dateFrom} onChange={setDateFrom} /></div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 180px', minWidth: 150 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#6f5a41', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateTo')}</span>
+                <div style={{ flex: 1 }}><DatePicker value={dateTo} onChange={setDateTo} /></div>
+              </div>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...filterControlStyle, flex: '1 1 170px', minWidth: 140 }}>
+                <option value="">{t('leave.admin_filter_all_status')}</option>
+                <option value="pending">{t('leave.status_pending')}</option>
+                <option value="store manager approved">{t('leave.status_store_manager_approved')}</option>
+                <option value="area manager approved">{t('leave.status_area_manager_approved')}</option>
+                <option value="HR approved">{t('leave.status_hr_approved')}</option>
+                <option value="approved">{t('leave.status_approved')}</option>
+                <option value="rejected">{t('leave.status_rejected')}</option>
+                <option value="cancelled">{t('leave.status_cancelled')}</option>
+              </select>
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...filterControlStyle, flex: '1 1 150px', minWidth: 120 }}>
+                <option value="">{t('leave.admin_filter_all_types')}</option>
+                <option value="vacation">{t('leave.type_vacation')}</option>
+                <option value="sick">{t('leave.type_sick')}</option>
+              </select>
+              <select value={filterStoreId} onChange={(e) => setFilterStoreId(e.target.value)} style={{ ...filterControlStyle, flex: '1 1 190px', minWidth: 150 }}>
+                <option value="">{t('leave.admin_filter_all_stores', 'All stores')}</option>
+                {[...stores]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((store) => (
+                    <option key={store.id} value={String(store.id)}>{store.name}</option>
+                  ))}
+              </select>
+              {loading && <span style={{ fontSize: 12, color: '#6f5a41' }}>{t('common.loading')}</span>}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Requests tab ──────────────────────────────────────────────────── */}
       {panelTab === 'requests' && (
         <>
-          {/* ── Filter bar ────────────────────────────────────────────────── */}
-          <div style={{
-            padding: '12px 32px', background: 'var(--surface)',
-            borderBottom: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-            position: 'sticky', top: 0, zIndex: 20,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-          }}>
-            {/* Search */}
-            <input
-              type="text"
-              placeholder={t('common.search')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ ...selectStyle, flex: '1 1 140px', minWidth: 120, cursor: 'text' }}
-            />
-            {/* Date range */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 160px', minWidth: 140 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateFrom')}</span>
-              <div style={{ flex: 1 }}><DatePicker value={dateFrom} onChange={setDateFrom} /></div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 160px', minWidth: 140 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateTo')}</span>
-              <div style={{ flex: 1 }}><DatePicker value={dateTo} onChange={setDateTo} /></div>
-            </div>
-            {/* Status filter */}
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...selectStyle, flex: '1 1 140px', minWidth: 120 }}>
-              <option value="">{t('leave.admin_filter_all_status')}</option>
-              <option value="pending">{t('leave.status_pending')}</option>
-              <option value="store manager approved">{t('leave.status_store_manager_approved')}</option>
-              <option value="area manager approved">{t('leave.status_area_manager_approved')}</option>
-              <option value="HR approved">{t('leave.status_hr_approved')}</option>
-              <option value="approved">{t('leave.status_approved')}</option>
-              <option value="rejected">{t('leave.status_rejected')}</option>
-              <option value="cancelled">{t('leave.status_cancelled')}</option>
-            </select>
-            {/* Type filter */}
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...selectStyle, flex: '1 1 120px', minWidth: 100 }}>
-              <option value="">{t('leave.admin_filter_all_types')}</option>
-              <option value="vacation">{t('leave.type_vacation')}</option>
-              <option value="sick">{t('leave.type_sick')}</option>
-            </select>
-            {loading && (
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
-            )}
-          </div>
-
           {/* ── Table ─────────────────────────────────────────────────────── */}
-          <div style={{ padding: '20px 32px' }}>
+          <div style={{ padding: '20px 24px 24px' }}>
             {flash && (
               <div style={{
                 background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
@@ -1196,22 +1625,24 @@ export default function AdminLeavePanel() {
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
                     <thead>
-                      <tr style={{ background: 'var(--surface)' }}>
+                      <tr style={{ background: 'var(--primary)' }}>
                         {[
                           t('leave.col_employee'),
+                          t('leave.col_store', 'Store'),
                           t('leave.type_label'),
                           t('leave.col_period'),
                           t('leave.col_days'),
                           t('leave.col_status'),
+                          t('leave.col_action_time', 'Last action'),
                           t('common.actions'),
                         ].map((h, i) => (
                           <th key={`${h}-${i}`} style={{
                             padding: '10px 16px', textAlign: 'left',
-                            fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                            fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.84)',
                             textTransform: 'uppercase', letterSpacing: '1.5px',
-                            borderBottom: '2px solid var(--border)',
+                            borderBottom: '1px solid rgba(255,255,255,0.22)',
                             ...(i === 0 ? { paddingLeft: 20 } : {}),
                           }}>
                             {h}
@@ -1222,9 +1653,25 @@ export default function AdminLeavePanel() {
                     <tbody>
                       {filtered.map((req) => {
                         const days = countWorkingDays(req.startDate, req.endDate);
+                        const isShortLeave = req.leaveDurationType === 'short_leave';
+                        const shortHours = shortLeaveHours(req.shortStartTime, req.shortEndTime);
                         const isVacation = req.leaveType === 'vacation';
                         const typeColor = isVacation ? '#3b82f6' : '#f59e0b';
+                        const storeMeta = resolveRequestStoreMeta(req);
+                        const storeLogoUrl = getStoreLogoUrl(storeMeta.storeLogoFilename);
+                        const storeInitial = (storeMeta.storeName?.[0] ?? 'S').toUpperCase();
+                        const avatarUrl = getAvatarUrl(req.userAvatarFilename);
+                        const initials = initialsForPerson(req.userName, req.userSurname);
+                        const avatarFallbackColor = avatarColorFromName(`${req.userName ?? ''} ${req.userSurname ?? ''}`.trim() || String(req.userId));
                         const isHR = user?.role === 'hr';
+                        const latestActionLabel = req.latestAction === 'approved'
+                          ? t('leave.action_approve')
+                          : req.latestAction === 'rejected'
+                            ? t('leave.action_reject')
+                            : null;
+                        const latestActionTime = req.latestActionAt
+                          ? fmtDateTime(req.latestActionAt, locale)
+                          : '—';
                         const canAct =
                           req.status !== 'approved' &&
                           !req.status.includes('rejected') &&
@@ -1240,34 +1687,106 @@ export default function AdminLeavePanel() {
                           >
                             {/* Employee */}
                             <td style={{ padding: '12px 16px 12px 20px' }}>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                                {req.userSurname} {req.userName}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                <span style={{
+                                  width: 30,
+                                  height: 30,
+                                  borderRadius: '50%',
+                                  overflow: 'hidden',
+                                  flexShrink: 0,
+                                  border: '1px solid rgba(148,163,184,0.4)',
+                                  background: avatarUrl ? 'transparent' : avatarFallbackColor,
+                                  color: '#fff',
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}>
+                                  {avatarUrl ? (
+                                    <img src={avatarUrl} alt={`${req.userSurname ?? ''} ${req.userName ?? ''}`.trim()} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : initials}
+                                </span>
+                                <span style={{ minWidth: 0 }}>
+                                  <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {req.userSurname} {req.userName}
+                                  </span>
+                                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                                    #{req.id} · {new Date(req.createdAt).toLocaleDateString(locale === 'en' ? 'en-GB' : 'it-IT')}
+                                  </span>
+                                </span>
                               </div>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                                #{req.id} · {new Date(req.createdAt).toLocaleDateString(locale === 'en' ? 'en-GB' : 'it-IT')}
+                            </td>
+                            {/* Store */}
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                <span style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: '50%',
+                                  overflow: 'hidden',
+                                  border: '1px solid rgba(148,163,184,0.35)',
+                                  background: 'rgba(13,33,55,0.12)',
+                                  color: '#0D2137',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                }}>
+                                  {storeLogoUrl ? (
+                                    <img src={storeLogoUrl} alt={storeMeta.storeName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : storeInitial}
+                                </span>
+                                <span style={{ minWidth: 0 }}>
+                                  <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {storeMeta.storeName}
+                                  </span>
+                                  <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {storeMeta.companyName}
+                                  </span>
+                                </span>
                               </div>
                             </td>
                             {/* Type */}
                             <td style={{ padding: '12px 16px' }}>
                               <span style={{
-                                display: 'inline-block', padding: '3px 10px', borderRadius: 20,
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                padding: '3px 10px', borderRadius: 20,
                                 fontSize: 11, fontWeight: 700,
                                 background: `${typeColor}18`, color: typeColor, border: `1px solid ${typeColor}30`,
                               }}>
+                                {isVacation ? <Palmtree size={11} strokeWidth={2.4} /> : <Thermometer size={11} strokeWidth={2.4} />}
                                 {t(`leave.type_${req.leaveType}`)}
                               </span>
                             </td>
                             {/* Period */}
                             <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                              {fmtDate(req.startDate, locale)} → {fmtDate(req.endDate, locale)}
+                              {isShortLeave
+                                ? `${fmtDate(req.startDate, locale)} · ${req.shortStartTime ?? '--:--'}-${req.shortEndTime ?? '--:--'}`
+                                : `${fmtDate(req.startDate, locale)} → ${fmtDate(req.endDate, locale)}`}
                             </td>
                             {/* Days */}
                             <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                              {days}
+                              {isShortLeave && shortHours != null
+                                ? `${shortHours}h`
+                                : days}
                             </td>
                             {/* Status */}
                             <td style={{ padding: '12px 16px' }}>
                               <StatusBadge status={req.status} />
+                            </td>
+                            {/* Last Action */}
+                            <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                              {latestActionLabel ? (
+                                <>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>{latestActionLabel}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{latestActionTime}</div>
+                                </>
+                              ) : (
+                                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                              )}
                             </td>
                             {/* Actions */}
                             <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
@@ -1275,53 +1794,65 @@ export default function AdminLeavePanel() {
                                 {req.medicalCertificateName && (
                                   <button
                                     onClick={() => handleDownloadCertificate(req)}
+                                    title={t('leave.certificate_btn')}
+                                    aria-label={t('leave.certificate_btn')}
                                     style={{
-                                      padding: '4px 10px', borderRadius: 6,
+                                      width: 28, height: 28, borderRadius: 7,
                                       border: '1px solid rgba(3,105,161,0.25)',
                                       background: 'rgba(3,105,161,0.08)',
-                                      color: '#0369a1', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                      color: '#0369a1', cursor: 'pointer',
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                     }}
                                   >
-                                    {t('leave.certificate_btn')}
+                                    <FileText size={13} strokeWidth={2.5} />
                                   </button>
                                 )}
                                 {canAct && (
                                   <>
                                     <button
-                                      onClick={() => handleApprove(req)}
+                                      onClick={() => setApproveTarget(req)}
+                                      title={t('leave.action_approve')}
+                                      aria-label={t('leave.action_approve')}
                                       style={{
-                                        padding: '4px 10px', borderRadius: 6,
+                                        width: 28, height: 28, borderRadius: 7,
                                         border: '1px solid rgba(22,163,74,0.3)',
                                         background: 'rgba(22,163,74,0.08)',
-                                        color: '#16a34a', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                        color: '#16a34a', cursor: 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                       }}
                                     >
-                                      {t('leave.action_approve')}
+                                      <CheckCheck size={14} strokeWidth={2.6} />
                                     </button>
                                     <button
                                       onClick={() => { setRejectTarget(req); setRejectNotes(''); setRejectError(null); }}
+                                      title={t('leave.action_reject')}
+                                      aria-label={t('leave.action_reject')}
                                       style={{
-                                        padding: '4px 10px', borderRadius: 6,
+                                        width: 28, height: 28, borderRadius: 7,
                                         border: '1px solid rgba(220,38,38,0.3)',
                                         background: 'rgba(220,38,38,0.08)',
-                                        color: '#dc2626', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                        color: '#dc2626', cursor: 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                       }}
                                     >
-                                      {t('leave.action_reject')}
+                                      <XCircle size={14} strokeWidth={2.6} />
                                     </button>
                                   </>
                                 )}
                                 {isAdmin && (
                                   <button
                                     onClick={() => setDeleteTarget(req)}
+                                    title={t('common.delete')}
+                                    aria-label={t('common.delete')}
                                     style={{
-                                      padding: '4px 10px', borderRadius: 6,
+                                      width: 28, height: 28, borderRadius: 7,
                                       border: '1px solid rgba(107,114,128,0.25)',
                                       background: 'rgba(107,114,128,0.06)',
-                                      color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                      color: 'var(--text-muted)', cursor: 'pointer',
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                     }}
                                   >
-                                    {t('common.delete')}
+                                    <Trash2 size={13} strokeWidth={2.4} />
                                   </button>
                                 )}
                               </div>
@@ -1371,7 +1902,7 @@ export default function AdminLeavePanel() {
             }
           }}
         >
-          <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 480, border: '1px solid var(--border)' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 520, maxHeight: '88vh', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -1381,47 +1912,33 @@ export default function AdminLeavePanel() {
                   {t('leave.admin_create_title')}
                 </h2>
               </div>
-              <button onClick={() => { setCreateOpen(false); setCEmployeeOpen(false); }} disabled={cSaving} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              <button
+                onClick={() => { setCreateOpen(false); setCEmployeeOpen(false); }}
+                disabled={cSaving}
+                style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: 'var(--text-secondary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ×
+              </button>
             </div>
-            <div style={{ padding: '20px 24px' }}>
+
+            <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
               {cError && (
                 <div style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)', borderLeft: '4px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#dc2626', fontSize: 13 }}>
                   {cError}
                 </div>
               )}
 
-              {/* Employee */}
               <div style={{ marginBottom: 14 }}>
                 <label style={labelStyle}>{t('leave.select_employee')} *</label>
                 <div ref={cEmployeePickerRef} style={{ position: 'relative' }}>
                   <button
                     type="button"
                     onClick={() => setCEmployeeOpen((prev) => !prev)}
-                    style={{
-                      ...selectStyle,
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                    }}
+                    style={{ ...selectStyle, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
                   >
                     {selectedCreateEmployee ? (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        <span style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: '50%',
-                          overflow: 'hidden',
-                          background: 'rgba(13,33,55,0.14)',
-                          color: '#0D2137',
-                          fontSize: 10,
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}>
+                        <span style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {selectedCreateEmployeeAvatarUrl ? (
                             <img src={selectedCreateEmployeeAvatarUrl} alt={selectedCreateEmployeeFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           ) : selectedCreateEmployeeInitials}
@@ -1443,23 +1960,9 @@ export default function AdminLeavePanel() {
                   </button>
 
                   {cEmployeeOpen && (
-                    <div style={{
-                      position: 'absolute',
-                      zIndex: 20,
-                      top: 'calc(100% + 6px)',
-                      left: 0,
-                      right: 0,
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 10,
-                      boxShadow: '0 16px 30px rgba(0,0,0,0.18)',
-                      maxHeight: 230,
-                      overflowY: 'auto',
-                    }}>
+                    <div style={{ position: 'absolute', zIndex: 20, top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #d1d5db', borderRadius: 10, boxShadow: '0 16px 30px rgba(0,0,0,0.18)', maxHeight: 230, overflowY: 'auto' }}>
                       {empList.length === 0 ? (
-                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-                          {t('common.loading')}
-                        </div>
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
                       ) : (
                         empList.map((emp) => {
                           const fullName = `${emp.surname} ${emp.name}`.trim();
@@ -1475,33 +1978,9 @@ export default function AdminLeavePanel() {
                                 setCUserId(String(emp.id));
                                 setCEmployeeOpen(false);
                               }}
-                              style={{
-                                width: '100%',
-                                border: 'none',
-                                borderBottom: '1px solid var(--border)',
-                                background: selected ? 'var(--surface-warm)' : 'var(--surface)',
-                                padding: '8px 10px',
-                                textAlign: 'left',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                cursor: 'pointer',
-                              }}
+                              style={{ width: '100%', border: 'none', borderBottom: '1px solid #e5e7eb', background: selected ? '#f8fafc' : '#ffffff', padding: '8px 10px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
                             >
-                              <span style={{
-                                width: 24,
-                                height: 24,
-                                borderRadius: '50%',
-                                overflow: 'hidden',
-                                background: 'rgba(13,33,55,0.14)',
-                                color: '#0D2137',
-                                fontSize: 10,
-                                fontWeight: 700,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                              }}>
+                              <span style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 {avatarUrl ? (
                                   <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 ) : initials}
@@ -1522,50 +2001,8 @@ export default function AdminLeavePanel() {
                     </div>
                   )}
                 </div>
-
-                {selectedCreateEmployee && (
-                  <div style={{
-                    marginTop: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 10px',
-                    borderRadius: 8,
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface-warm)',
-                  }}>
-                    <div style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      overflow: 'hidden',
-                      background: 'rgba(13,33,55,0.14)',
-                      color: '#0D2137',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      {selectedCreateEmployeeAvatarUrl ? (
-                        <img src={selectedCreateEmployeeAvatarUrl} alt={selectedCreateEmployeeFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : selectedCreateEmployeeInitials}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {selectedCreateEmployeeFullName}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {selectedCreateEmployeeRoleLabel}
-                        {selectedCreateEmployee.storeName ? ` · ${selectedCreateEmployee.storeName}` : ''}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Type */}
               <div style={{ marginBottom: 14 }}>
                 <label style={labelStyle}>{t('leave.type_label')} *</label>
                 <select value={cType} onChange={(e) => setCType(e.target.value)} style={{ ...selectStyle, width: '100%' }}>
@@ -1574,24 +2011,93 @@ export default function AdminLeavePanel() {
                 </select>
               </div>
 
-              {/* Dates */}
+              {cType === 'vacation' && (
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>{t('leave.duration_mode_label', 'Duration')} *</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {([
+                      { key: 'full_day', label: t('leave.duration_full_day', 'Full day leave') },
+                      { key: 'short_leave', label: t('leave.duration_short_leave', 'Short leave') },
+                    ] as const).map((opt) => {
+                      const selected = cDurationType === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setCDurationType(opt.key)}
+                          style={{ borderRadius: 8, border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`, background: '#ffffff', color: selected ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: 12, fontWeight: 700, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
                 <div style={{ flex: 1 }}>
                   <DatePicker label={`${t('leave.start_date')} *`} value={cStart} onChange={setCStart} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <DatePicker label={`${t('leave.end_date')} *`} value={cEnd} onChange={setCEnd} />
+                  <DatePicker label={`${t('leave.end_date')} *`} value={cEnd} onChange={setCEnd} disabled={cDurationType === 'short_leave'} />
                 </div>
               </div>
 
-              {/* Working days preview */}
-              {cStart && cEnd && new Date(cStart) <= new Date(cEnd) && (
-                <div style={{ marginBottom: 14, padding: '8px 12px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  {t('leave.working_days', { n: countWorkingDays(cStart, cEnd) })}
+              {cDurationType === 'short_leave' && (
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>{t('leave.short_leave_time_range', 'Time range')} *</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <input type="time" value={cShortStartTime} onChange={(e) => setCShortStartTime(e.target.value)} style={{ ...selectStyle, width: '100%', boxSizing: 'border-box', cursor: 'text' }} />
+                    <input type="time" value={cShortEndTime} onChange={(e) => setCShortEndTime(e.target.value)} style={{ ...selectStyle, width: '100%', boxSizing: 'border-box', cursor: 'text' }} />
+                  </div>
                 </div>
               )}
 
-              {/* Notes */}
+              {cStart && cEnd && new Date(cStart) <= new Date(cEnd) && (
+                <div style={{ marginBottom: 14, padding: '8px 12px', background: '#ffffff', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 12, color: '#4b5563', fontWeight: 600 }}>
+                  {cDurationType === 'short_leave'
+                    ? (() => {
+                        const hours = shortLeaveHours(cShortStartTime, cShortEndTime);
+                        return hours != null
+                          ? t('leave.short_leave_hours', { hours })
+                          : t('leave.short_leave_hint', 'Select start and end time for a short leave.');
+                      })()
+                    : t('leave.working_days', { n: countWorkingDays(cStart, cEnd) })}
+                </div>
+              )}
+
+              {cOverlapLoading && cUserId && (
+                <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', fontSize: 12, color: '#4b5563', fontWeight: 600 }}>
+                  {t('common.loading')}
+                </div>
+              )}
+
+              {!cOverlapLoading && cOverlappingLeaves.length > 0 && (
+                <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(220,38,38,0.25)', background: 'rgba(220,38,38,0.06)' }}>
+                  <div style={{ fontSize: 12, color: '#b91c1c', fontWeight: 700, marginBottom: 8 }}>
+                    {t('leave.error_employee_has_leave_same_day', 'This user already has leave on the same day.')}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {cOverlappingLeaves.slice(0, 3).map((conflict) => {
+                      const conflictShort = conflict.leaveDurationType === 'short_leave';
+                      return (
+                        <div key={conflict.id} style={{ background: '#fff', border: '1px solid rgba(220,38,38,0.18)', borderRadius: 7, padding: '7px 9px' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>
+                            {t(`leave.type_${conflict.leaveType}`)} · {t(`leave.status_${conflict.status.toLowerCase().replace(/ /g, '_')}`)}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#6b7280' }}>
+                            {conflictShort
+                              ? `${fmtDate(conflict.startDate, locale)} · ${conflict.shortStartTime ?? '--:--'}-${conflict.shortEndTime ?? '--:--'}`
+                              : `${fmtDate(conflict.startDate, locale)} → ${fmtDate(conflict.endDate, locale)}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: 24 }}>
                 <label style={labelStyle}>{t('leave.notes_label')}</label>
                 <textarea
@@ -1599,18 +2105,61 @@ export default function AdminLeavePanel() {
                   onChange={(e) => setCNotes(e.target.value)}
                   rows={2}
                   placeholder={t('leave.notes_placeholder')}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--background)', color: 'var(--text)', fontSize: 14, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #d1d5db', background: '#fff', color: 'var(--text)', fontSize: 14, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
                 />
               </div>
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => { setCreateOpen(false); setCEmployeeOpen(false); }} disabled={cSaving} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                <button
+                  onClick={() => { setCreateOpen(false); setCEmployeeOpen(false); }}
+                  disabled={cSaving}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid #d1d5db', background: '#fff', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                >
                   {t('common.cancel')}
                 </button>
-                <button onClick={handleCreate} disabled={cSaving} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: cSaving ? 'not-allowed' : 'pointer', opacity: cSaving ? 0.7 : 1 }}>
+                <button
+                  onClick={handleCreate}
+                  disabled={cSaving}
+                  style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: cSaving ? 'not-allowed' : 'pointer', opacity: cSaving ? 0.7 : 1 }}
+                >
                   {cSaving ? t('common.saving') : t('leave.admin_new')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Approve Confirm Modal ───────────────────────────────────────── */}
+      {approveTarget && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setApproveTarget(null); }}
+        >
+          <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 390, border: '1px solid var(--border)', padding: 24 }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: '1rem', fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
+              {t('leave.action_approve')}
+            </h3>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-secondary)' }}>
+              {approveTarget.userSurname} {approveTarget.userName} · {fmtDate(approveTarget.startDate, locale)} → {fmtDate(approveTarget.endDate, locale)}
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setApproveTarget(null)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: '#fff', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={async () => {
+                  const target = approveTarget;
+                  setApproveTarget(null);
+                  if (target) await handleApprove(target);
+                }}
+                style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                {t('common.confirm', 'Confirm')}
+              </button>
             </div>
           </div>
         </div>

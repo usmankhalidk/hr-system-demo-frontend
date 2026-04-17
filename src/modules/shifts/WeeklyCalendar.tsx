@@ -169,6 +169,22 @@ export default function WeeklyCalendar({
     t('shifts.daySun', 'Sun'),
   ];
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const [hoveredActivityKey, setHoveredActivityKey] = useState<string | null>(null);
+  const [hoveredLeaveKey, setHoveredLeaveKey] = useState<string | null>(null);
+
+  const hoverCardStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 'calc(100% + 2px)',
+    right: 0,
+    minWidth: 176,
+    maxWidth: 228,
+    borderRadius: 8,
+    border: '1px solid rgba(148,163,184,0.44)',
+    background: '#ffffff',
+    boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
+    padding: '7px 8px',
+    zIndex: 80,
+  };
   const windowDisplayMap = new Map<string, WindowDisplayActivity[]>();
   for (const item of windowDisplayActivities ?? []) {
     const dateItems = windowDisplayMap.get(item.date) ?? [];
@@ -446,6 +462,8 @@ export default function WeeklyCalendar({
                   const transferVm = transferVisualMeta(transfer?.status ?? 'active');
                   const lvVacation = leave?.leaveType === 'vacation';
                   const lvPending = leave ? leave.status !== 'hr_approved' : false;
+                  const leaveHoverKey = `${userId}-${dateStr}-leave`;
+                  const isLeaveHovered = hoveredLeaveKey === leaveHoverKey;
                   const transferTargetStoreId = transfer?.targetStoreId ?? null;
                   const transferLaneShifts = transferTargetStoreId == null
                     ? []
@@ -574,6 +592,8 @@ export default function WeeklyCalendar({
                     <td
                       key={colIdx}
                       title={canEdit && !hasVisibleShift
+                        && !leave
+                        && dayActivities.length === 0
                         ? t('shifts.addShiftTooltip', '+ Aggiungi turno')
                         : undefined}
                       style={{
@@ -597,61 +617,91 @@ export default function WeeklyCalendar({
                         const activityLabel = getActivityTypeLabel(t, activity.activityType, activity.customActivityName);
                         const hoursLabel = activity.durationHours != null ? `${activity.durationHours}h` : null;
                         const palette = getActivityPalette(activity.activityType);
+                        const activityHoverKey = `${userId}-${dateStr}-${activity.id}`;
+                        const isActivityHovered = hoveredActivityKey === activityHoverKey;
+                        const activityStoreName = activity.storeName || t('common.store', 'Store');
 
                         return (
-                          <button
+                          <div
                             key={`activity-${activity.id}`}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onWindowDisplayClick?.(dateStr);
-                            }}
-                            style={{
-                              marginBottom: 4,
-                              width: '100%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              borderRadius: 5,
-                              border: `1px solid ${palette.border}`,
-                              borderLeft: `3px solid ${palette.accentBorder}`,
-                              background: palette.background,
-                              color: palette.color,
-                              padding: '4px 6px 4px 5px',
-                              fontSize: '0.66rem',
-                              fontWeight: 800,
-                              lineHeight: 1.2,
-                              cursor: onWindowDisplayClick ? 'pointer' : 'default',
-                              textAlign: 'left',
-                            }}
-                            title={`${iconText} ${activityLabel}${hoursLabel ? ` · ${hoursLabel}` : ''}${activity.notes ? ` · ${activity.notes}` : ''}`}
+                            style={{ position: 'relative' }}
+                            onMouseEnter={() => setHoveredActivityKey(activityHoverKey)}
+                            onMouseLeave={() => setHoveredActivityKey((current) => (current === activityHoverKey ? null : current))}
                           >
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
-                              <span style={{
-                                display: 'inline-flex',
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onWindowDisplayClick?.(dateStr);
+                              }}
+                              style={{
+                                marginBottom: 4,
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                borderRadius: 5,
+                                border: `1px solid ${palette.border}`,
+                                borderLeft: `3px solid ${palette.accentBorder}`,
+                                background: palette.background,
                                 color: palette.color,
-                                fontSize: '0.94rem',
+                                padding: '4px 6px 4px 5px',
+                                fontSize: '0.66rem',
                                 fontWeight: 800,
-                                lineHeight: 1,
-                                flexShrink: 0,
-                              }}>
-                                {iconText}
+                                lineHeight: 1.2,
+                                cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                                textAlign: 'left',
+                              }}
+                            >
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  color: palette.color,
+                                  fontSize: '0.94rem',
+                                  fontWeight: 800,
+                                  lineHeight: 1,
+                                  flexShrink: 0,
+                                }}>
+                                  {iconText}
+                                </span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                                  {activityLabel}
+                                </span>
                               </span>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>
-                                {activityLabel}
-                              </span>
-                            </span>
-                            {hoursLabel && (
-                              <span style={{
-                                fontSize: '0.63rem',
-                                opacity: 0.88,
-                                whiteSpace: 'nowrap',
-                                flexShrink: 0,
-                              }}>
-                                {hoursLabel}
-                              </span>
+                              {hoursLabel && (
+                                <span style={{
+                                  fontSize: '0.63rem',
+                                  opacity: 0.88,
+                                  whiteSpace: 'nowrap',
+                                  flexShrink: 0,
+                                }}>
+                                  {hoursLabel}
+                                </span>
+                              )}
+                            </button>
+
+                            {isActivityHovered && (
+                              <div style={{ ...hoverCardStyle, border: `1px solid ${palette.border}`, borderLeft: `3px solid ${palette.accentBorder}` }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.68rem', fontWeight: 800, lineHeight: 1.2, color: palette.color }}>
+                                  <span style={{ fontSize: '0.92rem', lineHeight: 1 }}>{iconText}</span>
+                                  <span>{activityLabel}</span>
+                                </div>
+                                {hoursLabel && (
+                                  <div style={{ marginTop: 4, fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                                    {t('shifts.activityDuration', 'Duration')}: {hoursLabel}
+                                  </div>
+                                )}
+                                <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                  {t('common.store', 'Store')}: {activityStoreName}
+                                </div>
+                                {activity.notes && (
+                                  <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 600, color: 'var(--text-secondary)', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                                    {activity.notes}
+                                  </div>
+                                )}
+                              </div>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
 
@@ -715,39 +765,58 @@ export default function WeeklyCalendar({
 
                       {/* Leave event block — Google-Calendar-style, sits below shifts */}
                       {leave && (
-                        <div style={{
-                          marginTop: dayShifts.length > 0 ? 3 : 0,
-                          borderRadius: 4,
-                          padding: '4px 7px 4px 8px',
-                          background: lvVacation ? 'rgba(219,234,254,0.8)' : 'rgba(255,237,213,0.8)',
-                          borderLeft: `3px solid ${lvVacation
-                            ? (lvPending ? 'rgba(37,99,235,0.45)' : '#2563eb')
-                            : (lvPending ? 'rgba(234,88,12,0.45)' : '#ea580c')}`,
-                          borderTop: `1px ${lvPending ? 'dashed' : 'solid'} ${lvVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
-                          borderRight: `1px ${lvPending ? 'dashed' : 'solid'} ${lvVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
-                          borderBottom: `1px ${lvPending ? 'dashed' : 'solid'} ${lvVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          opacity: lvPending ? 0.72 : 1,
-                          pointerEvents: 'none',
-                          minHeight: 22,
-                        }}>
-                          <span style={{ lineHeight: 1, flexShrink: 0, display: 'flex' }}>
-                            {lvVacation ? <Palmtree size={11} strokeWidth={2.5} /> : <Thermometer size={11} strokeWidth={2.5} />}
-                          </span>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700, lineHeight: 1.2,
-                            color: lvVacation ? '#1e40af' : '#9a3412',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                        <div
+                          style={{ position: 'relative', marginTop: dayShifts.length > 0 ? 3 : 0 }}
+                          onMouseEnter={() => setHoveredLeaveKey(leaveHoverKey)}
+                          onMouseLeave={() => setHoveredLeaveKey((current) => (current === leaveHoverKey ? null : current))}
+                        >
+                          <div style={{
+                            borderRadius: 4,
+                            padding: '4px 7px 4px 8px',
+                            background: lvVacation ? 'rgba(219,234,254,0.8)' : 'rgba(255,237,213,0.8)',
+                            borderLeft: `3px solid ${lvVacation
+                              ? (lvPending ? 'rgba(37,99,235,0.45)' : '#2563eb')
+                              : (lvPending ? 'rgba(234,88,12,0.45)' : '#ea580c')}`,
+                            borderTop: `1px ${lvPending ? 'dashed' : 'solid'} ${lvVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
+                            borderRight: `1px ${lvPending ? 'dashed' : 'solid'} ${lvVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
+                            borderBottom: `1px ${lvPending ? 'dashed' : 'solid'} ${lvVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            opacity: lvPending ? 0.72 : 1,
+                            minHeight: 22,
                           }}>
-                            {lvVacation ? t('leave.type_vacation') : t('leave.type_sick')}
-                          </span>
-                          {lvPending && (
+                            <span style={{ lineHeight: 1, flexShrink: 0, display: 'flex' }}>
+                              {lvVacation ? <Palmtree size={11} strokeWidth={2.5} /> : <Thermometer size={11} strokeWidth={2.5} />}
+                            </span>
                             <span style={{
-                              fontSize: 8.5, fontWeight: 700, flexShrink: 0,
-                              color: lvVacation ? '#3b82f6' : '#f97316',
-                              background: 'rgba(255,255,255,0.7)',
-                              padding: '1px 4px', borderRadius: 3, lineHeight: 1.4,
-                            }}>{t('leave.pending_short')}</span>
+                              fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                              color: lvVacation ? '#1e40af' : '#9a3412',
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                            }}>
+                              {lvVacation ? t('leave.type_vacation') : t('leave.type_sick')}
+                            </span>
+                            {lvPending && (
+                              <span style={{
+                                fontSize: 8.5, fontWeight: 700, flexShrink: 0,
+                                color: lvVacation ? '#3b82f6' : '#f97316',
+                                background: 'rgba(255,255,255,0.7)',
+                                padding: '1px 4px', borderRadius: 3, lineHeight: 1.4,
+                              }}>{t('leave.pending_short')}</span>
+                            )}
+                          </div>
+
+                          {isLeaveHovered && (
+                            <div style={hoverCardStyle}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.68rem', fontWeight: 800, lineHeight: 1.2, color: lvVacation ? '#1e40af' : '#92400e' }}>
+                                {lvVacation ? <Palmtree size={11} strokeWidth={2.4} /> : <Thermometer size={11} strokeWidth={2.4} />}
+                                <span>{lvVacation ? t('leave.type_vacation') : t('leave.type_sick')}</span>
+                              </div>
+                              <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                {leave.startDate === leave.endDate ? leave.startDate : `${leave.startDate} -> ${leave.endDate}`}
+                              </div>
+                              <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: `1px solid ${lvVacation ? 'rgba(37,99,235,0.28)' : 'rgba(217,119,6,0.28)'}`, background: lvVacation ? 'rgba(219,234,254,0.7)' : 'rgba(254,243,199,0.7)', color: lvVacation ? '#1e40af' : '#92400e', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
+                                {t(`leave.status_${String(leave.status).toLowerCase().replace(/\s+/g, '_')}`, leave.status)}
+                              </div>
+                            </div>
                           )}
                         </div>
                       )}
