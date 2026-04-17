@@ -363,6 +363,18 @@
       "type": "directory"
     },
     {
+      "path": "src/App.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776409909061,
+      "type": "file"
+    },
+    {
+      "path": "vite.config.ts",
+      "accessCount": 2,
+      "lastAccessed": 1776409916846,
+      "type": "file"
+    },
+    {
       "path": "src/api/stores.ts",
       "accessCount": 1,
       "lastAccessed": 1775668347696,
