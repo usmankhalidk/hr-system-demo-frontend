@@ -229,3 +229,10 @@ export async function downloadDocumentGeneric(id: number, filename: string): Pro
   link.click();
   link.remove();
 }
+
+export async function getDocumentPreviewUrlGeneric(id: number, mimeType: string): Promise<string> {
+  const response = await apiClient.get(`/documents/${id}/download`, {
+    responseType: 'blob',
+  });
+  return window.URL.createObjectURL(new Blob([response.data], { type: mimeType }));
+}
