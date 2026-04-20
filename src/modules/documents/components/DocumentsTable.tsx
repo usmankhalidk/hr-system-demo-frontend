@@ -8,9 +8,10 @@ import {
   signDocument,
   restoreDocument,
   EmployeeDocument,
-  DocumentCategory
+  DocumentCategory,
+  getDocumentPreviewUrlGeneric
 } from '../../../api/documents';
-import { IconDownload, IconPen, IconTrash, IconRestore, mimeIcon } from './DocUtils';
+import { IconDownload, IconPen, IconTrash, IconRestore, mimeIcon, IconEye, ModalBackdrop, ModalHeader } from './DocUtils';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 import { Pagination } from '../../../components/ui/Pagination';
 
@@ -41,6 +42,9 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const [signing, setSigning] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [previewDocName, setPreviewDocName] = useState<string>('');
+  const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
   const pageSize = 10;
 
   // Reset to page 1 when docs change (e.g. search or filter)
@@ -60,6 +64,27 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
       await downloadDocumentGeneric(doc.id, name); 
     }
     catch { showToast(t('documents.errorLoad'), 'error'); }
+  };
+
+  const handlePreview = async (doc: any) => {
+    setPreviewLoadingId(doc.id);
+    try {
+      const mimeType = doc.mimeType || doc.mime_type || 'application/pdf';
+      const url = await getDocumentPreviewUrlGeneric(doc.id, mimeType);
+      setPreviewDocUrl(url);
+      setPreviewDocName(doc.fileName || doc.title || 'Preview');
+    } catch {
+      showToast(t('documents.errorLoad', 'Error loading document'), 'error');
+    } finally {
+      setPreviewLoadingId(null);
+    }
+  };
+
+  const closePreview = () => {
+    if (previewDocUrl) {
+      URL.revokeObjectURL(previewDocUrl);
+    }
+    setPreviewDocUrl(null);
   };
 
   const handleDeleteClick = (doc: any) => {
@@ -252,6 +277,13 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                   ) : (
                     <>
                       <button 
+                        onClick={() => handlePreview(doc)} 
+                        title={t('common.preview', 'Preview')}
+                        disabled={previewLoadingId === doc.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: previewLoadingId === doc.id ? 'wait' : 'pointer', fontSize: 12 }}>
+                        {previewLoadingId === doc.id ? '...' : <IconEye />}
+                      </button>
+                      <button 
                         onClick={() => handleDownload(doc)} 
                         title={t('documents.download')}
                         style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12 }}>
@@ -327,6 +359,19 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
       confirmLabel={signing ? '...' : t('common.sign', 'Sign')}
       variant="primary"
     />
+
+    {previewDocUrl && (
+      <ModalBackdrop onClose={closePreview} width={800}>
+        <ModalHeader title={previewDocName} onClose={closePreview} />
+        <div style={{ width: '100%', height: '75vh', background: 'var(--background)', borderRadius: 12, overflow: 'hidden' }}>
+          <iframe 
+            src={previewDocUrl} 
+            style={{ width: '100%', height: '100%', border: 'none' }} 
+            title={previewDocName}
+          />
+        </div>
+      </ModalBackdrop>
+    )}
     </>
   );
 };
