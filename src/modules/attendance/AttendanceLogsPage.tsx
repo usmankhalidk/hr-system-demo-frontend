@@ -316,12 +316,14 @@ export default function AttendanceLogsPage() {
   async function handleExport(format: 'csv' | 'xlsx') {
     try {
       const params = new URLSearchParams();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (dateFrom)  params.append('date_from', dateFrom);
       if (dateTo)    params.append('date_to', dateTo);
       if (eventType) params.append('event_type', eventType);
       if (filterStoreId) params.append('store_id', filterStoreId);
       if (filterUserId) params.append('user_id', filterUserId);
       if (filterSearch.trim()) params.append('search', filterSearch.trim());
+      if (timezone) params.append('timezone', timezone);
       params.append('format', format);
       const res = await client.get(`/attendance?${params.toString()}`, { responseType: 'blob' });
       const ext = format === 'xlsx' ? 'xlsx' : 'csv';

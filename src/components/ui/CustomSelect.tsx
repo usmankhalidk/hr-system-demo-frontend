@@ -134,7 +134,7 @@ export default function CustomSelect({
             maxHeight: menuMaxHeight,
             display: 'flex',
             flexDirection: 'column',
-            zIndex: 100,
+            zIndex: 5000,
           }}
         >
           {searchable && (

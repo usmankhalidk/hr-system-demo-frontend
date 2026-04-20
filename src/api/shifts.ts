@@ -10,16 +10,23 @@ export interface Shift {
   storeId: number;
   userId: number;
   assignmentId?: number | null;
+  timezone?: string | null;
   date: string;          // may be 'YYYY-MM-DD' or full ISO — use .split('T')[0] to normalize
   startTime: string;     // 'HH:MM:SS'
   endTime: string;       // 'HH:MM:SS'
+  startAtUtc?: string | null;
+  endAtUtc?: string | null;
   breakStart: string | null;
   breakEnd: string | null;
+  breakStartAtUtc?: string | null;
+  breakEndAtUtc?: string | null;
   breakType: 'fixed' | 'flexible';
   breakMinutes: number | null;
   isSplit: boolean;
   splitStart2: string | null;
   splitEnd2: string | null;
+  splitStart2AtUtc?: string | null;
+  splitEnd2AtUtc?: string | null;
   isOffDay: boolean;
   status: 'scheduled' | 'confirmed' | 'cancelled';
   notes: string | null;
@@ -46,10 +53,88 @@ function normalizeDateOnly(value: string): string {
   return `${y}-${m}-${d}`;
 }
 
-function normalizeShift(shift: Shift): Shift {
+function getBrowserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+function formatUtcToLocalParts(isoValue: string, timeZone: string): { date: string; time: string } | null {
+  const parsed = new Date(isoValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+
+  const parts = formatter.formatToParts(parsed);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  const hour = parts.find((part) => part.type === 'hour')?.value;
+  const minute = parts.find((part) => part.type === 'minute')?.value;
+  const second = parts.find((part) => part.type === 'second')?.value;
+
+  if (!year || !month || !day || !hour || !minute || !second) return null;
+
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hour}:${minute}:${second}`,
+  };
+}
+
+function convertShiftUtcToLocal(shift: Shift): Shift {
+  if (!shift.startAtUtc || !shift.endAtUtc) {
+    return shift;
+  }
+
+  const tz = getBrowserTimeZone();
+  const startLocal = formatUtcToLocalParts(shift.startAtUtc, tz);
+  const endLocal = formatUtcToLocalParts(shift.endAtUtc, tz);
+  if (!startLocal || !endLocal) {
+    return shift;
+  }
+
+  const breakStartLocal = shift.breakStartAtUtc
+    ? formatUtcToLocalParts(shift.breakStartAtUtc, tz)?.time ?? shift.breakStart
+    : shift.breakStart;
+  const breakEndLocal = shift.breakEndAtUtc
+    ? formatUtcToLocalParts(shift.breakEndAtUtc, tz)?.time ?? shift.breakEnd
+    : shift.breakEnd;
+  const splitStart2Local = shift.splitStart2AtUtc
+    ? formatUtcToLocalParts(shift.splitStart2AtUtc, tz)?.time ?? shift.splitStart2
+    : shift.splitStart2;
+  const splitEnd2Local = shift.splitEnd2AtUtc
+    ? formatUtcToLocalParts(shift.splitEnd2AtUtc, tz)?.time ?? shift.splitEnd2
+    : shift.splitEnd2;
+
   return {
     ...shift,
-    date: normalizeDateOnly(shift.date),
+    date: startLocal.date,
+    startTime: startLocal.time,
+    endTime: endLocal.time,
+    breakStart: breakStartLocal,
+    breakEnd: breakEndLocal,
+    splitStart2: splitStart2Local,
+    splitEnd2: splitEnd2Local,
+  };
+}
+
+function normalizeShift(shift: Shift): Shift {
+  const localized = convertShiftUtcToLocal(shift);
+  return {
+    ...shift,
+    ...localized,
+    date: normalizeDateOnly(localized.date),
   };
 }
 
@@ -81,6 +166,7 @@ export interface CreateShiftPayload {
   user_id: number;
   store_id: number;
   date: string;
+  timezone?: string;
   start_time: string;
   end_time: string;
   break_type?: 'fixed' | 'flexible';
@@ -107,7 +193,12 @@ export async function listShifts(params: {
   store_id?: number;
   user_id?: number;
 }): Promise<{ shifts: Shift[] }> {
-  const res = await client.get('/shifts', { params });
+  const res = await client.get('/shifts', {
+    params: {
+      ...params,
+      timezone: getBrowserTimeZone(),
+    },
+  });
   return {
     ...res.data.data,
     shifts: (res.data.data.shifts as Shift[]).map(normalizeShift),
@@ -115,12 +206,18 @@ export async function listShifts(params: {
 }
 
 export async function createShift(payload: CreateShiftPayload): Promise<Shift> {
-  const res = await client.post('/shifts', payload);
+  const res = await client.post('/shifts', {
+    ...payload,
+    timezone: payload.timezone ?? getBrowserTimeZone(),
+  });
   return normalizeShift(res.data.data as Shift);
 }
 
 export async function updateShift(id: number, payload: UpdateShiftPayload): Promise<Shift> {
-  const res = await client.put(`/shifts/${id}`, payload);
+  const res = await client.put(`/shifts/${id}`, {
+    ...payload,
+    timezone: payload.timezone ?? getBrowserTimeZone(),
+  });
   return normalizeShift(res.data.data as Shift);
 }
 
@@ -201,6 +298,7 @@ export interface ImportResult {
 export async function importShifts(file: File): Promise<ImportResult> {
   const form = new FormData();
   form.append('file', file);
+  form.append('timezone', getBrowserTimeZone());
   const res = await client.post('/shifts/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

@@ -10,7 +10,6 @@ export interface CompanyProfilePayload {
   city?: string | null;
   state?: string | null;
   address?: string | null;
-  timezones?: string | null;
   currency?: string | null;
 }
 

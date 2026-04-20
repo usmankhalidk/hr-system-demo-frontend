@@ -63,6 +63,7 @@ export interface Store {
   state?: string | null;
   country?: string | null;
   phone?: string | null;
+  timezone?: string | null;
   maxStaff: number | null;
   isActive: boolean;
   employeeCount?: number;

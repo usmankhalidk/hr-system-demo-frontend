@@ -17,8 +17,6 @@ import {
   Image as ImageIcon,
   Hash,
   CalendarClock,
-  Globe2,
-  Plus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -45,7 +43,6 @@ import { Alert } from '../../components/ui/Alert';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Select } from '../../components/ui/Select';
-import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
 
 function parseCompanyIdFromSlug(slug?: string): number | null {
@@ -82,7 +79,6 @@ type CompanyProfileForm = {
   city: string;
   state: string;
   address: string;
-  timezones: string;
   currency: string;
 };
 
@@ -95,62 +91,8 @@ const EMPTY_PROFILE_FORM: CompanyProfileForm = {
   city: '',
   state: '',
   address: '',
-  timezones: '',
   currency: '',
 };
-
-const FALLBACK_TIMEZONES = [
-  'UTC',
-  'Europe/Rome',
-  'Europe/London',
-  'Europe/Paris',
-  'America/New_York',
-  'America/Chicago',
-  'America/Los_Angeles',
-  'Asia/Dubai',
-  'Asia/Singapore',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-];
-
-type IntlWithSupportedValues = typeof Intl & {
-  supportedValuesOf?: (key: string) => string[];
-};
-
-const intlWithSupportedValues = Intl as IntlWithSupportedValues;
-
-const TIMEZONE_OPTIONS = typeof intlWithSupportedValues.supportedValuesOf === 'function'
-  ? intlWithSupportedValues.supportedValuesOf('timeZone')
-  : FALLBACK_TIMEZONES;
-
-function parseTimezones(value: string): string[] {
-  const seen = new Set<string>();
-  const list: string[] = [];
-  value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .forEach((item) => {
-      if (seen.has(item)) return;
-      seen.add(item);
-      list.push(item);
-    });
-  return list;
-}
-
-function serializeTimezones(primaryTimezone: string | null, additionalTimezones: string[]): string {
-  const seen = new Set<string>();
-  const list: string[] = [];
-
-  for (const value of [primaryTimezone, ...additionalTimezones]) {
-    const normalized = (value ?? '').trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    list.push(normalized);
-  }
-
-  return list.join(', ');
-}
 
 function profileFromCompany(company: Company | null): CompanyProfileForm {
   if (!company) return { ...EMPTY_PROFILE_FORM };
@@ -163,7 +105,6 @@ function profileFromCompany(company: Company | null): CompanyProfileForm {
     city: company.city ?? '',
     state: company.state ?? '',
     address: company.address ?? '',
-    timezones: company.timezones ?? '',
     currency: company.currency ?? '',
   };
 }
@@ -183,7 +124,6 @@ function profilePayload(profile: CompanyProfileForm) {
     city: normalizeProfileValue(profile.city),
     state: normalizeProfileValue(profile.state),
     address: normalizeProfileValue(profile.address),
-    timezones: normalizeProfileValue(profile.timezones),
     currency: normalizeProfileValue(profile.currency),
   };
 }
@@ -211,9 +151,6 @@ export default function CompanyDetail() {
   const [editGroupId, setEditGroupId] = useState<number | null>(null);
   const [editOwnerUserId, setEditOwnerUserId] = useState<string>('');
   const [editProfile, setEditProfile] = useState<CompanyProfileForm>({ ...EMPTY_PROFILE_FORM });
-  const [primaryTimezone, setPrimaryTimezone] = useState<string | null>(null);
-  const [additionalTimezones, setAdditionalTimezones] = useState<string[]>([]);
-  const [additionalTimezoneDraft, setAdditionalTimezoneDraft] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -274,43 +211,6 @@ export default function CompanyDetail() {
     ];
   }, [company, ownerCandidates, t]);
 
-  const timezonePool = useMemo(() => {
-    const values = new Set<string>(TIMEZONE_OPTIONS);
-    if (primaryTimezone) values.add(primaryTimezone);
-    for (const timezone of additionalTimezones) values.add(timezone);
-    return Array.from(values).sort((a, b) => a.localeCompare(b));
-  }, [additionalTimezones, primaryTimezone]);
-
-  const primaryTimezoneOptions = useMemo<SelectOption[]>(() => {
-    return timezonePool.map((timezone) => ({
-      value: timezone,
-      label: timezone,
-      render: (
-        <div style={{ display: 'grid', gap: 1 }}>
-          <span style={{ fontWeight: 700 }}>{timezone}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
-        </div>
-      ),
-    }));
-  }, [timezonePool]);
-
-  const additionalTimezoneOptions = useMemo<SelectOption[]>(() => {
-    const selected = new Set<string>(additionalTimezones);
-    if (primaryTimezone) selected.add(primaryTimezone);
-    return timezonePool
-      .filter((timezone) => !selected.has(timezone))
-      .map((timezone) => ({
-        value: timezone,
-        label: timezone,
-        render: (
-          <div style={{ display: 'grid', gap: 1 }}>
-            <span style={{ fontWeight: 700 }}>{timezone}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
-          </div>
-        ),
-      }));
-  }, [additionalTimezones, primaryTimezone, timezonePool]);
-
   const loadData = useCallback(async () => {
     if (!companyId) {
       setError(t('companies.errorLoad'));
@@ -350,36 +250,13 @@ export default function CompanyDetail() {
     void loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    if (!primaryTimezone) return;
-    setAdditionalTimezones((prev) => prev.filter((timezone) => timezone !== primaryTimezone));
-  }, [primaryTimezone]);
-
-  useEffect(() => {
-    if (!editOpen) return;
-    const serialized = serializeTimezones(primaryTimezone, additionalTimezones);
-    setEditProfile((prev) => (
-      prev.timezones === serialized
-        ? prev
-        : { ...prev, timezones: serialized }
-    ));
-  }, [additionalTimezones, editOpen, primaryTimezone]);
-
   function openEditModal() {
     if (!company) return;
-    const timezoneList = parseTimezones(company.timezones ?? '');
-    const nextPrimaryTimezone = timezoneList[0] ?? null;
-    const nextAdditionalTimezones = timezoneList.slice(1);
 
     setEditName(company.name);
     setEditGroupId(company.groupId ?? null);
     setEditOwnerUserId(company.ownerUserId != null ? String(company.ownerUserId) : '');
-    const nextProfile = profileFromCompany(company);
-    nextProfile.timezones = serializeTimezones(nextPrimaryTimezone, nextAdditionalTimezones);
-    setEditProfile(nextProfile);
-    setPrimaryTimezone(nextPrimaryTimezone);
-    setAdditionalTimezones(nextAdditionalTimezones);
-    setAdditionalTimezoneDraft(null);
+    setEditProfile(profileFromCompany(company));
     setEditError(null);
     setEditOpen(true);
   }
@@ -566,7 +443,6 @@ export default function CompanyDetail() {
     { label: t('companies.companyPhoneNumbers', 'Company phone numbers'), value: company.companyPhoneNumbers },
     { label: t('companies.officesLocations', 'Offices locations'), value: company.officesLocations },
     { label: t('companies.location', 'Location'), value: companyLocation || null },
-    { label: t('companies.timezones', 'Timezones'), value: company.timezones },
     { label: t('companies.currency', 'Currency'), value: company.currency },
   ];
   const heroTitleOffset = 'clamp(108px, 24vw, 132px)';
@@ -750,289 +626,153 @@ export default function CompanyDetail() {
             <div style={{ padding: 14, fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData')}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {stores.slice(0, 8).map((store) => (
-                <div key={store.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {getStoreLogoUrl(store.logoFilename) ? (
-                        <img src={getStoreLogoUrl(store.logoFilename)!} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <span style={{ fontSize: 11, fontWeight: 800, color: '#8B6914' }}>
-                          {initials(store.name)}
-                        </span>
-                      )}
-                    </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {store.name}
-                      </div>
-                      <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {store.code} · {store.employeeCount ?? 0} {t('stores.colEmployees').toLowerCase()}
-                        </span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
-                          <MapPin size={11} />
-                          {store.address ?? t('common.noData')}
-                        </span>
-                        {storeManagersByStoreId.get(store.id) && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
-                            <ManagerAvatar employee={storeManagersByStoreId.get(store.id)!} />
-                            {`${storeManagersByStoreId.get(store.id)!.name} ${storeManagersByStoreId.get(store.id)!.surname}`}
+              {stores.slice(0, 8).map((store) => {
+                const manager = storeManagersByStoreId.get(store.id);
+                const storeEmployees = employeesByStoreId.get(store.id) ?? [];
+                return (
+                  <div key={store.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {getStoreLogoUrl(store.logoFilename) ? (
+                          <img src={getStoreLogoUrl(store.logoFilename)!} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#8B6914' }}>
+                            {initials(store.name)}
                           </span>
                         )}
-                        <EmployeeAvatarStack employees={employeesByStoreId.get(store.id) ?? []} />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {store.name}
+                        </div>
+                        <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{store.code}</span>
+                          {manager ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-secondary)' }}>
+                              <ManagerAvatar employee={manager} />
+                              {`${manager.name} ${manager.surname ?? ''}`.trim()}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('stores.noManager')}</span>
+                          )}
+                          {storeEmployees.length > 0 ? <EmployeeAvatarStack employees={storeEmployees} /> : null}
+                        </div>
                       </div>
                     </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 10, borderRadius: 999, padding: '2px 7px', color: store.isActive ? '#166534' : '#991b1b', border: store.isActive ? '1px solid rgba(34,197,94,0.36)' : '1px solid rgba(248,113,113,0.44)', background: store.isActive ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)' }}>
+                        {store.isActive ? t('common.active') : t('common.inactive')}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => navigate(`/negozi/${toStoreSlug(store)}`)}
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                      >
+                        {t('common.view', 'View')}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => navigate(`/negozi/${toStoreSlug(store)}`)}
-                    style={{
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      background: 'var(--surface-warm)',
-                      color: 'var(--text-secondary)',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: '6px 10px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {t('common.open')} →
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
         <div style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'linear-gradient(135deg, rgba(22,51,82,0.92) 0%, rgba(15,118,110,0.82) 100%)' }}>
-            {t('companies.detailInsightsTitle', 'Company insights')}
+          <div style={{ padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'linear-gradient(135deg, rgba(13,33,55,0.94) 0%, rgba(16,40,66,0.88) 100%)' }}>
+            {t('companies.profileDetails', 'Company details')}
           </div>
-          <div style={{ padding: '12px 14px', display: 'grid', gap: 8 }}>
-            <InsightRow label={t('companies.labelCreated')} value={new Date(company.createdAt).toLocaleDateString(locale)} />
-            <InsightRow label={t('companies.detailActiveStores', 'Active stores')} value={String(activeStores)} />
-            <InsightRow label={t('companies.detailInactiveStores', 'Inactive stores')} value={String(Math.max(stores.length - activeStores, 0))} />
-            <InsightRow label={t('companies.detailEmployeesLoaded', 'Loaded active employees')} value={String(employees.length)} />
-            <InsightRow label={t('companies.detailSlug', 'Public slug')} value={company.slug ?? '—'} />
+          <div style={{ padding: 14, display: 'grid', gap: 10 }}>
             {companyInsights
-              .filter((row) => row.value && String(row.value).trim().length > 0)
-              .map((row) => (
-                <InsightRow key={row.label} label={row.label} value={String(row.value)} />
+              .filter((item) => Boolean(item.value))
+              .map((item) => (
+                <InsightRow key={item.label} label={item.label} value={item.value as string} />
               ))}
+            <InsightRow label={t('companies.activeStores', 'Active stores')} value={`${activeStores}/${stores.length}`} />
           </div>
         </div>
       </div>
 
       <Modal
         open={editOpen}
-        onClose={() => { if (!editSaving) setEditOpen(false); }}
-        title={t('companies.editCompany')}
+        onClose={() => setEditOpen(false)}
+        title={t('companies.editCompany', 'Edit Company')}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setEditOpen(false)} disabled={editSaving}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleSaveEdit} loading={editSaving}>
-              {t('common.save')}
-            </Button>
+            <Button variant="secondary" onClick={() => setEditOpen(false)} disabled={editSaving}>{t('common.cancel')}</Button>
+            <Button onClick={() => void handleSaveEdit()} loading={editSaving}>{t('common.save')}</Button>
           </>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'grid', gap: 12 }}>
           {editError ? <Alert variant="danger" onClose={() => setEditError(null)}>{editError}</Alert> : null}
+
           <Input
-            label={t('companies.fieldName')}
+            label={t('companies.fieldName', 'Company name *')}
             value={editName}
             onChange={(event) => setEditName(event.target.value)}
-            placeholder={t('companies.placeholderName')}
             disabled={editSaving}
           />
-          <Select
-            label={t('companies.fieldGroup')}
-            value={editGroupId ?? ''}
-            onChange={(event) => {
-              const raw = event.target.value;
-              setEditGroupId(raw === '' ? null : parseInt(raw, 10));
-            }}
-            disabled={editSaving}
-          >
-            <option value="">{t('companies.optionStandalone')}</option>
-            {companyGroups.map((group) => (
-              <option key={group.id} value={group.id}>{group.name}</option>
-            ))}
-          </Select>
-          <Select
-            label={t('companies.ownerField', 'Company owner')}
-            value={editOwnerUserId}
-            onChange={(event) => setEditOwnerUserId(event.target.value)}
-            disabled={editSaving || ownerOptions.length === 0}
-          >
-            <option value="">{t('companies.ownerUnchanged', 'No change')}</option>
-            {ownerOptions.map((candidate) => (
-              <option key={candidate.id} value={String(candidate.id)}>
-                {candidate.name} {candidate.surname}
-              </option>
-            ))}
-          </Select>
-          {ownerOptions.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {t('companies.ownerCandidatesEmpty', 'No active admin available for ownership transfer in this company.')}
-            </div>
-          )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <Input
-              label={t('companies.registrationNumber', 'Registration number')}
-              value={editProfile.registrationNumber}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, registrationNumber: event.target.value }))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+            <Select
+              label={t('companies.fieldGroup', 'Business group')}
+              value={editGroupId != null ? String(editGroupId) : ''}
+              onChange={(event) => {
+                const value = event.target.value;
+                setEditGroupId(value ? parseInt(value, 10) : null);
+              }}
               disabled={editSaving}
-            />
-            <Input
-              label={t('companies.companyEmail', 'Company email')}
-              value={editProfile.companyEmail}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, companyEmail: event.target.value }))}
+            >
+              <option value="">{t('companies.optionStandalone', 'Standalone')}</option>
+              {companyGroups.map((group) => (
+                <option key={group.id} value={String(group.id)}>{group.name}</option>
+              ))}
+            </Select>
+
+            <Select
+              label={t('companies.ownerField', 'Company owner')}
+              value={editOwnerUserId}
+              onChange={(event) => setEditOwnerUserId(event.target.value)}
               disabled={editSaving}
-            />
-            <Input
-              label={t('companies.officesLocations', 'Offices locations')}
-              value={editProfile.officesLocations}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, officesLocations: event.target.value }))}
-              disabled={editSaving}
-            />
-            <Input
-              label={t('companies.currency', 'Currency')}
-              value={editProfile.currency}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, currency: event.target.value }))}
-              disabled={editSaving}
-            />
-
-            <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 10 }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                <Globe2 size={14} />
-                {t('companies.timezones', 'Timezones')}
-              </div>
-
-              <div style={{ display: 'grid', gap: 8 }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
-                    {t('companies.primaryTimezone', 'Primary timezone')}
-                  </div>
-                  <CustomSelect
-                    value={primaryTimezone}
-                    onChange={(value) => setPrimaryTimezone(value)}
-                    options={primaryTimezoneOptions}
-                    placeholder={t('companies.primaryTimezone', 'Primary timezone')}
-                    searchPlaceholder={t('companies.timezoneSearchPlaceholder', 'Search timezone...')}
-                    noOptionsMessage={t('companies.timezoneNoResults', 'No timezone found')}
-                    searchable
-                    highlightSelected
-                    disabled={editSaving}
-                  />
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
-                    {t('companies.additionalTimezones', 'Additional timezones')}
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
-                    <CustomSelect
-                      value={additionalTimezoneDraft}
-                      onChange={(value) => setAdditionalTimezoneDraft(value)}
-                      options={additionalTimezoneOptions}
-                      placeholder={t('companies.secondaryTimezone', 'Secondary timezone')}
-                      searchPlaceholder={t('companies.timezoneSearchPlaceholder', 'Search timezone...')}
-                      noOptionsMessage={t('companies.timezoneNoResults', 'No timezone found')}
-                      searchable
-                      disabled={editSaving}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!additionalTimezoneDraft) return;
-                        setAdditionalTimezones((prev) => (
-                          prev.includes(additionalTimezoneDraft) || additionalTimezoneDraft === primaryTimezone
-                            ? prev
-                            : [...prev, additionalTimezoneDraft]
-                        ));
-                        setAdditionalTimezoneDraft(null);
-                      }}
-                      disabled={editSaving || !additionalTimezoneDraft}
-                      style={{
-                        minWidth: 86,
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        background: 'var(--surface-warm)',
-                        color: 'var(--text-secondary)',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: editSaving || !additionalTimezoneDraft ? 'not-allowed' : 'pointer',
-                        opacity: editSaving || !additionalTimezoneDraft ? 0.55 : 1,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 5,
-                        padding: '0 10px',
-                      }}
-                    >
-                      <Plus size={12} />
-                      {t('companies.addTimezone', 'Add')}
-                    </button>
-                  </div>
-
-                  {additionalTimezones.length > 0 ? (
-                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {additionalTimezones.map((timezone) => (
-                        <span
-                          key={timezone}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '4px 8px',
-                            borderRadius: 999,
-                            border: '1px solid rgba(148,163,184,0.45)',
-                            background: 'rgba(241,245,249,0.8)',
-                            color: 'var(--text-secondary)',
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {timezone}
-                          <button
-                            type="button"
-                            onClick={() => setAdditionalTimezones((prev) => prev.filter((item) => item !== timezone))}
-                            style={{
-                              border: 'none',
-                              background: 'none',
-                              color: 'var(--text-muted)',
-                              cursor: 'pointer',
-                              lineHeight: 1,
-                              fontSize: 14,
-                              padding: 0,
-                            }}
-                            aria-label={t('common.remove', 'Remove')}
-                          >
-                            x
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                      {t('companies.noAdditionalTimezones', 'No additional timezones selected')}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {t('companies.timezoneFieldHint', 'Timezones are saved as primary + additional values')}: {editProfile.timezones || '-'}
-              </div>
-            </div>
+            >
+              <option value="">{t('companies.currentOwner', 'Current owner')}</option>
+              {ownerOptions.map((owner) => (
+                <option key={owner.id} value={String(owner.id)}>{`${owner.name} ${owner.surname ?? ''}`.trim()}</option>
+              ))}
+            </Select>
           </div>
+
+          <Input
+            label={t('companies.registrationNumber', 'Registration number')}
+            value={editProfile.registrationNumber}
+            onChange={(event) => setEditProfile((prev) => ({ ...prev, registrationNumber: event.target.value }))}
+            disabled={editSaving}
+          />
+
+          <Input
+            label={t('companies.companyEmail', 'Company email')}
+            type="email"
+            value={editProfile.companyEmail}
+            onChange={(event) => setEditProfile((prev) => ({ ...prev, companyEmail: event.target.value }))}
+            disabled={editSaving}
+          />
+
+          <Input
+            label={t('companies.officesLocations', 'Offices locations')}
+            value={editProfile.officesLocations}
+            onChange={(event) => setEditProfile((prev) => ({ ...prev, officesLocations: event.target.value }))}
+            disabled={editSaving}
+          />
+
+          <Input
+            label={t('companies.currency', 'Currency')}
+            value={editProfile.currency}
+            onChange={(event) => setEditProfile((prev) => ({ ...prev, currency: event.target.value }))}
+            disabled={editSaving}
+          />
 
           <LocationFieldGroup
             value={{
