@@ -363,8 +363,6 @@ export default function MonthlyCalendar({
 
   const summaryHoverCardStyle: React.CSSProperties = {
     position: 'absolute',
-    top: 'calc(100% + 4px)',
-    right: 0,
     minWidth: 220,
     maxWidth: 280,
     borderRadius: 10,
@@ -372,7 +370,7 @@ export default function MonthlyCalendar({
     background: '#ffffff',
     boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
     padding: '8px 9px',
-    zIndex: 90,
+    zIndex: 900,
   };
 
   const renderAvatar = (person: HoverPersonInfo): React.ReactNode => {
@@ -460,6 +458,7 @@ export default function MonthlyCalendar({
               key={dateStr}
               onClick={() => onDayClick(dateStr)}
               style={{
+                position: 'relative',
                 minHeight: 92,
                 borderRadius: 6,
                 border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
@@ -787,51 +786,6 @@ export default function MonthlyCalendar({
                         <ArrowLeftRight size={9} strokeWidth={2.5} />
                         {t('shifts.monthlyTransfers', 'Transfers')} {transferCount}
                       </span>
-
-                      {hoveredSummaryTag === transferTagKey && (
-                        <div style={summaryHoverCardStyle}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#1e40af', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
-                            <ArrowLeftRight size={11} strokeWidth={2.5} />
-                            <span>{t('shifts.monthlyTransfers', 'Transfers')} {transferDetailsForDate.length}</span>
-                          </div>
-
-                          {transferDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((transfer, index) => (
-                            <div
-                              key={transfer.id}
-                              style={{
-                                paddingTop: index === 0 ? 0 : 6,
-                                marginTop: index === 0 ? 0 : 6,
-                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {renderAvatar(transfer.user)}
-                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{transfer.user.fullName}</span>
-                              </div>
-                              <div style={{ marginTop: 3, fontSize: '0.57rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                                {`${transfer.originStoreName} -> ${transfer.targetStoreName}`}
-                              </div>
-                              <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                                {transfer.companyName} • {formatDateRange(transfer.startDate, transfer.endDate)}
-                              </div>
-                              <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(30,64,175,0.3)', background: 'rgba(219,234,254,0.75)', color: '#1e40af', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
-                                {formatTransferStatus(transfer.status)}
-                              </div>
-                              {transfer.notes && (
-                                <div style={{ marginTop: 3, fontSize: '0.54rem', color: 'var(--text-secondary)', lineHeight: 1.25, wordBreak: 'break-word' }}>
-                                  {transfer.notes}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-
-                          {transferDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
-                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                              +{transferDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   )}
                   {vacationApprovedUsers > 0 && (
@@ -855,46 +809,6 @@ export default function MonthlyCalendar({
                         <Palmtree size={9} strokeWidth={2.4} />
                         {t('leave.type_vacation', 'Vacation')} {vacationApprovedUsers}
                       </span>
-
-                      {hoveredSummaryTag === vacationTagKey && (
-                        <div style={summaryHoverCardStyle}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#1e40af', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
-                            <Palmtree size={11} strokeWidth={2.4} />
-                            <span>{t('leave.type_vacation', 'Vacation')} {vacationDetailsForDate.length}</span>
-                          </div>
-
-                          {vacationDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((leaveRow, index) => (
-                            <div
-                              key={leaveRow.id}
-                              style={{
-                                paddingTop: index === 0 ? 0 : 6,
-                                marginTop: index === 0 ? 0 : 6,
-                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {renderAvatar(leaveRow.user)}
-                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{leaveRow.user.fullName}</span>
-                              </div>
-                              <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                                {leaveRow.storeName} • {leaveRow.companyName}
-                              </div>
-                              <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                                {formatDateRange(leaveRow.startDate, leaveRow.endDate)}
-                              </div>
-                              <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(37,99,235,0.3)', background: 'rgba(219,234,254,0.7)', color: '#1e40af', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
-                                {formatLeaveStatus(leaveRow.status)}
-                              </div>
-                            </div>
-                          ))}
-
-                          {vacationDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
-                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                              +{vacationDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   )}
                   {sickApprovedUsers > 0 && (
@@ -918,46 +832,6 @@ export default function MonthlyCalendar({
                         <Thermometer size={9} strokeWidth={2.4} />
                         {t('leave.type_sick', 'Leave')} {sickApprovedUsers}
                       </span>
-
-                      {hoveredSummaryTag === sickTagKey && (
-                        <div style={summaryHoverCardStyle}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#92400e', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
-                            <Thermometer size={11} strokeWidth={2.4} />
-                            <span>{t('leave.type_sick', 'Leave')} {sickDetailsForDate.length}</span>
-                          </div>
-
-                          {sickDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((leaveRow, index) => (
-                            <div
-                              key={leaveRow.id}
-                              style={{
-                                paddingTop: index === 0 ? 0 : 6,
-                                marginTop: index === 0 ? 0 : 6,
-                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {renderAvatar(leaveRow.user)}
-                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{leaveRow.user.fullName}</span>
-                              </div>
-                              <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                                {leaveRow.storeName} • {leaveRow.companyName}
-                              </div>
-                              <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                                {formatDateRange(leaveRow.startDate, leaveRow.endDate)}
-                              </div>
-                              <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(217,119,6,0.28)', background: 'rgba(254,243,199,0.7)', color: '#92400e', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
-                                {formatLeaveStatus(leaveRow.status)}
-                              </div>
-                            </div>
-                          ))}
-
-                          {sickDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
-                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                              +{sickDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   )}
                   {offDayUserCount > 0 && (
@@ -981,41 +855,116 @@ export default function MonthlyCalendar({
                         <Moon size={9} strokeWidth={2.4} />
                         {t('shifts.form.offDay', 'Off day')} {offDayUserCount}
                       </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
-                      {hoveredSummaryTag === offDayTagKey && (
-                        <div style={summaryHoverCardStyle}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#475569', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
-                            <Moon size={11} strokeWidth={2.4} />
-                            <span>{t('shifts.form.offDay', 'Off day')} {offDayDetailsForDate.length}</span>
+              {/* Unified Tooltip Renderer aligned with cell */}
+              {hoveredSummaryTag && (hoveredSummaryTag === transferTagKey || hoveredSummaryTag === vacationTagKey || hoveredSummaryTag === sickTagKey || hoveredSummaryTag === offDayTagKey) && (
+                <div style={{
+                  ...summaryHoverCardStyle,
+                  top: 'calc(100% + 4px)',
+                  right: (idx % 7 > 3) ? 0 : 'auto',
+                  left: (idx % 7 > 3) ? 'auto' : 0,
+                }}>
+                  {hoveredSummaryTag === transferTagKey && (
+                    <>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#1e40af', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                        <ArrowLeftRight size={11} strokeWidth={2.5} />
+                        <span>{t('shifts.monthlyTransfers', 'Transfers')} {transferDetailsForDate.length}</span>
+                      </div>
+                      {transferDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((transfer, index) => (
+                        <div key={transfer.id} style={{ paddingTop: index === 0 ? 0 : 6, marginTop: index === 0 ? 0 : 6, borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {renderAvatar(transfer.user)}
+                            <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{transfer.user.fullName}</span>
                           </div>
-
-                          {offDayDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((offDayRow, index) => (
-                            <div
-                              key={offDayRow.key}
-                              style={{
-                                paddingTop: index === 0 ? 0 : 6,
-                                marginTop: index === 0 ? 0 : 6,
-                                borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {renderAvatar(offDayRow.user)}
-                                <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{offDayRow.user.fullName}</span>
-                              </div>
-                              <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                                {offDayRow.storeName} • {offDayRow.companyName}
-                              </div>
-                            </div>
-                          ))}
-
-                          {offDayDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
-                            <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                              +{offDayDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}
-                            </div>
+                          <div style={{ marginTop: 3, fontSize: '0.57rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                            {`${transfer.originStoreName} -> ${transfer.targetStoreName}`}
+                          </div>
+                          <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                            {transfer.companyName} • {formatDateRange(transfer.startDate, transfer.endDate)}
+                          </div>
+                          <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(30,64,175,0.3)', background: 'rgba(219,234,254,0.75)', color: '#1e40af', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>
+                            {formatTransferStatus(transfer.status)}
+                          </div>
+                          {transfer.notes && (
+                            <div style={{ marginTop: 3, fontSize: '0.54rem', color: 'var(--text-secondary)', lineHeight: 1.25, wordBreak: 'break-word' }}>{transfer.notes}</div>
                           )}
                         </div>
+                      ))}
+                      {transferDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                        <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>+{transferDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}</div>
                       )}
-                    </div>
+                    </>
+                  )}
+
+                  {hoveredSummaryTag === vacationTagKey && (
+                    <>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#1e40af', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                        <Palmtree size={11} strokeWidth={2.4} />
+                        <span>{t('leave.type_vacation', 'Vacation')} {vacationDetailsForDate.length}</span>
+                      </div>
+                      {vacationDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((leaveRow, index) => (
+                        <div key={leaveRow.id} style={{ paddingTop: index === 0 ? 0 : 6, marginTop: index === 0 ? 0 : 6, borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {renderAvatar(leaveRow.user)}
+                            <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{leaveRow.user.fullName}</span>
+                          </div>
+                          <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>{leaveRow.storeName} • {leaveRow.companyName}</div>
+                          <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>{formatDateRange(leaveRow.startDate, leaveRow.endDate)}</div>
+                          <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(37,99,235,0.3)', background: 'rgba(219,234,254,0.7)', color: '#1e40af', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>{formatLeaveStatus(leaveRow.status)}</div>
+                        </div>
+                      ))}
+                      {vacationDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                        <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>+{vacationDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}</div>
+                      )}
+                    </>
+                  )}
+
+                  {hoveredSummaryTag === sickTagKey && (
+                    <>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#92400e', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                        <Thermometer size={11} strokeWidth={2.4} />
+                        <span>{t('leave.type_sick', 'Leave')} {sickDetailsForDate.length}</span>
+                      </div>
+                      {sickDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((leaveRow, index) => (
+                        <div key={leaveRow.id} style={{ paddingTop: index === 0 ? 0 : 6, marginTop: index === 0 ? 0 : 6, borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {renderAvatar(leaveRow.user)}
+                            <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{leaveRow.user.fullName}</span>
+                          </div>
+                          <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>{leaveRow.storeName} • {leaveRow.companyName}</div>
+                          <div style={{ marginTop: 2, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>{formatDateRange(leaveRow.startDate, leaveRow.endDate)}</div>
+                          <div style={{ marginTop: 3, display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(217,119,6,0.28)', background: 'rgba(254,243,199,0.7)', color: '#92400e', fontSize: '0.52rem', fontWeight: 800, padding: '1px 6px' }}>{formatLeaveStatus(leaveRow.status)}</div>
+                        </div>
+                      ))}
+                      {sickDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                        <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>+{sickDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}</div>
+                      )}
+                    </>
+                  )}
+
+                  {hoveredSummaryTag === offDayTagKey && (
+                    <>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#475569', fontSize: '0.64rem', fontWeight: 900, marginBottom: 6 }}>
+                        <Moon size={11} strokeWidth={2.4} />
+                        <span>{t('shifts.form.offDay', 'Off day')} {offDayDetailsForDate.length}</span>
+                      </div>
+                      {offDayDetailsForDate.slice(0, MAX_VISIBLE_DETAIL_ROWS).map((offDayRow, index) => (
+                        <div key={offDayRow.key} style={{ paddingTop: index === 0 ? 0 : 6, marginTop: index === 0 ? 0 : 6, borderTop: index === 0 ? 'none' : '1px solid rgba(148,163,184,0.28)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {renderAvatar(offDayRow.user)}
+                            <span style={{ fontSize: '0.61rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{offDayRow.user.fullName}</span>
+                          </div>
+                          <div style={{ marginTop: 3, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>{offDayRow.storeName} • {offDayRow.companyName}</div>
+                        </div>
+                      ))}
+                      {offDayDetailsForDate.length > MAX_VISIBLE_DETAIL_ROWS && (
+                        <div style={{ marginTop: 6, fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>+{offDayDetailsForDate.length - MAX_VISIBLE_DETAIL_ROWS} {t('common.more', 'more')}</div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

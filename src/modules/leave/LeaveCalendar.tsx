@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, Palmtree, Thermometer } from 'lucide-react';
 import { getLeaveRequests, LeaveRequest } from '../../api/leave';
 import { getAvatarUrl } from '../../api/client';
 
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -20,11 +19,6 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-/** Monday-based day-of-week (0=Mon … 6=Sun) */
-function dayOfWeekMon(date: Date): number {
-  return (date.getDay() + 6) % 7;
-}
-
 function initials(name?: string, surname?: string): string {
   const n = (name ?? '').trim();
   const s = (surname ?? '').trim();
@@ -33,38 +27,29 @@ function initials(name?: string, surname?: string): string {
   return `${n.slice(0, 1)}${s.slice(0, 1)}`.toUpperCase();
 }
 
-// ---------------------------------------------------------------------------
-// Status colour mapping
-// ---------------------------------------------------------------------------
-
-interface StatusStyle {
-  bg: string;
-  border: string;
-  text: string;
-  label: string;
+function formatDateRange(startDate: string, endDate: string): string {
+  return startDate === endDate ? startDate : `${startDate} -> ${endDate}`;
 }
 
-function statusStyle(status: string, t: (k: string) => string): StatusStyle {
-  if (status === 'approved' || status.endsWith('approved')) {
-    return { bg: 'rgba(22,163,74,0.10)', border: 'rgba(22,163,74,0.30)', text: '#16a34a', label: t('leave.status_approved') };
-  }
-  if (status === 'pending' || status === 'store manager approved' || status === 'area manager approved' || status === 'HR approved') {
-    return { bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.35)', text: '#b45309', label: t('leave.status_pending') };
-  }
-  if (status === 'rejected' || status.endsWith('rejected')) {
-    return { bg: 'rgba(220,38,38,0.08)', border: 'rgba(220,38,38,0.25)', text: '#dc2626', label: t('leave.status_rejected') };
-  }
-  if (status === 'cancelled') {
-    return { bg: 'rgba(107,114,128,0.08)', border: 'rgba(107,114,128,0.25)', text: '#6b7280', label: t('leave.status_cancelled') };
-  }
-  return { bg: 'rgba(107,114,128,0.08)', border: 'rgba(107,114,128,0.25)', text: '#6b7280', label: status };
+function formatLeaveStatus(status: string, t: any): string {
+  const normalized = String(status ?? '').toLowerCase().replace(/\s+/g, '_');
+  return t(`leave.status_${normalized}`, status || t('leave.status_pending', 'Pending'));
+}
+
+function LegendDot({ color, label, icon }: { color: string; label: string; icon?: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+      {icon ?? <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />}
+      <span style={{ fontWeight: 600 }}>{label}</span>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-const MAX_VISIBLE = 3;
+const MAX_VISIBLE = 4;
 
 export default function LeaveCalendar() {
   const { t, i18n } = useTranslation();
@@ -97,11 +82,11 @@ export default function LeaveCalendar() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Build day → requests map
+  // Build day -> requests map
   const dayMap = new Map<string, LeaveRequest[]>();
   for (const req of requests) {
-    const start = new Date(req.startDate + 'T00:00:00');
-    const end = new Date(req.endDate + 'T00:00:00');
+    const start = new Date(req.startDate + 'T12:00:00');
+    const end = new Date(req.endDate + 'T12:00:00');
     const d = new Date(start);
     while (d <= end) {
       if (d.getMonth() === month && d.getFullYear() === year) {
@@ -112,24 +97,6 @@ export default function LeaveCalendar() {
       }
       d.setDate(d.getDate() + 1);
     }
-  }
-
-  // Calendar grid
-  const totalDays = daysInMonth(year, month);
-  const firstDow = dayOfWeekMon(new Date(year, month, 1));
-  const weeks: (number | null)[][] = [];
-  let week: (number | null)[] = Array(firstDow).fill(null);
-
-  for (let day = 1; day <= totalDays; day++) {
-    week.push(day);
-    if (week.length === 7) {
-      weeks.push(week);
-      week = [];
-    }
-  }
-  if (week.length > 0) {
-    while (week.length < 7) week.push(null);
-    weeks.push(week);
   }
 
   const DAY_LABELS = [
@@ -153,11 +120,75 @@ export default function LeaveCalendar() {
 
   const todayStr = formatDate(new Date());
 
+  // First day of month (0=Sun ... 6=Sat), convert to Mon-based (0=Mon ... 6=Sun)
+  const firstDay = new Date(year, month, 1).getDay();
+  const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
+  const daysInMonthTotal = daysInMonth(year, month);
+
+  const cells: (Date | null)[] = [
+    ...Array(startOffset).fill(null),
+    ...Array.from({ length: daysInMonthTotal }, (_, i) => new Date(year, month, i + 1)),
+  ];
+  // Pad to complete last row
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const summaryHoverCardStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 'calc(100% + 4px)',
+    minWidth: 220,
+    maxWidth: 280,
+    borderRadius: 10,
+    border: '1px solid rgba(148,163,184,0.44)',
+    background: '#ffffff',
+    boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
+    padding: '8px 9px',
+    zIndex: 100,
+  };
+
+  const renderAvatar = (req: LeaveRequest): React.ReactNode => {
+    const avatarUrl = getAvatarUrl(req.userAvatarFilename);
+    const initialsStr = initials(req.userName, req.userSurname);
+    if (avatarUrl) {
+      return (
+        <img
+          src={avatarUrl}
+          alt=""
+          style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(148,163,184,0.45)' }}
+        />
+      );
+    }
+    return (
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
+          color: '#fff',
+          fontSize: '0.52rem',
+          fontWeight: 800,
+          border: '1px solid rgba(148,163,184,0.45)',
+        }}
+      >
+        {initialsStr}
+      </span>
+    );
+  };
+
   return (
-    <div style={{ padding: '20px 0' }}>
+    <div style={{
+      padding: '24px 32px',
+      background: 'var(--surface)',
+      borderRadius: 'var(--radius-lg)',
+      border: '1px solid var(--border)',
+      boxShadow: 'var(--shadow-sm)',
+    }}>
       {/* Navigation */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
         flexWrap: 'wrap',
       }}>
         <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft size={18} /></button>
@@ -172,9 +203,7 @@ export default function LeaveCalendar() {
         </button>
 
         {/* Legend */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <LegendDot color="#16a34a" label={t('leave.status_approved')} />
-          <LegendDot color="#b45309" label={t('leave.status_pending')} />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <LegendDot color="#3b82f6" label={t('leave.type_vacation')} icon={<Palmtree size={12} />} />
           <LegendDot color="#ef4444" label={t('leave.type_sick')} icon={<Thermometer size={12} />} />
         </div>
@@ -192,200 +221,268 @@ export default function LeaveCalendar() {
       )}
 
       {!loading && (
-        <div style={{
-          background: 'var(--surface)',
-          borderRadius: 12,
-          border: '1px solid var(--border)',
-          overflow: 'hidden',
-        }}>
-          {/* Day-of-week header */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-            borderBottom: '1px solid var(--border)',
-            background: 'var(--surface-warm)',
-          }}>
+        <div style={{ padding: 0 }}>
+          {/* Day headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>
             {DAY_LABELS.map((label) => (
               <div key={label} style={{
-                padding: '8px 4px', textAlign: 'center',
-                fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-                textTransform: 'uppercase', letterSpacing: 0.8,
+                textAlign: 'center', fontWeight: 600,
+                fontFamily: 'var(--font-display)', color: 'var(--primary)',
+                padding: '4px 0', fontSize: '0.85rem',
               }}>
                 {label}
               </div>
             ))}
           </div>
 
-          {/* Weeks */}
-          {weeks.map((week, wi) => (
-            <div key={wi} style={{
-              display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-              borderBottom: wi < weeks.length - 1 ? '1px solid var(--border-light)' : 'none',
-            }}>
-              {week.map((day, di) => {
-                if (day === null) {
-                  return <div key={`e-${di}`} style={{ minHeight: 90, background: 'var(--background)', borderRight: di < 6 ? '1px solid var(--border-light)' : 'none' }} />;
-                }
-                const dateStr = formatDate(new Date(year, month, day));
-                const dayReqs = dayMap.get(dateStr) ?? [];
-                const isToday = dateStr === todayStr;
-                const isWeekend = di >= 5;
-                const isHovered = hoveredDay === dateStr;
+          {/* Day cells */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {cells.map((date, idx) => {
+              if (!date) {
+                return <div key={`empty-${idx}`} style={{ minHeight: 104 }} />;
+              }
+              const dateStr = formatDate(date);
+              const dayReqs = dayMap.get(dateStr) ?? [];
+              const isToday = dateStr === todayStr;
+              const isHovered = hoveredDay === dateStr;
+              const hasLeaves = dayReqs.length > 0;
 
-                return (
-                  <div
-                    key={day}
-                    onMouseEnter={() => setHoveredDay(dateStr)}
-                    onMouseLeave={() => setHoveredDay(null)}
-                    style={{
-                      minHeight: 90,
-                      padding: '4px 6px',
-                      borderRight: di < 6 ? '1px solid var(--border-light)' : 'none',
-                      background: isToday ? 'rgba(182,140,86,0.06)' : isWeekend ? 'rgba(0,0,0,0.015)' : 'transparent',
-                      position: 'relative',
-                      transition: 'background 0.15s',
-                      ...(isHovered ? { background: 'rgba(182,140,86,0.10)' } : {}),
-                    }}
-                  >
-                    {/* Day number */}
+              return (
+                <div
+                  key={dateStr}
+                  style={{
+                    minHeight: 92,
+                    borderRadius: 6,
+                    border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    padding: 7,
+                    cursor: 'default',
+                    background: isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)',
+                    transition: 'background 0.15s',
+                    position: 'relative',
+                    boxShadow: hasLeaves ? 'var(--shadow-xs)' : undefined,
+                  }}
+                  onMouseEnter={(e) => {
+                    setHoveredDay(dateStr);
+                    e.currentTarget.style.background = 'var(--background)';
+                  }}
+                  onMouseLeave={(e) => {
+                    setHoveredDay(null);
+                    e.currentTarget.style.background = isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)';
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 6,
+                    marginBottom: 6,
+                  }}>
                     <div style={{
-                      fontSize: 12, fontWeight: isToday ? 800 : 600,
-                      color: isToday ? '#b68c56' : 'var(--text)',
-                      marginBottom: 4,
-                      ...(isToday ? {
-                        width: 22, height: 22, borderRadius: '50%',
-                        background: '#b68c56', color: '#fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      } : {}),
+                      fontWeight: isToday ? 700 : 500,
+                      color: isToday ? 'var(--accent)' : 'var(--text)',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '0.9rem',
+                      lineHeight: 1,
                     }}>
-                      {day}
-                    </div>
-
-                    {/* Leave entries */}
-                    {dayReqs.slice(0, MAX_VISIBLE).map((req) => {
-                      const ss = statusStyle(req.status, t);
-                      const isVacation = req.leaveType === 'vacation';
-                      return (
-                        <div key={req.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          padding: '2px 5px', marginBottom: 2,
-                          borderRadius: 6, fontSize: 10, fontWeight: 600,
-                          background: ss.bg, border: `1px solid ${ss.border}`,
-                          color: ss.text, overflow: 'hidden', whiteSpace: 'nowrap',
-                          textOverflow: 'ellipsis',
+                      {isToday ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 26, height: 26, borderRadius: '50%',
+                          background: 'var(--accent)', color: '#fff', fontWeight: 700,
+                          boxShadow: '0 0 0 3px rgba(201,151,58,0.16)',
                         }}>
-                          {req.userAvatarFilename ? (
-                            <img
-                              src={getAvatarUrl(req.userAvatarFilename) ?? undefined}
-                              alt=""
-                              style={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0 }}
-                            />
-                          ) : (
-                            <span style={{
-                              width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
-                              background: isVacation ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)',
-                              color: isVacation ? '#3b82f6' : '#ef4444',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 7, fontWeight: 800,
-                            }}>
-                              {initials(req.userName, req.userSurname)}
-                            </span>
-                          )}
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {req.userName ?? ''} {(req.userSurname ?? '').slice(0, 1)}.
-                          </span>
-                          {isVacation
-                            ? <Palmtree size={10} style={{ flexShrink: 0, opacity: 0.7 }} />
-                            : <Thermometer size={10} style={{ flexShrink: 0, opacity: 0.7 }} />
-                          }
-                        </div>
-                      );
-                    })}
-                    {dayReqs.length > MAX_VISIBLE && (
-                      <div style={{
-                        fontSize: 10, color: 'var(--text-muted)', fontWeight: 700,
-                        padding: '1px 5px',
-                      }}>
-                        +{dayReqs.length - MAX_VISIBLE}
-                      </div>
-                    )}
-
-                    {/* Hover tooltip for full list */}
-                    {isHovered && dayReqs.length > 0 && (
-                      <div style={{
-                        position: 'absolute', top: '100%', left: 0, zIndex: 100,
-                        background: 'var(--surface)', border: '1px solid var(--border)',
-                        borderRadius: 10, padding: '8px 10px', minWidth: 200,
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-                      }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
-                          {dateStr} — {dayReqs.length} {dayReqs.length === 1 ? t('leave.leave_singular', 'leave') : t('leave.leave_plural', 'leaves')}
-                        </div>
-                        {dayReqs.map((req) => {
-                          const ss = statusStyle(req.status, t);
-                          const isVacation = req.leaveType === 'vacation';
-                          return (
-                            <div key={req.id} style={{
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              padding: '4px 0',
-                              borderBottom: '1px solid var(--border-light)',
-                            }}>
-                              {req.userAvatarFilename ? (
-                                <img src={getAvatarUrl(req.userAvatarFilename) ?? undefined} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />
-                              ) : (
-                                <span style={{
-                                  width: 20, height: 20, borderRadius: '50%',
-                                  background: isVacation ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)',
-                                  color: isVacation ? '#3b82f6' : '#ef4444',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: 9, fontWeight: 800,
-                                }}>
-                                  {initials(req.userName, req.userSurname)}
-                                </span>
-                              )}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                                  {req.userName} {req.userSurname}
-                                </div>
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                                  {req.storeName ?? ''} · {req.startDate} → {req.endDate}
-                                </div>
-                              </div>
-                              <span style={{
-                                padding: '2px 6px', borderRadius: 4,
-                                fontSize: 9, fontWeight: 700,
-                                background: ss.bg, color: ss.text, border: `1px solid ${ss.border}`,
-                              }}>
-                                {ss.label}
-                              </span>
-                              {isVacation
-                                ? <Palmtree size={12} color="#3b82f6" />
-                                : <Thermometer size={12} color="#ef4444" />
-                              }
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                          {date.getDate()}
+                        </span>
+                      ) : date.getDate()}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          ))}
+
+                  {hasLeaves && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {dayReqs.slice(0, MAX_VISIBLE).map((req) => {
+                        const isVacation = req.leaveType === 'vacation';
+                        const color = isVacation ? '#1e40af' : '#92400e';
+                        const bg = isVacation ? 'rgba(219,234,254,0.76)' : 'rgba(254,243,199,0.78)';
+                        const borderLeft = isVacation ? '#2563eb' : '#d97706';
+                        const border = isVacation ? 'rgba(37,99,235,0.22)' : 'rgba(217,119,6,0.22)';
+                        const Icon = isVacation ? Palmtree : Thermometer;
+
+                        return (
+                          <div key={req.id} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            borderRadius: 6,
+                            border: `1px solid ${border}`,
+                            borderLeftWidth: 5,
+                            borderLeftStyle: 'solid',
+                            borderLeftColor: borderLeft,
+                            background: bg,
+                            color: color,
+                            padding: '3px 8px',
+                            fontSize: '0.65rem',
+                            fontWeight: 800,
+                            lineHeight: 1,
+                            position: 'relative',
+                            overflow: 'hidden',
+                          }}>
+                            <Icon size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                            <span style={{ whiteSpace: 'nowrap' }}>
+                              {isVacation ? t('leave.type_vacation', 'Vacation') : t('leave.type_sick', 'Sick leave')}
+                            </span>
+
+                            <div style={{
+                              marginLeft: 'auto',
+                              background: '#fff',
+                              padding: '1px 5px',
+                              borderRadius: 4,
+                              fontSize: '0.55rem',
+                              fontWeight: 900,
+                              color: color,
+                              border: `1px solid ${border}`,
+                            }}>
+                              {req.status.includes('pending') || req.status === 'pending'
+                                ? t('leave.pending_short', 'pend.')
+                                : t('leave.approved_label', 'Appr.')}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {dayReqs.length > MAX_VISIBLE && (
+                        <div style={{ fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          +{dayReqs.length - MAX_VISIBLE} {t('common.more', 'more')}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Hover tooltip for full list */}
+                  {isHovered && hasLeaves && (
+                    <div style={{ ...summaryHoverCardStyle, right: (idx % 7 > 3) ? 0 : 'auto', left: (idx % 7 > 3) ? 'auto' : 0 }}>
+                      {(() => {
+                        const vacations = dayReqs.filter(r => r.leaveType === 'vacation');
+                        const sickLeaves = dayReqs.filter(r => r.leaveType === 'sick');
+
+                        return (
+                          <>
+                            {/* Vacation Group */}
+                            {vacations.length > 0 && (
+                              <div style={{ marginBottom: sickLeaves.length > 0 ? 10 : 0 }}>
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  color: '#1e40af',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 800,
+                                  marginBottom: 8,
+                                  paddingBottom: 4,
+                                  borderBottom: '1px solid rgba(30,64,175,0.1)'
+                                }}>
+                                  <Palmtree size={13} strokeWidth={2.5} />
+                                  <span>{t('leave.type_vacation', 'Vacation')} {vacations.length}</span>
+                                </div>
+                                {vacations.map((req, vIdx) => (
+                                  <div
+                                    key={req.id}
+                                    style={{
+                                      padding: '4px 0',
+                                      marginBottom: vIdx === vacations.length - 1 ? 0 : 4,
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                      {renderAvatar(req)}
+                                      <span style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text)', lineHeight: 1.2 }}>
+                                        {req.userName} {req.userSurname}
+                                      </span>
+                                    </div>
+                                    <div style={{ marginTop: 2, paddingLeft: 25, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                      {req.storeName ?? t('employees.noStore', 'No store')} {req.companyName ? `• ${req.companyName}` : ''}
+                                    </div>
+                                    <div style={{ marginTop: 1, paddingLeft: 25, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                      {formatDateRange(req.startDate, req.endDate)}
+                                    </div>
+                                    <div style={{ marginTop: 3, paddingLeft: 25 }}>
+                                      <span style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                                        borderRadius: 999,
+                                        border: '1px solid rgba(37,99,235,0.25)',
+                                        background: 'rgba(219,234,254,0.6)',
+                                        color: '#1e40af',
+                                        fontSize: '0.52rem', fontWeight: 800, padding: '1px 7px'
+                                      }}>
+                                        {formatLeaveStatus(req.status, t)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Sick Leave Group */}
+                            {sickLeaves.length > 0 && (
+                              <div>
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  color: '#92400e',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 800,
+                                  marginBottom: 8,
+                                  paddingBottom: 4,
+                                  borderBottom: '1px solid rgba(146,64,14,0.1)'
+                                }}>
+                                  <Thermometer size={13} strokeWidth={2.5} />
+                                  <span>{t('leave.type_sick', 'Sick leave')} {sickLeaves.length}</span>
+                                </div>
+                                {sickLeaves.map((req, sIdx) => (
+                                  <div
+                                    key={req.id}
+                                    style={{
+                                      padding: '4px 0',
+                                      marginBottom: sIdx === sickLeaves.length - 1 ? 0 : 4,
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                      {renderAvatar(req)}
+                                      <span style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text)', lineHeight: 1.2 }}>
+                                        {req.userName} {req.userSurname}
+                                      </span>
+                                    </div>
+                                    <div style={{ marginTop: 2, paddingLeft: 25, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                      {req.storeName ?? t('employees.noStore', 'No store')} {req.companyName ? `• ${req.companyName}` : ''}
+                                    </div>
+                                    <div style={{ marginTop: 1, paddingLeft: 25, fontSize: '0.56rem', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                      {formatDateRange(req.startDate, req.endDate)}
+                                    </div>
+                                    <div style={{ marginTop: 3, paddingLeft: 25 }}>
+                                      <span style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                                        borderRadius: 999,
+                                        border: '1px solid rgba(217,119,6,0.25)',
+                                        background: 'rgba(254,243,199,0.7)',
+                                        color: '#92400e',
+                                        fontSize: '0.52rem', fontWeight: 800, padding: '1px 7px'
+                                      }}>
+                                        {formatLeaveStatus(req.status, t)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Small sub-components
-// ---------------------------------------------------------------------------
-
-function LegendDot({ color, label, icon }: { color: string; label: string; icon?: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
-      {icon ?? <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />}
-      <span style={{ fontWeight: 600 }}>{label}</span>
     </div>
   );
 }

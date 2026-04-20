@@ -1901,12 +1901,16 @@ export default function AdminLeavePanel() {
 
       {/* ── Calendar tab ────────────────────────────────────────────────── */}
       {panelTab === 'calendar' && (
-        <LeaveCalendar />
+        <div style={{ padding: '20px 24px 24px' }}>
+          <LeaveCalendar />
+        </div>
       )}
 
       {/* ── Approval Config tab ─────────────────────────────────────────── */}
       {panelTab === 'approval_config' && (
-        <ApprovalConfigPanel />
+        <div style={{ padding: '20px 24px 24px' }}>
+          <ApprovalConfigPanel />
+        </div>
       )}
 
       {/* ── Create Modal ──────────────────────────────────────────────────── */}
