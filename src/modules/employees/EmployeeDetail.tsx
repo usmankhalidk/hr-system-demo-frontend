@@ -295,6 +295,17 @@ const IconFile = () => (
     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
   </svg>
 );
+const IconTasks = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+  </svg>
+);
+const IconCertificate = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 3h8l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+    <path d="M8 13h8"/><path d="M8 17h5"/>
+  </svg>
+);
 const IconEdit = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -331,7 +342,7 @@ export function EmployeeDetail() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'documents'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'documents' | 'qualifications'>('overview');
 
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
   const [showActivateModal, setShowActivateModal] = useState(false);
@@ -763,43 +774,59 @@ export function EmployeeDetail() {
 
       {/* Tabs Navigation */}
       <div style={{
-        display: 'flex', gap: '32px', marginBottom: '24px',
-        borderBottom: '1px solid var(--border)', padding: '0 4px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '18px',
+        marginBottom: '24px',
+        borderBottom: '1px solid var(--border)',
+        paddingBottom: '6px',
       }}>
-        <button
-          onClick={() => setActiveTab('overview')}
-          style={{
-            padding: '12px 4px', fontSize: '14px', fontWeight: 700,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: activeTab === 'overview' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'overview' ? '3px solid var(--primary)' : '3px solid transparent',
-            fontFamily: 'var(--font-display)', transition: 'all 0.2s ease',
-            textTransform: 'uppercase', letterSpacing: '0.04em',
-          }}
-        >
-          {t('common.overview', 'Overview')}
-        </button>
-        {employee.role !== 'admin' && (
-          <button
-            onClick={() => setActiveTab('documents')}
-            style={{
-              padding: '12px 4px', fontSize: '14px', fontWeight: 700,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: activeTab === 'documents' ? 'var(--primary)' : 'var(--text-muted)',
-              borderBottom: activeTab === 'documents' ? '3px solid var(--primary)' : '3px solid transparent',
-              fontFamily: 'var(--font-display)', transition: 'all 0.2s ease',
-              textTransform: 'uppercase', letterSpacing: '0.04em',
-              display: 'flex', alignItems: 'center', gap: '8px'
-            }}
-          >
-            <IconFile /> {t('documents.title')}
-          </button>
-        )}
+        {[
+          { key: 'overview' as const, label: t('employees.tabOverview', 'Overview'), icon: <IconUser />, color: '#0D2137' },
+          { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1b4d3e' },
+          { key: 'qualifications' as const, label: t('employees.tabQualifications', 'Qualifications'), icon: <IconCertificate />, color: '#8B6914' },
+          { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#1e4a7a' },
+        ].filter(tab => tab.key !== 'documents' || employee.role !== 'admin').map((tab) => {
+          const selected = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 0',
+                borderRadius: 0,
+                border: 'none',
+                borderBottom: selected ? `2px solid ${tab.color}` : '2px solid transparent',
+                background: 'transparent',
+                color: selected ? tab.color : 'var(--text-muted)',
+                fontSize: '13px',
+                fontWeight: 700,
+                fontFamily: 'var(--font-display)',
+                letterSpacing: '0.03em',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <span style={{ display: 'inline-flex', color: selected ? tab.color : 'var(--text-muted)' }}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {activeTab === 'overview' ? (
+      {activeTab === 'documents' ? (
+        <DocumentManager
+          employeeId={Number(employeeId)}
+          employeeName={`${employee.name} ${employee.surname}`}
+          isTrashEnabled={isAdminOrHr}
+        />
+      ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: (canViewSensitive && !isMobile) ? '1fr 1fr' : '1fr', gap: '20px' }}>
+          {activeTab === 'overview' && (
+            <div style={{ display: 'grid', gridTemplateColumns: (canViewSensitive && !isMobile) ? '1fr 1fr' : '1fr', gap: '20px' }}>
 
 
 
@@ -900,10 +927,19 @@ export function EmployeeDetail() {
             <InfoRow label={t('employees.terminationTypeField')} value={employee.terminationType ? t(TERMINATION_TYPE_KEYS[employee.terminationType] ?? 'employees.terminationTypeField', { defaultValue: employee.terminationType }) : '—'} last />
           </SectionPanel>
         )}
-      </div>
+            </div>
+          )}
+
+      {activeTab === 'qualifications' && !canViewSensitive && (
+        <SectionPanel title={t('employees.tabQualifications', 'Qualifications')} icon={<IconCertificate />}>
+          <div style={{ padding: '18px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            {t('common.notAllowed', 'You do not have permission to view this section.')}
+          </div>
+        </SectionPanel>
+      )}
 
       {/* Training Records */}
-      {canViewSensitive && (
+      {activeTab === 'qualifications' && canViewSensitive && (
         <div style={{ marginTop: 20 }}>
           <SectionPanel title={t('employees.trainingSection')} icon={<IconFile />}>
             {trainingsLoading ? (
@@ -947,7 +983,7 @@ export function EmployeeDetail() {
       )}
 
       {/* Medical Checks */}
-      {canViewSensitive && (
+      {activeTab === 'qualifications' && canViewSensitive && (
         <div style={{ marginTop: 20 }}>
           <SectionPanel
             title={t('employees.medicalSection')}
@@ -1016,13 +1052,14 @@ export function EmployeeDetail() {
       )}
 
       {/* Onboarding Tasks */}
-      {(isAdminOrHr || isOwnProfile) && employeeId && (
+      {activeTab === 'tasks' && (isAdminOrHr || isOwnProfile) && employeeId && (
         <div style={{ marginTop: 20 }}>
           <OnboardingSection employeeId={employeeId} isAdminOrHr={isAdminOrHr} />
         </div>
       )}
 
 {/* Role associations tree */}
+      {activeTab === 'tasks' && (
       <div style={{ marginTop: 20 }}>
         <SectionPanel title={t('employees.associationsSection')} icon={<IconUser />}>
           {associationsLoading ? (
@@ -1162,17 +1199,9 @@ export function EmployeeDetail() {
           )}
         </SectionPanel>
       </div>
-    </>
-  ) : (
-
-
-
-        <DocumentManager 
-          employeeId={Number(employeeId)} 
-          employeeName={`${employee.name} ${employee.surname}`} 
-          isTrashEnabled={isAdminOrHr}
-        />
       )}
+    </>
+  )}
 
 
 

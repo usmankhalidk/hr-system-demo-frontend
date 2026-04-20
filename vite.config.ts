@@ -3,6 +3,14 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // Target Safari explicitly so esbuild (dev) and rollup (build) emit
+  // compatible code for iOS Safari's smaller call-stack and JS engine quirks.
+  build: {
+    target: ['es2020', 'safari14'],
+  },
+  esbuild: {
+    target: 'safari14',
+  },
   server: {
     port: 5173,
     proxy: {

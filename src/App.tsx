@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { SocketProvider } from './context/SocketContext';
@@ -8,39 +8,45 @@ import { OfflineSyncProvider } from './context/OfflineSyncContext';
 import ToastContainer from './components/ui/ToastContainer';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/layout/Layout';
-import LoginPage from './modules/auth/LoginPage';
-import HomePage from './modules/home/HomePage';
-import EmployeeList from './modules/employees/EmployeeList';
-import EmployeeDetail from './modules/employees/EmployeeDetail';
-import StoreList from './modules/stores/StoreList';
-import StoreDetail from './modules/stores/StoreDetail';
-import SystemCompanyManagement from './modules/companies/SystemCompanyManagement';
-import CompanyDetail from './modules/companies/CompanyDetail';
-import SystemPermissionsPanel from './modules/permissions/SystemPermissionsPanel';
-import PermissionsPanel from './modules/permissions/PermissionsPanel';
-import ProfilePage from './modules/profile/ProfilePage';
-import ShiftsPage from './modules/shifts/ShiftsPage';
-import ExternalAffluencePage from './modules/externalAffluence/ExternalAffluencePage';
-import AttendanceLogsPage from './modules/attendance/AttendanceLogsPage';
-import AnomaliesPage from './modules/attendance/AnomaliesPage';
-import QRPage from './modules/attendance/QRPage';
-import TerminalPage from './modules/attendance/TerminalPage';
-import TerminalList from './modules/terminals/TerminalList';
-import LeavePage from './modules/leave/LeavePage';
-import SettingsPage from './modules/settings/SettingsPage';
-import EmployeeCheckinPage from './modules/attendance/EmployeeCheckinPage';
-import ScanPage from './modules/attendance/ScanPage';
-import HRChatPage from './modules/messages/HRChatPage';
-import ATSPage from './modules/ats/ATSPage';
-import OnboardingPage from './modules/onboarding/OnboardingPage';
-import DocumentsPage from './modules/documents/DocumentsPage';
-import TransfersPage from './modules/transfers/TransfersPage';
-import DeviceRegistrationPage from './modules/device/DeviceRegistrationPage';
-import HrDeviceResetPage from './modules/device/HrDeviceResetPage';
-import EmailSettingsPage from './modules/email/EmailSettingsPage';
-import PublicCareersPage from './modules/publicCareers/PublicCareersPage';
-import PublicJobDetailPage from './modules/publicCareers/PublicJobDetailPage';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import { Spinner } from './components/ui';
+
+// Lazy-load route components to reduce the initial ES-module evaluation depth.
+// iOS Safari evaluates module imports recursively; eagerly importing 30+ heavy
+// page components (each with their own deep dependency trees) overflows Safari's
+// smaller call-stack limit, causing "RangeError: Maximum call stack size exceeded".
+const LoginPage = lazy(() => import('./modules/auth/LoginPage'));
+const HomePage = lazy(() => import('./modules/home/HomePage'));
+const EmployeeList = lazy(() => import('./modules/employees/EmployeeList'));
+const EmployeeDetail = lazy(() => import('./modules/employees/EmployeeDetail'));
+const StoreList = lazy(() => import('./modules/stores/StoreList'));
+const StoreDetail = lazy(() => import('./modules/stores/StoreDetail'));
+const SystemCompanyManagement = lazy(() => import('./modules/companies/SystemCompanyManagement'));
+const CompanyDetail = lazy(() => import('./modules/companies/CompanyDetail'));
+const SystemPermissionsPanel = lazy(() => import('./modules/permissions/SystemPermissionsPanel'));
+const PermissionsPanel = lazy(() => import('./modules/permissions/PermissionsPanel'));
+const ProfilePage = lazy(() => import('./modules/profile/ProfilePage'));
+const ShiftsPage = lazy(() => import('./modules/shifts/ShiftsPage'));
+const ExternalAffluencePage = lazy(() => import('./modules/externalAffluence/ExternalAffluencePage'));
+const AttendanceLogsPage = lazy(() => import('./modules/attendance/AttendanceLogsPage'));
+const AnomaliesPage = lazy(() => import('./modules/attendance/AnomaliesPage'));
+const QRPage = lazy(() => import('./modules/attendance/QRPage'));
+const TerminalPage = lazy(() => import('./modules/attendance/TerminalPage'));
+const TerminalList = lazy(() => import('./modules/terminals/TerminalList'));
+const LeavePage = lazy(() => import('./modules/leave/LeavePage'));
+const SettingsPage = lazy(() => import('./modules/settings/SettingsPage'));
+const EmployeeCheckinPage = lazy(() => import('./modules/attendance/EmployeeCheckinPage'));
+const ScanPage = lazy(() => import('./modules/attendance/ScanPage'));
+const HRChatPage = lazy(() => import('./modules/messages/HRChatPage'));
+const ATSPage = lazy(() => import('./modules/ats/ATSPage'));
+const OnboardingPage = lazy(() => import('./modules/onboarding/OnboardingPage'));
+const DocumentsPage = lazy(() => import('./modules/documents/DocumentsPage'));
+const TransfersPage = lazy(() => import('./modules/transfers/TransfersPage'));
+const DeviceRegistrationPage = lazy(() => import('./modules/device/DeviceRegistrationPage'));
+const HrDeviceResetPage = lazy(() => import('./modules/device/HrDeviceResetPage'));
+const EmailSettingsPage = lazy(() => import('./modules/email/EmailSettingsPage'));
+const PublicCareersPage = lazy(() => import('./modules/publicCareers/PublicCareersPage'));
+const PublicJobDetailPage = lazy(() => import('./modules/publicCareers/PublicJobDetailPage'));
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -172,7 +178,7 @@ function AppRoutes() {
       } />
 
       <Route path="/integrazioni/database-esterno" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="turni">
+        <ProtectedRoute roles={['admin']} permissionKey="turni">
           <Layout title={t('nav.externalAffluence', 'Database Integration')}><ExternalAffluencePage /></Layout>
         </ProtectedRoute>
       } />
@@ -264,6 +270,14 @@ function AppRoutes() {
   );
 }
 
+function SuspenseFallback() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--background)' }}>
+      <Spinner size="lg" color="var(--primary)" />
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <ToastProvider>
@@ -273,7 +287,9 @@ export default function App() {
             <BrowserRouter>
               <ToastContainer />
               <ErrorBoundary>
-                <AppRoutes />
+                <Suspense fallback={<SuspenseFallback />}>
+                  <AppRoutes />
+                </Suspense>
               </ErrorBoundary>
             </BrowserRouter>
           </OfflineSyncProvider>

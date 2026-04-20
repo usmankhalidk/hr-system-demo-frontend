@@ -1,7 +1,7 @@
 {
-  "tool_name": "mcp__plugin_playwright_playwright__browser_click",
-  "tool_input_preview": "{\"ref\":\"e237\",\"element\":\"previous month ‹\"}",
-  "error": "### Error\nError: Ref e237 not found in the current page snapshot. Try capturing new snapshot.",
-  "timestamp": "2026-04-16T05:41:49.212Z",
-  "retry_count": 1
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /Users/user/hr-software && git stash pop 2>&1 || git checkout stash -- hr-system-demo-frontend/src/App.tsx hr-system-demo-frontend/vite.config.ts 2>&1\",\"description\":\"Recover stashed ch...",
+  "error": "Exit code 128\nNo stash entries found.\nfatal: invalid reference: stash",
+  "timestamp": "2026-04-17T07:10:59.027Z",
+  "retry_count": 2
 }

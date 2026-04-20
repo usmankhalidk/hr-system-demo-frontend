@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Palmtree, Thermometer } from 'lucide-react';
 import { LeaveRequest, LeaveStatus, approveLeaveRequest, rejectLeaveRequest, downloadCertificate, cancelLeaveRequest } from '../../api/leave';
 import { getAvatarUrl } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
@@ -426,6 +427,17 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
     return count;
   }
 
+  function getShortLeaveHours(startTime?: string | null, endTime?: string | null): number | null {
+    if (!startTime || !endTime) return null;
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    if ([sh, sm, eh, em].some((value) => Number.isNaN(value))) return null;
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+    if (endMinutes <= startMinutes) return null;
+    return Number(((endMinutes - startMinutes) / 60).toFixed(2));
+  }
+
   function getInitials(surname: string, name: string): string {
     return `${(surname[0] ?? '').toUpperCase()}${(name[0] ?? '').toUpperCase()}`;
   }
@@ -467,6 +479,8 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {requests.map((req) => {
           const isVacation = req.leaveType === 'vacation';
+          const isShortLeave = req.leaveDurationType === 'short_leave';
+          const shortHours = getShortLeaveHours(req.shortStartTime, req.shortEndTime);
           const isRejected = req.status === 'rejected';
           const accentColor = isRejected ? 'var(--danger)' : isVacation ? 'var(--accent)' : '#0369a1';
           const days = getDurationDays(req.startDate, req.endDate);
@@ -515,12 +529,14 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
                       </span>
                       {/* Leave type badge */}
                       <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
                         fontSize: 11, fontWeight: 600,
                         color: isVacation ? 'var(--accent)' : '#0369a1',
                         background: isVacation ? 'var(--accent-light)' : 'rgba(3,105,161,0.08)',
                         padding: '1px 8px', borderRadius: 20,
                         border: `1px solid ${isVacation ? 'rgba(201,151,58,0.3)' : 'rgba(3,105,161,0.2)'}`,
                       }}>
+                        {isVacation ? <Palmtree size={11} strokeWidth={2.4} /> : <Thermometer size={11} strokeWidth={2.4} />}
                         {t(`leave.type_${req.leaveType}`)}
                       </span>
                       {/* Duration badge */}
@@ -529,12 +545,20 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
                         background: 'var(--background)', padding: '1px 8px',
                         borderRadius: 20, border: '1px solid var(--border)',
                       }}>
-                        {days} {days === 1 ? t('leave.day_singular', 'giorno') : t('leave.day_plural', 'giorni')}
+                        {isShortLeave && shortHours != null
+                          ? `${shortHours}h`
+                          : `${days} ${days === 1 ? t('leave.day_singular', 'giorno') : t('leave.day_plural', 'giorni')}`}
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                      {formatDate(req.startDate)}
-                      {req.startDate !== req.endDate && <> — {formatDate(req.endDate)}</>}
+                      {isShortLeave
+                        ? `${formatDate(req.startDate)} · ${req.shortStartTime ?? '--:--'}-${req.shortEndTime ?? '--:--'}`
+                        : (
+                          <>
+                            {formatDate(req.startDate)}
+                            {req.startDate !== req.endDate && <> — {formatDate(req.endDate)}</>}
+                          </>
+                        )}
                     </div>
                   </div>
 
