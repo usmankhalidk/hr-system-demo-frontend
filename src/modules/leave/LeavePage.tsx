@@ -12,6 +12,7 @@ import { LeaveBalanceCard } from './LeaveBalanceCard';
 import { LeaveRequestDrawer } from './LeaveRequestDrawer';
 import { LeaveApprovalList } from './LeaveApprovalList';
 import AdminLeavePanel from './AdminLeavePanel';
+import LeaveCalendar from './LeaveCalendar';
 
 const ADMIN_ROLES = ['admin', 'hr'] as const;
 
@@ -22,7 +23,7 @@ function isApprover(role: string): role is ApproverRole {
   return (APPROVER_ROLES as readonly string[]).includes(role);
 }
 
-type Tab = 'mine' | 'pending';
+type Tab = 'mine' | 'pending' | 'calendar';
 
 // Outer shell: only calls useAuth (one stable hook), then delegates to the
 // appropriate view. This avoids a Rules-of-Hooks violation that would occur
@@ -184,6 +185,9 @@ function PersonalLeavePage() {
               )}
             </button>
           )}
+          <button style={tabStyle('calendar')} onClick={() => setActiveTab('calendar')}>
+            {t('leave.tab_calendar', 'Calendar')}
+          </button>
         </div>
 
         {/* Tab content */}
@@ -203,6 +207,9 @@ function PersonalLeavePage() {
               onRefresh={fetchPendingRequests}
               showActions
             />
+          )}
+          {activeTab === 'calendar' && (
+            <LeaveCalendar />
           )}
         </div>
       </div>

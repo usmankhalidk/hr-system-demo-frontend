@@ -204,7 +204,7 @@ export async function uploadDocumentUnified(
   const { data } = await apiClient.post('/documents/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
-  return data;
+  return data.data;
 }
 
 
@@ -228,4 +228,11 @@ export async function downloadDocumentGeneric(id: number, filename: string): Pro
   document.body.appendChild(link);
   link.click();
   link.remove();
+}
+
+export async function getDocumentPreviewUrlGeneric(id: number, mimeType: string): Promise<string> {
+  const response = await apiClient.get(`/documents/${id}/download`, {
+    responseType: 'blob',
+  });
+  return window.URL.createObjectURL(new Blob([response.data], { type: mimeType }));
 }

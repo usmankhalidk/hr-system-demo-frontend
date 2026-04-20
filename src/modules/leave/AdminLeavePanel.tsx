@@ -28,6 +28,8 @@ import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatLocalDate } from '../../utils/date';
 import { LeaveRequestDrawer } from './LeaveRequestDrawer';
+import ApprovalConfigPanel from './ApprovalConfigPanel';
+import LeaveCalendar from './LeaveCalendar';
 import { translateApiError } from '../../utils/apiErrors';
 import { Store as StoreModel } from '../../types';
 
@@ -857,7 +859,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type PanelTab = 'requests' | 'balances';
+type PanelTab = 'requests' | 'balances' | 'calendar' | 'approval_config';
 
 type CreateEmployeeOption = {
   id: number;
@@ -1524,7 +1526,13 @@ export default function AdminLeavePanel() {
           boxShadow: '0 4px 12px rgba(15,23,42,0.06)',
         }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {((['requests', 'balances'] as PanelTab[]).filter((tab) => tab === 'requests' || permissions?.saldi || user?.isSuperAdmin)).map((tab) => {
+            {((['requests', 'balances', 'calendar', 'approval_config'] as PanelTab[]).filter((tab) => {
+              if (tab === 'requests') return true;
+              if (tab === 'balances') return permissions?.saldi || user?.isSuperAdmin;
+              if (tab === 'calendar') return true;
+              if (tab === 'approval_config') return user?.role === 'admin' || user?.isSuperAdmin;
+              return false;
+            })).map((tab) => {
               const selected = panelTab === tab;
               return (
                 <button
@@ -1541,7 +1549,7 @@ export default function AdminLeavePanel() {
                     cursor: 'pointer',
                   }}
                 >
-                  {tab === 'requests' ? t('leave.admin_title') : t('leave.balance_tab')}
+                  {tab === 'requests' ? t('leave.admin_title') : tab === 'balances' ? t('leave.balance_tab') : tab === 'calendar' ? t('leave.calendar_tab') : t('leave.approval_config_tab')}
                 </button>
               );
             })}
@@ -1889,6 +1897,20 @@ export default function AdminLeavePanel() {
           )}
           <BalancesTab showFlash={showFlash} />
         </>
+      )}
+
+      {/* ── Calendar tab ────────────────────────────────────────────────── */}
+      {panelTab === 'calendar' && (
+        <div style={{ padding: '20px 24px 24px' }}>
+          <LeaveCalendar />
+        </div>
+      )}
+
+      {/* ── Approval Config tab ─────────────────────────────────────────── */}
+      {panelTab === 'approval_config' && (
+        <div style={{ padding: '20px 24px 24px' }}>
+          <ApprovalConfigPanel />
+        </div>
       )}
 
       {/* ── Create Modal ──────────────────────────────────────────────────── */}

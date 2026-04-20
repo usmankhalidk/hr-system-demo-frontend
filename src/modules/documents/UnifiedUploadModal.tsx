@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { uploadDocumentUnified } from '../../api/documents';
+import { uploadDocumentUnified, updateDocumentGeneric } from '../../api/documents';
+import { getEmployees } from '../../api/employees';
 import { Employee } from '../../types';
 import { createPortal } from 'react-dom';
 import { DatePicker } from '../../components/ui/DatePicker';
@@ -68,7 +69,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   const { showToast } = useToast();
   const { user } = useAuth();
   
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -76,6 +77,14 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [expiresAt, setExpiresAt] = useState('');
   const [visibility, setVisibility] = useState<'everyone' | 'hr'>('everyone');
+
+  // Manual Assignment (Step 3)
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmps, setLoadingEmps] = useState(false);
+  const [documentId, setDocumentId] = useState<number | null>(null);
+  const [manualEmployeeId, setManualEmployeeId] = useState<number | null>(null);
+  const [editableTitle, setEditableTitle] = useState('');
+  const [fileExtension, setFileExtension] = useState('');
 
   const isHrOrAdmin = user && ['admin', 'hr'].includes(user.role);
 
@@ -111,18 +120,66 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
         ? ['admin', 'hr'] 
         : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
 
-      await uploadDocumentUnified(file, {
+      const response = await uploadDocumentUnified(file, {
         requiresSignature,
         expiresAt: expiresAt || null,
         visibleToRoles,
         employeeId: targetEmployeeId
       });
 
+      if (response && response.matched) {
+        showToast(t('documents.uploaded'), 'success');
+        onSuccess();
+        onClose();
+      } else if (response) {
+        // Fallback to Manual Assignment
+        setDocumentId(response.documentId);
+        
+        const fileName = response.fileName || '';
+        const lastDot = fileName.lastIndexOf('.');
+        const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
+        const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
+        
+        setEditableTitle(initialTitle);
+        setFileExtension(extension);
+        setStep(3);
+        
+        // Load employees for dropdown
+        setLoadingEmps(true);
+        try {
+          const res = await getEmployees({ status: 'active', excludeAdmins: true });
+          setEmployees(res.employees);
+        } catch {
+          showToast(t('employees.errorLoad'), 'error');
+        } finally {
+          setLoadingEmps(false);
+        }
+      }
+    } catch (err: any) {
+      if (err.response?.data?.code === 'EXPIRY_DATE_REQUIRED') {
+        showToast(t('employees.fieldRequired'), 'error');
+      } else {
+        showToast(t('documents.errorUpload'), 'error');
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleManualSave = async () => {
+    if (!documentId || !editableTitle.trim()) return;
+    
+    setUploading(true);
+    try {
+      await updateDocumentGeneric(documentId, { 
+        title: `${editableTitle}${fileExtension}`, 
+        employee_id: manualEmployeeId 
+      });
       showToast(t('documents.uploaded'), 'success');
       onSuccess();
       onClose();
-    } catch (err: any) {
-      showToast(t('documents.errorUpload'), 'error');
+    } catch {
+      showToast(t('common.error'), 'error');
     } finally {
       setUploading(false);
     }
@@ -137,6 +194,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
           <div style={{ display: 'flex', gap: 6 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 1 ? 'var(--primary)' : 'var(--border)' }} />
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 2 ? 'var(--primary)' : 'var(--border)' }} />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 3 ? 'var(--primary)' : 'var(--border)' }} />
           </div>
         </div>
 
@@ -169,9 +227,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 <input type="file" hidden onChange={handleFileChange} accept=".pdf,.jpg,.jpeg,.png,.webp,.zip,application/zip,application/x-zip-compressed" />
               </label>
             </div>
-          ) : (
+          ) : step === 2 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {/* File Summary */}
+              {/* Step 2 Content... */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--background)', borderRadius: 12, border: '1.5px solid var(--border)' }}>
                 <div style={{ color: 'var(--primary)' }}><IconFile /></div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -189,7 +247,6 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   {t('documents.changeFile')}
                 </button>
               </div>
-
 
               <div style={{ display: 'flex', gap: 20 }}>
                 <div style={{ flex: 1 }}>
@@ -267,6 +324,48 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 </p>
               </div>
             </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, fontSize: 13, color: '#B45309', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>⚠️</span>
+                {t('documents.noAutoMatchFound', 'No auto-match found. Please assign manually.')}
+              </div>
+
+              <div>
+                <label style={labelStyle}>{t('documents.fileName')}</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input 
+                    value={editableTitle} 
+                    onChange={(e) => setEditableTitle(e.target.value)} 
+                    style={{ ...inputStyle, flex: 1 }} 
+                    placeholder="Enter file name..."
+                  />
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{fileExtension}</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>{t('documents.assigned')}</label>
+                <select 
+                  value={manualEmployeeId || ''} 
+                  onChange={(e) => setManualEmployeeId(e.target.value ? Number(e.target.value) : null)} 
+                  style={inputStyle} 
+                  disabled={loadingEmps}
+                >
+                  <option value="">{t('documents.selectEmployee')}</option>
+                  {employees.length === 0 && !loadingEmps ? (
+                    <option disabled>{t('documents.noEmployeesAvailable', 'No employees available')}</option>
+                  ) : (
+                    employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} {emp.surname} ({emp.uniqueId || emp.role})
+                      </option>
+                    ))
+                  )}
+                </select>
+                {loadingEmps && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Loading users...</p>}
+              </div>
+            </div>
           )}
         </div>
 
@@ -278,7 +377,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
           >
             {t('common.cancel')}
           </button>
-          {step === 2 && (
+          {step === 2 ? (
             <button 
               onClick={handleSubmit}
               disabled={uploading}
@@ -291,7 +390,20 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             >
               {uploading ? t('common.loading') : t('documents.uploadWizardTitle')}
             </button>
-          )}
+          ) : step === 3 ? (
+            <button 
+              onClick={handleManualSave}
+              disabled={uploading || !editableTitle.trim()}
+              style={{ 
+                padding: '10px 32px', borderRadius: 8, border: 'none', background: 'var(--primary)', 
+                color: '#fff', cursor: (uploading || !editableTitle.trim()) ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
+                opacity: (uploading || !editableTitle.trim()) ? 0.7 : 1, transition: 'all 0.2s',
+                boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
+              }}
+            >
+              {uploading ? t('common.loading') : t('common.save')}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>,

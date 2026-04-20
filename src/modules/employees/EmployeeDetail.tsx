@@ -786,7 +786,7 @@ export function EmployeeDetail() {
           { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1b4d3e' },
           { key: 'qualifications' as const, label: t('employees.tabQualifications', 'Qualifications'), icon: <IconCertificate />, color: '#8B6914' },
           { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#1e4a7a' },
-        ].map((tab) => {
+        ].filter(tab => tab.key !== 'documents' || employee.role !== 'admin').map((tab) => {
           const selected = activeTab === tab.key;
           return (
             <button
