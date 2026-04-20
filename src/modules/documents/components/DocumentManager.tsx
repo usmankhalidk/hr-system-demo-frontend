@@ -116,7 +116,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       if (Number(d.companyId) !== selectedCompanyId) return false;
     }
     const term = search.toLowerCase();
-    const name = (d.fileName || d.title || '').toLowerCase();
+    const name = (d.fileName || '').toLowerCase();
     const emp = (d.employeeName || '').toLowerCase();
     return name.includes(term) || emp.includes(term);
   });

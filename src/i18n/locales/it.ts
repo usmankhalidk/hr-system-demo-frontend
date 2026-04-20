@@ -2068,7 +2068,6 @@ const it = {
     closeCategory: 'Chiudi Categoria',
     selectFolder: 'Seleziona una cartella per visualizzare i documenti',
     selectDesc: 'Sfoglia i documenti scegliendo una categoria e un\'azienda qui sopra.',
-    selectCompany: 'Seleziona un\'azienda per visualizzare i documenti',
     selectCompanyDesc: 'Sfoglia i documenti scegliendo una cartella aziendale qui sopra.',
     companyViewDesc: 'Visualizzazione di tutti i documenti associati a questa azienda',
     closeCompany: 'Chiudi Vista',
