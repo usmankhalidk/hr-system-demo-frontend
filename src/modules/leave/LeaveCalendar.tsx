@@ -221,9 +221,10 @@ export default function LeaveCalendar() {
       )}
 
       {!loading && (
-        <div style={{ padding: 0 }}>
-          {/* Day headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>
+        <div style={{ padding: 0, overflowX: 'auto' }}>
+          <div style={{ minWidth: 1200 }}>
+            {/* Day headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 8 }}>
             {DAY_LABELS.map((label) => (
               <div key={label} style={{
                 textAlign: 'center', fontWeight: 600,
@@ -236,7 +237,7 @@ export default function LeaveCalendar() {
           </div>
 
           {/* Day cells */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
             {cells.map((date, idx) => {
               if (!date) {
                 return <div key={`empty-${idx}`} style={{ minHeight: 104 }} />;
@@ -251,6 +252,7 @@ export default function LeaveCalendar() {
                 <div
                   key={dateStr}
                   style={{
+                    minWidth: 0,
                     minHeight: 92,
                     borderRadius: 6,
                     border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
@@ -358,7 +360,13 @@ export default function LeaveCalendar() {
 
                   {/* Hover tooltip for full list */}
                   {isHovered && hasLeaves && (
-                    <div style={{ ...summaryHoverCardStyle, right: (idx % 7 > 3) ? 0 : 'auto', left: (idx % 7 > 3) ? 'auto' : 0 }}>
+                    <div style={{ 
+                      ...summaryHoverCardStyle, 
+                      top: idx >= cells.length - 7 ? 'auto' : 'calc(100% + 4px)',
+                      bottom: idx >= cells.length - 7 ? 'calc(100% + 4px)' : 'auto',
+                      right: (idx % 7 > 3) ? 0 : 'auto', 
+                      left: (idx % 7 > 3) ? 'auto' : 0 
+                    }}>
                       {(() => {
                         const vacations = dayReqs.filter(r => r.leaveType === 'vacation');
                         const sickLeaves = dayReqs.filter(r => r.leaveType === 'sick');
@@ -480,6 +488,7 @@ export default function LeaveCalendar() {
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
       )}
