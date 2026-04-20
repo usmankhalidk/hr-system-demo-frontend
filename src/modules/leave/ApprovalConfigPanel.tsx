@@ -96,13 +96,13 @@ export default function ApprovalConfigPanel() {
   const enabledLevels = levels.filter((l) => l.enabled);
 
   return (
-    <div style={{ padding: '20px 0' }}>
+    <div>
       <div style={{
         background: 'var(--surface)',
         borderRadius: 12,
         border: '1px solid var(--border)',
         overflow: 'hidden',
-        maxWidth: 560,
+        width: '100%',
       }}>
         {/* Header */}
         <div style={{
@@ -238,12 +238,12 @@ export default function ApprovalConfigPanel() {
 
         {/* Save button */}
         {isAdmin && (
-          <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--border)' }}>
+          <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
             <button
               onClick={handleSave}
               disabled={saving}
               style={{
-                width: '100%', padding: '10px 0', borderRadius: 8,
+                padding: '10px 28px', borderRadius: 8,
                 border: 'none', background: '#b68c56', color: '#fff',
                 fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
                 opacity: saving ? 0.7 : 1,

@@ -461,7 +461,9 @@ export default function WeeklyCalendar({
                     .filter((item) => activityStoreIds.has(item.storeId));
                   const transferVm = transferVisualMeta(transfer?.status ?? 'active');
                   const lvVacation = leave?.leaveType === 'vacation';
-                  const lvPending = leave ? leave.status !== 'hr_approved' : false;
+                  const statusLower = String(leave?.status || '').toLowerCase();
+                  const lvApproved = statusLower.includes('approved');
+                  const lvPending = leave ? !lvApproved : false;
                   const leaveHoverKey = `${userId}-${dateStr}-leave`;
                   const isLeaveHovered = hoveredLeaveKey === leaveHoverKey;
                   const transferTargetStoreId = transfer?.targetStoreId ?? null;
@@ -794,14 +796,14 @@ export default function WeeklyCalendar({
                             }}>
                               {lvVacation ? t('leave.type_vacation') : t('leave.type_sick')}
                             </span>
-                            {lvPending && (
-                              <span style={{
-                                fontSize: 8.5, fontWeight: 700, flexShrink: 0,
-                                color: lvVacation ? '#3b82f6' : '#f97316',
-                                background: 'rgba(255,255,255,0.7)',
-                                padding: '1px 4px', borderRadius: 3, lineHeight: 1.4,
-                              }}>{t('leave.pending_short')}</span>
-                            )}
+                            <span style={{
+                              fontSize: 8.5, fontWeight: 700, flexShrink: 0,
+                              color: lvVacation ? '#1e40af' : '#9a3412',
+                              background: 'rgba(255,255,255,0.7)',
+                              padding: '1px 4px', borderRadius: 3, lineHeight: 1.4,
+                            }}>
+                              {lvApproved ? t('leave.approved_short', 'Appr.') : t('leave.pending_short', 'pend.')}
+                            </span>
                           </div>
 
                           {isLeaveHovered && (
