@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { listMyAttendanceEvents, type AttendanceEvent, type EventType } from '../../api/attendance';
 import { Spinner } from '../../components/ui/Spinner';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
+import { formatLocalDate } from '../../utils/date';
 import { useOfflineSync } from '../../context/OfflineSyncContext';
 import client from '../../api/client';
 
@@ -115,7 +116,7 @@ export default function EmployeeCheckinPage() {
     setLoading(true);
     setError(null);
     const days = parseInt(filter, 10);
-    const dateFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const dateFrom = formatLocalDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
     let alive = true;
 
     async function load() {
@@ -156,7 +157,7 @@ export default function EmployeeCheckinPage() {
           console.warn('[CheckinPage] Invalid date found for event:', ev);
           continue;
         }
-        const date = dObj.toISOString().split('T')[0];
+        const date = formatLocalDate(dObj);
         let group = grouped.find((g) => g.date === date);
         if (!group) {
           group = { date, items: [] };

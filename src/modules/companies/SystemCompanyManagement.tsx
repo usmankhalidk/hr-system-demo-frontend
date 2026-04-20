@@ -27,7 +27,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
-import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import { SelectOption } from '../../components/ui/CustomSelect';
 import { Badge } from '../../components/ui/Badge';
 import { LocationFieldGroup } from '../../components/location';
 
@@ -855,108 +855,6 @@ export default function SystemCompanyManagement() {
               onChange={(e) => setFormProfile((prev) => ({ ...prev, currency: e.target.value }))}
               disabled={formSaving}
             />
-          </div>
-
-          <div style={{ display: 'grid', gap: 8 }}>
-            <label style={{ marginBottom: 2, fontSize: '12.5px', fontWeight: 500, color: 'var(--text-secondary)' }}>
-              {t('companies.timezones', 'Timezones')}
-            </label>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {timezoneValues.length > 0 ? timezoneValues.map((timezone) => (
-                <span key={timezone} style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  border: '1px solid var(--border)',
-                  borderRadius: 999,
-                  background: 'var(--surface-warm)',
-                  color: 'var(--text-primary)',
-                  padding: '3px 8px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}>
-                  {timezone}
-                  <button
-                    type="button"
-                    onClick={() => removeTimezone(timezone)}
-                    disabled={formSaving}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      lineHeight: 1,
-                      padding: 0,
-                    }}
-                    aria-label={`Remove ${timezone}`}
-                  >
-                    x
-                  </button>
-                </span>
-              )) : (
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {t('companies.noTimezonesSelected', 'No timezones selected yet')}
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) auto auto', gap: 8 }}>
-              <CustomSelect
-                value={timezoneDraft}
-                onChange={(value) => setTimezoneDraft(value)}
-                options={timezoneSelectOptions}
-                placeholder={t('companies.timezonesPlaceholder', 'Select IANA timezone, e.g. Europe/Rome')}
-                disabled={formSaving}
-                isClearable
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => addTimezone(timezoneDraft)}
-                disabled={formSaving || !timezoneDraft}
-              >
-                {t('common.add', 'Add')}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => addTimezone(detectedTimezone)}
-                disabled={formSaving || !detectedTimezone}
-              >
-                {t('companies.useLocalTimezone', 'Use local')}
-              </Button>
-            </div>
-
-            {countryTimezoneSuggestions.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {countryTimezoneSuggestions.map((timezone) => (
-                  <button
-                    key={timezone}
-                    type="button"
-                    onClick={() => addTimezone(timezone)}
-                    disabled={formSaving}
-                    style={{
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface-warm)',
-                      color: 'var(--text-secondary)',
-                      borderRadius: 999,
-                      padding: '3px 10px',
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {timezone}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {t('companies.timezonesHint', 'Store IANA timezone values (for example Europe/Rome) for scheduling, payroll cut-offs, and reporting.')}
-              {countryLabel ? ` ${t('companies.timezonesCountryHint', 'Country presets loaded for')}: ${countryLabel}.` : ''}
-            </span>
           </div>
 
           <LocationFieldGroup

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -16,8 +16,15 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
 import { Eye, EyeOff, RefreshCw } from 'lucide-react';
+import {
+  getBrowserTimeZone,
+  getPreferredTimezoneForCountry,
+  getTimezoneOptionValues,
+  getUtcOffsetLabel,
+} from '../../utils/timezone';
 
 interface StoreFormData {
   name: string;
@@ -28,6 +35,7 @@ interface StoreFormData {
   state: string;
   country: string;
   phone: string;
+  timezone: string;
   maxStaff: string;
 }
 
@@ -40,6 +48,7 @@ const emptyForm: StoreFormData = {
   state: '',
   country: '',
   phone: '',
+  timezone: '',
   maxStaff: '',
 };
 
@@ -158,6 +167,21 @@ export function StoreList() {
 
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
 
+  const browserTimezone = useMemo(() => getBrowserTimeZone(), []);
+
+  const timezoneOptions = useMemo<SelectOption[]>(() => {
+    return getTimezoneOptionValues([formData.timezone, browserTimezone]).map((timezone) => ({
+      value: timezone,
+      label: timezone,
+      render: (
+        <div style={{ display: 'grid', gap: 1 }}>
+          <span style={{ fontWeight: 700 }}>{timezone}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{getUtcOffsetLabel(timezone)}</span>
+        </div>
+      ),
+    }));
+  }, [browserTimezone, formData.timezone]);
+
   const loadStores = async () => {
     setLoading(true);
     setError(null);
@@ -187,7 +211,7 @@ export function StoreList() {
 
   const openNewForm = () => {
     setEditingStore(null);
-    setFormData(emptyForm);
+    setFormData({ ...emptyForm, timezone: browserTimezone });
     setFormErrors({});
     setFormError(null);
     // Super-admin has no default company; require explicit selection.
@@ -212,6 +236,7 @@ export function StoreList() {
       state: store.state ?? '',
       country: store.country ?? '',
       phone: store.phone ?? '',
+      timezone: store.timezone ?? getPreferredTimezoneForCountry(store.country, browserTimezone),
       maxStaff: store.maxStaff != null ? String(store.maxStaff) : '',
     });
     setFormErrors({});
@@ -312,6 +337,7 @@ export function StoreList() {
         state: formData.state.trim() || null,
         country: formData.country.trim() || null,
         phone: formData.phone.trim() || null,
+        timezone: (formData.timezone || getPreferredTimezoneForCountry(formData.country, browserTimezone)).trim(),
         maxStaff: formData.maxStaff ? parseInt(formData.maxStaff, 10) : 0,
       };
 
@@ -748,15 +774,22 @@ export function StoreList() {
               phone: formData.phone,
             }}
             onChange={(location) => {
-              setFormData((prev) => ({
-                ...prev,
-                country: location.country,
-                state: location.state,
-                city: location.city,
-                address: location.address,
-                cap: location.postalCode,
-                phone: location.phone,
-              }));
+              setFormData((prev) => {
+                const nextTimezone = prev.country !== location.country
+                  ? getPreferredTimezoneForCountry(location.country, prev.timezone || browserTimezone)
+                  : prev.timezone;
+
+                return {
+                  ...prev,
+                  country: location.country,
+                  state: location.state,
+                  city: location.city,
+                  address: location.address,
+                  cap: location.postalCode,
+                  phone: location.phone,
+                  timezone: nextTimezone,
+                };
+              });
             }}
             includeAddress
             includePostalCode
@@ -771,6 +804,24 @@ export function StoreList() {
               phone: t('companies.companyPhoneNumbers', 'Phone'),
             }}
           />
+          <div style={{ display: 'grid', gap: 4 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+              {t('stores.fieldTimezone', 'Timezone')}
+            </label>
+            <CustomSelect
+              value={formData.timezone || browserTimezone}
+              onChange={(value) => {
+                if (!value) return;
+                setFormData((prev) => ({ ...prev, timezone: value }));
+              }}
+              options={timezoneOptions}
+              placeholder={t('stores.placeholderTimezone', 'Select timezone')}
+              searchPlaceholder={t('settings.timezoneSearchPlaceholder', 'Search timezone...')}
+              noOptionsMessage={t('settings.timezoneNoResults', 'No timezone found')}
+              disabled={formSaving}
+              isClearable={false}
+            />
+          </div>
           <Input
             label={t('stores.fieldMaxStaff')}
             type="number"

@@ -52,12 +52,22 @@ export interface AttendanceListParams {
   dateTo?: string;
   eventType?: EventType;
   search?: string;
+  timezone?: string;
 }
 
 export interface AttendanceListResponse {
   events: AttendanceEvent[];
   total: number;
   hasMore: boolean;
+}
+
+function resolveBrowserTimezone(): string {
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return timezone && timezone.trim().length > 0 ? timezone : 'Europe/Rome';
+  } catch {
+    return 'Europe/Rome';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +91,11 @@ export async function recordCheckin(payload: CheckinPayload): Promise<Attendance
 export async function listAttendanceEvents(
   params?: AttendanceListParams,
 ): Promise<AttendanceListResponse> {
-  const { data } = await client.get('/attendance', { params });
+  const requestParams: AttendanceListParams = {
+    ...(params ?? {}),
+    timezone: params?.timezone ?? resolveBrowserTimezone(),
+  };
+  const { data } = await client.get('/attendance', { params: requestParams });
   return data.data as AttendanceListResponse;
 }
 
@@ -90,7 +104,12 @@ export async function listMyAttendanceEvents(params?: {
   dateFrom?: string;
   dateTo?: string;
   deviceFingerprint?: string;
+  timezone?: string;
 }): Promise<AttendanceListResponse> {
-  const { data } = await client.get('/attendance/my', { params });
+  const requestParams = {
+    ...(params ?? {}),
+    timezone: params?.timezone ?? resolveBrowserTimezone(),
+  };
+  const { data } = await client.get('/attendance/my', { params: requestParams });
   return data.data as AttendanceListResponse;
 }

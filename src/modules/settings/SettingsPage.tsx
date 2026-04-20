@@ -13,6 +13,11 @@ import {
   NotificationSetting,
   AutomationSetting,
 } from '../../api/documents';
+import {
+  getBrowserTimeZone,
+  getTimezoneOptionValues,
+  getUtcOffsetLabel,
+} from '../../utils/timezone';
 
 const IconSettings = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -45,30 +50,6 @@ const IconClock = () => (
     <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
   </svg>
 );
-
-const FALLBACK_TIMEZONES = [
-  'UTC',
-  'Europe/Rome',
-  'Europe/London',
-  'Europe/Paris',
-  'America/New_York',
-  'America/Chicago',
-  'America/Los_Angeles',
-  'Asia/Dubai',
-  'Asia/Singapore',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-];
-
-type IntlWithSupportedValues = typeof Intl & {
-  supportedValuesOf?: (key: string) => string[];
-};
-
-const intlWithSupportedValues = Intl as IntlWithSupportedValues;
-
-const TIMEZONE_OPTIONS = typeof intlWithSupportedValues.supportedValuesOf === 'function'
-  ? intlWithSupportedValues.supportedValuesOf('timeZone')
-  : FALLBACK_TIMEZONES;
 
 // ── Notification Settings Panel ────────────────────────────────────────────
 
@@ -370,8 +351,12 @@ const SettingsPage: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr';
-  const detectedTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', []);
+  const detectedTimezone = useMemo(() => getBrowserTimeZone(), []);
   const [selectedTimezone, setSelectedTimezone] = useState<string>(detectedTimezone);
+  const currentTimezoneOffset = useMemo(
+    () => getUtcOffsetLabel(selectedTimezone || detectedTimezone),
+    [detectedTimezone, selectedTimezone],
+  );
 
   const [showLeaveBalance, setShowLeaveBalance] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -379,19 +364,16 @@ const SettingsPage: React.FC = () => {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   const timezoneOptions = useMemo<SelectOption[]>(() => {
-    const values = new Set<string>(TIMEZONE_OPTIONS);
-    if (detectedTimezone) values.add(detectedTimezone);
-    if (selectedTimezone) values.add(selectedTimezone);
-
-    return Array.from(values)
-      .sort((a, b) => a.localeCompare(b))
+    return getTimezoneOptionValues([detectedTimezone, selectedTimezone])
       .map((timezone) => ({
         value: timezone,
         label: timezone,
         render: (
           <div style={{ display: 'grid', gap: 1 }}>
             <span style={{ fontWeight: 700 }}>{timezone}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              {getUtcOffsetLabel(timezone)}
+            </span>
           </div>
         ),
       }));
@@ -458,7 +440,8 @@ const SettingsPage: React.FC = () => {
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderLeft: '4px solid #1D4ED8',
-        borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
+        borderRadius: 'var(--radius-lg)', overflow: 'visible', marginBottom: 24,
+        position: 'relative', zIndex: 5,
         boxShadow: 'var(--shadow-sm)',
       }}>
         <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
@@ -476,7 +459,7 @@ const SettingsPage: React.FC = () => {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
             <span style={{ fontWeight: 700 }}>{t('settings.currentTimezone', 'Current timezone')}:</span>
             <span style={{ padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(29,78,216,0.28)', background: 'rgba(219,234,254,0.5)', color: '#1E40AF', fontWeight: 700 }}>
-              {selectedTimezone || detectedTimezone}
+              {selectedTimezone || detectedTimezone} ({currentTimezoneOffset})
             </span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               ({t('settings.detectedTimezone', 'Auto-detected')}: {detectedTimezone})
