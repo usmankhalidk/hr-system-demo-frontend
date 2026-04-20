@@ -408,9 +408,10 @@ export default function MonthlyCalendar({
   };
 
   return (
-    <div style={{ padding: 16 }}>
-      {/* Day headers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>
+    <div style={{ padding: 16, overflowX: 'auto' }}>
+      <div style={{ minWidth: 1200 }}>
+        {/* Day headers */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 8 }}>
         {DAY_LABELS.map((label) => (
           <div key={label} style={{
             textAlign: 'center', fontWeight: 600,
@@ -423,7 +424,7 @@ export default function MonthlyCalendar({
       </div>
 
       {/* Day cells */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
         {cells.map((date, idx) => {
           if (!date) {
             return <div key={`empty-${idx}`} style={{ minHeight: 104 }} />;
@@ -459,6 +460,7 @@ export default function MonthlyCalendar({
               onClick={() => onDayClick(dateStr)}
               style={{
                 position: 'relative',
+                minWidth: 0,
                 minHeight: 92,
                 borderRadius: 6,
                 border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
@@ -550,7 +552,8 @@ export default function MonthlyCalendar({
                           {isHovered && (
                             <div style={{
                               position: 'absolute',
-                              top: 'calc(100% + 2px)',
+                              top: idx >= cells.length - 7 ? 'auto' : 'calc(100% + 2px)',
+                              bottom: idx >= cells.length - 7 ? 'calc(100% + 2px)' : 'auto',
                               right: 0,
                               minWidth: 170,
                               maxWidth: 220,
@@ -659,7 +662,7 @@ export default function MonthlyCalendar({
                     fontWeight: 800,
                     lineHeight: 1.2,
                   }}
-                  title={t('shifts.shiftCountPlural', 'Shifts')}
+                    title={t('shifts.shiftCountPlural', 'Shifts')}
                   >
                     <Clock3 size={10} strokeWidth={2.4} />
                     {t('shifts.shiftCountPlural', 'Shifts')} {shiftCount}
@@ -864,7 +867,8 @@ export default function MonthlyCalendar({
               {hoveredSummaryTag && (hoveredSummaryTag === transferTagKey || hoveredSummaryTag === vacationTagKey || hoveredSummaryTag === sickTagKey || hoveredSummaryTag === offDayTagKey) && (
                 <div style={{
                   ...summaryHoverCardStyle,
-                  top: 'calc(100% + 4px)',
+                  top: idx >= cells.length - 7 ? 'auto' : 'calc(100% + 4px)',
+                  bottom: idx >= cells.length - 7 ? 'calc(100% + 4px)' : 'auto',
                   right: (idx % 7 > 3) ? 0 : 'auto',
                   left: (idx % 7 > 3) ? 'auto' : 0,
                 }}>
@@ -971,6 +975,7 @@ export default function MonthlyCalendar({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
