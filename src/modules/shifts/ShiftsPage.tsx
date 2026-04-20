@@ -14,7 +14,7 @@ import MonthlyCalendar from './MonthlyCalendar';
 import DayCalendar from './DayCalendar';
 import ShiftDrawer from './ShiftDrawer';
 import ShiftTemplatesPanel from './ShiftTemplatesPanel';
-import AffluencePanel from './AffluencePanel';
+import ExternalAffluenceLivePanel from './ExternalAffluenceLivePanel';
 import CalendarActivitiesModal from './CalendarActivitiesModal';
 
 type ViewMode = 'day' | 'week' | 'month';
@@ -816,7 +816,7 @@ export default function ShiftsPage() {
 
         {/* ── Affluence Panel ───────────────────────────────────────── */}
         {affluenceOpen && storeFilter && viewMode === 'week' && (
-          <AffluencePanel
+          <ExternalAffluenceLivePanel
             storeId={storeFilter}
             week={formatIsoWeek(currentDate)}
           />

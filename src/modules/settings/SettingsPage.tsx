@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { Globe2 } from 'lucide-react';
 import apiClient from '../../api/client';
 import { BalancesTab } from '../leave/AdminLeavePanel';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import {
   getNotificationSettings,
   updateNotificationSetting,
@@ -43,6 +45,30 @@ const IconClock = () => (
     <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
   </svg>
 );
+
+const FALLBACK_TIMEZONES = [
+  'UTC',
+  'Europe/Rome',
+  'Europe/London',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Asia/Dubai',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
+
+type IntlWithSupportedValues = typeof Intl & {
+  supportedValuesOf?: (key: string) => string[];
+};
+
+const intlWithSupportedValues = Intl as IntlWithSupportedValues;
+
+const TIMEZONE_OPTIONS = typeof intlWithSupportedValues.supportedValuesOf === 'function'
+  ? intlWithSupportedValues.supportedValuesOf('timeZone')
+  : FALLBACK_TIMEZONES;
 
 // ── Notification Settings Panel ────────────────────────────────────────────
 
@@ -344,11 +370,32 @@ const SettingsPage: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr';
+  const detectedTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', []);
+  const [selectedTimezone, setSelectedTimezone] = useState<string>(detectedTimezone);
 
   const [showLeaveBalance, setShowLeaveBalance] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const timezoneOptions = useMemo<SelectOption[]>(() => {
+    const values = new Set<string>(TIMEZONE_OPTIONS);
+    if (detectedTimezone) values.add(detectedTimezone);
+    if (selectedTimezone) values.add(selectedTimezone);
+
+    return Array.from(values)
+      .sort((a, b) => a.localeCompare(b))
+      .map((timezone) => ({
+        value: timezone,
+        label: timezone,
+        render: (
+          <div style={{ display: 'grid', gap: 1 }}>
+            <span style={{ fontWeight: 700 }}>{timezone}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+          </div>
+        ),
+      }));
+  }, [detectedTimezone, selectedTimezone]);
 
   useEffect(() => {
     if (!isAdmin) { setLoading(false); return; }
@@ -406,6 +453,51 @@ const SettingsPage: React.FC = () => {
         <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
           {t('settings.subtitle')}
         </p>
+      </div>
+
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderLeft: '4px solid #1D4ED8',
+        borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
+        boxShadow: 'var(--shadow-sm)',
+      }}>
+        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <span style={{ color: '#1D4ED8' }}><Globe2 size={16} /></span>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+              {t('settings.sectionTimezone', 'Timezone')}
+            </h3>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+            {t('settings.sectionTimezoneDesc', 'Timezone is auto-detected from your current region and can be changed for display.')}
+          </p>
+        </div>
+        <div style={{ padding: 20, display: 'grid', gap: 10 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+            <span style={{ fontWeight: 700 }}>{t('settings.currentTimezone', 'Current timezone')}:</span>
+            <span style={{ padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(29,78,216,0.28)', background: 'rgba(219,234,254,0.5)', color: '#1E40AF', fontWeight: 700 }}>
+              {selectedTimezone || detectedTimezone}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              ({t('settings.detectedTimezone', 'Auto-detected')}: {detectedTimezone})
+            </span>
+          </div>
+
+          <div style={{ maxWidth: 420 }}>
+            <CustomSelect
+              value={selectedTimezone}
+              onChange={(value) => {
+                if (value) setSelectedTimezone(value);
+              }}
+              options={timezoneOptions}
+              placeholder={t('settings.chooseTimezone', 'Choose timezone')}
+              searchable
+              searchPlaceholder={t('settings.timezoneSearchPlaceholder', 'Search timezone...')}
+              noOptionsMessage={t('settings.timezoneNoResults', 'No timezone found')}
+              isClearable={false}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Leave Balance Management (admin + hr) */}

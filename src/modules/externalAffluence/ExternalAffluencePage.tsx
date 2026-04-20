@@ -31,7 +31,6 @@ import {
   getExternalTableData,
   listExternalDepositi,
   listExternalMappings,
-  syncExternalAffluence,
   upsertExternalMapping,
   deleteExternalMapping,
 } from '../../api/externalAffluence';
@@ -940,7 +939,6 @@ export default function ExternalAffluencePage() {
   const [trafficData, setTrafficData] = useState<ExternalIngressiResponse | null>(null);
   const [selectedTrafficMonth, setSelectedTrafficMonth] = useState<string>('');
   const [previewData, setPreviewData] = useState<ExternalAffluencePreviewResponse | null>(null);
-  const [overwriteDefault, setOverwriteDefault] = useState<boolean>(true);
 
   const [hoveredCard, setHoveredCard] = useState<PanelKey | null>(null);
   const [openPanels, setOpenPanels] = useState<Record<PanelKey, boolean>>({
@@ -957,7 +955,6 @@ export default function ExternalAffluencePage() {
   const [loadingDepositi, setLoadingDepositi] = useState<boolean>(false);
   const [loadingTraffic, setLoadingTraffic] = useState<boolean>(false);
   const [loadingPreview, setLoadingPreview] = useState<boolean>(false);
-  const [syncing, setSyncing] = useState<boolean>(false);
   const [savingMappingCode, setSavingMappingCode] = useState<string | null>(null);
 
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -1685,34 +1682,6 @@ export default function ExternalAffluencePage() {
       showToast(message, 'error');
     } finally {
       setLoadingPreview(false);
-    }
-  };
-
-  const handleSyncPreview = async () => {
-    if (!selectedStore || !selectedCompanyIdNum) {
-      setStep3Error(tx.selectStoreFirst);
-      showToast(tx.selectStoreFirst, 'warning');
-      return;
-    }
-
-    setSyncing(true);
-    setStep3Error(null);
-    try {
-      await syncExternalAffluence({
-        storeId: selectedStore.id,
-        targetCompanyId: selectedCompanyIdNum,
-        fromDate,
-        toDate,
-        overwriteDefault,
-      });
-      showToast(tx.syncToast, 'success');
-      await handleLoadPreview();
-    } catch (err) {
-      const message = parseApiError(err);
-      setStep3Error(message);
-      showToast(message, 'error');
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -2838,24 +2807,6 @@ export default function ExternalAffluencePage() {
             disabled={loadingPreview || !selectedStore || !selectedStoreMapping}
           >
             {loadingPreview ? tx.generating : tx.generatePreview}
-          </button>
-
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-            <input
-              type="checkbox"
-              checked={overwriteDefault}
-              onChange={(event) => setOverwriteDefault(event.target.checked)}
-            />
-            {tx.overwrite}
-          </label>
-
-          <button
-            type="button"
-            className="btn btn-accent"
-            onClick={() => { void handleSyncPreview(); }}
-            disabled={!canWrite || syncing || !selectedStore || !selectedStoreMapping}
-          >
-            {syncing ? tx.syncing : tx.applyToLocal}
           </button>
         </div>
 

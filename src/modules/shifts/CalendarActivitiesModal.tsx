@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { CalendarDays } from 'lucide-react';
 import { Store } from '../../types';
 import { StoreActivityType, WindowDisplayActivity } from '../../api/windowDisplay';
 import { getEmployees } from '../../api/employees';
@@ -104,6 +105,10 @@ function parseIsoMonth(month: string): { year: number; monthIndex: number } {
     return { year: fallback.getFullYear(), monthIndex: fallback.getMonth() };
   }
   return { year, monthIndex };
+}
+
+function daysInMonth(year: number, monthIndex: number): number {
+  return new Date(year, monthIndex + 1, 0).getDate();
 }
 
 function humanName(name: string | null | undefined, surname: string | null | undefined): string | null {
@@ -561,9 +566,10 @@ export default function CalendarActivitiesModal({
                 background: 'rgba(255,255,255,0.12)',
                 color: '#fff',
                 fontSize: 12,
-                padding: '7px 10px',
+                padding: '0 10px',
                 fontWeight: 700,
                 minWidth: 190,
+                height: 34,
               }}
             >
               <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
@@ -583,11 +589,11 @@ export default function CalendarActivitiesModal({
               <div style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
-              borderRadius: 9,
+              gap: 5,
+              borderRadius: 10,
               border: '1px solid rgba(255,255,255,0.28)',
               background: 'rgba(255,255,255,0.12)',
-              padding: '3px 6px',
+              padding: '2px',
               }}>
               <button
                 type="button"
@@ -596,14 +602,14 @@ export default function CalendarActivitiesModal({
                   setMonthPickerOpen(false);
                 }}
                 style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 6,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 8,
                   border: '1px solid rgba(255,255,255,0.26)',
-                  background: 'rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.16)',
                   color: '#fff',
                   cursor: 'pointer',
-                  fontSize: 13,
+                  fontSize: 15,
                   fontWeight: 800,
                   lineHeight: 1,
                 }}
@@ -618,18 +624,20 @@ export default function CalendarActivitiesModal({
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 7,
-                  borderRadius: 7,
+                  gap: 8,
+                  borderRadius: 8,
                   border: '1px solid rgba(255,255,255,0.28)',
                   background: 'rgba(255,255,255,0.2)',
                   color: '#fff',
                   fontSize: 12,
-                  padding: '6px 10px',
+                  padding: '0 12px',
                   fontWeight: 700,
-                  minWidth: 186,
+                  minWidth: 198,
+                  minHeight: 30,
                   cursor: 'pointer',
                 }}
               >
+                <CalendarDays size={14} />
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{monthLabel}</span>
                 <span style={{ fontSize: 10, opacity: 0.9 }}>{monthPickerOpen ? '▲' : '▼'}</span>
               </button>
@@ -641,14 +649,14 @@ export default function CalendarActivitiesModal({
                   setMonthPickerOpen(false);
                 }}
                 style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 6,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 8,
                   border: '1px solid rgba(255,255,255,0.26)',
-                  background: 'rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.16)',
                   color: '#fff',
                   cursor: 'pointer',
-                  fontSize: 13,
+                  fontSize: 15,
                   fontWeight: 800,
                   lineHeight: 1,
                 }}
@@ -663,7 +671,7 @@ export default function CalendarActivitiesModal({
                   position: 'absolute',
                   top: 'calc(100% + 6px)',
                   right: 0,
-                  width: 258,
+                  width: 276,
                   borderRadius: 'var(--radius-lg)',
                   border: '1px solid rgba(255,255,255,0.3)',
                   background: '#ffffff',
@@ -728,6 +736,7 @@ export default function CalendarActivitiesModal({
                         const today = new Date();
                         const isSelected = monthPickerYear === selectedMonthParts.year && idx === selectedMonthParts.monthIndex;
                         const isCurrentMonth = monthPickerYear === today.getFullYear() && idx === today.getMonth();
+                        const monthDays = daysInMonth(monthPickerYear, idx);
 
                         return (
                           <button
@@ -744,13 +753,21 @@ export default function CalendarActivitiesModal({
                               color: isSelected ? '#fff' : isCurrentMonth ? 'var(--primary)' : 'var(--text-primary)',
                               fontSize: 12,
                               fontWeight: isSelected ? 800 : 700,
-                              padding: '8px 6px',
+                              padding: '7px 6px',
                               textTransform: 'capitalize',
                               cursor: 'pointer',
                               boxShadow: isSelected ? '0 2px 8px rgba(201,151,58,0.35)' : 'none',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 1,
                             }}
                           >
-                            {label}
+                            <span>{label}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, opacity: isSelected ? 0.88 : 0.7 }}>
+                              {monthDays}d
+                            </span>
                           </button>
                         );
                       })}
@@ -768,9 +785,13 @@ export default function CalendarActivitiesModal({
                 border: '1px solid rgba(255,255,255,0.18)',
                 color: '#fff',
                 borderRadius: 8,
-                padding: '6px 10px',
+                padding: '0 12px',
+                height: 34,
                 cursor: 'pointer',
                 fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
               {t('common.close', 'Close')}

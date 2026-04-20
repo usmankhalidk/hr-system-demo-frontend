@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { CheckCheck, FileText, Palmtree, Thermometer, Trash2, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCheck, Clock3, FileText, Palmtree, Thermometer, Trash2, XCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
   getLeaveRequests,
@@ -2005,10 +2005,38 @@ export default function AdminLeavePanel() {
 
               <div style={{ marginBottom: 14 }}>
                 <label style={labelStyle}>{t('leave.type_label')} *</label>
-                <select value={cType} onChange={(e) => setCType(e.target.value)} style={{ ...selectStyle, width: '100%' }}>
-                  <option value="vacation">{t('leave.type_vacation')}</option>
-                  <option value="sick">{t('leave.type_sick')}</option>
-                </select>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {([
+                    { key: 'vacation', label: t('leave.type_vacation'), icon: <Palmtree size={13} strokeWidth={2.4} /> },
+                    { key: 'sick', label: t('leave.type_sick'), icon: <Thermometer size={13} strokeWidth={2.4} /> },
+                  ] as const).map((opt) => {
+                    const selected = cType === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setCType(opt.key)}
+                        style={{
+                          borderRadius: 8,
+                          border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`,
+                          background: '#ffffff',
+                          color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-start',
+                          gap: 6,
+                        }}
+                      >
+                        {opt.icon}
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {cType === 'vacation' && (
@@ -2016,8 +2044,8 @@ export default function AdminLeavePanel() {
                   <label style={labelStyle}>{t('leave.duration_mode_label', 'Duration')} *</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {([
-                      { key: 'full_day', label: t('leave.duration_full_day', 'Full day leave') },
-                      { key: 'short_leave', label: t('leave.duration_short_leave', 'Short leave') },
+                      { key: 'full_day', label: t('leave.duration_full_day', 'Full day leave'), icon: <CalendarDays size={13} strokeWidth={2.4} /> },
+                      { key: 'short_leave', label: t('leave.duration_short_leave', 'Short leave'), icon: <Clock3 size={13} strokeWidth={2.4} /> },
                     ] as const).map((opt) => {
                       const selected = cDurationType === opt.key;
                       return (
@@ -2025,8 +2053,9 @@ export default function AdminLeavePanel() {
                           key={opt.key}
                           type="button"
                           onClick={() => setCDurationType(opt.key)}
-                          style={{ borderRadius: 8, border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`, background: '#ffffff', color: selected ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: 12, fontWeight: 700, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}
+                          style={{ borderRadius: 8, border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`, background: '#ffffff', color: selected ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: 12, fontWeight: 700, padding: '10px 12px', cursor: 'pointer', textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                         >
+                          {opt.icon}
                           {opt.label}
                         </button>
                       );
