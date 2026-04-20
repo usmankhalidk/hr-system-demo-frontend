@@ -287,3 +287,34 @@ export async function importLeaveBalances(file: File): Promise<ImportResult> {
 export const cancelLeaveRequest = async (id: number): Promise<LeaveRequest> => {
   return apiClient.put(`/leave/${id}/cancel`).then((res) => res.data.data);
 };
+
+// ---------------------------------------------------------------------------
+// Approval Config
+// ---------------------------------------------------------------------------
+
+export interface ApprovalLevel {
+  id: number;
+  role: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+/** Get approval chain configuration for a company. */
+export async function getApprovalConfig(companyId?: number): Promise<ApprovalLevel[]> {
+  const { data } = await apiClient.get('/leave/approval-config', {
+    params: companyId != null ? { company_id: companyId } : {},
+  });
+  return data.data as ApprovalLevel[];
+}
+
+/** Update approval chain configuration. */
+export async function updateApprovalConfig(
+  companyId: number,
+  levels: Array<{ role: string; enabled: boolean; sort_order: number }>,
+): Promise<ApprovalLevel[]> {
+  const { data } = await apiClient.put('/leave/approval-config', {
+    company_id: companyId,
+    levels,
+  });
+  return data.data as ApprovalLevel[];
+}

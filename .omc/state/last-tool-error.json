@@ -1,7 +1,7 @@
 {
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Users/user/hr-software && git stash pop 2>&1 || git checkout stash -- hr-system-demo-frontend/src/App.tsx hr-system-demo-frontend/vite.config.ts 2>&1\",\"description\":\"Recover stashed ch...",
-  "error": "Exit code 128\nNo stash entries found.\nfatal: invalid reference: stash",
-  "timestamp": "2026-04-17T07:10:59.027Z",
-  "retry_count": 2
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"/Users/user/hr-software/hr-system-demo-frontend/src/i18n/locales/it.ts\"}",
+  "error": "File content (35683 tokens) exceeds maximum allowed tokens (25000). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
+  "timestamp": "2026-04-20T04:53:10.840Z",
+  "retry_count": 3
 }

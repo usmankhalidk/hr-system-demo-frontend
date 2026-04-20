@@ -154,8 +154,8 @@
   "hotPaths": [
     {
       "path": "src/i18n/locales/en.ts",
-      "accessCount": 38,
-      "lastAccessed": 1776318239458,
+      "accessCount": 39,
+      "lastAccessed": 1776660807397,
       "type": "directory"
     },
     {
@@ -166,8 +166,8 @@
     },
     {
       "path": "src/i18n/locales/it.ts",
-      "accessCount": 26,
-      "lastAccessed": 1776318241668,
+      "accessCount": 27,
+      "lastAccessed": 1776660807631,
       "type": "file"
     },
     {
@@ -181,6 +181,12 @@
       "accessCount": 18,
       "lastAccessed": 1776132030447,
       "type": "directory"
+    },
+    {
+      "path": "src/modules/leave/LeaveCalendar.tsx",
+      "accessCount": 17,
+      "lastAccessed": 1776660790112,
+      "type": "file"
     },
     {
       "path": "src/modules/settings/SettingsPage.tsx",
@@ -207,16 +213,16 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 12,
+      "lastAccessed": 1776660582162,
+      "type": "directory"
+    },
+    {
       "path": "src/hooks/useOfflineSync.ts",
       "accessCount": 11,
       "lastAccessed": 1775881666317,
       "type": "file"
-    },
-    {
-      "path": "src",
-      "accessCount": 11,
-      "lastAccessed": 1776318196992,
-      "type": "directory"
     },
     {
       "path": "src/modules/documents/DocumentsPage.tsx",
@@ -232,8 +238,8 @@
     },
     {
       "path": "src/modules/attendance/AnomalyList.tsx",
-      "accessCount": 8,
-      "lastAccessed": 1776318360046,
+      "accessCount": 9,
+      "lastAccessed": 1776660794104,
       "type": "file"
     },
     {
@@ -268,8 +274,8 @@
     },
     {
       "path": "src/api/client.ts",
-      "accessCount": 4,
-      "lastAccessed": 1775818656405,
+      "accessCount": 5,
+      "lastAccessed": 1776660666684,
       "type": "file"
     },
     {
@@ -303,6 +309,12 @@
       "type": "file"
     },
     {
+      "path": "src/types/index.ts",
+      "accessCount": 3,
+      "lastAccessed": 1776660585319,
+      "type": "file"
+    },
+    {
       "path": "src/api/documents.ts",
       "accessCount": 2,
       "lastAccessed": 1775650414833,
@@ -312,12 +324,6 @@
       "path": "src/api/ats.ts",
       "accessCount": 2,
       "lastAccessed": 1775668348171,
-      "type": "file"
-    },
-    {
-      "path": "src/types/index.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775669608888,
       "type": "file"
     },
     {
@@ -375,6 +381,18 @@
       "type": "file"
     },
     {
+      "path": "src/context/AuthContext.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776660579122,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/leave/AdminLeavePanel.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776660806342,
+      "type": "file"
+    },
+    {
       "path": "src/api/stores.ts",
       "accessCount": 1,
       "lastAccessed": 1775668347696,
@@ -390,12 +408,6 @@
       "path": "src/api/companies.ts",
       "accessCount": 1,
       "lastAccessed": 1775668645059,
-      "type": "file"
-    },
-    {
-      "path": "src/context/AuthContext.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1775669603886,
       "type": "file"
     },
     {
@@ -420,6 +432,18 @@
       "path": "src/modules/attendance/AnomaliesPage.tsx",
       "accessCount": 1,
       "lastAccessed": 1776318212065,
+      "type": "file"
+    },
+    {
+      "path": "src/api/leave.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776660788434,
+      "type": "file"
+    },
+    {
+      "path": "src/modules/leave/ApprovalConfigPanel.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776660788796,
       "type": "file"
     }
   ],
