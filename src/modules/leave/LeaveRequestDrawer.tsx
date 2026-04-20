@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { CalendarDays, Clock3, Palmtree, Thermometer } from 'lucide-react';
 import { submitLeaveRequest, LeaveDurationType, LeaveType } from '../../api/leave';
 import { useToast } from '../../context/ToastContext';
 import { DatePicker } from '../../components/ui/DatePicker';
@@ -210,20 +211,28 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
               {t('leave.type_label')}
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
-              {(['vacation', 'sick'] as LeaveType[]).map((type) => (
+              {([
+                { key: 'vacation', label: t('leave.type_vacation'), icon: <Palmtree size={13} strokeWidth={2.4} /> },
+                { key: 'sick', label: t('leave.type_sick'), icon: <Thermometer size={13} strokeWidth={2.4} /> },
+              ] as const).map((typeOption) => (
                 <button
-                  key={type}
+                  key={typeOption.key}
                   type="button"
-                  onClick={() => setLeaveType(type)}
+                  onClick={() => setLeaveType(typeOption.key as LeaveType)}
                   style={{
-                    flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    flex: 1, padding: '9px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                     cursor: 'pointer', transition: 'all 0.15s',
                     background: '#ffffff',
-                    color: leaveType === type ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: `1px solid ${leaveType === type ? 'var(--primary)' : '#d1d5db'}`,
+                    color: leaveType === typeOption.key ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    border: `1px solid ${leaveType === typeOption.key ? 'var(--primary)' : '#d1d5db'}`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
                   }}
                 >
-                  {t(`leave.type_${type}`)}
+                  {typeOption.icon}
+                  {typeOption.label}
                 </button>
               ))}
             </div>
@@ -236,8 +245,8 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {([
-                  { key: 'full_day', label: t('leave.duration_full_day', 'Full day leave') },
-                  { key: 'short_leave', label: t('leave.duration_short_leave', 'Short leave') },
+                    { key: 'full_day', label: t('leave.duration_full_day', 'Full day leave'), icon: <CalendarDays size={13} strokeWidth={2.4} /> },
+                    { key: 'short_leave', label: t('leave.duration_short_leave', 'Short leave'), icon: <Clock3 size={13} strokeWidth={2.4} /> },
                 ] as const).map((option) => {
                   const selected = leaveDurationType === option.key;
                   return (
@@ -255,8 +264,12 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
                         padding: '10px 12px',
                         cursor: 'pointer',
                         textAlign: 'left',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
                       }}
                     >
+                      {option.icon}
                       {option.label}
                     </button>
                   );

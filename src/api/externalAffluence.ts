@@ -227,6 +227,55 @@ export interface ExternalAffluencePreviewResponse {
   recommendations: ExternalAffluencePreviewRow[];
 }
 
+export interface ExternalAffluenceCalculationSettings {
+  visitorsPerStaff: number;
+  lowMaxStaff: number;
+  mediumMaxStaff: number;
+  coverageTolerance: number;
+  slotWeights: Array<{
+    timeSlot: string;
+    weight: number;
+  }>;
+}
+
+export interface ExternalAffluenceWeekResponse {
+  storeId: number;
+  companyId: number;
+  companyName: string;
+  localStoreName: string;
+  localStoreCode: string;
+  externalStoreCode: string;
+  externalStoreName: string | null;
+  week: string | null;
+  fromDate: string;
+  toDate: string;
+  settings: ExternalAffluenceCalculationSettings;
+  sourceSummary: ExternalIngressiSummary;
+  recommendations: ExternalAffluencePreviewRow[];
+}
+
+export interface ExternalAffluenceConfigurationResponse {
+  storeId: number;
+  companyId: number;
+  companyName: string;
+  localStoreName: string;
+  localStoreCode: string;
+  localStoreLogoFilename: string | null;
+  integration: {
+    mapped: boolean;
+    externalStoreCode: string | null;
+    externalStoreName: string | null;
+    notes: string | null;
+    isActive: boolean;
+    mappedByUserId: number | null;
+    mappedByName: string | null;
+    mappedBySurname: string | null;
+    mappedByAvatarFilename: string | null;
+    mappedAt: string | null;
+  };
+  settings: ExternalAffluenceCalculationSettings;
+}
+
 export interface SyncExternalAffluenceResponse {
   storeId: number;
   externalStoreCode: string;
@@ -338,6 +387,70 @@ export async function getExternalAffluencePreview(params: {
   });
 
   return data.data;
+}
+
+export async function getExternalWeekAffluence(params: {
+  storeId: number;
+  week?: string;
+  fromDate?: string;
+  toDate?: string;
+  targetCompanyId?: number;
+}): Promise<ExternalAffluenceWeekResponse> {
+  const { data } = await client.get('/external-affluence/week-affluence', {
+    params: {
+      store_id: params.storeId,
+      ...(params.week ? { week: params.week } : {}),
+      ...(params.fromDate ? { from_date: params.fromDate } : {}),
+      ...(params.toDate ? { to_date: params.toDate } : {}),
+      ...(params.targetCompanyId ? { target_company_id: params.targetCompanyId } : {}),
+    },
+  });
+
+  return data.data;
+}
+
+export async function getExternalAffluenceConfiguration(params: {
+  storeId: number;
+  targetCompanyId?: number;
+}): Promise<ExternalAffluenceConfigurationResponse> {
+  const { data } = await client.get('/external-affluence/configuration', {
+    params: {
+      store_id: params.storeId,
+      ...(params.targetCompanyId ? { target_company_id: params.targetCompanyId } : {}),
+    },
+  });
+
+  return data.data;
+}
+
+export async function updateExternalAffluenceConfiguration(payload: {
+  storeId: number;
+  visitorsPerStaff?: number;
+  lowMaxStaff?: number;
+  mediumMaxStaff?: number;
+  coverageTolerance?: number;
+  slotWeights?: Array<{ timeSlot: string; weight: number }>;
+  targetCompanyId?: number;
+}): Promise<ExternalAffluenceConfigurationResponse> {
+  await client.patch('/external-affluence/configuration', {
+    store_id: payload.storeId,
+    ...(payload.visitorsPerStaff != null ? { visitors_per_staff: payload.visitorsPerStaff } : {}),
+    ...(payload.lowMaxStaff != null ? { low_max_staff: payload.lowMaxStaff } : {}),
+    ...(payload.mediumMaxStaff != null ? { medium_max_staff: payload.mediumMaxStaff } : {}),
+    ...(payload.coverageTolerance != null ? { coverage_tolerance: payload.coverageTolerance } : {}),
+    ...(payload.slotWeights ? {
+      slot_weights: payload.slotWeights.map((slot) => ({
+        time_slot: slot.timeSlot,
+        weight: slot.weight,
+      })),
+    } : {}),
+    ...(payload.targetCompanyId ? { target_company_id: payload.targetCompanyId } : {}),
+  });
+
+  return getExternalAffluenceConfiguration({
+    storeId: payload.storeId,
+    ...(payload.targetCompanyId ? { targetCompanyId: payload.targetCompanyId } : {}),
+  });
 }
 
 export async function getExternalTableData(params: {

@@ -17,6 +17,8 @@ import {
   Image as ImageIcon,
   Hash,
   CalendarClock,
+  Globe2,
+  Plus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -43,6 +45,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Select } from '../../components/ui/Select';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
 
 function parseCompanyIdFromSlug(slug?: string): number | null {
@@ -95,6 +98,59 @@ const EMPTY_PROFILE_FORM: CompanyProfileForm = {
   timezones: '',
   currency: '',
 };
+
+const FALLBACK_TIMEZONES = [
+  'UTC',
+  'Europe/Rome',
+  'Europe/London',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Asia/Dubai',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
+
+type IntlWithSupportedValues = typeof Intl & {
+  supportedValuesOf?: (key: string) => string[];
+};
+
+const intlWithSupportedValues = Intl as IntlWithSupportedValues;
+
+const TIMEZONE_OPTIONS = typeof intlWithSupportedValues.supportedValuesOf === 'function'
+  ? intlWithSupportedValues.supportedValuesOf('timeZone')
+  : FALLBACK_TIMEZONES;
+
+function parseTimezones(value: string): string[] {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((item) => {
+      if (seen.has(item)) return;
+      seen.add(item);
+      list.push(item);
+    });
+  return list;
+}
+
+function serializeTimezones(primaryTimezone: string | null, additionalTimezones: string[]): string {
+  const seen = new Set<string>();
+  const list: string[] = [];
+
+  for (const value of [primaryTimezone, ...additionalTimezones]) {
+    const normalized = (value ?? '').trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    list.push(normalized);
+  }
+
+  return list.join(', ');
+}
 
 function profileFromCompany(company: Company | null): CompanyProfileForm {
   if (!company) return { ...EMPTY_PROFILE_FORM };
@@ -155,6 +211,9 @@ export default function CompanyDetail() {
   const [editGroupId, setEditGroupId] = useState<number | null>(null);
   const [editOwnerUserId, setEditOwnerUserId] = useState<string>('');
   const [editProfile, setEditProfile] = useState<CompanyProfileForm>({ ...EMPTY_PROFILE_FORM });
+  const [primaryTimezone, setPrimaryTimezone] = useState<string | null>(null);
+  const [additionalTimezones, setAdditionalTimezones] = useState<string[]>([]);
+  const [additionalTimezoneDraft, setAdditionalTimezoneDraft] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -215,6 +274,43 @@ export default function CompanyDetail() {
     ];
   }, [company, ownerCandidates, t]);
 
+  const timezonePool = useMemo(() => {
+    const values = new Set<string>(TIMEZONE_OPTIONS);
+    if (primaryTimezone) values.add(primaryTimezone);
+    for (const timezone of additionalTimezones) values.add(timezone);
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [additionalTimezones, primaryTimezone]);
+
+  const primaryTimezoneOptions = useMemo<SelectOption[]>(() => {
+    return timezonePool.map((timezone) => ({
+      value: timezone,
+      label: timezone,
+      render: (
+        <div style={{ display: 'grid', gap: 1 }}>
+          <span style={{ fontWeight: 700 }}>{timezone}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+        </div>
+      ),
+    }));
+  }, [timezonePool]);
+
+  const additionalTimezoneOptions = useMemo<SelectOption[]>(() => {
+    const selected = new Set<string>(additionalTimezones);
+    if (primaryTimezone) selected.add(primaryTimezone);
+    return timezonePool
+      .filter((timezone) => !selected.has(timezone))
+      .map((timezone) => ({
+        value: timezone,
+        label: timezone,
+        render: (
+          <div style={{ display: 'grid', gap: 1 }}>
+            <span style={{ fontWeight: 700 }}>{timezone}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+          </div>
+        ),
+      }));
+  }, [additionalTimezones, primaryTimezone, timezonePool]);
+
   const loadData = useCallback(async () => {
     if (!companyId) {
       setError(t('companies.errorLoad'));
@@ -254,12 +350,36 @@ export default function CompanyDetail() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!primaryTimezone) return;
+    setAdditionalTimezones((prev) => prev.filter((timezone) => timezone !== primaryTimezone));
+  }, [primaryTimezone]);
+
+  useEffect(() => {
+    if (!editOpen) return;
+    const serialized = serializeTimezones(primaryTimezone, additionalTimezones);
+    setEditProfile((prev) => (
+      prev.timezones === serialized
+        ? prev
+        : { ...prev, timezones: serialized }
+    ));
+  }, [additionalTimezones, editOpen, primaryTimezone]);
+
   function openEditModal() {
     if (!company) return;
+    const timezoneList = parseTimezones(company.timezones ?? '');
+    const nextPrimaryTimezone = timezoneList[0] ?? null;
+    const nextAdditionalTimezones = timezoneList.slice(1);
+
     setEditName(company.name);
     setEditGroupId(company.groupId ?? null);
     setEditOwnerUserId(company.ownerUserId != null ? String(company.ownerUserId) : '');
-    setEditProfile(profileFromCompany(company));
+    const nextProfile = profileFromCompany(company);
+    nextProfile.timezones = serializeTimezones(nextPrimaryTimezone, nextAdditionalTimezones);
+    setEditProfile(nextProfile);
+    setPrimaryTimezone(nextPrimaryTimezone);
+    setAdditionalTimezones(nextAdditionalTimezones);
+    setAdditionalTimezoneDraft(null);
     setEditError(null);
     setEditOpen(true);
   }
@@ -786,12 +906,132 @@ export default function CompanyDetail() {
               onChange={(event) => setEditProfile((prev) => ({ ...prev, currency: event.target.value }))}
               disabled={editSaving}
             />
-            <Input
-              label={t('companies.timezones', 'Timezones')}
-              value={editProfile.timezones}
-              onChange={(event) => setEditProfile((prev) => ({ ...prev, timezones: event.target.value }))}
-              disabled={editSaving}
-            />
+
+            <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 10 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                <Globe2 size={14} />
+                {t('companies.timezones', 'Timezones')}
+              </div>
+
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    {t('companies.primaryTimezone', 'Primary timezone')}
+                  </div>
+                  <CustomSelect
+                    value={primaryTimezone}
+                    onChange={(value) => setPrimaryTimezone(value)}
+                    options={primaryTimezoneOptions}
+                    placeholder={t('companies.primaryTimezone', 'Primary timezone')}
+                    searchPlaceholder={t('companies.timezoneSearchPlaceholder', 'Search timezone...')}
+                    noOptionsMessage={t('companies.timezoneNoResults', 'No timezone found')}
+                    searchable
+                    highlightSelected
+                    disabled={editSaving}
+                  />
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    {t('companies.additionalTimezones', 'Additional timezones')}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                    <CustomSelect
+                      value={additionalTimezoneDraft}
+                      onChange={(value) => setAdditionalTimezoneDraft(value)}
+                      options={additionalTimezoneOptions}
+                      placeholder={t('companies.secondaryTimezone', 'Secondary timezone')}
+                      searchPlaceholder={t('companies.timezoneSearchPlaceholder', 'Search timezone...')}
+                      noOptionsMessage={t('companies.timezoneNoResults', 'No timezone found')}
+                      searchable
+                      disabled={editSaving}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!additionalTimezoneDraft) return;
+                        setAdditionalTimezones((prev) => (
+                          prev.includes(additionalTimezoneDraft) || additionalTimezoneDraft === primaryTimezone
+                            ? prev
+                            : [...prev, additionalTimezoneDraft]
+                        ));
+                        setAdditionalTimezoneDraft(null);
+                      }}
+                      disabled={editSaving || !additionalTimezoneDraft}
+                      style={{
+                        minWidth: 86,
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        background: 'var(--surface-warm)',
+                        color: 'var(--text-secondary)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: editSaving || !additionalTimezoneDraft ? 'not-allowed' : 'pointer',
+                        opacity: editSaving || !additionalTimezoneDraft ? 0.55 : 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                        padding: '0 10px',
+                      }}
+                    >
+                      <Plus size={12} />
+                      {t('companies.addTimezone', 'Add')}
+                    </button>
+                  </div>
+
+                  {additionalTimezones.length > 0 ? (
+                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {additionalTimezones.map((timezone) => (
+                        <span
+                          key={timezone}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 8px',
+                            borderRadius: 999,
+                            border: '1px solid rgba(148,163,184,0.45)',
+                            background: 'rgba(241,245,249,0.8)',
+                            color: 'var(--text-secondary)',
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {timezone}
+                          <button
+                            type="button"
+                            onClick={() => setAdditionalTimezones((prev) => prev.filter((item) => item !== timezone))}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              lineHeight: 1,
+                              fontSize: 14,
+                              padding: 0,
+                            }}
+                            aria-label={t('common.remove', 'Remove')}
+                          >
+                            x
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                      {t('companies.noAdditionalTimezones', 'No additional timezones selected')}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {t('companies.timezoneFieldHint', 'Timezones are saved as primary + additional values')}: {editProfile.timezones || '-'}
+              </div>
+            </div>
           </div>
 
           <LocationFieldGroup
