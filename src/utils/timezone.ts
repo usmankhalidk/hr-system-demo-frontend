@@ -131,6 +131,19 @@ export function getUtcOffsetLabel(timeZone: string, atDate: Date = new Date()): 
   return `UTC${sign}${hours}:${minutes}`;
 }
 
+export function getTimezoneLocalTimeLabel(timeZone: string, atDate: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(atDate);
+  } catch {
+    return '--:--';
+  }
+}
+
 export function getPreferredTimezoneForCountry(
   countryCode: string | null | undefined,
   fallback: string = getBrowserTimeZone(),

@@ -32,8 +32,9 @@ interface MessageBoardProps {
 
 export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps) {
   const { t, i18n } = useTranslation();
-  const { user, targetCompanyId } = useAuth();
+  const { user, targetCompanyId, allowedCompanyIds } = useAuth();
   const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
+  const useAllAccessibleCompanies = allowedCompanyIds.length > 1;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,11 +43,11 @@ export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps
   const loadMessages = useCallback(() => {
     setLoading(true);
     setError(null);
-    getMessages(activeCompanyId)
+    getMessages(useAllAccessibleCompanies ? undefined : activeCompanyId)
       .then(setMessages)
       .catch(err => setError(translateApiError(err, t, t('messages.errorLoad'))))
       .finally(() => setLoading(false));
-  }, [activeCompanyId, t]);
+  }, [activeCompanyId, t, useAllAccessibleCompanies]);
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
@@ -57,7 +58,7 @@ export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps
       // Optimistic: update local state immediately for responsiveness.
       // If the API call fails, the message reverts to unread on next load (intentional).
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
-      markMessageAsRead(msg.id, activeCompanyId).catch(() => { /* non-critical */ });
+      markMessageAsRead(msg.id, msg.companyId).catch(() => { /* non-critical */ });
     }
   };
 
@@ -132,7 +133,10 @@ export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps
                     {msg.subject}
                   </div>
                   <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: 2 }}>
-                    {t('messages.from')}: {msg.senderName ?? '—'} · {formatDate(msg.createdAt, i18n.language)}
+                    {t('messages.from')}: {msg.senderName ?? '—'}
+                    {msg.companyName ? ` · ${msg.companyName}` : ''}
+                    {' · '}
+                    {formatDate(msg.createdAt, i18n.language)}
                   </div>
                 </div>
                 <svg

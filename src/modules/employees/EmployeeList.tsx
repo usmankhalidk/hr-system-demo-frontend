@@ -198,7 +198,7 @@ export function EmployeeList() {
                 {fullName}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {truncateText(row.email, 22)}
+                {truncateText(row.email, 18)}
               </div>
             </div>
           </div>

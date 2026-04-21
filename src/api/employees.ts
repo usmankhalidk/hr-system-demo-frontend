@@ -11,6 +11,7 @@ export interface EmployeeListParams {
   limit?: number;
   targetCompanyId?: number | null;
   excludeAdmins?: boolean;
+  includeStoreTerminals?: boolean;
   /** Area managers: employees in supervised stores (aligned with shift assignment). */
   forShiftPlanning?: boolean;
 }
@@ -30,6 +31,7 @@ export async function getEmployees(params?: EmployeeListParams): Promise<Employe
   if (params?.limit != null) query.limit = params.limit;
   if (params?.targetCompanyId != null) query.target_company_id = params.targetCompanyId;
   if (params?.excludeAdmins) query.exclude_admins = 1;
+  if (params?.includeStoreTerminals) query.include_store_terminals = 1;
   if (params?.forShiftPlanning) query.for_shift_planning = 1;
   const { data } = await apiClient.get('/employees', { params: query });
   return data.data;

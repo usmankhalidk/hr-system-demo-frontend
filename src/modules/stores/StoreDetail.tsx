@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import ReactCountryFlag from 'react-country-flag';
 import {
   Building2,
   MapPin,
@@ -15,6 +16,7 @@ import {
   BriefcaseBusiness,
   CalendarClock,
   Clock3,
+  Eye,
   UserRound,
   Settings2,
   Sunrise,
@@ -48,12 +50,13 @@ import { Alert } from '../../components/ui/Alert';
 import { Badge } from '../../components/ui/Badge';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
+import { TimezoneOptionContent } from '../../components/timezone/TimezoneOptionContent';
 import { getApiErrorCode, translateApiError } from '../../utils/apiErrors';
+import { getCountryDisplayName } from '../../utils/country';
 import {
   getBrowserTimeZone,
   getPreferredTimezoneForCountry,
   getTimezoneOptionValues,
-  getUtcOffsetLabel,
 } from '../../utils/timezone';
 
 interface StoreFormData {
@@ -239,6 +242,7 @@ export default function StoreDetail() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const [hoveredEmployeeId, setHoveredEmployeeId] = useState<number | null>(null);
 
   const [hoursSaving, setHoursSaving] = useState(false);
   const [hoursError, setHoursError] = useState<string | null>(null);
@@ -264,12 +268,7 @@ export default function StoreDetail() {
     return getTimezoneOptionValues([formData.timezone, browserTimezone]).map((timezone) => ({
       value: timezone,
       label: timezone,
-      render: (
-        <div style={{ display: 'grid', gap: 1 }}>
-          <span style={{ fontWeight: 700 }}>{timezone}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{getUtcOffsetLabel(timezone)}</span>
-        </div>
-      ),
+      render: <TimezoneOptionContent timezone={timezone} />,
     }));
   }, [browserTimezone, formData.timezone]);
 
@@ -318,6 +317,8 @@ export default function StoreDetail() {
   }, [loadData]);
 
   const logoUrl = getStoreLogoUrl(store?.logoFilename);
+  const storeCountryName = store?.country ? getCountryDisplayName(store.country) : null;
+  const storeTimezone = store?.timezone ?? (store?.country ? getPreferredTimezoneForCountry(store.country, browserTimezone) : browserTimezone);
 
   const openEdit = () => {
     if (!store) return;
@@ -627,7 +628,27 @@ export default function StoreDetail() {
 
           <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, color: 'var(--text-primary)' }}>{store.name}</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, color: 'var(--text-primary)' }}>{store.name}</div>
+                {store.country ? (
+                  <span
+                    title={storeCountryName || store.country}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 28,
+                      height: 22,
+                      borderRadius: 999,
+                      border: '1px solid rgba(13,33,55,0.12)',
+                      background: 'rgba(13,33,55,0.06)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ReactCountryFlag countryCode={store.country} svg style={{ width: '1em', height: '1em' }} />
+                  </span>
+                ) : null}
+              </div>
               <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: 'var(--primary)', border: '1px solid rgba(13,33,55,0.2)', background: 'rgba(13,33,55,0.08)', borderRadius: 999, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <Building2 size={11} />
@@ -635,6 +656,10 @@ export default function StoreDetail() {
                 </span>
                 <span style={{ fontSize: 11, color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.34)', background: 'rgba(201,151,58,0.12)', borderRadius: 999, padding: '3px 8px' }}>
                   {store.groupName ?? t('companies.optionStandalone')}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', border: '1px solid rgba(13,33,55,0.14)', background: 'rgba(13,33,55,0.06)', borderRadius: 999, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Clock3 size={11} />
+                  {storeTimezone}
                 </span>
                 {store.isActive ? (
                   <span style={{ fontSize: 11, color: '#166534', border: '1px solid rgba(34,197,94,0.34)', background: 'rgba(22,163,74,0.12)', borderRadius: 999, padding: '3px 8px' }}>
@@ -666,8 +691,8 @@ export default function StoreDetail() {
                 store.cap,
               ].filter(Boolean).join(', ') || '—'}
             />
-            <InfoChip icon={<Phone size={13} />} label={t('companies.companyPhoneNumbers', 'Phone')} value={store.phone || '—'} />
-            <InfoChip icon={<Users size={13} />} label={t('stores.colMaxStaff', 'Max staff')} value={store.maxStaff != null ? String(store.maxStaff) : '0'} />
+            {store.phone ? <InfoChip icon={<Phone size={13} />} label={t('companies.companyPhoneNumbers', 'Phone')} value={store.phone} /> : null}
+            {store.maxStaff != null ? <InfoChip icon={<Users size={13} />} label={t('stores.colMaxStaff', 'Max staff')} value={String(store.maxStaff)} /> : null}
           </div>
         </div>
       </div>
@@ -685,7 +710,39 @@ export default function StoreDetail() {
               const initials = `${employee.name?.[0] ?? ''}${employee.surname?.[0] ?? ''}`.toUpperCase() || 'U';
               const contractMonths = monthsBetween(employee.hireDate, employee.contractEndDate ?? undefined);
               return (
-                <div key={employee.id} style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface-warm)', padding: '11px 12px', display: 'grid', gap: 9 }}>
+                <div
+                  key={employee.id}
+                  onMouseEnter={() => setHoveredEmployeeId(employee.id)}
+                  onMouseLeave={() => setHoveredEmployeeId((current) => (current === employee.id ? null : current))}
+                  style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface-warm)', padding: '11px 12px', display: 'grid', gap: 9, position: 'relative', overflow: 'hidden' }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dipendenti/${employee.id}`)}
+                    aria-label={t('common.view', 'View')}
+                    title={t('common.view', 'View')}
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      border: '1px solid rgba(13,33,55,0.12)',
+                      background: 'rgba(255,255,255,0.96)',
+                      color: 'var(--text-secondary)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(15,23,42,0.08)',
+                      opacity: hoveredEmployeeId === employee.id ? 1 : 0,
+                      transform: hoveredEmployeeId === employee.id ? 'translateY(0)' : 'translateY(-4px)',
+                      transition: 'opacity 0.15s ease, transform 0.15s ease',
+                    }}
+                  >
+                    <Eye size={14} />
+                  </button>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                     <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', background: '#8B6914', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       {avatarUrl ? (
@@ -706,7 +763,7 @@ export default function StoreDetail() {
                     <MetaLine
                       icon={<BriefcaseBusiness size={12} />}
                       label={t('roles.label', 'Role')}
-                      value={<Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{t(`roles.${employee.role}`, employee.role)}</Badge>}
+                      value={<Badge variant={ROLE_BADGE_VARIANT[employee.role]} size="sm">{t(`roles.${employee.role}`, employee.role)}</Badge>}
                     />
                     <MetaLine icon={<CalendarClock size={12} />} label={t('employees.hireDate', 'Hire date')} value={formatDate(employee.hireDate, locale)} />
                     <MetaLine
@@ -1225,14 +1282,20 @@ export default function StoreDetail() {
   );
 }
 
-function InfoChip({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function InfoChip({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+  const valueNode = typeof value === 'string' ? (
+    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</span>
+  ) : (
+    value
+  );
+
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'var(--surface-warm)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {icon}
         {label}
       </div>
-      <div style={{ marginTop: 4, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</div>
+      <div style={{ marginTop: 4, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{valueNode}</div>
     </div>
   );
 }

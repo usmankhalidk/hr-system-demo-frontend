@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import ReactCountryFlag from 'react-country-flag';
 import { ArrowRight, Building2, Users, Store, Plus, Layers } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -19,7 +20,7 @@ import {
 } from '../../api/companies';
 import { getCompanyGroups } from '../../api/companyGroups';
 import { getEmployees } from '../../api/employees';
-import { getCompanyLogoUrl, getCompanyBannerUrl } from '../../api/client';
+import { getCompanyLogoUrl, getCompanyBannerUrl, getAvatarUrl } from '../../api/client';
 import { getApiErrorCode, translateApiError } from '../../utils/apiErrors';
 import { Company } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -27,9 +28,10 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
-import { SelectOption } from '../../components/ui/CustomSelect';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Badge } from '../../components/ui/Badge';
 import { LocationFieldGroup } from '../../components/location';
+import { getCountryDisplayName } from '../../utils/country';
 
 type ModalMode = 'create' | 'edit';
 
@@ -260,7 +262,7 @@ export default function SystemCompanyManagement() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerError, setBannerError] = useState<string | null>(null);
-  const [ownerCandidates, setOwnerCandidates] = useState<Array<{ id: number; name: string; surname: string }>>([]);
+  const [ownerCandidates, setOwnerCandidates] = useState<Array<{ id: number; name: string; surname: string; avatarFilename?: string | null; companyCount: number }>>([]);
   const [ownerCandidatesLoading, setOwnerCandidatesLoading] = useState(false);
   const [timezoneDraft, setTimezoneDraft] = useState<string | null>(null);
 
@@ -279,9 +281,14 @@ export default function SystemCompanyManagement() {
         value: timezone,
         label: timezone,
         render: (
-          <div style={{ display: 'grid', gap: 1 }}>
-            <span style={{ fontWeight: 700 }}>{timezone}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
+            <div style={{ display: 'grid', gap: 1, minWidth: 0 }}>
+              <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{timezone}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              {new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date())}
+            </span>
           </div>
         ),
       }));
@@ -414,11 +421,11 @@ export default function SystemCompanyManagement() {
     }
     let mounted = true;
     setOwnerCandidatesLoading(true);
-    getEmployees({ role: 'admin', status: 'active', limit: 200, targetCompanyId: editingCompanyId })
+    getEmployees({ role: 'admin', limit: 200, targetCompanyId: editingCompanyId })
       .then((res) => {
         if (!mounted) return;
         setOwnerCandidates(
-          res.employees.map((emp) => ({ id: emp.id, name: emp.name, surname: emp.surname }))
+          res.employees.map((emp) => ({ id: emp.id, name: emp.name, surname: emp.surname, avatarFilename: emp.avatarFilename ?? null, companyCount: companies.filter((company) => company.ownerUserId === emp.id).length }))
             .sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`)),
         );
       })
@@ -434,7 +441,33 @@ export default function SystemCompanyManagement() {
     return () => {
       mounted = false;
     };
-  }, [modalOpen, modalMode, editingCompanyId]);
+  }, [companies, modalOpen, modalMode, editingCompanyId]);
+
+  const ownerSelectOptions = useMemo<SelectOption[]>(() => {
+    return ownerCandidates.map((candidate) => {
+      const fullName = `${candidate.name} ${candidate.surname}`.trim();
+      const avatarUrl = candidate.avatarFilename ? getAvatarUrl(candidate.avatarFilename) : null;
+      return {
+        value: String(candidate.id),
+        label: fullName,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: avatarUrl ? 'transparent' : 'var(--primary)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
+              {avatarUrl ? <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : `${candidate.name?.[0] ?? ''}${candidate.surname?.[0] ?? ''}`.toUpperCase()}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {fullName}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {candidate.companyCount} {t('companies.ownedCompanies', { defaultValue: 'companies owned', count: candidate.companyCount })}
+              </div>
+            </div>
+          </div>
+        ),
+      };
+    });
+  }, [ownerCandidates, t]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -673,6 +706,7 @@ export default function SystemCompanyManagement() {
             const logoUrl = getCompanyLogoUrl(c.logoFilename);
             const bannerUrl = getCompanyBannerUrl(c.bannerFilename);
             const ownerLabel = c.ownerName ? `${c.ownerName} ${c.ownerSurname ?? ''}`.trim() : null;
+            const countryLabel = getCountryDisplayName(c.country);
 
             return (
               <div
@@ -724,9 +758,15 @@ export default function SystemCompanyManagement() {
                     ) : initials}
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
-                      {c.name}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em', display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                      {c.country ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+                          <ReactCountryFlag countryCode={c.country} svg style={{ width: '0.9em', height: '0.9em' }} />
+                          {countryLabel}
+                        </span>
+                      ) : null}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
                       {groupName && (
@@ -747,9 +787,9 @@ export default function SystemCompanyManagement() {
                         </span>
                       )}
                       {c.isActive ? (
-                        <Badge variant="success">{t('common.active')}</Badge>
+                        <Badge variant="success" size="sm">{t('common.active')}</Badge>
                       ) : (
-                        <Badge variant="danger">{t('common.inactive')}</Badge>
+                        <Badge variant="danger" size="sm">{t('common.inactive')}</Badge>
                       )}
                       <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>{createdDate}</span>
                     </div>
@@ -899,20 +939,17 @@ export default function SystemCompanyManagement() {
 
           {modalMode === 'edit' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <Select
-                label={t('companies.ownerField', 'Proprietario azienda')}
-                value={formOwnerUserId ?? ''}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setFormOwnerUserId(raw === '' ? null : parseInt(raw, 10));
-                }}
+              <CustomSelect
+                value={formOwnerUserId != null ? String(formOwnerUserId) : null}
+                onChange={(value) => setFormOwnerUserId(value ? parseInt(value, 10) : null)}
+                options={ownerSelectOptions}
+                placeholder={t('companies.ownerUnchanged', 'Nessuna modifica')}
                 disabled={formSaving || ownerCandidatesLoading}
-              >
-                <option value="">{t('companies.ownerUnchanged', 'Nessuna modifica')}</option>
-                {ownerCandidates.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>{candidate.name} {candidate.surname}</option>
-                ))}
-              </Select>
+                searchable
+                isClearable
+                searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Cerca amministratore...')}
+                noOptionsMessage={t('companies.ownerNoResults', 'Nessun amministratore trovato')}
+              />
               {ownerCandidatesLoading && (
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   {t('companies.ownerLoading', 'Caricamento amministratori in corso...')}

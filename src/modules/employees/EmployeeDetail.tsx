@@ -898,24 +898,37 @@ export function EmployeeDetail() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '7px 11px',
-                borderRadius: 'var(--radius-sm)',
-                border: selected ? `1px solid ${tab.color}` : '1px solid transparent',
-                background: selected ? `${tab.color}14` : 'transparent',
+                padding: '8px 13px',
+                borderRadius: '16px',
+                border: selected ? `1px solid ${tab.color}66` : `1px solid ${tab.color}20`,
+                background: selected ? `${tab.color}18` : 'var(--surface-warm)',
                 color: selected ? tab.color : 'var(--text-secondary)',
                 fontSize: '12.5px',
-                fontWeight: 700,
+                fontWeight: 800,
                 fontFamily: 'var(--font-body)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
+                boxShadow: selected ? `0 8px 18px ${tab.color}18` : 'none',
+              }}
+              onMouseEnter={(event) => {
+                if (!selected) {
+                  event.currentTarget.style.background = `${tab.color}14`;
+                  event.currentTarget.style.borderColor = `${tab.color}40`;
+                }
+              }}
+              onMouseLeave={(event) => {
+                if (!selected) {
+                  event.currentTarget.style.background = 'var(--surface-warm)';
+                  event.currentTarget.style.borderColor = `${tab.color}20`;
+                }
               }}
             >
               <span style={{
                 display: 'inline-flex',
-                color: selected ? tab.color : 'var(--text-muted)',
-                background: selected ? `${tab.color}22` : 'transparent',
-                borderRadius: 6,
-                padding: selected ? 3 : 0,
+                color: selected ? '#fff' : 'var(--text-muted)',
+                background: selected ? tab.color : 'transparent',
+                borderRadius: 999,
+                padding: selected ? 5 : 0,
               }}>
                 {tab.icon}
               </span>
@@ -1586,7 +1599,7 @@ export function EmployeeDetail() {
         <ComposeMessage
           recipientId={employee.id}
           recipientName={fullName}
-          companyId={activeCompanyId}
+          companyId={employee.companyId ?? activeCompanyId}
           onClose={() => setShowCompose(false)}
           onSent={() => showToast(t('messages.successSent'), 'success')}
         />
