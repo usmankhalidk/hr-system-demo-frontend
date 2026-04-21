@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, RefreshCw, Copy, CheckCircle2, KeyRound, ChevronDown, ShieldAlert, ShieldCheck, Store as StoreIcon } from 'lucide-react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { getEmployee, createEmployee, updateEmployee, getEmployees } from '../../api/employees';
 import { getCompanies } from '../../api/companies';
 import { translateApiError } from '../../utils/apiErrors';
@@ -116,6 +117,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const isEditMode = employeeId !== undefined;
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
 
   const row2: React.CSSProperties = {
@@ -418,7 +420,17 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
       setEditPasswordError(t('employees.passwordTooShort'));
       return;
     }
-    if (validateStep1()) setStep(2);
+    if (validateStep1()) {
+      // Check store capacity if a store is selected
+      if (formData.storeId) {
+        const store = stores.find(s => String(s.id) === formData.storeId);
+        if (store && store.maxStaff != null && (store.employeeCount ?? 0) >= store.maxStaff) {
+          showToast(t('employees.storeFullCapacity', 'That store has full capacity'), 'error');
+          return;
+        }
+      }
+      setStep(2);
+    }
   };
   const handleBack = () => setStep(1);
 
@@ -1157,8 +1169,15 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                                 {selectedStore.name}
                               </span>
                             </span>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                              {`${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                            <span style={{ 
+                              fontSize: 11, 
+                              fontWeight: 700, 
+                              color: (selectedStore.maxStaff != null && (selectedStore.employeeCount ?? 0) >= selectedStore.maxStaff) ? 'var(--danger)' : 'var(--text-secondary)', 
+                              whiteSpace: 'nowrap' 
+                            }}>
+                              {(selectedStore.maxStaff != null && (selectedStore.employeeCount ?? 0) >= selectedStore.maxStaff) 
+                                ? t('employees.capacityFull', 'Capacity Full')
+                                : `${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
                             </span>
                           </span>
                         ) : (
@@ -1253,8 +1272,15 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                                   {store.name}
                                 </span>
                               </span>
-                              <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {`${store.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                              <span style={{ 
+                                fontSize: 10.5, 
+                                color: (store.maxStaff != null && (store.employeeCount ?? 0) >= store.maxStaff) ? 'var(--danger)' : 'var(--text-secondary)', 
+                                fontWeight: 700, 
+                                whiteSpace: 'nowrap' 
+                              }}>
+                                {(store.maxStaff != null && (store.employeeCount ?? 0) >= store.maxStaff)
+                                  ? t('employees.capacityFull', 'Capacity Full')
+                                  : `${store.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
                               </span>
                             </button>
                           ))}
@@ -1639,11 +1665,13 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       label={t('employees.hireDateField')}
                       value={formData.hireDate}
                       onChange={(v) => set('hireDate', v)}
+                      placement="bottom"
                     />
                     <DatePicker
                       label={t('employees.contractEndField')}
                       value={formData.contractEndDate}
                       onChange={(v) => set('contractEndDate', v)}
+                      placement="bottom"
                     />
                   </div>
                   <div style={row2}>
@@ -1678,6 +1706,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       value={formData.dateOfBirth}
                       onChange={(v) => set('dateOfBirth', v)}
                       initialViewYear={new Date().getFullYear() - 30}
+                      placement="bottom"
                     />
                   </div>
                   <div style={row2}>
@@ -1803,6 +1832,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       label={t('employees.terminationDateField')}
                       value={formData.terminationDate}
                       onChange={(v) => set('terminationDate', v)}
+                      placement="top"
                     />
                     <Select
                       label={t('employees.terminationTypeField')}

@@ -101,8 +101,11 @@ export async function uploadDocument(
   return data.data as { id: number; fileName: string };
 }
 
-export async function downloadDocument(id: number, fileName: string): Promise<void> {
-  const response = await apiClient.get(`/documents/${id}/download`, { responseType: 'blob' });
+export async function downloadDocument(id: number, fileName: string, source?: string): Promise<void> {
+  const response = await apiClient.get(`/documents/${id}/download`, { 
+    params: { source },
+    responseType: 'blob' 
+  });
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
   link.href = url;
@@ -217,8 +220,9 @@ export async function getDocumentsGeneric(): Promise<any[]> {
   return data.data;
 }
 
-export async function downloadDocumentGeneric(id: number, filename: string): Promise<void> {
+export async function downloadDocumentGeneric(id: number, filename: string, source?: string): Promise<void> {
   const response = await apiClient.get(`/documents/${id}/download`, {
+    params: { source },
     responseType: 'blob',
   });
   const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -230,8 +234,9 @@ export async function downloadDocumentGeneric(id: number, filename: string): Pro
   link.remove();
 }
 
-export async function getDocumentPreviewUrlGeneric(id: number, mimeType: string): Promise<string> {
+export async function getDocumentPreviewUrlGeneric(id: number, mimeType: string, source?: string): Promise<string> {
   const response = await apiClient.get(`/documents/${id}/download`, {
+    params: { source },
     responseType: 'blob',
   });
   return window.URL.createObjectURL(new Blob([response.data], { type: mimeType }));

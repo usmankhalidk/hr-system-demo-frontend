@@ -16,6 +16,7 @@ import {
   Shield,
   ArrowLeftRight,
   Monitor,
+  Clipboard,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -34,7 +35,8 @@ import PermissionGridTable, { GridModuleDef } from './PermissionGridTable';
 const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'negozi',      implemented: true, icon: <Store size={15} /> },
   { key: 'dipendenti',  implemented: true, icon: <Users size={15} /> },
-  { key: 'ats',         implemented: false, icon: <Briefcase size={15} /> },
+  { key: 'ats',         implemented: true, icon: <Briefcase size={15} /> },
+  { key: 'onboarding',  implemented: true, icon: <Clipboard size={15} /> },
   { key: 'documenti',   implemented: true, icon: <FileText size={15} /> },
   { key: 'terminali',   implemented: true, icon: <Monitor size={15} /> },
   { key: 'turni',       implemented: true, icon: <Clock size={15} /> },

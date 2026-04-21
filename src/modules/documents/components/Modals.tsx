@@ -58,7 +58,7 @@ export const UploadModal: React.FC<{
         </div>
         <div>
           <label style={labelStyle}>{t('documents.expiresAtLabel')}</label>
-          <DatePicker value={expiresAt} onChange={setExpiresAt} />
+          <DatePicker value={expiresAt} onChange={setExpiresAt} placement="top" />
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}>
           <input type="checkbox" checked={requiresSignature} onChange={(e) => setRequiresSignature(e.target.checked)} />
@@ -262,7 +262,7 @@ export const EditDocumentModal: React.FC<{ doc: any; onClose: () => void; onSucc
 
   useEffect(() => {
     setLoadingEmps(true);
-    getEmployees({ status: 'active', excludeAdmins: true })
+    getEmployees({ status: 'active', excludeAdmins: true, limit: 1000 })
       .then(res => setEmployees(res.employees))
       .catch(() => showToast(t('employees.errorLoad'), 'error'))
       .finally(() => setLoadingEmps(false));
@@ -295,7 +295,7 @@ export const EditDocumentModal: React.FC<{ doc: any; onClose: () => void; onSucc
           <label style={labelStyle}>{t('documents.assigned')}</label>
           <select value={employeeId || ''} onChange={(e) => setEmployeeId(e.target.value ? Number(e.target.value) : null)} style={inputStyle} disabled={loadingEmps}>
             <option value="">{t('documents.unassigned')}</option>
-            {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name} {emp.surname}</option>)}
+            {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name} {emp.surname} ({emp.uniqueId || emp.role}){emp.companyName ? ` - ${emp.companyName}` : ''}</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8 }}>
