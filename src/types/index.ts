@@ -212,6 +212,7 @@ export interface MedicalCheck {
 export interface Message {
   id: number;
   companyId: number;
+  companyName?: string | null;
   senderId: number;
   recipientId: number;
   subject: string;

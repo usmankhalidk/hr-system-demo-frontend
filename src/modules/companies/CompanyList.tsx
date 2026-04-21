@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getCompanies, updateCompany, uploadCompanyLogo } from '../../api/companies';
 import { getCompanyLogoUrl } from '../../api/client';
+import { getApiErrorCode } from '../../utils/apiErrors';
 import { translateApiError } from '../../utils/apiErrors';
 import { Company } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -118,7 +119,11 @@ export function CompanyList() {
       showToast(t('companies.logoUpdated'), 'success');
       await load();
     } catch (err: unknown) {
-      setLogoError(translateApiError(err, t, t('companies.logoError')) ?? t('companies.logoError'));
+      const message = translateApiError(err, t, t('companies.logoError')) ?? t('companies.logoError');
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message, 'warning');
+      }
+      setLogoError(message);
     } finally {
       setLogoUploading(false);
       e.target.value = '';

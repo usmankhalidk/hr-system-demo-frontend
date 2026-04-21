@@ -254,12 +254,14 @@ const EmptyDetail: React.FC<{ t: (k: string) => string }> = ({ t }) => (
 /* ─── main page ──────────────────────────────────────────────────────────── */
 
 export default function HRChatPage() {
-  const { user } = useAuth();
+  const { user, targetCompanyId, allowedCompanyIds } = useAuth();
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
 
   const isEmployee = user?.role === 'employee';
+  const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
+  const useAllAccessibleCompanies = allowedCompanyIds.length > 1;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -276,14 +278,14 @@ export default function HRChatPage() {
   const loadMessages = useCallback(() => {
     setLoading(true);
     setError(null);
-    getMessages()
+    getMessages(useAllAccessibleCompanies ? undefined : activeCompanyId)
       .then(msgs => {
         setMessages(msgs);
         setSelected(prev => prev ? (msgs.find(m => m.id === prev.id) ?? null) : null);
       })
       .catch(err => setError(translateApiError(err, t, t('messages.errorLoad'))))
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [activeCompanyId, t, useAllAccessibleCompanies]);
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
@@ -291,11 +293,11 @@ export default function HRChatPage() {
   useEffect(() => {
     if (!isEmployee) return;
     setHrLoading(true);
-    getHrRecipient()
+    getHrRecipient(activeCompanyId)
       .then(setHrRecipient)
       .catch(() => {})
       .finally(() => setHrLoading(false));
-  }, [isEmployee]);
+  }, [activeCompanyId, isEmployee]);
 
   const handleSelect = async (msg: Message) => {
     // On mobile, toggle expand inline
@@ -306,7 +308,7 @@ export default function HRChatPage() {
     }
     if (!msg.isRead) {
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
-      markMessageAsRead(msg.id).catch(() => {});
+      markMessageAsRead(msg.id, msg.companyId).catch(() => {});
     }
   };
 
@@ -522,6 +524,7 @@ export default function HRChatPage() {
         <ComposeMessage
           recipientId={composeRecipient?.id}
           recipientName={composeRecipient?.name}
+          companyId={composeRecipient ? activeCompanyId : undefined}
           defaultSubject={composeDefaultSubject}
           onClose={() => { setComposeOpen(false); setComposeRecipient(null); }}
           onSent={handleSent}

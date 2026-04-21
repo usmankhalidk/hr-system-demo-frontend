@@ -79,3 +79,16 @@ export function translateApiError(
 
   return fallback ?? (t as (key: string) => string)('errors.DEFAULT');
 }
+
+export function getApiErrorCode(err: unknown): string | null {
+  const axiosErr = err as {
+    response?: {
+      data?: {
+        code?: string;
+      };
+    };
+  };
+
+  const code = axiosErr?.response?.data?.code;
+  return typeof code === 'string' && code ? code : null;
+}

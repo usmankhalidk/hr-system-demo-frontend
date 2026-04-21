@@ -5,6 +5,7 @@ import { Globe2 } from 'lucide-react';
 import apiClient from '../../api/client';
 import { BalancesTab } from '../leave/AdminLeavePanel';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import { TimezoneOptionContent } from '../../components/timezone/TimezoneOptionContent';
 import {
   getNotificationSettings,
   updateNotificationSetting,
@@ -368,14 +369,7 @@ const SettingsPage: React.FC = () => {
       .map((timezone) => ({
         value: timezone,
         label: timezone,
-        render: (
-          <div style={{ display: 'grid', gap: 1 }}>
-            <span style={{ fontWeight: 700 }}>{timezone}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-              {getUtcOffsetLabel(timezone)}
-            </span>
-          </div>
-        ),
+        render: <TimezoneOptionContent timezone={timezone} />,
       }));
   }, [detectedTimezone, selectedTimezone]);
 

@@ -5,6 +5,7 @@ import { getMessages, markMessageAsRead } from '../../api/messages';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { translateApiError } from '../../utils/apiErrors';
+import { useAuth } from '../../context/AuthContext';
 
 function formatDate(dateStr: string, lang: string): string {
   try {
@@ -31,6 +32,9 @@ interface MessageBoardProps {
 
 export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps) {
   const { t, i18n } = useTranslation();
+  const { user, targetCompanyId, allowedCompanyIds } = useAuth();
+  const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
+  const useAllAccessibleCompanies = allowedCompanyIds.length > 1;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +43,11 @@ export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps
   const loadMessages = useCallback(() => {
     setLoading(true);
     setError(null);
-    getMessages()
+    getMessages(useAllAccessibleCompanies ? undefined : activeCompanyId)
       .then(setMessages)
       .catch(err => setError(translateApiError(err, t, t('messages.errorLoad'))))
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [activeCompanyId, t, useAllAccessibleCompanies]);
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
@@ -54,7 +58,7 @@ export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps
       // Optimistic: update local state immediately for responsiveness.
       // If the API call fails, the message reverts to unread on next load (intentional).
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
-      markMessageAsRead(msg.id).catch(() => { /* non-critical */ });
+      markMessageAsRead(msg.id, msg.companyId).catch(() => { /* non-critical */ });
     }
   };
 
@@ -129,7 +133,10 @@ export function MessageBoard({ enableReply = false, onReply }: MessageBoardProps
                     {msg.subject}
                   </div>
                   <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: 2 }}>
-                    {t('messages.from')}: {msg.senderName ?? '—'} · {formatDate(msg.createdAt, i18n.language)}
+                    {t('messages.from')}: {msg.senderName ?? '—'}
+                    {msg.companyName ? ` · ${msg.companyName}` : ''}
+                    {' · '}
+                    {formatDate(msg.createdAt, i18n.language)}
                   </div>
                 </div>
                 <svg

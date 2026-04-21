@@ -1,6 +1,8 @@
+import { getApiErrorCode } from '../../utils/apiErrors';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import ReactCountryFlag from 'react-country-flag';
 import {
   ArrowLeft,
   Building2,
@@ -42,8 +44,11 @@ import { Button } from '../../components/ui/Button';
 import { Alert } from '../../components/ui/Alert';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Select } from '../../components/ui/Select';
 import { LocationFieldGroup } from '../../components/location';
+import { getCountryDisplayName } from '../../utils/country';
+import { getCompanies } from '../../api/companies';
 
 function parseCompanyIdFromSlug(slug?: string): number | null {
   if (!slug) return null;
@@ -142,7 +147,9 @@ export default function CompanyDetail() {
   const [stores, setStores] = useState<Store[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [companyGroups, setCompanyGroups] = useState<Array<{ id: number; name: string }>>([]);
-  const [ownerCandidates, setOwnerCandidates] = useState<Array<{ id: number; name: string; surname: string }>>([]);
+  const [ownerCandidates, setOwnerCandidates] = useState<Array<{ id: number; name: string; surname: string; avatarFilename?: string | null; companyCount: number }>>([]);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
+  const [ownerCandidatesLoading, setOwnerCandidatesLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -195,21 +202,49 @@ export default function CompanyDetail() {
   }, [employees]);
 
   const ownerOptions = useMemo(() => {
-    if (!company || !company.ownerUserId) {
-      return ownerCandidates;
-    }
-    if (ownerCandidates.some((candidate) => candidate.id === company.ownerUserId)) {
-      return ownerCandidates;
-    }
-    return [
-      {
+    const candidates = ownerCandidates.map((candidate) => ({
+      ...candidate,
+      companyCount: allCompanies.filter((item) => item.ownerUserId === candidate.id).length,
+    }));
+
+    if (company?.ownerUserId != null && !candidates.some((candidate) => candidate.id === company.ownerUserId)) {
+      candidates.unshift({
         id: company.ownerUserId,
         name: company.ownerName ?? t('companies.currentOwner', 'Current owner'),
         surname: company.ownerSurname ?? '',
-      },
-      ...ownerCandidates,
-    ];
-  }, [company, ownerCandidates, t]);
+        avatarFilename: company.ownerAvatarFilename ?? null,
+        companyCount: allCompanies.filter((item) => item.ownerUserId === company.ownerUserId).length,
+      });
+    }
+
+    return candidates;
+  }, [allCompanies, company, ownerCandidates, t]);
+
+  const ownerSelectOptions = useMemo<SelectOption[]>(() => {
+    return ownerOptions.map((owner) => {
+      const fullName = `${owner.name} ${owner.surname ?? ''}`.trim();
+      const avatarUrl = getAvatarUrl(owner.avatarFilename);
+      return {
+        value: String(owner.id),
+        label: fullName,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: avatarUrl ? 'transparent' : 'var(--primary)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
+              {avatarUrl ? <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(fullName)}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {fullName}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {owner.companyCount} {t('companies.ownedCompanies', { defaultValue: 'companies owned', count: owner.companyCount })}
+              </div>
+            </div>
+          </div>
+        ),
+      };
+    });
+  }, [ownerOptions, t]);
 
   const loadData = useCallback(async () => {
     if (!companyId) {
@@ -222,12 +257,13 @@ export default function CompanyDetail() {
     setError(null);
 
     try {
-      const [companyData, storeData, employeeData, groupData, ownerData] = await Promise.all([
+      const [companyData, storeData, employeeData, groupData, ownerData, companyList] = await Promise.all([
         getCompanyById(companyId),
         getStores({ targetCompanyId: companyId }),
         getEmployees({ targetCompanyId: companyId, status: 'active', limit: 300 }),
         getCompanyGroups().catch(() => []),
         getEmployees({ targetCompanyId: companyId, status: 'active', role: 'admin', limit: 200 }).catch(() => ({ employees: [] as Employee[] })),
+        getCompanies().catch(() => []),
       ]);
 
       setCompany(companyData);
@@ -236,9 +272,10 @@ export default function CompanyDetail() {
       setCompanyGroups((groupData ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)));
       setOwnerCandidates(
         (ownerData.employees ?? [])
-          .map((emp) => ({ id: emp.id, name: emp.name, surname: emp.surname }))
+          .map((emp) => ({ id: emp.id, name: emp.name, surname: emp.surname, avatarFilename: emp.avatarFilename ?? null, companyCount: 0 }))
           .sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`)),
       );
+      setAllCompanies((companyList ?? []).slice());
     } catch {
       setError(t('companies.errorLoad'));
     } finally {
@@ -300,7 +337,11 @@ export default function CompanyDetail() {
       showToast(t('companies.logoUpdated'), 'success');
       await loadData();
     } catch (err: unknown) {
-      setMediaError(translateApiError(err, t, t('companies.logoError')));
+      const message = translateApiError(err, t, t('companies.logoError'));
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message ?? t('companies.logoError'), 'warning');
+      }
+      setMediaError(message);
     } finally {
       setLogoUploading(false);
     }
@@ -315,7 +356,11 @@ export default function CompanyDetail() {
       showToast(t('companies.bannerUpdated', 'Company banner updated'), 'success');
       await loadData();
     } catch (err: unknown) {
-      setMediaError(translateApiError(err, t, t('companies.bannerError', 'Error updating company banner')));
+      const message = translateApiError(err, t, t('companies.bannerError', 'Error updating company banner'));
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message ?? t('companies.bannerError', 'Error updating company banner'), 'warning');
+      }
+      setMediaError(message);
     } finally {
       setBannerUploading(false);
     }
@@ -436,6 +481,8 @@ export default function CompanyDetail() {
   const companyLocation = [company.address, company.city, company.state, company.country]
     .filter((part) => Boolean(part && String(part).trim().length > 0))
     .join(', ');
+  const companyCountryName = getCountryDisplayName(company.country);
+  const activeEmployees = employees.filter((employee) => employee.role !== 'store_terminal');
 
   const companyInsights: Array<{ label: string; value: string | null | undefined }> = [
     { label: t('companies.registrationNumber', 'Registration number'), value: company.registrationNumber },
@@ -508,8 +555,14 @@ export default function CompanyDetail() {
           }}
         >
           <div style={{ minWidth: 0, paddingLeft: heroTitleOffset }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1.00, fontWeight: 800, color: '#fff' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1.00, fontWeight: 800, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {company.name}
+              {company.country ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                  <ReactCountryFlag countryCode={company.country} svg style={{ width: '0.95em', height: '0.95em' }} />
+                  {companyCountryName}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -607,12 +660,27 @@ export default function CompanyDetail() {
 
         <div style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
           <InfoChip icon={<StoreIcon size={13} />} label={t('companies.statStores')} value={String(company.storeCount)} />
-          <InfoChip icon={<Users size={13} />} label={t('companies.statEmployees')} value={String(company.employeeCount)} />
+          <InfoChip
+            icon={<Users size={13} />}
+            label={t('companies.statEmployees')}
+            value={String(activeEmployees.length)}
+            endSlot={<EmployeeAvatarStack employees={activeEmployees} />}
+          />
           <InfoChip icon={<Building2 size={13} />} label={t('companies.ownerField')} value={ownerLabel} avatarUrl={ownerAvatarUrl} />
-          <InfoChip icon={<Hash size={13} />} label={t('companies.companyId', 'Company ID')} value={`#${company.id}`} />
           <InfoChip icon={<CalendarClock size={13} />} label={t('companies.labelCreated')} value={new Date(company.createdAt).toLocaleDateString(locale)} />
           <InfoChip icon={<Layers size={13} />} label={t('companies.fieldGroup')} value={company.groupName ?? t('companies.optionStandalone')} />
-          {company.country ? <InfoChip icon={<MapPin size={13} />} label={t('companies.country', 'Country')} value={company.country} /> : null}
+          {company.country ? (
+            <InfoChip
+              icon={<MapPin size={13} />}
+              label={t('companies.country', 'Country')}
+              value={(
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  <ReactCountryFlag countryCode={company.country} svg style={{ width: '1em', height: '1em' }} />
+                  {companyCountryName || company.country}
+                </span>
+              )}
+            />
+          ) : null}
           {company.currency ? <InfoChip icon={<ImageIcon size={13} />} label={t('companies.currency', 'Currency')} value={company.currency} /> : null}
         </div>
       </div>
@@ -642,8 +710,16 @@ export default function CompanyDetail() {
                         )}
                       </span>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {store.name}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: '100%' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {store.name}
+                          </div>
+                          {store.country ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+                              <ReactCountryFlag countryCode={store.country} svg style={{ width: '0.9em', height: '0.9em' }} />
+                              {getCountryDisplayName(store.country)}
+                            </span>
+                          ) : null}
                         </div>
                         <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{store.code}</span>
@@ -685,6 +761,7 @@ export default function CompanyDetail() {
             {t('companies.profileDetails', 'Company details')}
           </div>
           <div style={{ padding: 14, display: 'grid', gap: 10 }}>
+            <InsightRow label={t('companies.companyId', 'Company ID')} value={`#${company.id}`} />
             {companyInsights
               .filter((item) => Boolean(item.value))
               .map((item) => (
@@ -732,17 +809,17 @@ export default function CompanyDetail() {
               ))}
             </Select>
 
-            <Select
-              label={t('companies.ownerField', 'Company owner')}
-              value={editOwnerUserId}
-              onChange={(event) => setEditOwnerUserId(event.target.value)}
-              disabled={editSaving}
-            >
-              <option value="">{t('companies.currentOwner', 'Current owner')}</option>
-              {ownerOptions.map((owner) => (
-                <option key={owner.id} value={String(owner.id)}>{`${owner.name} ${owner.surname ?? ''}`.trim()}</option>
-              ))}
-            </Select>
+            <CustomSelect
+              value={editOwnerUserId || null}
+              onChange={(value) => setEditOwnerUserId(value ?? '')}
+              options={ownerSelectOptions}
+              placeholder={t('companies.currentOwner', 'Current owner')}
+              disabled={editSaving || ownerCandidatesLoading}
+              searchable
+              isClearable
+              searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
+              noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
+            />
           </div>
 
           <Input
@@ -1055,20 +1132,29 @@ function ManagerAvatar({ employee }: { employee: Employee }) {
   );
 }
 
-function InfoChip({ icon, label, value, avatarUrl }: { icon: React.ReactNode; label: string; value: string; avatarUrl?: string | null }) {
+function InfoChip({ icon, label, value, avatarUrl, endSlot }: { icon: React.ReactNode; label: string; value: React.ReactNode; avatarUrl?: string | null; endSlot?: React.ReactNode }) {
+  const valueNode = typeof value === 'string' ? (
+    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</span>
+  ) : (
+    value
+  );
+
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'var(--surface-warm)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {icon}
         {label}
       </div>
-      <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 7 }}>
-        {avatarUrl ? (
-          <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
-            <img src={avatarUrl} alt={value} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </span>
-        ) : null}
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</span>
+      <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+          {avatarUrl ? (
+            <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+              <img src={avatarUrl} alt={typeof value === 'string' ? value : label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </span>
+          ) : null}
+          <span style={{ minWidth: 0 }}>{valueNode}</span>
+        </div>
+        {endSlot ? <div style={{ flexShrink: 0 }}>{endSlot}</div> : null}
       </div>
     </div>
   );
@@ -1079,11 +1165,11 @@ function EmployeeAvatarStack({ employees }: { employees: Employee[] }) {
     return null;
   }
 
-  const visible = employees.slice(0, 4);
-  const remaining = Math.max(employees.length - 4, 0);
+  const visible = employees.slice(0, 6);
+  const remaining = Math.max(employees.length - visible.length, 0);
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 2 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
       {visible.map((employee, index) => {
         const avatarUrl = getAvatarUrl(employee.avatarFilename);
         const initialsLabel = `${employee.name?.[0] ?? ''}${employee.surname?.[0] ?? ''}`.toUpperCase() || 'U';
@@ -1116,9 +1202,9 @@ function EmployeeAvatarStack({ employees }: { employees: Employee[] }) {
       })}
       {remaining > 0 ? (
         <span
-          title={`+${remaining}`}
+          title={`${employees.length}`}
           style={{
-            width: 20,
+            width: 24,
             height: 20,
             borderRadius: '50%',
             border: '1.5px solid var(--surface)',
@@ -1132,7 +1218,7 @@ function EmployeeAvatarStack({ employees }: { employees: Employee[] }) {
             marginLeft: -6,
           }}
         >
-          4+
+          7+
         </span>
       ) : null}
     </span>

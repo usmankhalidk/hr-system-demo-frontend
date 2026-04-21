@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import ReactCountryFlag from 'react-country-flag';
 import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useToast } from '../../context/ToastContext';
@@ -18,13 +19,14 @@ import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
+import { TimezoneOptionContent } from '../../components/timezone/TimezoneOptionContent';
 import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 import {
   getBrowserTimeZone,
   getPreferredTimezoneForCountry,
   getTimezoneOptionValues,
-  getUtcOffsetLabel,
 } from '../../utils/timezone';
+import { getCountryDisplayName } from '../../utils/country';
 
 interface StoreFormData {
   name: string;
@@ -107,6 +109,19 @@ function getCompanyInitials(name?: string): string {
   return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
+function getStoreInitials(name?: string): string {
+  if (!name) return '?';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
 function toStoreSlug(store: Store): string {
   const base = store.name
     .toLowerCase()
@@ -173,12 +188,7 @@ export function StoreList() {
     return getTimezoneOptionValues([formData.timezone, browserTimezone]).map((timezone) => ({
       value: timezone,
       label: timezone,
-      render: (
-        <div style={{ display: 'grid', gap: 1 }}>
-          <span style={{ fontWeight: 700 }}>{timezone}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{getUtcOffsetLabel(timezone)}</span>
-        </div>
-      ),
+      render: <TimezoneOptionContent timezone={timezone} />,
     }));
   }, [browserTimezone, formData.timezone]);
 
@@ -494,24 +504,72 @@ export function StoreList() {
               getCompanyInitials(row.companyName)
             )}
           </div>
-          <span
-            style={{
-              fontSize: '13px',
-              color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-            title={row.companyName ?? undefined}
-          >
-            {row.companyName ?? '—'}
-          </span>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: '13px',
+                color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontWeight: 600,
+              }}
+              title={row.companyName ?? undefined}
+            >
+              {row.companyName ?? '—'}
+            </div>
+            {row.groupName ? (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.groupName}>
+                {row.groupName}
+              </div>
+            ) : null}
+          </div>
         </div>
       ),
     }] : []),
-    { key: 'name', label: t('stores.colName') },
+    {
+      key: 'name',
+      label: t('stores.colName'),
+      render: (row) => {
+        const logoUrl = getCompanyLogoUrl(row.companyLogoFilename);
+        const countryLabel = getCountryDisplayName(row.country);
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <div style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              overflow: 'hidden',
+              border: '1px solid var(--border)',
+              background: logoUrl ? '#fff' : 'rgba(13,33,55,0.08)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              {logoUrl ? (
+                <img src={logoUrl} alt={row.companyName ?? row.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)' }}>{getStoreInitials(row.name)}</span>
+              )}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.name}>
+                {truncateText(row.name, 16)}
+              </div>
+              {(row.country || countryLabel) ? (
+                <div style={{ marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                  {row.country ? <ReactCountryFlag countryCode={row.country} svg style={{ width: '0.95em', height: '0.95em' }} /> : null}
+                  <span>{truncateText(countryLabel ?? row.country ?? '—', 24)}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+      },
+    },
     { key: 'code', label: t('stores.colCode') },
-    { key: 'address', label: t('stores.colAddress'), render: (row) => row.address ?? '—' },
+    { key: 'address', label: t('stores.colAddress'), render: (row) => truncateText(row.address ?? '—', 24) },
     { key: 'cap', label: t('stores.colCap'), render: (row) => row.cap ?? '—' },
     { key: 'maxStaff', label: t('stores.colMaxStaff'), render: (row) => String(row.maxStaff) },
     { key: 'employeeCount', label: t('stores.colEmployees'), render: (row) => String(row.employeeCount ?? 0) },
@@ -543,11 +601,6 @@ export function StoreList() {
             >
               {t('common.open')} →
             </button>
-            {!row.isActive && (
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
-                {t('common.inactive')}
-              </span>
-            )}
           </div>
         );
       },

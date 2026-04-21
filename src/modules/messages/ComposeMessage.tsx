@@ -10,11 +10,14 @@ import { getEmployees } from '../../api/employees';
 import { translateApiError } from '../../utils/apiErrors';
 import { useAuth } from '../../context/AuthContext';
 import { getAvatarUrl } from '../../api/client';
+import { Badge } from '../../components/ui/Badge';
+import { UserRole } from '../../types';
 
 interface Props {
   /** Pre-set recipient (reply mode or employee→HR). If omitted, show picker. */
   recipientId?: number;
   recipientName?: string;
+  companyId?: number | null;
   /** Optional prefill for reply mode */
   defaultSubject?: string;
   defaultBody?: string;
@@ -26,10 +29,30 @@ interface PickableEmployee {
   id: number;
   name: string;
   surname: string;
-  role: string;
+  role: UserRole;
   email: string;
   avatarFilename?: string | null;
+  companyName?: string | null;
+  companyId?: number;
 }
+
+const ROLE_ORDER: Record<UserRole, number> = {
+  admin: 0,
+  hr: 1,
+  area_manager: 2,
+  store_manager: 3,
+  employee: 4,
+  store_terminal: 5,
+};
+
+const ROLE_BADGE_VARIANT: Record<UserRole, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
+  admin: 'accent',
+  hr: 'info',
+  area_manager: 'success',
+  store_manager: 'warning',
+  employee: 'neutral',
+  store_terminal: 'neutral',
+};
 
 const AVATAR_COLORS = ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'];
 
@@ -51,9 +74,9 @@ const LABEL_STYLE: React.CSSProperties = {
   display: 'block', marginBottom: 6,
 };
 
-export function ComposeMessage({ recipientId, recipientName, defaultSubject, defaultBody, onClose, onSent }: Props) {
+export function ComposeMessage({ recipientId, recipientName, companyId, defaultSubject, defaultBody, onClose, onSent }: Props) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, targetCompanyId, allowedCompanyIds } = useAuth();
 
   const showPicker = recipientId === undefined;
 
@@ -68,15 +91,23 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
   const [search, setSearch] = useState('');
   const [pickedId, setPickedId] = useState<number | null>(null);
   const [pickedName, setPickedName] = useState<string>('');
+  const effectiveCompanyId = companyId ?? targetCompanyId ?? user?.companyId ?? null;
+  const shouldFetchAllAccessibleUsers = allowedCompanyIds.length > 1;
+  const pickerCompanyId = shouldFetchAllAccessibleUsers ? undefined : effectiveCompanyId ?? undefined;
 
   useEffect(() => {
     if (!showPicker) return;
     setEmpLoading(true);
-    getEmployees({ limit: 200, status: 'active' })
+    getEmployees({
+      limit: shouldFetchAllAccessibleUsers ? 500 : 200,
+      status: 'active',
+      targetCompanyId: pickerCompanyId,
+      includeStoreTerminals: true,
+    })
       .then(({ employees: list }) => setEmployees(list))
       .catch(() => {})
       .finally(() => setEmpLoading(false));
-  }, [showPicker]);
+  }, [pickerCompanyId, shouldFetchAllAccessibleUsers, showPicker]);
 
   const filtered = employees.filter(e => {
     const q = search.toLowerCase();
@@ -106,7 +137,12 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
     setSaving(true);
     setError(null);
     try {
-      await sendMessage({ recipientId: effectiveRecipientId, subject: subject.trim() || undefined, body: body.trim() });
+      await sendMessage({
+        recipientId: effectiveRecipientId,
+        subject: subject.trim() || undefined,
+        body: body.trim(),
+        companyId: shouldFetchAllAccessibleUsers ? undefined : effectiveCompanyId,
+      });
       onSent?.();
       onClose();
     } catch (err: unknown) {
@@ -231,10 +267,20 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
                     <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
                       {t('common.noResults')}
                     </div>
-                  ) : filtered.map(emp => {
+                  ) : filtered
+                    .slice()
+                    .sort((a, b) => {
+                      const roleDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
+                      if (roleDiff !== 0) return roleDiff;
+                      const companyDiff = (a.companyName ?? '').localeCompare(b.companyName ?? '');
+                      if (companyDiff !== 0) return companyDiff;
+                      return `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`);
+                    })
+                    .map(emp => {
                     const fullName = `${emp.name} ${emp.surname}`;
                     const isPicked = pickedId === emp.id;
                     const avatarUrl = getAvatarUrl(emp.avatarFilename);
+                    const roleLabel = t(`roles.${emp.role}`, emp.role);
                     return (
                       <button
                         key={emp.id}
@@ -276,6 +322,16 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
                             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {emp.email}
+                            </div>
+                            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <Badge variant={ROLE_BADGE_VARIANT[emp.role]} size="sm">
+                                {roleLabel}
+                              </Badge>
+                              {emp.companyName ? (
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                  {emp.companyName}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </div>
