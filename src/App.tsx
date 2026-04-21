@@ -241,13 +241,13 @@ function AppRoutes() {
       } />
 
       <Route path="/ats" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="ats">
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']} permissionKey="ats">
           <Layout title={t('nav.ats')}><ATSPage /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/onboarding" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="onboarding">
           <Layout title={t('nav.onboarding')}><OnboardingPage /></Layout>
         </ProtectedRoute>
       } />

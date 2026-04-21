@@ -147,7 +147,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
         // Load employees for dropdown
         setLoadingEmps(true);
         try {
-          const res = await getEmployees({ status: 'active', excludeAdmins: true });
+          const res = await getEmployees({ status: 'active', excludeAdmins: true, limit: 1000 });
           setEmployees(res.employees);
         } catch {
           showToast(t('employees.errorLoad'), 'error');
@@ -358,7 +358,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   ) : (
                     employees.map(emp => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.name} {emp.surname} ({emp.uniqueId || emp.role})
+                        {emp.name} {emp.surname} ({emp.uniqueId || emp.role}){emp.companyName ? ` - ${emp.companyName}` : ''}
                       </option>
                     ))
                   )}

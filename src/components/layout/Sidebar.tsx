@@ -271,7 +271,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
     employee: [
       { labelKey: 'nav.dashboard', path: '/', icon: <IconDashboard /> },
       { labelKey: 'nav.myProfile', path: '/profilo', icon: <IconPerson /> },
-      { labelKey: 'nav.onboarding', path: '/onboarding', icon: <IconClipboard /> },
+      { labelKey: 'nav.onboarding', path: '/onboarding', icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti', path: '/documenti', icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.turni', path: '/turni', icon: <IconCalendar />, permissionKey: 'turni' },

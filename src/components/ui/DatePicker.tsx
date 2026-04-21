@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 // ── Locale data ───────────────────────────────────────────────────────────────
@@ -72,11 +72,13 @@ interface DatePickerProps {
   placeholder?: string;
   disabled?: boolean;
   initialViewYear?: number; // Override starting year when no value is set (e.g. for date-of-birth)
+  placement?: 'top' | 'bottom';
+  disableFlip?: boolean;
 }
 
 type PickerView = 'calendar' | 'month' | 'year';
 
-export function DatePicker({ label, value, onChange, error, placeholder, disabled, initialViewYear }: DatePickerProps) {
+export function DatePicker({ label, value, onChange, error, placeholder, disabled, initialViewYear, placement, disableFlip }: DatePickerProps) {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('it') ? 'it' : 'en';
 
@@ -110,26 +112,35 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
       setYearStart(d.getFullYear() - (d.getFullYear() % YEAR_PAGE));
     }
   }, [value]);
+  
+  // Portaling & Positioning
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
 
-  // Calculate popup position when opening
   useEffect(() => {
     if (!open || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const popupWidth = 272;
-    const popupEstHeight = 340;
 
-    let left = rect.left;
-    if (left + popupWidth > window.innerWidth - 8) {
-      left = window.innerWidth - popupWidth - 8;
-    }
+    const updatePosition = () => {
+      const rect = containerRef.current!.getBoundingClientRect();
+      setCoords({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width
+      });
+    };
 
-    let top = rect.bottom + 6;
-    if (top + popupEstHeight > window.innerHeight) {
-      top = rect.top - popupEstHeight - 6;
-    }
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
 
-    setPopupPos({ top, left });
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [open]);
+
+  // --- Direction logic ---
+  // If absolute within a scrollable panel, we just respect the placement prop.
+  const finalPlacement = placement || 'bottom';
 
   // Close on outside click
   useEffect(() => {
@@ -223,16 +234,17 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
     </button>
   );
 
-  // ── Calendar popup (portalled to body to escape overflow containers) ─────────
-  const popup = open && popupPos ? ReactDOM.createPortal(
+  // ── Calendar popup (Portaled to document.body) ─────────
+  const popup = open ? createPortal(
     <div
       ref={popupRef}
       className="pop-in"
       style={{
         position: 'fixed',
-        zIndex: 9999,
-        top: popupPos.top,
-        left: popupPos.left,
+        zIndex: 99999,
+        top: finalPlacement === 'bottom' ? (coords.top + 38 + 5) : (coords.top - 5),
+        left: coords.left,
+        transform: finalPlacement === 'bottom' ? 'none' : 'translateY(-100%)',
         minWidth: '272px',
         background: 'var(--surface)',
         border: '1px solid var(--border)',

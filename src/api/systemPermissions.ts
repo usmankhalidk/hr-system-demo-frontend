@@ -18,6 +18,8 @@ export interface CompanyGrid {
   gestione_accessi?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   terminali?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   documenti?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  ats?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  onboarding?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
 }
 
 export interface CompanyPermissions {
@@ -46,7 +48,9 @@ export interface SystemPermissionUpdate {
     | 'impostazioni'
     | 'gestione_accessi'
     | 'terminali'
-    | 'documenti';
+    | 'documenti'
+    | 'ats'
+    | 'onboarding';
   enabled: boolean;
 }
 

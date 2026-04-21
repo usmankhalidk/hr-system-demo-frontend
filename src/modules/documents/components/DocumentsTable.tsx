@@ -61,7 +61,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const handleDownload = async (doc: any) => {
     try { 
       const name = doc.fileName || doc.title || 'document';
-      await downloadDocumentGeneric(doc.id, name); 
+      await downloadDocumentGeneric(doc.id, name, doc.sourceTable); 
     }
     catch { showToast(t('documents.errorLoad'), 'error'); }
   };
@@ -70,7 +70,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
     setPreviewLoadingId(doc.id);
     try {
       const mimeType = doc.mimeType || doc.mime_type || 'application/pdf';
-      const url = await getDocumentPreviewUrlGeneric(doc.id, mimeType);
+      const url = await getDocumentPreviewUrlGeneric(doc.id, mimeType, doc.sourceTable);
       setPreviewDocUrl(url);
       setPreviewDocName(doc.fileName || doc.title || 'Preview');
     } catch {
