@@ -15,6 +15,7 @@ interface Props {
   /** Pre-set recipient (reply mode or employee→HR). If omitted, show picker. */
   recipientId?: number;
   recipientName?: string;
+  companyId?: number | null;
   /** Optional prefill for reply mode */
   defaultSubject?: string;
   defaultBody?: string;
@@ -51,9 +52,9 @@ const LABEL_STYLE: React.CSSProperties = {
   display: 'block', marginBottom: 6,
 };
 
-export function ComposeMessage({ recipientId, recipientName, defaultSubject, defaultBody, onClose, onSent }: Props) {
+export function ComposeMessage({ recipientId, recipientName, companyId, defaultSubject, defaultBody, onClose, onSent }: Props) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, targetCompanyId } = useAuth();
 
   const showPicker = recipientId === undefined;
 
@@ -68,15 +69,16 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
   const [search, setSearch] = useState('');
   const [pickedId, setPickedId] = useState<number | null>(null);
   const [pickedName, setPickedName] = useState<string>('');
+  const effectiveCompanyId = companyId ?? targetCompanyId ?? user?.companyId ?? null;
 
   useEffect(() => {
     if (!showPicker) return;
     setEmpLoading(true);
-    getEmployees({ limit: 200, status: 'active' })
+    getEmployees({ limit: 200, status: 'active', targetCompanyId: effectiveCompanyId ?? undefined })
       .then(({ employees: list }) => setEmployees(list))
       .catch(() => {})
       .finally(() => setEmpLoading(false));
-  }, [showPicker]);
+  }, [effectiveCompanyId, showPicker]);
 
   const filtered = employees.filter(e => {
     const q = search.toLowerCase();
@@ -106,7 +108,12 @@ export function ComposeMessage({ recipientId, recipientName, defaultSubject, def
     setSaving(true);
     setError(null);
     try {
-      await sendMessage({ recipientId: effectiveRecipientId, subject: subject.trim() || undefined, body: body.trim() });
+      await sendMessage({
+        recipientId: effectiveRecipientId,
+        subject: subject.trim() || undefined,
+        body: body.trim(),
+        companyId: effectiveCompanyId,
+      });
       onSent?.();
       onClose();
     } catch (err: unknown) {

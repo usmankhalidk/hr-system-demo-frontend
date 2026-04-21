@@ -20,7 +20,7 @@ import {
 import { getCompanyGroups } from '../../api/companyGroups';
 import { getEmployees } from '../../api/employees';
 import { getCompanyLogoUrl, getCompanyBannerUrl } from '../../api/client';
-import { translateApiError } from '../../utils/apiErrors';
+import { getApiErrorCode, translateApiError } from '../../utils/apiErrors';
 import { Company } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -447,7 +447,11 @@ export default function SystemCompanyManagement() {
       showToast(t('companies.logoUpdated'), 'success');
       await load();
     } catch (err: unknown) {
-      setLogoError(translateApiError(err, t, t('companies.logoError')) ?? t('companies.logoError'));
+      const message = translateApiError(err, t, t('companies.logoError')) ?? t('companies.logoError');
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message, 'warning');
+      }
+      setLogoError(message);
     } finally {
       setLogoUploading(false);
       e.target.value = '';
@@ -465,7 +469,11 @@ export default function SystemCompanyManagement() {
       showToast(t('companies.bannerUpdated', 'Banner aziendale aggiornato'), 'success');
       await load();
     } catch (err: unknown) {
-      setBannerError(translateApiError(err, t, t('companies.bannerError', 'Errore durante aggiornamento banner')) ?? t('companies.bannerError', 'Errore durante aggiornamento banner'));
+      const message = translateApiError(err, t, t('companies.bannerError', 'Errore durante aggiornamento banner')) ?? t('companies.bannerError', 'Errore durante aggiornamento banner');
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message, 'warning');
+      }
+      setBannerError(message);
     } finally {
       setBannerUploading(false);
       e.target.value = '';

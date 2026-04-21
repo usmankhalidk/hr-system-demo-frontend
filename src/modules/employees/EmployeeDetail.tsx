@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ReactCountryFlag from 'react-country-flag';
@@ -13,7 +13,7 @@ import {
 } from '../../api/employees';
 import { getAvatarUrl } from '../../api/client';
 import { getTrainings, getMedicals, createTraining, updateTraining, createMedical, updateMedical } from '../../api/trainings';
-import { translateApiError } from '../../utils/apiErrors';
+import { getApiErrorCode, translateApiError } from '../../utils/apiErrors';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Employee, EmployeeAssociationEntry, EmployeeAssociationsResponse, UserRole, Training, MedicalCheck, TrainingType } from '../../types';
@@ -29,6 +29,8 @@ import { MessageBoard } from '../messages/MessageBoard';
 import { ComposeMessage } from '../messages/ComposeMessage';
 import { getEmployeeTasks, assignTasks, OnboardingProgress } from '../../api/onboarding';
 import { DocumentManager } from '../documents/components/DocumentManager';
+import MonthlyCalendar from '../shifts/MonthlyCalendar';
+import { Shift, listShifts } from '../../api/shifts';
 
 
 // ── Types & constants ──────────────────────────────────────────────────────────
@@ -95,6 +97,17 @@ function formatDate(dateStr: string | null | undefined, lang: string): string {
 function maskIban(iban: string): string {
   if (iban.length <= 8) return iban;
   return `${iban.slice(0, 4)} •••• •••• ${iban.slice(-4)}`;
+}
+
+function formatMonthToken(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function shiftClock(value: string | null | undefined): string {
+  if (!value) return '--:--';
+  return value.slice(0, 5);
 }
 
 // ── Info row (horizontal label / value) ───────────────────────────────────────
@@ -306,6 +319,15 @@ const IconCertificate = () => (
     <path d="M8 13h8"/><path d="M8 17h5"/>
   </svg>
 );
+const IconShifts = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4" />
+    <path d="M8 2v4" />
+    <path d="M3 10h18" />
+    <path d="M9 15h6" />
+  </svg>
+);
 const IconEdit = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -331,7 +353,7 @@ const IconBack = () => (
 export function EmployeeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, targetCompanyId } = useAuth();
   const { isMobile } = useBreakpoint();
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
@@ -342,7 +364,12 @@ export function EmployeeDetail() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'documents' | 'qualifications'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'documents' | 'qualifications' | 'shifts'>('overview');
+  const [shiftMonthCursor, setShiftMonthCursor] = useState<Date>(() => new Date());
+  const [employeeShifts, setEmployeeShifts] = useState<Shift[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [shiftsError, setShiftsError] = useState<string | null>(null);
+  const [selectedShiftDate, setSelectedShiftDate] = useState<string | null>(null);
 
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
   const [showActivateModal, setShowActivateModal] = useState(false);
@@ -375,6 +402,8 @@ export function EmployeeDetail() {
   const isOwnProfile = user?.id === employee?.id;
   const canViewSensitive = isAdminOrHr || isOwnProfile;
   const canResetDevice = isAdminOrHr && employee?.role === 'employee';
+  const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
+  const shiftMonthToken = useMemo(() => formatMonthToken(shiftMonthCursor), [shiftMonthCursor]);
 
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
 
@@ -388,7 +417,7 @@ export function EmployeeDetail() {
       await loadEmployee();
     } catch (err: unknown) {
       const message = translateApiError(err, t, t('employees.avatarError')) ?? t('employees.avatarError');
-      showToast(message, 'error');
+      showToast(message, getApiErrorCode(err) === 'INVALID_FILE_TYPE' ? 'warning' : 'error');
     } finally {
       setAvatarUploading(false);
       const input = document.getElementById('avatar-upload') as HTMLInputElement;
@@ -445,6 +474,43 @@ export function EmployeeDetail() {
       .finally(() => setTrainingsLoading(false));
   }, [employeeId, canViewSensitive]);
 
+  useEffect(() => {
+    if (activeTab !== 'shifts' || !employeeId) return;
+
+    let cancelled = false;
+    setShiftsLoading(true);
+    setShiftsError(null);
+
+    listShifts({
+      month: shiftMonthToken,
+      user_id: employeeId,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setEmployeeShifts(res.shifts);
+        const dayKeys = new Set(res.shifts.map((shift) => shift.date.split('T')[0]));
+        setSelectedShiftDate((prev) => {
+          if (prev && dayKeys.has(prev)) return prev;
+          const first = res.shifts[0]?.date?.split('T')[0];
+          return first ?? null;
+        });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setEmployeeShifts([]);
+        setSelectedShiftDate(null);
+        setShiftsError(translateApiError(err, t, t('shifts.errorLoad', 'Unable to load shifts')) ?? t('shifts.errorLoad', 'Unable to load shifts'));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setShiftsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, employeeId, shiftMonthToken, t]);
+
   const handleActivate = async () => {
     if (!employeeId) return;
     setActivating(true);
@@ -493,6 +559,21 @@ export function EmployeeDetail() {
       setDeviceResetting(false);
     }
   };
+
+  const supervisorAssociation = useMemo(() => {
+    if (!employee?.supervisorId || !associations) return null;
+
+    for (const company of associations.companies) {
+      for (const store of company.stores) {
+        const found = store.employees.find((entry) => entry.id === employee.supervisorId);
+        if (found) return found;
+      }
+      const unassigned = company.unassignedEmployees.find((entry) => entry.id === employee.supervisorId);
+      if (unassigned) return unassigned;
+    }
+
+    return null;
+  }, [associations, employee?.supervisorId]);
 
   if (loading) {
     return (
@@ -592,23 +673,108 @@ export function EmployeeDetail() {
     );
   };
 
+  const shiftMonthLabel = shiftMonthCursor.toLocaleDateString(i18n.language.startsWith('it') ? 'it-IT' : 'en-GB', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const selectedDayShifts = employeeShifts
+    .filter((shift) => shift.date.split('T')[0] === selectedShiftDate)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
   return (
     <div className="page-enter" style={{ maxWidth: '1000px', margin: '0 auto' }}>
 
-      {/* Back nav */}
-      <button
-        onClick={() => navigate('/dipendenti')}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '5px',
-          fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'var(--font-body)',
-          cursor: 'pointer', background: 'none', border: 'none', padding: '0 0 16px',
-          fontWeight: 500, transition: 'color 0.15s',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-      >
-        <IconBack /> {t('employees.backToList')}
-      </button>
+      {/* Back + actions row */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+        flexWrap: 'wrap',
+        marginBottom: 12,
+      }}>
+        <button
+          onClick={() => navigate('/dipendenti')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-body)',
+            cursor: 'pointer', background: 'none', border: 'none', padding: 0,
+            fontWeight: 600, transition: 'color 0.15s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+        >
+          <IconBack /> {t('employees.backToList')}
+        </button>
+
+        {isAdminOrHr && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setShowEditForm(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '6px 10px', borderRadius: 999,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--text-primary)', fontSize: 11.5, fontWeight: 700,
+                fontFamily: 'var(--font-body)', cursor: 'pointer',
+              }}
+            >
+              <IconEdit /> {t('common.edit')}
+            </button>
+
+            {!isOwnProfile && (
+              <button
+                onClick={() => setShowCompose(true)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '6px 10px', borderRadius: 999,
+                  border: '1px solid rgba(201,151,58,0.35)',
+                  background: 'rgba(201,151,58,0.10)',
+                  color: 'rgba(201,151,58,0.92)', fontSize: 11.5, fontWeight: 700,
+                  fontFamily: 'var(--font-body)', cursor: 'pointer',
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+                {t('employees.sendMessage')}
+              </button>
+            )}
+
+            {employee.status === 'active' ? (
+              <button
+                onClick={() => setShowDeactivateModal(true)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '6px 10px', borderRadius: 999,
+                  border: '1px solid rgba(220,38,38,0.42)',
+                  background: 'rgba(220,38,38,0.10)',
+                  color: '#DC2626', fontSize: 11.5, fontWeight: 700,
+                  fontFamily: 'var(--font-body)', cursor: 'pointer',
+                }}
+              >
+                <IconOff /> {t('common.deactivate')}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowActivateModal(true)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '6px 10px', borderRadius: 999,
+                  border: '1px solid rgba(21,128,61,0.42)',
+                  background: 'rgba(21,128,61,0.10)',
+                  color: '#15803D', fontSize: 11.5, fontWeight: 700,
+                  fontFamily: 'var(--font-body)', cursor: 'pointer',
+                }}
+              >
+                <IconOn /> {t('common.activate')}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Hero card */}
       <div style={{
@@ -702,90 +868,26 @@ export function EmployeeDetail() {
           </div>
         </div>
 
-        {/* Actions */}
-        {isAdminOrHr && (
-          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-            <button
-              onClick={() => setShowEditForm(true)}
-              className="btn btn-secondary"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '8px 16px', borderRadius: 'var(--radius-sm)',
-                border: '1px solid rgba(255,255,255,0.20)',
-                background: 'rgba(255,255,255,0.08)',
-                color: '#FFFFFF', fontSize: '13px', fontWeight: 600,
-                fontFamily: 'var(--font-body)', cursor: 'pointer',
-              }}
-            >
-              <IconEdit /> {t('common.edit')}
-            </button>
-            {isAdminOrHr && !isOwnProfile && (
-              <button
-                onClick={() => setShowCompose(true)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: 'var(--radius-sm)',
-                  border: '1px solid rgba(201,151,58,0.30)',
-                  background: 'rgba(201,151,58,0.12)',
-                  color: 'rgba(201,151,58,0.9)', fontSize: '13px', fontWeight: 600,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                </svg>
-                {t('employees.sendMessage')}
-              </button>
-            )}
-            {isAdminOrHr && employee.status === 'active' && (
-              <button
-                onClick={() => setShowDeactivateModal(true)}
-                className="btn btn-danger"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: 'var(--radius-sm)',
-                  border: '1px solid rgba(220,38,38,0.40)',
-                  background: 'rgba(220,38,38,0.15)',
-                  color: '#FCA5A5', fontSize: '13px', fontWeight: 600,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
-              >
-                <IconOff /> {t('common.deactivate')}
-              </button>
-            )}
-            {isAdminOrHr && employee.status === 'inactive' && (
-              <button
-                onClick={() => setShowActivateModal(true)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: 'var(--radius-sm)',
-                  border: '1px solid rgba(21,128,61,0.40)',
-                  background: 'rgba(21,128,61,0.15)',
-                  color: '#86EFAC', fontSize: '13px', fontWeight: 600,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
-              >
-                <IconOn /> {t('common.activate')}
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Tabs Navigation */}
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
-        gap: '18px',
+        gap: '8px',
         marginBottom: '24px',
-        borderBottom: '1px solid var(--border)',
-        paddingBottom: '6px',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '8px',
+        background: 'var(--surface)',
+        boxShadow: 'var(--shadow-xs)',
       }}>
         {[
           { key: 'overview' as const, label: t('employees.tabOverview', 'Overview'), icon: <IconUser />, color: '#0D2137' },
-          { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1b4d3e' },
+          { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1B4D3E' },
           { key: 'qualifications' as const, label: t('employees.tabQualifications', 'Qualifications'), icon: <IconCertificate />, color: '#8B6914' },
-          { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#1e4a7a' },
+          { key: 'shifts' as const, label: t('employees.tabShifts', 'Shifts'), icon: <IconShifts />, color: '#1E4A7A' },
+          { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#4B5563' },
         ].filter(tab => tab.key !== 'documents' || employee.role !== 'admin').map((tab) => {
           const selected = activeTab === tab.key;
           return (
@@ -796,21 +898,27 @@ export function EmployeeDetail() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '8px 0',
-                borderRadius: 0,
-                border: 'none',
-                borderBottom: selected ? `2px solid ${tab.color}` : '2px solid transparent',
-                background: 'transparent',
-                color: selected ? tab.color : 'var(--text-muted)',
-                fontSize: '13px',
+                padding: '7px 11px',
+                borderRadius: 'var(--radius-sm)',
+                border: selected ? `1px solid ${tab.color}` : '1px solid transparent',
+                background: selected ? `${tab.color}14` : 'transparent',
+                color: selected ? tab.color : 'var(--text-secondary)',
+                fontSize: '12.5px',
                 fontWeight: 700,
-                fontFamily: 'var(--font-display)',
-                letterSpacing: '0.03em',
+                fontFamily: 'var(--font-body)',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease',
+                transition: 'all 0.15s ease',
               }}
             >
-              <span style={{ display: 'inline-flex', color: selected ? tab.color : 'var(--text-muted)' }}>{tab.icon}</span>
+              <span style={{
+                display: 'inline-flex',
+                color: selected ? tab.color : 'var(--text-muted)',
+                background: selected ? `${tab.color}22` : 'transparent',
+                borderRadius: 6,
+                padding: selected ? 3 : 0,
+              }}>
+                {tab.icon}
+              </span>
               {tab.label}
             </button>
           );
@@ -927,6 +1035,120 @@ export function EmployeeDetail() {
             <InfoRow label={t('employees.terminationTypeField')} value={employee.terminationType ? t(TERMINATION_TYPE_KEYS[employee.terminationType] ?? 'employees.terminationTypeField', { defaultValue: employee.terminationType }) : '—'} last />
           </SectionPanel>
         )}
+            </div>
+          )}
+
+          {activeTab === 'shifts' && (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <SectionPanel
+                title={t('employees.tabShifts', 'Shifts')}
+                icon={<IconShifts />}
+                action={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setShiftMonthCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                      style={{
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-secondary)',
+                        borderRadius: 8,
+                        padding: '3px 8px',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {'<'}
+                    </button>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', minWidth: 120, textAlign: 'center' }}>
+                      {shiftMonthLabel}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShiftMonthCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                      style={{
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-secondary)',
+                        borderRadius: 8,
+                        padding: '3px 8px',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {'>'}
+                    </button>
+                  </div>
+                }
+              >
+                {shiftsLoading ? (
+                  <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
+                    <Spinner size="sm" />
+                  </div>
+                ) : shiftsError ? (
+                  <div style={{ padding: '10px 0' }}>
+                    <Alert variant="danger" title={t('common.error')}>{shiftsError}</Alert>
+                  </div>
+                ) : employeeShifts.length === 0 ? (
+                  <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                    {t('shifts.noneInRange', 'No shifts scheduled in this month.')}
+                  </div>
+                ) : (
+                  <div style={{ paddingTop: 8 }}>
+                    <MonthlyCalendar
+                      shifts={employeeShifts}
+                      currentDate={shiftMonthCursor}
+                      onDayClick={(date) => setSelectedShiftDate(date)}
+                    />
+                  </div>
+                )}
+              </SectionPanel>
+
+              <SectionPanel
+                title={selectedShiftDate ? `${t('shifts.day', 'Day')} ${selectedShiftDate}` : t('shifts.day', 'Day')}
+                icon={<IconShifts />}
+              >
+                {!selectedShiftDate ? (
+                  <div style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                    {t('shifts.selectDay', 'Select a day on the calendar to view shifts.')}
+                  </div>
+                ) : selectedDayShifts.length === 0 ? (
+                  <div style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                    {t('shifts.noneOnDay', 'No shifts on the selected day.')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 8, paddingTop: 4 }}>
+                    {selectedDayShifts.map((shift) => (
+                      <div
+                        key={shift.id}
+                        style={{
+                          border: '1px solid var(--border-light)',
+                          background: 'var(--surface-warm)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '9px 11px',
+                          display: 'grid',
+                          gap: 4,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {shiftClock(shift.startTime)} - {shiftClock(shift.endTime)}
+                          </span>
+                          <Badge variant={shift.status === 'confirmed' ? 'success' : shift.status === 'cancelled' ? 'danger' : 'warning'}>
+                            {shift.status}
+                          </Badge>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {shift.storeName || employee.storeName || '—'} · {employee.companyName || t('common.company', 'Company')}
+                        </div>
+                        {shift.notes ? (
+                          <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{shift.notes}</div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </SectionPanel>
             </div>
           )}
 
@@ -1077,28 +1299,61 @@ export function EmployeeDetail() {
           ) : (
             <div style={{ padding: '8px 0 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
                 gap: 8,
-                padding: '10px 12px',
+                padding: '10px',
                 border: '1px solid var(--border-light)',
                 borderRadius: 'var(--radius-sm)',
                 background: 'var(--surface-warm)',
               }}>
-                <span style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                }}>
-                  {t('employees.associationsScopeLabel')}
-                </span>
-                <Badge variant="info">{t(`employees.associationScope_${associations.scope}`)}</Badge>
-                <Badge variant="neutral">{t('employees.associationsCompaniesCount', { count: associations.summary.companyCount })}</Badge>
-                <Badge variant="neutral">{t('employees.associationsStoresCount', { count: associations.summary.storeCount })}</Badge>
-                <Badge variant="neutral">{t('employees.associationsEmployeesCount', { count: associations.summary.employeeCount })}</Badge>
+                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    1. {t('employees.companyField')}
+                  </div>
+                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {employee.companyName ?? '—'}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
+                    {t(`employees.associationScope_${associations.scope}`)} · {t('employees.associationsCompaniesCount', { count: associations.summary.companyCount })}
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    2. {t('common.store')}
+                  </div>
+                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {employee.storeName ?? t('employees.noStore', 'No store')}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
+                    {t('employees.associationsStoresCount', { count: associations.summary.storeCount })}
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    3. {t('employees.supervisorField')}
+                  </div>
+                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {employee.supervisorName ?? '—'}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
+                    {supervisorAssociation?.email ?? t('employees.associationsNoEmployees')}
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    4. {t('employees.colName')}
+                  </div>
+                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {fullName}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
+                    {employee.email} · {tRole(employee.role)}
+                  </div>
+                </div>
               </div>
 
               {associations.companies.map((company) => (
@@ -1331,6 +1586,7 @@ export function EmployeeDetail() {
         <ComposeMessage
           recipientId={employee.id}
           recipientName={fullName}
+          companyId={activeCompanyId}
           onClose={() => setShowCompose(false)}
           onSent={() => showToast(t('messages.successSent'), 'success')}
         />

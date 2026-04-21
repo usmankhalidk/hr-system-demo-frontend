@@ -165,7 +165,7 @@ const ROLE_ACCENT: Record<UserRole, string> = {
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose }) => {
-  const { user, permissions, logout } = useAuth();
+  const { user, permissions, logout, targetCompanyId } = useAuth();
   const { t } = useTranslation();
   const location = useLocation();
 
@@ -174,12 +174,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
   useEffect(() => {
     if (!user || user.role === 'store_terminal') return;
-    getUnreadCount().then(setUnreadMessages).catch(() => { });
+    const scopedCompanyId = targetCompanyId ?? user.companyId ?? null;
+    getUnreadCount(scopedCompanyId).then(setUnreadMessages).catch(() => { });
     const interval = setInterval(() => {
-      getUnreadCount().then(setUnreadMessages).catch(() => { });
+      getUnreadCount(scopedCompanyId).then(setUnreadMessages).catch(() => { });
     }, 60_000);
     return () => clearInterval(interval);
-  }, [user?.id, user?.role]);
+  }, [targetCompanyId, user?.companyId, user?.id, user?.role]);
 
   if (!user || user.role === 'store_terminal') return null;
 

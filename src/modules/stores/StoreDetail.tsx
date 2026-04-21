@@ -40,7 +40,6 @@ import {
 } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
 import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
-import { translateApiError } from '../../utils/apiErrors';
 import { Employee, Store, StoreOperatingHour, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -49,6 +48,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Badge } from '../../components/ui/Badge';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
+import { getApiErrorCode, translateApiError } from '../../utils/apiErrors';
 import {
   getBrowserTimeZone,
   getPreferredTimezoneForCountry,
@@ -378,7 +378,11 @@ export default function StoreDetail() {
       showToast(t('stores.logoUpdated', 'Store photo updated'), 'success');
       await loadData();
     } catch (err: unknown) {
-      setLogoError(translateApiError(err, t, t('stores.logoError', 'Error uploading store photo')));
+      const message = translateApiError(err, t, t('stores.logoError', 'Error uploading store photo'));
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message ?? t('stores.logoError', 'Error uploading store photo'), 'warning');
+      }
+      setLogoError(message);
     } finally {
       setLogoUploading(false);
     }

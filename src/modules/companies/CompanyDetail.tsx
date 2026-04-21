@@ -1,3 +1,4 @@
+import { getApiErrorCode } from '../../utils/apiErrors';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -300,7 +301,11 @@ export default function CompanyDetail() {
       showToast(t('companies.logoUpdated'), 'success');
       await loadData();
     } catch (err: unknown) {
-      setMediaError(translateApiError(err, t, t('companies.logoError')));
+      const message = translateApiError(err, t, t('companies.logoError'));
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message ?? t('companies.logoError'), 'warning');
+      }
+      setMediaError(message);
     } finally {
       setLogoUploading(false);
     }
@@ -315,7 +320,11 @@ export default function CompanyDetail() {
       showToast(t('companies.bannerUpdated', 'Company banner updated'), 'success');
       await loadData();
     } catch (err: unknown) {
-      setMediaError(translateApiError(err, t, t('companies.bannerError', 'Error updating company banner')));
+      const message = translateApiError(err, t, t('companies.bannerError', 'Error updating company banner'));
+      if (getApiErrorCode(err) === 'INVALID_FILE_TYPE') {
+        showToast(message ?? t('companies.bannerError', 'Error updating company banner'), 'warning');
+      }
+      setMediaError(message);
     } finally {
       setBannerUploading(false);
     }

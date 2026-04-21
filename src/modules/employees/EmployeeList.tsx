@@ -51,6 +51,12 @@ function formatTransferDate(value: string): string {
   }).format(date);
 }
 
+function truncateText(value: string | null | undefined, max: number): string {
+  const text = value ?? '—';
+  if (text === '—' || text.length <= max) return text;
+  return `${text.slice(0, max)}...`;
+}
+
 export function EmployeeList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -188,11 +194,11 @@ export function EmployeeList() {
               ) : initials}
             </div>
             <div>
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13.5px', lineHeight: 1.3 }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13.5px', lineHeight: 1.3, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {fullName}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                {row.email}
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {truncateText(row.email, 22)}
               </div>
             </div>
           </div>
@@ -220,8 +226,8 @@ export function EmployeeList() {
       key: 'companyName' as keyof Employee,
       label: t('employees.colCompany'),
       render: (row: Employee) => (
-        <span style={{ fontSize: '13px', color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)' }}>
-          {row.companyName ?? '—'}
+        <span style={{ fontSize: '13px', color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)', maxWidth: 160, display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {truncateText(row.companyName, 16)}
         </span>
       ),
     }] : []),
@@ -243,8 +249,13 @@ export function EmployeeList() {
               <span style={{
                 fontSize: '13px',
                 color: 'var(--text-secondary)',
+                maxWidth: 160,
+                display: 'inline-block',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}>
-                {transfer.originStoreName || row.storeName || '—'}
+                {truncateText(transfer.originStoreName || row.storeName, 16)}
               </span>
 
               <button
@@ -318,8 +329,8 @@ export function EmployeeList() {
           );
         }
         return (
-          <span style={{ fontSize: '13px', color: row.storeName ? 'var(--text-secondary)' : 'var(--text-disabled)' }}>
-            {row.storeName ?? '—'}
+          <span style={{ fontSize: '13px', color: row.storeName ? 'var(--text-secondary)' : 'var(--text-disabled)', maxWidth: 160, display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {truncateText(row.storeName, 16)}
           </span>
         );
       },
