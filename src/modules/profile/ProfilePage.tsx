@@ -152,7 +152,7 @@ export function ProfilePage() {
 
   if (!user) return null;
 
-  const tRole = (role: string) => (t as (k: string) => string)(`roles.${role}`);
+  const tRole = (role: string) => user.isSuperAdmin ? t('roles.super_admin') : (t as (k: string) => string)(`roles.${role}`);
   const fullName = user.surname ? `${user.name} ${user.surname}` : user.name;
   const initials = `${user.name?.[0] ?? ''}${user.surname?.[0] ?? ''}`.toUpperCase();
   const avatarBg = getAvatarColor(fullName);

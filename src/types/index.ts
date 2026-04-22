@@ -101,6 +101,7 @@ export interface Employee {
   workingType: 'full_time' | 'part_time' | null;
   weeklyHours: number | null;
   status: 'active' | 'inactive';
+  isSuperAdmin?: boolean;
   firstAidFlag: boolean;
   maritalStatus: string | null;
   storeName?: string;
@@ -136,6 +137,7 @@ export interface EmployeeAssociationEntry {
   email: string;
   role: UserRole;
   status: 'active' | 'inactive';
+  isSuperAdmin?: boolean;
   companyId: number;
   companyName: string;
   storeId: number | null;

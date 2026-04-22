@@ -1170,7 +1170,12 @@ export default function AdminLeavePanel() {
     setCEmployeeOpen(false);
     setCreateOpen(true);
     if (empList.length === 0) {
-      getEmployees({ limit: 200, status: 'active', role: 'employee' })
+      getEmployees({
+        limit: 200,
+        status: 'active',
+        excludeAdmins: true,
+        targetCompanyId: user?.role === 'hr' ? user.companyId : undefined
+      })
         .then((r) => {
           const rows = r.employees
             .filter((e) => (user?.id ? e.id !== user.id : true))
@@ -1530,7 +1535,7 @@ export default function AdminLeavePanel() {
               if (tab === 'requests') return true;
               if (tab === 'balances') return permissions?.saldi || user?.isSuperAdmin;
               if (tab === 'calendar') return true;
-              if (tab === 'approval_config') return user?.role === 'admin' || user?.isSuperAdmin;
+              if (tab === 'approval_config') return (user?.role === 'admin' || user?.isSuperAdmin) && !user?.isSuperAdmin;
               return false;
             })).map((tab) => {
               const selected = panelTab === tab;
@@ -1638,6 +1643,7 @@ export default function AdminLeavePanel() {
                       <tr style={{ background: 'var(--primary)' }}>
                         {[
                           t('leave.col_employee'),
+                          t('leave.col_role', 'Role'),
                           t('leave.col_store', 'Store'),
                           t('leave.type_label'),
                           t('leave.col_period'),
@@ -1724,6 +1730,12 @@ export default function AdminLeavePanel() {
                                   </span>
                                 </span>
                               </div>
+                            </td>
+                            {/* Role */}
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                                {req.userRole ? t(`roles.${req.userRole}`, { defaultValue: req.userRole }) : '—'}
+                              </span>
                             </td>
                             {/* Store */}
                             <td style={{ padding: '12px 16px' }}>
@@ -1907,7 +1919,7 @@ export default function AdminLeavePanel() {
       )}
 
       {/* ── Approval Config tab ─────────────────────────────────────────── */}
-      {panelTab === 'approval_config' && (
+      {panelTab === 'approval_config' && !user?.isSuperAdmin && (
         <div style={{ padding: '20px 24px 24px' }}>
           <ApprovalConfigPanel />
         </div>

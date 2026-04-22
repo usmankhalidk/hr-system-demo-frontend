@@ -65,6 +65,7 @@ const it = {
   // ─── Roles ────────────────────────────────────────────────────────────────
   roles: {
     admin: 'Amministratore',
+    super_admin: 'Super Admin',
     hr: 'Risorse Umane',
     area_manager: 'Area Manager',
     store_manager: 'Resp. Negozio',
@@ -846,10 +847,11 @@ const it = {
     INVALID_FILE_TYPE: 'Tipo file non valido.',
     FILE_TOO_LARGE: 'Il file supera il limite di 2MB.',
     NO_FILE: 'Nessun file selezionato.',
+    LEAVES_FULL: 'Hai già esaurito tutti i tuoi permessi.',
+    LEAVE_OVERLAP: 'Hai già un permesso approvato in queste date.',
     INVALID_RECIPIENT: 'Destinatario non valido.',
     MISSING_FIELDS: 'Compila tutti i campi obbligatori.',
     COMPANY_MISMATCH: 'Non hai accesso a questa azienda.',
-    LEAVE_OVERLAP: 'Non è possibile richiedere un permesso per date sovrapposte.',
     INSUFFICIENT_BALANCE: 'Saldo insufficiente per completare l\'operazione.',
     BALANCE_BELOW_USED: 'Il totale non può essere inferiore ai giorni già utilizzati.',
     LEAVE_NOT_RESPONSIBLE: 'Non sei il responsabile di questa richiesta.',
@@ -1620,6 +1622,7 @@ const it = {
     admin_filter_all_types: 'Tutti i tipi',
     admin_filter_all_stores: 'Tutti i negozi',
     col_employee: 'Dipendente',
+    col_role: 'Ruolo',
     col_store: 'Negozio',
     col_period: 'Periodo',
     col_days: 'Giorni',

@@ -298,6 +298,7 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
               value={endDate}
               onChange={setEndDate}
               disabled={leaveDurationType === 'short_leave'}
+              placement="top"
             />
           </div>
 
