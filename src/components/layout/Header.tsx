@@ -182,7 +182,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
   const initials = user
     ? `${user.name.charAt(0)}${user.surname ? user.surname.charAt(0) : ''}`.toUpperCase()
     : '';
-  const roleLabel = user ? t(`roles.${user.role}`) : '';
+  const roleLabel = user ? (user.isSuperAdmin ? t('roles.super_admin') : t(`roles.${user.role}`)) : '';
   const canOpenSettings = user?.role === 'admin';
 
   return (

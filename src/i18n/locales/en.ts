@@ -66,6 +66,7 @@ const en = {
   // ─── Roles ────────────────────────────────────────────────────────────────
   roles: {
     admin: 'Administrator',
+    super_admin: 'Super Admin',
     hr: 'Human Resources',
     area_manager: 'Area Manager',
     store_manager: 'Store Manager',
@@ -847,10 +848,11 @@ const en = {
     INVALID_FILE_TYPE: 'Invalid file type.',
     FILE_TOO_LARGE: 'The file exceeds the 2MB limit.',
     NO_FILE: 'No file selected.',
+    LEAVES_FULL: 'You have already used all your leaves.',
+    LEAVE_OVERLAP: 'You already have an approved leave on these dates.',
     INVALID_RECIPIENT: 'Invalid recipient.',
     MISSING_FIELDS: 'Please fill in all required fields.',
     COMPANY_MISMATCH: 'You do not have access to this company.',
-    LEAVE_OVERLAP: 'You cannot request leave for overlapping dates.',
     INSUFFICIENT_BALANCE: 'Insufficient balance to complete this operation.',
     BALANCE_BELOW_USED: 'Total days cannot be lower than already used days.',
     LEAVE_NOT_RESPONSIBLE: 'You are not responsible for this leave request.',
@@ -1620,6 +1622,7 @@ const en = {
     admin_filter_all_types: 'All types',
     admin_filter_all_stores: 'All stores',
     col_employee: 'Employee',
+    col_role: 'Role',
     col_store: 'Store',
     col_period: 'Period',
     col_days: 'Days',

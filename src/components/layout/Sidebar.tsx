@@ -293,7 +293,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
   const initials = `${user.name.charAt(0)}${user.surname ? user.surname.charAt(0) : ''}`.toUpperCase();
   const fullName = user.surname ? `${user.name} ${user.surname}` : user.name;
   const roleColor = ROLE_ACCENT[user.role];
-  const roleLabel = t(`roles.${user.role}`);
+  const roleLabel = user.isSuperAdmin ? t('roles.super_admin') : t(`roles.${user.role}`);
 
   const handleLogout = async () => {
     try { await logout(); } catch { /* ignore */ }

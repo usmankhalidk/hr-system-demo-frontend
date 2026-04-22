@@ -37,6 +37,7 @@ export interface LeaveRequest {
   updatedAt: string;
   userName?: string;
   userSurname?: string;
+  userRole?: string;
   userAvatarFilename?: string | null;
   storeName?: string | null;
   storeLogoFilename?: string | null;

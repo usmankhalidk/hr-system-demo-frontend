@@ -24,6 +24,7 @@ export function translateApiError(
       data?: {
         code?: string;
         message?: string;
+        error?: string;
         errors?: Record<string, string[] | string>;
       };
       status?: number;
@@ -72,9 +73,11 @@ export function translateApiError(
       if (errorMessages) return errorMessages;
     }
 
-    if (data?.message && typeof data.message === 'string') {
-      return data.message;
-    }
+  }
+  
+  const apiMsg = data?.message || data?.error;
+  if (apiMsg && typeof apiMsg === 'string') {
+    return apiMsg;
   }
 
   return fallback ?? (t as (key: string) => string)('errors.DEFAULT');
