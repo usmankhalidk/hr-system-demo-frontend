@@ -220,7 +220,7 @@ export function EmployeeList() {
     {
       key: 'role',
       label: t('employees.colRole'),
-      render: (row) => <Badge variant={ROLE_BADGE_VARIANT[row.role]}>{tRole(row.role)}</Badge>,
+      render: (row) => <Badge variant={ROLE_BADGE_VARIANT[row.role]}>{row.isSuperAdmin ? t('roles.super_admin') : tRole(row.role)}</Badge>,
     },
     ...(showCompanyColumn ? [{
       key: 'companyName' as keyof Employee,

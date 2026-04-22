@@ -728,7 +728,7 @@ export function EmployeeDetail() {
   const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
   const shiftMonthToken = useMemo(() => formatMonthToken(shiftMonthCursor), [shiftMonthCursor]);
 
-  const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
+  const tRole = (roleKey: string, isSuper?: boolean) => isSuper ? t('roles.super_admin') : (t as (k: string) => string)(`roles.${roleKey}`);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -987,7 +987,7 @@ export function EmployeeDetail() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <Badge variant={ROLE_BADGE_VARIANT[item.role]}>{tRole(item.role)}</Badge>
+          <Badge variant={ROLE_BADGE_VARIANT[item.role]}>{tRole(item.role, item.isSuperAdmin)}</Badge>
           <Badge variant={item.status === 'active' ? 'success' : 'danger'}>
             {item.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
           </Badge>
@@ -1170,7 +1170,7 @@ export function EmployeeDetail() {
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>
-              {tRole(employee.role)}
+              {tRole(employee.role, employee.isSuperAdmin)}
             </Badge>
             <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
               {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
@@ -1283,7 +1283,7 @@ export function EmployeeDetail() {
               : '—'
           } />
           <InfoRow label={t('common.role')} value={
-            <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{tRole(employee.role)}</Badge>
+            <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{tRole(employee.role, employee.isSuperAdmin)}</Badge>
           } />
           <InfoRow label={t('common.status')} value={
             <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>

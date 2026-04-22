@@ -36,7 +36,7 @@ export default function ApprovalConfigPanel() {
     setError(null);
     try {
       const data = await getApprovalConfig(companyId ?? undefined);
-      setLevels(data);
+      setLevels(data.map(l => l.role === 'admin' ? { ...l, enabled: true } : l));
     } catch {
       setError(t('common.error'));
     } finally {
@@ -66,11 +66,11 @@ export default function ApprovalConfigPanel() {
     try {
       const payload = levels.map((l) => ({
         role: l.role,
-        enabled: l.enabled,
+        enabled: l.role === 'admin' ? true : l.enabled,
         sort_order: l.sortOrder,
       }));
       const updated = await updateApprovalConfig(companyId, payload);
-      setLevels(updated);
+      setLevels(updated.map(l => l.role === 'admin' ? { ...l, enabled: true } : l));
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -120,14 +120,16 @@ export default function ApprovalConfigPanel() {
 
         {/* Levels */}
         <div style={{ padding: '12px 20px' }}>
-          {levels.map((level, idx) => {
+          {levels
+            .filter((l) => l.role !== 'admin')
+            .map((level, idx, arr) => {
             const color = ROLE_COLORS[level.role] ?? '#64748b';
             const label = ROLE_LABELS[level.role]?.[lang] ?? level.role;
             return (
               <div key={level.role} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 padding: '12px 0',
-                borderBottom: idx < levels.length - 1 ? '1px solid var(--border-light)' : 'none',
+                borderBottom: idx < arr.length - 1 ? '1px solid var(--border-light)' : 'none',
                 opacity: level.enabled ? 1 : 0.5,
                 transition: 'opacity 0.2s',
               }}>
