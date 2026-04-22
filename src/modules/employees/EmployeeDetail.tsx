@@ -27,7 +27,7 @@ import { DatePicker } from '../../components/ui/DatePicker';
 import { EmployeeForm } from './EmployeeForm';
 import { MessageBoard } from '../messages/MessageBoard';
 import { ComposeMessage } from '../messages/ComposeMessage';
-import { getEmployeeTasks, assignTasks, OnboardingProgress } from '../../api/onboarding';
+import { getEmployeeTasks, assignTasks, getTemplates, createTemplate, OnboardingProgress, OnboardingTemplate } from '../../api/onboarding';
 import { DocumentManager } from '../documents/components/DocumentManager';
 import MonthlyCalendar from '../shifts/MonthlyCalendar';
 import { Shift, listShifts } from '../../api/shifts';
@@ -44,6 +44,35 @@ const ROLE_BADGE_VARIANT: Record<UserRole, 'accent' | 'primary' | 'info' | 'succ
 };
 
 const AVATAR_PALETTE = ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'];
+const ONBOARDING_PHASE_META: Record<'day1' | 'week1' | 'month1' | 'ongoing', { icon: string; label: string }> = {
+  day1: { icon: '🚀', label: 'Day 1 Essentials' },
+  week1: { icon: '📚', label: 'First Week' },
+  month1: { icon: '🎯', label: 'First Month' },
+  ongoing: { icon: '⭐', label: 'Ongoing' },
+};
+const ONBOARDING_CATEGORY_META: Record<OnboardingTemplate['category'], { icon: string; label: string }> = {
+  profile_setup: { icon: '👤', label: 'Profile & Setup' },
+  hr_compliance: { icon: '📄', label: 'HR & Compliance' },
+  system_access: { icon: '🔐', label: 'System Access' },
+  training: { icon: '🎓', label: 'Training' },
+  operations: { icon: '⚙️', label: 'Operations' },
+  scheduling_shifts: { icon: '🕒', label: 'Scheduling & Shifts' },
+  performance: { icon: '📊', label: 'Performance' },
+  communication: { icon: '💬', label: 'Communication' },
+  it_tools: { icon: '💻', label: 'IT & Tools' },
+  inventory: { icon: '📦', label: 'Inventory' },
+  customer_service: { icon: '🛍️', label: 'Customer Service' },
+  finance_payroll: { icon: '💰', label: 'Finance & Payroll' },
+  hr_docs: { icon: '📄', label: 'HR Docs' },
+  it_setup: { icon: '💻', label: 'IT Setup' },
+  meeting: { icon: '🤝', label: 'Meeting' },
+  other: { icon: '🧩', label: 'Other' },
+};
+const ONBOARDING_PRIORITY_COLORS: Record<'high' | 'medium' | 'low', string> = {
+  high: '#DC2626',
+  medium: '#D97706',
+  low: '#0EA5E9',
+};
 function getAvatarColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -176,33 +205,69 @@ function SectionPanel({
 }
 
 // ── Onboarding Section ─────────────────────────────────────────────────────────
-function OnboardingSection({ employeeId, isAdminOrHr }: { employeeId: number; isAdminOrHr: boolean }) {
+function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName, employeeName, isAdminOrHr }: { employeeId: number; employeeCompanyId: number | null; employeeCompanyName: string | null; employeeName: string; isAdminOrHr: boolean }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [templates, setTemplates] = useState<OnboardingTemplate[]>([]);
+  const [templateMetaById, setTemplateMetaById] = useState<Map<number, OnboardingTemplate>>(new Map());
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<number>>(new Set());
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    description: '',
+    taskType: 'day1' as OnboardingTemplate['taskType'],
+    category: 'other' as OnboardingTemplate['category'],
+    priority: 'medium' as OnboardingTemplate['priority'],
+    sortOrder: 0,
+    dueDays: '' as string,
+    linkUrl: '',
+  });
 
   const load = React.useCallback(async () => {
     setLoading(true);
-    try { setProgress(await getEmployeeTasks(employeeId)); }
+    try {
+      const taskProgress = await getEmployeeTasks(employeeId);
+      setProgress(taskProgress);
+      if (employeeCompanyId) {
+        const rows = await getTemplates(false, employeeCompanyId);
+        setTemplateMetaById(new Map(rows.map((row) => [row.id, row])));
+      }
+    }
     catch { /* silently fail — onboarding may not be configured */ }
     finally { setLoading(false); }
-  }, [employeeId]);
+  }, [employeeId, employeeCompanyId]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAssign = async () => {
+  const openAssignModal = async () => {
+    if (!employeeCompanyId) return;
+    setAssignModalOpen(true);
+    setTemplatesLoading(true);
+    try {
+      const rows = await getTemplates(false, employeeCompanyId);
+      setTemplates(rows);
+      const assignedIds = new Set((progress?.tasks ?? []).map((task) => task.templateId));
+      setSelectedTemplateIds(assignedIds);
+    } catch {
+      setTemplates([]);
+      setSelectedTemplateIds(new Set());
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const handleAssignSelected = async () => {
     setAssigning(true);
     try {
-      const result = await assignTasks(employeeId);
-      if (result.assigned > 0) {
-        showToast(t('onboarding.assignedSuccess', { count: result.assigned }), 'success');
-      } else if (!progress || progress.total === 0) {
-        showToast(t('onboarding.noTemplatesToAssign'), 'warning');
-      } else {
-        showToast(t('onboarding.noNewTasksToAssign'), 'info');
-      }
+      await assignTasks(employeeId, Array.from(selectedTemplateIds));
+      showToast(t('onboarding.assignedSuccess', { count: selectedTemplateIds.size }), 'success');
+      setAssignModalOpen(false);
       await load();
     } catch (err: unknown) {
       const message = translateApiError(err, t, t('onboarding.errorSave')) ?? t('onboarding.errorSave');
@@ -212,12 +277,83 @@ function OnboardingSection({ employeeId, isAdminOrHr }: { employeeId: number; is
     }
   };
 
+  const handleCreateTemplate = async () => {
+    if (!employeeCompanyId) return;
+    if (!createForm.name.trim()) {
+      showToast(t('onboarding.errorSave', 'Please provide a task name'), 'warning');
+      return;
+    }
+    setCreatingTemplate(true);
+    try {
+      await createTemplate({
+        companyId: employeeCompanyId,
+        name: createForm.name.trim(),
+        description: createForm.description.trim() || undefined,
+        taskType: createForm.taskType,
+        category: createForm.category,
+        priority: createForm.priority,
+        sortOrder: Number.isFinite(createForm.sortOrder) ? createForm.sortOrder : 0,
+        dueDays: createForm.dueDays.trim() === '' ? null : Number(createForm.dueDays),
+        linkUrl: createForm.linkUrl.trim() || null,
+      });
+      showToast(t('onboarding.templateCreated', 'Task template created'), 'success');
+      setCreateModalOpen(false);
+      setCreateForm({
+        name: '',
+        description: '',
+        taskType: 'day1',
+        category: 'other',
+        priority: 'medium',
+        sortOrder: 0,
+        dueDays: '',
+        linkUrl: '',
+      });
+      await load();
+    } catch (err: unknown) {
+      const message = translateApiError(err, t, t('onboarding.errorSave')) ?? t('onboarding.errorSave');
+      showToast(message, 'error');
+    } finally {
+      setCreatingTemplate(false);
+    }
+  };
+
   const pct = progress && progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
-  const hasTasks = !!progress && progress.total > 0;
-  const headerAction = isAdminOrHr && hasTasks ? (
-    <Button size="sm" loading={assigning} onClick={handleAssign}>
-      {t('onboarding.assignTasks')}
-    </Button>
+  const tasksByPhase = useMemo(() => {
+    const map = new Map<'day1' | 'week1' | 'month1' | 'ongoing', OnboardingProgress['tasks']>();
+    map.set('day1', []);
+    map.set('week1', []);
+    map.set('month1', []);
+    map.set('ongoing', []);
+    (progress?.tasks ?? []).forEach((task) => {
+      const key = task.templateTaskType ?? 'ongoing';
+      if (!map.has(key)) map.set('ongoing', []);
+      map.get(key)!.push(task);
+    });
+    return map;
+  }, [progress]);
+
+  const templatesByPhase = useMemo(() => {
+    const map = new Map<'day1' | 'week1' | 'month1' | 'ongoing', OnboardingTemplate[]>();
+    map.set('day1', []);
+    map.set('week1', []);
+    map.set('month1', []);
+    map.set('ongoing', []);
+    templates.forEach((template) => {
+      const key = (template.taskType ?? 'ongoing') as 'day1' | 'week1' | 'month1' | 'ongoing';
+      map.get(key)?.push(template);
+    });
+    return map;
+  }, [templates]);
+
+  const headerAction = isAdminOrHr ? (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <Button size="sm" variant="secondary" onClick={() => setCreateModalOpen(true)}>
+        {t('onboarding.newTask', 'New task')}
+      </Button>
+      <Button size="sm" loading={assigning} onClick={openAssignModal}>
+        {t('onboarding.assignTasks')}
+      </Button>
+    </div>
   ) : undefined;
 
   return (
@@ -261,7 +397,7 @@ function OnboardingSection({ employeeId, isAdminOrHr }: { employeeId: number; is
             {isAdminOrHr ? t('onboarding.noTasksAssignedHintAdmin') : t('onboarding.noTasksAssignedHintEmployee')}
           </span>
           {isAdminOrHr && (
-            <Button size="sm" variant="accent" loading={assigning} onClick={handleAssign}>
+            <Button size="sm" variant="accent" loading={assigning} onClick={openAssignModal}>
               {t('onboarding.assignTasks')}
             </Button>
           )}
@@ -276,23 +412,210 @@ function OnboardingSection({ employeeId, isAdminOrHr }: { employeeId: number; is
               {progress.completed}/{progress.total} ({pct}%)
             </span>
           </div>
-          {progress.tasks.map((task, i) => (
-            <div key={task.id} style={{ padding: '9px 0', borderBottom: i < progress.tasks.length - 1 ? '1px solid var(--border-light)' : 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: task.completed ? 'rgba(21,128,61,0.12)' : 'var(--background)', border: `2px solid ${task.completed ? '#15803D' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {task.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-              </span>
-              <span style={{ fontSize: 13, color: task.completed ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.completed ? 'line-through' : 'none', flex: 1 }}>
-                {task.templateName}
-              </span>
-              {task.completedAt && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {new Date(task.completedAt).toLocaleDateString('it-IT')}
-                </span>
-              )}
-            </div>
-          ))}
+          {(['day1', 'week1', 'month1', 'ongoing'] as const).map((phase) => {
+            const phaseTasks = tasksByPhase.get(phase) ?? [];
+            if (phaseTasks.length === 0) return null;
+            return (
+              <div key={phase} style={{ marginTop: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    {phase === 'day1' ? '🚀 Day 1' : phase === 'week1' ? '📚 Week 1' : phase === 'month1' ? '🎯 Month 1' : '⭐ Ongoing'}
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{phaseTasks.length}</span>
+                </div>
+                <div style={{ display: 'grid', gap: 7 }}>
+                  {phaseTasks.map((task) => (
+                    <div key={task.id} style={{ padding: '9px 10px', border: '1px solid var(--border-light)', borderRadius: 8, background: 'var(--surface-warm)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: task.completed ? 'rgba(21,128,61,0.12)' : 'var(--background)', border: `2px solid ${task.completed ? '#15803D' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {task.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, color: task.completed ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.completed ? 'line-through' : 'none' }}>
+                            {task.templateName}
+                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: ONBOARDING_PRIORITY_COLORS[task.templatePriority] ?? 'var(--text-muted)', textTransform: 'uppercase' }}>{task.templatePriority}</span>
+                          <Badge variant={task.completed ? 'success' : 'warning'}>
+                            {task.completed ? t('onboarding.statusComplete', 'Complete') : t('onboarding.statusInProgress', 'In progress')}
+                          </Badge>
+                        </div>
+                        {task.templateDescription && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{task.templateDescription}</div>
+                        )}
+                        <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                            {ONBOARDING_CATEGORY_META[task.templateCategory]?.icon} {ONBOARDING_CATEGORY_META[task.templateCategory]?.label ?? task.templateCategory}
+                          </span>
+                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                            {ONBOARDING_PHASE_META[task.templateTaskType]?.icon} {ONBOARDING_PHASE_META[task.templateTaskType]?.label ?? task.templateTaskType}
+                          </span>
+                          {templateMetaById.get(task.templateId)?.createdByName && (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span>{t('common.createdBy', 'Created by')}:</span>
+                              <span style={{ width: 16, height: 16, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 700 }}>
+                                {templateMetaById.get(task.templateId)?.createdByAvatarFilename
+                                  ? <img src={getAvatarUrl(templateMetaById.get(task.templateId)?.createdByAvatarFilename ?? '') ?? ''} alt={templateMetaById.get(task.templateId)?.createdByName ?? 'user'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : (templateMetaById.get(task.templateId)?.createdByName ?? '?').slice(0, 1).toUpperCase()}
+                              </span>
+                              <span>{templateMetaById.get(task.templateId)?.createdByName}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
+      <Modal
+        open={assignModalOpen}
+        onClose={() => setAssignModalOpen(false)}
+        title={t('onboarding.assignTasks')}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setAssignModalOpen(false)}>{t('common.cancel')}</Button>
+            <Button loading={assigning || templatesLoading} disabled={selectedTemplateIds.size === 0} onClick={handleAssignSelected}>
+              {t('onboarding.assignConfirm', 'Assign')}
+            </Button>
+          </>
+        )}
+      >
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {employeeName} {employeeCompanyId ? `• #${employeeCompanyId}` : ''}
+          </div>
+          {templatesLoading ? (
+            <div style={{ padding: '18px 0', textAlign: 'center' }}><Spinner size="sm" /></div>
+          ) : (
+            <div style={{ maxHeight: 360, overflowY: 'auto', display: 'grid', gap: 12 }}>
+              {(['day1', 'week1', 'month1', 'ongoing'] as const).map((phase) => {
+                const phaseTemplates = templatesByPhase.get(phase) ?? [];
+                if (phaseTemplates.length === 0) return null;
+                return (
+                  <div key={phase}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      {phase === 'day1' ? '🚀 Day 1' : phase === 'week1' ? '📚 Week 1' : phase === 'month1' ? '🎯 Month 1' : '⭐ Ongoing'}
+                    </div>
+                    <div style={{ display: 'grid', gap: 7 }}>
+                      {phaseTemplates.map((template) => (
+                        <label key={template.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, border: '1px solid var(--border-light)', borderRadius: 8, background: 'var(--surface-warm)', padding: '8px 10px' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedTemplateIds.has(template.id)}
+                            onChange={() => setSelectedTemplateIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(template.id)) next.delete(template.id); else next.add(template.id);
+                              return next;
+                            })}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span>{template.name}</span>
+                              <span style={{ fontSize: 10, color: ONBOARDING_PRIORITY_COLORS[template.priority] ?? 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>{template.priority}</span>
+                            </div>
+                            {template.description && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{template.description}</div>
+                            )}
+                            <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                                {ONBOARDING_CATEGORY_META[template.category]?.icon} {ONBOARDING_CATEGORY_META[template.category]?.label ?? template.category}
+                              </span>
+                              <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                                {ONBOARDING_PHASE_META[template.taskType]?.icon} {ONBOARDING_PHASE_META[template.taskType]?.label ?? template.taskType}
+                              </span>
+                              {template.createdByName && (
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <span>{t('common.createdBy', 'Created by')}:</span>
+                                  <span style={{ width: 16, height: 16, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 700 }}>
+                                    {template.createdByAvatarFilename
+                                      ? <img src={getAvatarUrl(template.createdByAvatarFilename) ?? ''} alt={template.createdByName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      : template.createdByName.slice(0, 1).toUpperCase()}
+                                  </span>
+                                  <span>{template.createdByName}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Modal>
+      <Modal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        title={t('onboarding.newTask', 'New task')}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setCreateModalOpen(false)}>{t('common.cancel')}</Button>
+            <Button loading={creatingTemplate} onClick={handleCreateTemplate}>
+              {t('common.create', 'Create')}
+            </Button>
+          </>
+        )}
+      >
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {employeeCompanyName ?? t('common.company', 'Company')} {employeeCompanyId ? `• #${employeeCompanyId}` : ''}
+          </div>
+          <input
+            value={createForm.name}
+            onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
+            placeholder={t('onboarding.taskName', 'Task name')}
+            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+          />
+          <textarea
+            value={createForm.description}
+            onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
+            placeholder={t('onboarding.description', 'Description')}
+            rows={3}
+            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, resize: 'vertical', boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <select value={createForm.taskType} onChange={(e) => setCreateForm((prev) => ({ ...prev, taskType: e.target.value as OnboardingTemplate['taskType'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
+              {Object.entries(ONBOARDING_PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+            </select>
+            <select value={createForm.priority} onChange={(e) => setCreateForm((prev) => ({ ...prev, priority: e.target.value as OnboardingTemplate['priority'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
+              <option value="high">{t('onboarding.priorityHigh', 'High')}</option>
+              <option value="medium">{t('onboarding.priorityMedium', 'Medium')}</option>
+              <option value="low">{t('onboarding.priorityLow', 'Low')}</option>
+            </select>
+          </div>
+          <select value={createForm.category} onChange={(e) => setCreateForm((prev) => ({ ...prev, category: e.target.value as OnboardingTemplate['category'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
+            {Object.entries(ONBOARDING_CATEGORY_META).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+          </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <input
+              type="number"
+              value={createForm.sortOrder}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, sortOrder: Number(e.target.value) }))}
+              placeholder={t('onboarding.sortOrder', 'Sort order')}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+            />
+            <input
+              type="number"
+              value={createForm.dueDays}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, dueDays: e.target.value }))}
+              placeholder={t('onboarding.dueDays', 'Due days')}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+            />
+          </div>
+          <input
+            value={createForm.linkUrl}
+            onChange={(e) => setCreateForm((prev) => ({ ...prev, linkUrl: e.target.value }))}
+            placeholder={t('onboarding.linkUrl', 'Reference link (optional)')}
+            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+          />
+        </div>
+      </Modal>
     </SectionPanel>
   );
 }
@@ -1289,7 +1612,13 @@ export function EmployeeDetail() {
       {/* Onboarding Tasks */}
       {activeTab === 'tasks' && (isAdminOrHr || isOwnProfile) && employeeId && (
         <div style={{ marginTop: 20 }}>
-          <OnboardingSection employeeId={employeeId} isAdminOrHr={isAdminOrHr} />
+          <OnboardingSection
+            employeeId={employeeId}
+            employeeCompanyId={employee.companyId}
+            employeeCompanyName={employee.companyName ?? null}
+            employeeName={fullName}
+            isAdminOrHr={isAdminOrHr}
+          />
         </div>
       )}
 

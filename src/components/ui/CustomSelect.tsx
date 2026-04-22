@@ -21,6 +21,7 @@ interface CustomSelectProps {
   searchPlaceholder?: string;
   noOptionsMessage?: string;
   menuMaxHeight?: number;
+  controlMinHeight?: number;
 }
 
 export default function CustomSelect({
@@ -36,6 +37,7 @@ export default function CustomSelect({
   searchPlaceholder = 'Search...',
   noOptionsMessage = 'No options found',
   menuMaxHeight = 280,
+  controlMinHeight = 40,
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -77,7 +79,7 @@ export default function CustomSelect({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         style={{
           width: '100%',
-          minHeight: 40,
+          minHeight: controlMinHeight,
           background: disabled
             ? 'var(--background-muted)'
             : (highlightSelected && selectedOption ? 'rgba(201,151,58,0.14)' : '#ffffff'),
