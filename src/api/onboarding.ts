@@ -7,14 +7,35 @@ import apiClient from './client';
 export interface OnboardingTemplate {
   id: number;
   companyId: number;
+  companyName?: string;
   name: string;
   description: string | null;
+  taskType: 'day1' | 'week1' | 'month1' | 'ongoing';
   sortOrder: number;
   isActive: boolean;
-  category: 'hr_docs' | 'it_setup' | 'training' | 'meeting' | 'other';
+  category:
+    | 'profile_setup'
+    | 'hr_compliance'
+    | 'system_access'
+    | 'training'
+    | 'operations'
+    | 'scheduling_shifts'
+    | 'performance'
+    | 'communication'
+    | 'it_tools'
+    | 'inventory'
+    | 'customer_service'
+    | 'finance_payroll'
+    | 'hr_docs'
+    | 'it_setup'
+    | 'meeting'
+    | 'other';
   dueDays: number | null;
   linkUrl: string | null;
   priority: 'high' | 'medium' | 'low';
+  createdByUserId: number | null;
+  createdByName: string | null;
+  createdByAvatarFilename: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,7 +46,8 @@ export interface OnboardingTask {
   templateId: number;
   templateName: string;
   templateDescription: string | null;
-  templateCategory: 'hr_docs' | 'it_setup' | 'training' | 'meeting' | 'other';
+  templateTaskType: 'day1' | 'week1' | 'month1' | 'ongoing';
+  templateCategory: OnboardingTemplate['category'];
   templateLinkUrl: string | null;
   templatePriority: 'high' | 'medium' | 'low';
   completed: boolean;
@@ -79,6 +101,7 @@ export async function createTemplate(payload: {
   companyId?: number;
   name: string;
   description?: string;
+  taskType?: OnboardingTemplate['taskType'];
   sortOrder?: number;
   category?: OnboardingTemplate['category'];
   dueDays?: number | null;
@@ -89,6 +112,7 @@ export async function createTemplate(payload: {
     company_id: payload.companyId,
     name: payload.name,
     description: payload.description ?? null,
+    task_type: payload.taskType ?? 'day1',
     sort_order: payload.sortOrder ?? 0,
     category: payload.category ?? 'other',
     due_days: payload.dueDays ?? null,
@@ -104,6 +128,7 @@ export async function updateTemplate(
     targetCompanyId?: number;
     name?: string;
     description?: string;
+    taskType?: OnboardingTemplate['taskType'];
     sortOrder?: number;
     isActive?: boolean;
     category?: OnboardingTemplate['category'];
@@ -115,6 +140,7 @@ export async function updateTemplate(
   const body: Record<string, unknown> = {};
   if (payload.name !== undefined)        body.name = payload.name;
   if (payload.description !== undefined) body.description = payload.description;
+  if (payload.taskType !== undefined)    body.task_type = payload.taskType;
   if (payload.sortOrder !== undefined)   body.sort_order = payload.sortOrder;
   if (payload.isActive !== undefined)    body.is_active = payload.isActive;
   if (payload.category !== undefined)    body.category = payload.category;

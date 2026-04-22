@@ -8,6 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import { translateApiError } from '../../utils/apiErrors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { getAvatarUrl, getCompanyLogoUrl } from '../../api/client';
 import { getCompanies } from '../../api/companies';
@@ -17,7 +18,7 @@ import type { Company, Store, Employee } from '../../types';
 import {
   getTemplates, createTemplate, updateTemplate, deleteTemplate,
   getEmployeeTasks, assignTasks, completeTask, uncompleteTask,
-  getOnboardingOverview, getOnboardingStats, bulkAssignAll, sendReminder,
+  getOnboardingOverview, getOnboardingStats, sendReminder,
   OnboardingTemplate, OnboardingTask, OnboardingProgress, EmployeeOnboardingOverview, OnboardingStats,
 } from '../../api/onboarding';
 
@@ -34,6 +35,14 @@ function getPhase(sortOrder: number): Phase {
   return 'ongoing';
 }
 
+function getTemplatePhase(template: Pick<OnboardingTemplate, 'taskType' | 'sortOrder'>): Phase {
+  return template.taskType ?? getPhase(template.sortOrder);
+}
+
+function getTaskPhase(task: Pick<OnboardingTask, 'templateTaskType'>, index: number): Phase {
+  return task.templateTaskType ?? getPhase(index + 1);
+}
+
 const PHASE_META: Record<Phase, { icon: string; color: string; bg: string; border: string; labelKey: string; subKey: string }> = {
   day1:    { icon: '🚀', color: '#0284C7', bg: 'rgba(2,132,199,0.08)',   border: 'rgba(2,132,199,0.2)',   labelKey: 'onboarding.phaseDay1Label',    subKey: 'onboarding.phaseDay1Sub' },
   week1:   { icon: '📚', color: '#7C3AED', bg: 'rgba(124,58,237,0.08)', border: 'rgba(124,58,237,0.2)', labelKey: 'onboarding.phaseWeek1Label',   subKey: 'onboarding.phaseWeek1Sub' },
@@ -41,12 +50,23 @@ const PHASE_META: Record<Phase, { icon: string; color: string; bg: string; borde
   ongoing: { icon: '⭐', color: '#15803D', bg: 'rgba(21,128,61,0.08)',  border: 'rgba(21,128,61,0.2)',  labelKey: 'onboarding.phaseOngoingLabel', subKey: 'onboarding.phaseOngoingSub' },
 };
 
-const CATEGORY_ICONS: Record<string, string> = {
-  hr_docs: '📄',
-  it_setup: '💻',
-  training: '🎓',
-  meeting: '🤝',
-  other: '📌',
+const CATEGORY_META: Record<OnboardingTemplate['category'], { icon: string; label: string }> = {
+  profile_setup: { icon: '👤', label: 'Profile & Setup' },
+  hr_compliance: { icon: '📄', label: 'HR & Compliance' },
+  system_access: { icon: '🔐', label: 'System Access' },
+  training: { icon: '🎓', label: 'Training' },
+  operations: { icon: '⚙️', label: 'Operations' },
+  scheduling_shifts: { icon: '🕒', label: 'Scheduling & Shifts' },
+  performance: { icon: '📊', label: 'Performance' },
+  communication: { icon: '💬', label: 'Communication' },
+  it_tools: { icon: '💻', label: 'IT & Tools' },
+  inventory: { icon: '📦', label: 'Inventory' },
+  customer_service: { icon: '🛍️', label: 'Customer Service' },
+  finance_payroll: { icon: '💰', label: 'Finance & Payroll' },
+  hr_docs: { icon: '📄', label: 'HR Documents' },
+  it_setup: { icon: '💻', label: 'IT Setup' },
+  meeting: { icon: '🤝', label: 'Meeting' },
+  other: { icon: '📌', label: 'Other' },
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -54,6 +74,10 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: '#D97706',
   low: '#6B7280',
 };
+
+function getCategoryMeta(category: OnboardingTemplate['category'] | OnboardingTask['templateCategory']) {
+  return CATEGORY_META[category] ?? CATEGORY_META.other;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -241,7 +265,7 @@ const AssignModal: React.FC<{
   };
 
   const grouped = PHASE_ORDER.reduce((acc, phase) => {
-    acc[phase] = templates.filter((tmpl) => getPhase(tmpl.sortOrder) === phase);
+    acc[phase] = templates.filter((tmpl) => getTemplatePhase(tmpl) === phase);
     return acc;
   }, {} as Record<Phase, OnboardingTemplate[]>);
 
@@ -295,7 +319,7 @@ const AssignModal: React.FC<{
                           onChange={() => !isAssigned && toggle(tmpl.id)}
                           style={{ width: 16, height: 16, accentColor: 'var(--accent)', flexShrink: 0 }}
                         />
-                        <span style={{ fontSize: 18 }}>{CATEGORY_ICONS[tmpl.category] ?? '📌'}</span>
+                        <span style={{ fontSize: 18 }}>{getCategoryMeta(tmpl.category).icon}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                             {tmpl.name}
@@ -355,6 +379,7 @@ const TemplatesPanel: React.FC = () => {
     companyId: '',
     name: '',
     description: '',
+    taskType: 'day1' as Phase,
     sortOrder: '1',
     category: 'other' as OnboardingTemplate['category'],
     dueDays: '',
@@ -427,6 +452,84 @@ const TemplatesPanel: React.FC = () => {
       return haystack.includes(q);
     });
   }, [assignEmployees, assignEmployeeQuery]);
+
+  const companySelectOptions = useMemo<SelectOption[]>(() => (
+    companies.map((company) => {
+      const logoUrl = getCompanyLogoUrl(company.logoFilename);
+      const ownerLabel = company.ownerName
+        ? `${company.ownerName}${company.ownerSurname ? ` ${company.ownerSurname}` : ''}`
+        : t('companies.ownerMissing', 'No owner assigned');
+      return {
+        value: String(company.id),
+        label: company.name,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {logoUrl ? (
+                <img src={logoUrl} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)' }}>{company.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {company.name}
+              </span>
+              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {(company.groupName || t('common.none', 'None'))} • {ownerLabel} • {(company.storeCount ?? 0)} {t('employees.storesLabel', 'Stores')}
+              </span>
+            </span>
+          </div>
+        ),
+      };
+    })
+  ), [companies, t]);
+
+  const taskCompanyFilterOptions = useMemo<SelectOption[]>(() => (
+    companies.map((company) => {
+      const logoUrl = getCompanyLogoUrl(company.logoFilename);
+      return {
+        value: String(company.id),
+        label: company.name,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ width: 26, height: 26, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {logoUrl ? (
+                <img src={logoUrl} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--primary)' }}>{company.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {company.name}
+              </span>
+              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {company.groupName || t('common.none', 'None')}
+              </span>
+              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')} • ${company.employeeCount ?? 0} ${t('employees.title', 'Employees')}`}
+              </span>
+            </span>
+          </div>
+        ),
+      };
+    })
+  ), [companies, t]);
+
+  const categorySelectOptions = useMemo<SelectOption[]>(() => (
+    (Object.entries(CATEGORY_META) as Array<[OnboardingTemplate['category'], { icon: string; label: string }]>)
+      .map(([value, meta]) => ({
+        value,
+        label: meta.label,
+        render: (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>{meta.icon}</span>
+            <span>{meta.label}</span>
+          </span>
+        ),
+      }))
+  ), []);
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -528,6 +631,7 @@ const TemplatesPanel: React.FC = () => {
       companyId: companyFilter !== 'all' ? companyFilter : '',
       name: '',
       description: '',
+      taskType: 'day1',
       sortOrder: String(nextOrder),
       category: 'other',
       dueDays: '',
@@ -543,6 +647,7 @@ const TemplatesPanel: React.FC = () => {
       companyId: String(tmpl.companyId),
       name: tmpl.name,
       description: tmpl.description ?? '',
+      taskType: tmpl.taskType,
       sortOrder: String(tmpl.sortOrder),
       category: tmpl.category,
       dueDays: tmpl.dueDays != null ? String(tmpl.dueDays) : '',
@@ -568,6 +673,7 @@ const TemplatesPanel: React.FC = () => {
         companyId: parsedCompanyId,
         name: form.name.trim(),
         description: form.description.trim() || undefined,
+        taskType: form.taskType,
         sortOrder: parseInt(form.sortOrder, 10) || 1,
         category: form.category,
         dueDays: form.dueDays ? parseInt(form.dueDays, 10) : null,
@@ -682,7 +788,7 @@ const TemplatesPanel: React.FC = () => {
   const grouped = useMemo(() => {
     const map = new Map<Phase, OnboardingTemplate[]>();
     PHASE_ORDER.forEach((p) => map.set(p, []));
-    visible.forEach((t) => map.get(getPhase(t.sortOrder))!.push(t));
+    visible.forEach((template) => map.get(getTemplatePhase(template))!.push(template));
     return map;
   }, [visible]);
 
@@ -693,7 +799,7 @@ const TemplatesPanel: React.FC = () => {
     const map = new Map<Phase, OnboardingTemplate[]>();
     PHASE_ORDER.forEach((phase) => map.set(phase, []));
     assignTemplates.forEach((template) => {
-      map.get(getPhase(template.sortOrder))?.push(template);
+      map.get(getTemplatePhase(template))?.push(template);
     });
     return map;
   }, [assignTemplates]);
@@ -701,24 +807,15 @@ const TemplatesPanel: React.FC = () => {
   return (
     <div>
       {/* Header bar */}
-      <div style={{ display: 'flex', marginBottom: 16, alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 520px', minWidth: 300, flexWrap: 'wrap' }}>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('common.search')}
-            style={{ minWidth: 220, maxWidth: 280 }}
-          />
-          <select
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 180 }}
-          >
-            <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
-            {companies.map((company) => (
-              <option key={company.id} value={String(company.id)}>{company.name}</option>
-            ))}
-          </select>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 520px', minWidth: 280, flexWrap: 'wrap' }}>
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('common.search')}
+              style={{ minWidth: 220, maxWidth: 280 }}
+            />
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none', padding: '0 2px' }}>
             <input
               type="checkbox"
@@ -734,39 +831,59 @@ const TemplatesPanel: React.FC = () => {
             )}
           </label>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flex: '0 1 280px', minWidth: 220 }}>
+          <div style={{ width: 250 }}>
+            <CustomSelect
+              value={companyFilter}
+              onChange={(value) => setCompanyFilter(value ?? 'all')}
+              options={[
+                { value: 'all', label: `${t('common.all')} ${t('nav.companies', 'Companies')}` },
+                ...taskCompanyFilterOptions,
+              ]}
+              placeholder={`${t('common.all')} ${t('nav.companies', 'Companies')}`}
+              searchable
+              isClearable={false}
+              searchPlaceholder={t('common.search', 'Search...')}
+              noOptionsMessage={t('common.noData', 'No options found')}
+              menuMaxHeight={280}
+              controlMinHeight={40}
+            />
+          </div>
+        </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: '1 1 520px', minWidth: 280 }}>
+            {PHASE_ORDER.map((p) => {
+              const m = PHASE_META[p];
+              const count = grouped.get(p)?.length ?? 0;
+              return (
+                <div key={p} style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  background: count > 0 ? m.bg : 'transparent',
+                  border: `1px solid ${count > 0 ? m.border : 'var(--border)'}`,
+                  borderRadius: 99, padding: '4px 10px', fontSize: 12,
+                  color: count > 0 ? m.color : 'var(--text-muted)',
+                  fontWeight: count > 0 ? 600 : 400,
+                }}>
+                  <span>{m.icon}</span>
+                  <span>{t(m.labelKey)}</span>
+                  <span style={{ opacity: 0.7, fontWeight: 700 }}>{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flex: '1 1 420px', minWidth: 320, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {activeCount} {t('onboarding.activeTasksCount', 'active tasks')}
           </span>
-          <Button variant="primary" size="sm" onClick={() => setAssignDrawerOpen(true)}>
+          <Button variant="primary" size="sm" onClick={() => setAssignDrawerOpen(true)} style={{ minWidth: 130, height: 34, justifyContent: 'center' }}>
             <UserPlus size={14} /> {t('onboarding.assignTasks')}
           </Button>
-          <Button variant="primary" size="sm" onClick={openCreate}>
+          <Button variant="primary" size="sm" onClick={openCreate} style={{ minWidth: 130, height: 34, justifyContent: 'center' }}>
             + {t('onboarding.newTemplate', 'New Task')}
           </Button>
         </div>
       </div>
-
-      {/* Phase guide pills */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-        {PHASE_ORDER.map((p) => {
-          const m = PHASE_META[p];
-          const count = grouped.get(p)?.length ?? 0;
-          return (
-            <div key={p} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              background: count > 0 ? m.bg : 'transparent',
-              border: `1px solid ${count > 0 ? m.border : 'var(--border)'}`,
-              borderRadius: 99, padding: '4px 10px', fontSize: 12,
-              color: count > 0 ? m.color : 'var(--text-muted)',
-              fontWeight: count > 0 ? 600 : 400,
-            }}>
-              <span>{m.icon}</span>
-              <span>{t(m.labelKey)}</span>
-              <span style={{ opacity: 0.7, fontWeight: 700 }}>{count}</span>
-            </div>
-          );
-        })}
       </div>
 
       {loading ? (
@@ -805,7 +922,7 @@ const TemplatesPanel: React.FC = () => {
                     <div style={{ fontSize: 13, fontWeight: 700, color: meta.color, fontFamily: 'var(--font-display)' }}>{t(meta.labelKey)}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t(meta.subKey)}</div>
                   </div>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 8px' }}>{list.length}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: meta.color, background: 'var(--background)', border: `1px solid ${meta.border}`, borderRadius: 99, padding: '2px 8px', fontWeight: 700 }}>{list.length}</span>
                 </div>
 
                 {/* Task cards */}
@@ -846,18 +963,35 @@ const TemplatesPanel: React.FC = () => {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', textDecoration: tmpl.isActive ? 'none' : 'line-through' }}>{tmpl.name}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[tmpl.priority] ?? 'var(--text-muted)', textTransform: 'uppercase' }}>
+                            {t(`onboarding.priority${tmpl.priority === 'high' ? 'High' : tmpl.priority === 'medium' ? 'Medium' : 'Low'}`)}
+                          </span>
                           {!tmpl.isActive && (
                             <span style={{ fontSize: 10, background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 99, padding: '1px 6px', fontWeight: 600 }}>INACTIVE</span>
-                          )}
-                          {companyFilter === 'all' && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 7px' }}>
-                              <Building2 size={11} /> {companyMap.get(tmpl.companyId) ?? `#${tmpl.companyId}`}
-                            </span>
                           )}
                         </div>
                         {tmpl.description && (
                           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tmpl.description}</div>
                         )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', color: 'var(--text-secondary)', background: 'var(--background)' }}>
+                            {companyMap.get(tmpl.companyId) ?? `#${tmpl.companyId}`}
+                          </span>
+                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', color: 'var(--text-secondary)', background: 'var(--background)' }}>
+                            {getCategoryMeta(tmpl.category).icon} {getCategoryMeta(tmpl.category).label}
+                          </span>
+                          {tmpl.createdByName && (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span>{t('common.createdBy', 'Created by')}:</span>
+                              <span style={{ width: 16, height: 16, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 700 }}>
+                                {tmpl.createdByAvatarFilename
+                                  ? <img src={getAvatarUrl(tmpl.createdByAvatarFilename) ?? ''} alt={tmpl.createdByName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : tmpl.createdByName.slice(0, 1).toUpperCase()}
+                              </span>
+                              <span>{tmpl.createdByName}</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Actions */}
@@ -925,18 +1059,19 @@ const TemplatesPanel: React.FC = () => {
               <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
                 {t('nav.companies', 'Companies')} *
               </label>
-              <select
+              <CustomSelect
                 value={form.companyId}
+                onChange={(value) => setForm((f) => ({ ...f, companyId: value ?? '' }))}
+                options={companySelectOptions}
+                placeholder={t('employees.selectCompany', 'Select company')}
+                searchable
+                isClearable={false}
                 disabled={editing != null}
-                onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}
-                required
-              >
-                <option value="">{t('employees.selectCompany', 'Select company')}</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={String(company.id)}>{company.name}</option>
-                ))}
-              </select>
+                searchPlaceholder={t('common.search', 'Search...')}
+                noOptionsMessage={t('common.noData', 'No options found')}
+                menuMaxHeight={260}
+                controlMinHeight={40}
+              />
             </div>
             <Input
               label={`${t('onboarding.templateName', 'Task name')} *`}
@@ -954,25 +1089,42 @@ const TemplatesPanel: React.FC = () => {
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder={t('onboarding.templateDescPlaceholder', 'Optional instructions or details…')}
                 rows={3}
-                style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '8px 12px', fontSize: 13.5, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', color: 'var(--text-primary)', background: 'var(--background)' }}
+                style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '8px 12px', fontSize: 13.5, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', color: 'var(--text-primary)', background: 'var(--surface)' }}
               />
             </div>
             {/* Category */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
-                Category
+                {t('onboarding.taskType', 'Task type')}
               </label>
               <select
-                value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as OnboardingTemplate['category'] }))}
+                value={form.taskType}
+                onChange={(e) => setForm((f) => ({ ...f, taskType: e.target.value as Phase }))}
                 style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}
               >
-                <option value="hr_docs">{t('onboarding.categoryHrDocs', 'HR Documents')}</option>
-                <option value="it_setup">{t('onboarding.categoryItSetup', 'IT Setup')}</option>
-                <option value="training">{t('onboarding.categoryTraining', 'Training')}</option>
-                <option value="meeting">{t('onboarding.categoryMeeting', 'Meeting')}</option>
-                <option value="other">{t('onboarding.categoryOther', 'Other')}</option>
+                {PHASE_ORDER.map((phase) => (
+                  <option key={phase} value={phase}>{PHASE_META[phase].icon} {t(PHASE_META[phase].labelKey)}</option>
+                ))}
               </select>
+            </div>
+
+            {/* Category */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                Category
+              </label>
+              <CustomSelect
+                value={form.category}
+                onChange={(value) => setForm((f) => ({ ...f, category: (value as OnboardingTemplate['category']) ?? 'other' }))}
+                options={categorySelectOptions}
+                placeholder="Category"
+                searchable
+                isClearable={false}
+                searchPlaceholder={t('common.search', 'Search...')}
+                noOptionsMessage={t('common.noData', 'No options found')}
+                menuMaxHeight={260}
+                controlMinHeight={40}
+              />
             </div>
 
             {/* Priority */}
@@ -1018,23 +1170,12 @@ const TemplatesPanel: React.FC = () => {
               />
             </div>
 
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-              <div style={{ flex: '0 0 100px' }}>
-                <Input
-                  label={t('onboarding.sortOrder', 'Sort order')}
-                  type="number" min="1" value={form.sortOrder}
-                  onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
-                  hint={t('onboarding.sortOrderHint', 'Lower = shown first')}
-                />
-              </div>
-              <div style={{ flex: 1, padding: '8px 12px', background: 'var(--background)', borderRadius: 10, border: '1px solid var(--border)', fontSize: 12 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Phase: </span>
-                <span style={{ color: PHASE_META[getPhase(parseInt(form.sortOrder, 10) || 1)].color, fontWeight: 700 }}>
-                  {PHASE_META[getPhase(parseInt(form.sortOrder, 10) || 1)].icon}&nbsp;
-                  {t(PHASE_META[getPhase(parseInt(form.sortOrder, 10) || 1)].labelKey)}
-                </span>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>1–3 Day 1 · 4–7 Week 1 · 8–14 Month 1 · 15+ Ongoing</div>
-              </div>
+            <div>
+              <Input
+                label={t('onboarding.sortOrder', 'Sort order')}
+                type="number" min="1" value={form.sortOrder}
+                onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
+              />
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
               <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button>
@@ -1422,7 +1563,7 @@ const TemplatesPanel: React.FC = () => {
                               )}
                               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 5 }}>
                                 <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 6px', color: 'var(--text-muted)', background: 'var(--background)' }}>
-                                  {CATEGORY_ICONS[template.category] ?? '📌'} {t(`onboarding.category${template.category === 'hr_docs' ? 'HrDocs' : template.category === 'it_setup' ? 'ItSetup' : template.category === 'training' ? 'Training' : template.category === 'meeting' ? 'Meeting' : 'Other'}`)}
+                                  {getCategoryMeta(template.category).icon} {getCategoryMeta(template.category).label}
                                 </span>
                                 {template.dueDays != null && template.dueDays > 0 && (
                                   <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 6px', color: 'var(--text-muted)', background: 'var(--background)' }}>
@@ -1561,11 +1702,8 @@ const EmployeeDrawer: React.FC<{
     if (!progress) return new Map<Phase, OnboardingTask[]>();
     const map = new Map<Phase, OnboardingTask[]>();
     PHASE_ORDER.forEach((p) => map.set(p, []));
-    progress.tasks.forEach((task) => {
-      const tmpl = { sortOrder: 1 }; // We use task index as proxy since we don't have sortOrder here
-      // Find phase from task list position
-      const idx = progress.tasks.indexOf(task);
-      const phase = getPhase(idx + 1);
+    progress.tasks.forEach((task, idx) => {
+      const phase = getTaskPhase(task, idx);
       map.get(phase)!.push(task);
     });
     return map;
@@ -1767,7 +1905,13 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOnboardingOverview | null>(null);
   const [bulkAssigning, setBulkAssigning] = useState(false);
-  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
+  const [bulkCompanyId, setBulkCompanyId] = useState<string>('');
+  const [bulkEmployees, setBulkEmployees] = useState<Employee[]>([]);
+  const [bulkTemplates, setBulkTemplates] = useState<OnboardingTemplate[]>([]);
+  const [bulkSelectedEmployeeIds, setBulkSelectedEmployeeIds] = useState<Set<number>>(new Set());
+  const [bulkSelectedTemplateIds, setBulkSelectedTemplateIds] = useState<Set<number>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   useEffect(() => {
     getCompanies()
@@ -1792,10 +1936,17 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   }, [companyFilter]);
 
   const stores = useMemo(() => {
-    const map = new Map<number, { id: number; name: string; companyId: number }>();
+    const map = new Map<number, { id: number; name: string; companyId: number; companyName: string; employeeCount: number }>();
     overview.forEach((row) => {
       if (row.storeId && row.storeName) {
-        map.set(row.storeId, { id: row.storeId, name: row.storeName, companyId: row.companyId });
+        const existing = map.get(row.storeId);
+        map.set(row.storeId, {
+          id: row.storeId,
+          name: row.storeName,
+          companyId: row.companyId,
+          companyName: row.companyName,
+          employeeCount: (existing?.employeeCount ?? 0) + 1,
+        });
       }
     });
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -1820,17 +1971,56 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   }), [overview]);
 
   const handleBulkAssign = async () => {
-    setBulkConfirmOpen(false);
+    if (!bulkCompanyId || bulkSelectedEmployeeIds.size === 0 || bulkSelectedTemplateIds.size === 0) return;
     setBulkAssigning(true);
     try {
-      const targetCompanyId = companyFilter !== 'all' ? parseInt(companyFilter, 10) : undefined;
-      const result = await bulkAssignAll(targetCompanyId);
-      showToast(t('onboarding.bulkAssignDone', 'Tasks assigned to {{count}} employees', { count: result.employees }), 'success');
+      let totalAssignedEmployees = 0;
+      for (const employeeId of bulkSelectedEmployeeIds) {
+        const res = await assignTasks(employeeId, Array.from(bulkSelectedTemplateIds));
+        if (res.assigned > 0) totalAssignedEmployees += 1;
+      }
+      showToast(t('onboarding.bulkAssignDone', 'Tasks assigned to {{count}} employees', { count: totalAssignedEmployees }), 'success');
+      setBulkDrawerOpen(false);
       void load();
     } catch (err) {
       showToast(translateApiError(err, t, 'Error') ?? '', 'error');
     } finally { setBulkAssigning(false); }
   };
+
+  useEffect(() => {
+    if (!bulkDrawerOpen) return;
+    const preferredCompany = companyFilter !== 'all'
+      ? companyFilter
+      : (companies.length > 0 ? String(companies[0].id) : '');
+    setBulkCompanyId((prev) => prev || preferredCompany);
+  }, [bulkDrawerOpen, companyFilter, companies]);
+
+  useEffect(() => {
+    if (!bulkDrawerOpen || !bulkCompanyId) return;
+    const companyId = parseInt(bulkCompanyId, 10);
+    if (Number.isNaN(companyId)) return;
+    setBulkLoading(true);
+    Promise.all([
+      getEmployees({ targetCompanyId: companyId, role: 'employee', status: 'active', limit: 500 }),
+      getTemplates(false, companyId),
+    ]).then(([employeesRes, templatesRes]) => {
+      const unassignedIds = new Set(
+        overview
+          .filter((row) => row.companyId === companyId && !row.hasTasksAssigned)
+          .map((row) => row.employeeId),
+      );
+      const unassignedEmployees = employeesRes.employees.filter((emp) => unassignedIds.has(emp.id));
+      setBulkEmployees(unassignedEmployees);
+      setBulkTemplates(templatesRes);
+      setBulkSelectedEmployeeIds(new Set(unassignedEmployees.map((emp) => emp.id)));
+      setBulkSelectedTemplateIds(new Set(templatesRes.map((tmpl) => tmpl.id)));
+    }).catch(() => {
+      setBulkEmployees([]);
+      setBulkTemplates([]);
+      setBulkSelectedEmployeeIds(new Set());
+      setBulkSelectedTemplateIds(new Set());
+    }).finally(() => setBulkLoading(false));
+  }, [bulkDrawerOpen, bulkCompanyId, overview]);
 
   const statusOpts: Array<{ key: StatusFilter; label: string; color: string }> = [
     { key: 'all',         label: t('onboarding.filterAll', { count: counts.all }),               color: 'var(--primary)' },
@@ -1846,6 +2036,60 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     return '#6B7280';
   };
 
+  const overviewCompanyOptions = useMemo<SelectOption[]>(() => (
+    companies.map((company) => {
+      const logoUrl = getCompanyLogoUrl(company.logoFilename);
+      return {
+        value: String(company.id),
+        label: company.name,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {logoUrl ? (
+                <img src={logoUrl} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--primary)' }}>{company.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {company.name}
+              </span>
+              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)' }}>
+                {(company.groupName || t('common.none', 'None'))} • {(company.employeeCount ?? 0)} {t('employees.title', 'Employees')}
+              </span>
+            </span>
+          </div>
+        ),
+      };
+    })
+  ), [companies, t]);
+
+  const overviewStoreOptions = useMemo<SelectOption[]>(() => (
+    stores.map((store) => {
+      const initialsValue = store.name.slice(0, 2).toUpperCase();
+      return {
+        value: String(store.id),
+        label: `${store.name} ${store.companyName}`,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, fontWeight: 800 }}>
+              {initialsValue}
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {store.name}
+              </span>
+              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)' }}>
+                {store.companyName} • {store.employeeCount} {t('employees.title', 'Employees')}
+              </span>
+            </span>
+          </div>
+        ),
+      };
+    })
+  ), [stores, t]);
+
   return (
     <div>
       {/* Stats row */}
@@ -1858,39 +2102,50 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 
       {/* Filter bar */}
       <div style={{ display: 'flex', marginBottom: 10, alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: '1 1 520px', minWidth: 300, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 300px', minWidth: 220 }}>
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('common.search')} style={{ minWidth: 220, maxWidth: 280 }} />
-          <select
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 170 }}
-          >
-            <option value="all">{t('common.all')} {t('nav.companies', 'Companies')}</option>
-            {companies.map((company) => (
-              <option key={company.id} value={String(company.id)}>{company.name}</option>
-            ))}
-          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flex: '1 1 720px', minWidth: 320, flexWrap: 'wrap' }}>
+          <div style={{ width: 250 }}>
+            <CustomSelect
+              value={companyFilter}
+              onChange={(value) => setCompanyFilter(value ?? 'all')}
+              options={[
+                { value: 'all', label: `${t('common.all')} ${t('nav.companies', 'Companies')}` },
+                ...overviewCompanyOptions,
+              ]}
+              placeholder={`${t('common.all')} ${t('nav.companies', 'Companies')}`}
+              searchable
+              isClearable={false}
+              searchPlaceholder={t('common.search', 'Search...')}
+              noOptionsMessage={t('common.noData', 'No options found')}
+              menuMaxHeight={280}
+              controlMinHeight={40}
+            />
+          </div>
           {stores.length > 0 && (
-            <select
-              value={storeFilter}
-              onChange={(e) => setStoreFilter(e.target.value)}
-              style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', minWidth: 140 }}
-            >
-              <option value="">All stores</option>
-              {stores.map((store) => (
-                <option key={store.id} value={String(store.id)}>{store.name}</option>
-              ))}
-            </select>
+            <div style={{ width: 240 }}>
+              <CustomSelect
+                value={storeFilter || null}
+                onChange={(value) => setStoreFilter(value ?? '')}
+                options={[
+                  { value: '', label: t('common.all', 'All') + ' ' + t('stores.title', 'Stores') },
+                  ...overviewStoreOptions,
+                ]}
+                placeholder={t('common.all', 'All') + ' ' + t('stores.title', 'Stores')}
+                searchable
+                isClearable={false}
+                searchPlaceholder={t('common.search', 'Search...')}
+                noOptionsMessage={t('common.noData', 'No options found')}
+                menuMaxHeight={280}
+                controlMinHeight={40}
+              />
+            </div>
           )}
         </div>
-        {isAdmin && counts.not_started > 0 && (
-          <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={() => setBulkConfirmOpen(true)}>
-            📋 {t('onboarding.bulkAssignBtn', { count: counts.not_started })}
-          </Button>
-        )}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 5, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, flexWrap: 'wrap' }}>
           {statusOpts.map((opt) => (
             <button
@@ -1908,6 +2163,11 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             </button>
           ))}
         </div>
+        {isAdmin && counts.not_started > 0 && (
+          <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={() => setBulkDrawerOpen(true)} style={{ height: 32 }}>
+            📋 {t('onboarding.bulkAssignBtn', { count: counts.not_started })}
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -2024,15 +2284,71 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         onClose={() => setSelectedEmployee(null)}
         onRefresh={load}
       />
-      <ConfirmModal
-        open={bulkConfirmOpen}
-        title={t('onboarding.assignModalTitle', 'Bulk Assign Tasks')}
-        message={t('onboarding.confirmBulkAssign', 'Assign onboarding tasks to all {{count}} employees without tasks?', { count: counts?.not_started ?? 0 })}
-        confirmLabel={t('onboarding.assignConfirm', 'Assign')}
-        variant="warning"
-        onConfirm={handleBulkAssign}
-        onCancel={() => setBulkConfirmOpen(false)}
-      />
+      <SideDrawer open={bulkDrawerOpen} onClose={() => setBulkDrawerOpen(false)}>
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-warm)' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{t('onboarding.assignModalTitle', 'Bulk Assign Tasks')}</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{t('onboarding.lookupHint')}</div>
+        </div>
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ width: 250 }}>
+            <CustomSelect
+              value={bulkCompanyId || null}
+              onChange={(value) => setBulkCompanyId(value ?? '')}
+              options={overviewCompanyOptions}
+              placeholder={t('employees.selectCompany', 'Select company')}
+              searchable
+              isClearable={false}
+              controlMinHeight={40}
+            />
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{t('employees.title', 'Employees')} ({bulkEmployees.length})</div>
+            <div style={{ maxHeight: 160, overflowY: 'auto', display: 'grid', gap: 6 }}>
+              {bulkEmployees.map((emp) => (
+                <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                  <input
+                    type="checkbox"
+                    checked={bulkSelectedEmployeeIds.has(emp.id)}
+                    onChange={() => setBulkSelectedEmployeeIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(emp.id)) next.delete(emp.id); else next.add(emp.id);
+                      return next;
+                    })}
+                  />
+                  {emp.name} {emp.surname}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{t('onboarding.tabTemplates', 'Tasks')} ({bulkTemplates.length})</div>
+            <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gap: 6 }}>
+              {bulkTemplates.map((tmpl) => (
+                <label key={tmpl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                  <input
+                    type="checkbox"
+                    checked={bulkSelectedTemplateIds.has(tmpl.id)}
+                    onChange={() => setBulkSelectedTemplateIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(tmpl.id)) next.delete(tmpl.id); else next.add(tmpl.id);
+                      return next;
+                    })}
+                  />
+                  {tmpl.name}
+                </label>
+              ))}
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            loading={bulkAssigning || bulkLoading}
+            disabled={!bulkCompanyId || bulkSelectedEmployeeIds.size === 0 || bulkSelectedTemplateIds.size === 0}
+            onClick={handleBulkAssign}
+          >
+            {t('onboarding.assignConfirm', 'Assign')}
+          </Button>
+        </div>
+      </SideDrawer>
     </div>
   );
 };
@@ -2055,12 +2371,12 @@ const EmployeeTaskView: React.FC<{
   const pendingTasks = progress.tasks.filter((task) => !task.completed);
   const completedTasks = progress.tasks.filter((task) => task.completed);
 
-  // Group pending tasks by phase using their sort order index
+  // Group pending tasks by explicit task type.
   const tasksByPhase = useMemo(() => {
     const map = new Map<Phase, OnboardingTask[]>();
     PHASE_ORDER.forEach((p) => map.set(p, []));
     pendingTasks.forEach((task, i) => {
-      const phase = getPhase(i + 1);
+      const phase = getTaskPhase(task, i);
       map.get(phase)!.push(task);
     });
     return map;
@@ -2068,8 +2384,8 @@ const EmployeeTaskView: React.FC<{
 
   const pendingCountByPhase = useMemo(() => {
     const counts: Record<Phase, number> = { day1: 0, week1: 0, month1: 0, ongoing: 0 };
-    pendingTasks.forEach((_, i) => {
-      counts[getPhase(i + 1)]++;
+    pendingTasks.forEach((task, i) => {
+      counts[getTaskPhase(task, i)]++;
     });
     return counts;
   }, [pendingTasks]);
@@ -2160,7 +2476,7 @@ const EmployeeTaskView: React.FC<{
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>
-                    {CATEGORY_ICONS[task.templateCategory] ?? '📌'}
+                    {getCategoryMeta(task.templateCategory).icon}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
