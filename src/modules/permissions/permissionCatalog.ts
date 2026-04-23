@@ -9,6 +9,25 @@ export const MANAGED_ROLE_KEYS = [
 
 export type ManagedRoleKey = typeof MANAGED_ROLE_KEYS[number];
 
+export const ROLE_HIERARCHY: Record<ManagedRoleKey, number> = {
+  admin: 50,
+  hr: 40,
+  area_manager: 30,
+  store_manager: 20,
+  employee: 10,
+  store_terminal: 0,
+};
+
+export function canManageRole(currentUserRole: string, isSuperAdmin: boolean, targetRole: ManagedRoleKey): boolean {
+  if (isSuperAdmin) return true;
+  if (currentUserRole === 'admin') return true;
+  
+  const currentLevel = ROLE_HIERARCHY[currentUserRole as ManagedRoleKey] ?? -1;
+  const targetLevel = ROLE_HIERARCHY[targetRole] ?? -1;
+  
+  return currentLevel > targetLevel;
+}
+
 export const MODULE_KEYS = [
   'negozi',
   'dipendenti',

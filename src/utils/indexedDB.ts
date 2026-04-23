@@ -1,6 +1,68 @@
 /**
  * A lightweight utility to manage an offline attendance queue in IndexedDB.
+ * Also provides localStorage-based helpers to persist today's confirmed
+ * attendance state so that offline mode can restore it correctly.
  */
+
+// ── localStorage attendance state persistence ─────────────────────────────
+
+export interface PersistedDailyState {
+  checkedIn: boolean;
+  breakStarted: boolean;
+  breakEnded: boolean;
+  checkedOut: boolean;
+  date: string; // YYYY-MM-DD — used to auto-expire stale entries
+}
+
+function dailyStateKey(userId: number | string): string {
+  return `hr_attendance_state_${userId}`;
+}
+
+/**
+ * Persist the current attendance state for a user to localStorage.
+ * Keyed by userId and stamped with today's date so stale data is ignored.
+ */
+export function persistDailyAttendanceState(
+  userId: number | string,
+  state: Omit<PersistedDailyState, 'date'>
+): void {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const payload: PersistedDailyState = { ...state, date: today };
+    localStorage.setItem(dailyStateKey(userId), JSON.stringify(payload));
+  } catch (err) {
+    console.warn('[AttendanceState] Failed to persist state to localStorage:', err);
+  }
+}
+
+/**
+ * Read back today's persisted attendance state for a user.
+ * Returns null if nothing is stored or the stored entry is from a previous day.
+ */
+export function getPersistedDailyAttendanceState(
+  userId: number | string
+): Omit<PersistedDailyState, 'date'> | null {
+  try {
+    const raw = localStorage.getItem(dailyStateKey(userId));
+    if (!raw) return null;
+    const parsed: PersistedDailyState = JSON.parse(raw);
+    const today = new Date().toISOString().slice(0, 10);
+    if (parsed.date !== today) {
+      // Stale entry from a previous day — clear it
+      localStorage.removeItem(dailyStateKey(userId));
+      return null;
+    }
+    return {
+      checkedIn: !!parsed.checkedIn,
+      breakStarted: !!parsed.breakStarted,
+      breakEnded: !!parsed.breakEnded,
+      checkedOut: !!parsed.checkedOut,
+    };
+  } catch (err) {
+    console.warn('[AttendanceState] Failed to read persisted state from localStorage:', err);
+    return null;
+  }
+}
 
 const DB_NAME = 'hr_offline_db';
 const STORE_NAME = 'attendance_events';
