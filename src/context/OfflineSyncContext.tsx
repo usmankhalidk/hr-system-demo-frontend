@@ -6,10 +6,18 @@ import {
   getOfflineEvents, 
   deleteOfflineEvents, 
   addOfflineEvent,
+  getPersistedDailyAttendanceState,
   type OfflineAttendanceEvent 
 } from '../utils/indexedDB';
 
 const BATCH_SIZE = 100;
+
+export interface DailyOfflineState {
+  checkedIn: boolean;
+  breakStarted: boolean;
+  breakEnded: boolean;
+  checkedOut: boolean;
+}
 
 interface OfflineSyncContextValue {
   queueLength: number;
@@ -18,6 +26,8 @@ interface OfflineSyncContextValue {
   lastSyncTime: number; // New: timestamp of the last successful batch sync
   enqueue: (event: Omit<OfflineAttendanceEvent, 'id' | 'client_uuid'> & { client_uuid?: string }) => Promise<void>;
   drainQueue: () => Promise<void>;
+  /** Derive today's attendance state purely from the offline IndexedDB queue */
+  getTodayOfflineState: (userId?: number) => Promise<DailyOfflineState>;
 }
 
 const OfflineSyncContext = createContext<OfflineSyncContextValue | undefined>(undefined);
@@ -168,6 +178,56 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     console.log('[OfflineSync] Event saved to local queue.');
   }, [refreshQueueLength]);
 
+  /**
+   * Derive today's attendance state by merging two sources:
+   *   1. localStorage — state last confirmed/persisted from the server (handles
+   *      actions performed while online that never entered the IndexedDB queue).
+   *   2. IndexedDB offline queue — events queued while offline that have not
+   *      yet been synced to the server.
+   *
+   * Both sources are OR-merged (a flag is true if either source says true),
+   * which gives the most complete and accurate picture of today's state.
+   */
+  const getTodayOfflineState = useCallback(async (userId?: number): Promise<DailyOfflineState> => {
+    const state: DailyOfflineState = {
+      checkedIn: false,
+      breakStarted: false,
+      breakEnded: false,
+      checkedOut: false,
+    };
+    try {
+      // ── Source 1: localStorage persisted state (from last server sync) ──
+      if (userId != null) {
+        const persisted = getPersistedDailyAttendanceState(userId);
+        if (persisted) {
+          console.log('[OfflineSync] Restored attendance state from localStorage:', persisted);
+          state.checkedIn    = state.checkedIn    || persisted.checkedIn;
+          state.breakStarted = state.breakStarted || persisted.breakStarted;
+          state.breakEnded   = state.breakEnded   || persisted.breakEnded;
+          state.checkedOut   = state.checkedOut   || persisted.checkedOut;
+        }
+      }
+
+      // ── Source 2: IndexedDB queue (offline-queued events not yet synced) ──
+      const allEvents = await getOfflineEvents();
+      const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const todayEvents = allEvents.filter((e) => {
+        const dateMatch = e.event_time?.slice(0, 10) === todayStr;
+        const userMatch = userId == null || e.user_id === userId;
+        return dateMatch && userMatch;
+      });
+      for (const e of todayEvents) {
+        if (e.event_type === 'checkin')     state.checkedIn    = true;
+        if (e.event_type === 'break_start') state.breakStarted = true;
+        if (e.event_type === 'break_end')   state.breakEnded   = true;
+        if (e.event_type === 'checkout')    state.checkedOut   = true;
+      }
+    } catch (err) {
+      console.error('[OfflineSync] Failed to read offline state:', err);
+    }
+    return state;
+  }, []);
+
   // Global Listeners
   useEffect(() => {
     // Initial refresh
@@ -201,7 +261,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   }, [drainQueue, refreshQueueLength, showToast]);
 
   return (
-    <OfflineSyncContext.Provider value={{ queueLength, isOnline, isSyncing, lastSyncTime, enqueue, drainQueue }}>
+    <OfflineSyncContext.Provider value={{ queueLength, isOnline, isSyncing, lastSyncTime, enqueue, drainQueue, getTodayOfflineState }}>
       {children}
     </OfflineSyncContext.Provider>
   );

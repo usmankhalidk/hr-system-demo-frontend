@@ -1,12 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { listMyAttendanceEvents, type AttendanceEvent, type EventType } from '../../api/attendance';
 import { Spinner } from '../../components/ui/Spinner';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { formatLocalDate } from '../../utils/date';
 import { useOfflineSync } from '../../context/OfflineSyncContext';
+import { useToast } from '../../context/ToastContext';
 import client from '../../api/client';
+import { persistDailyAttendanceState } from '../../utils/indexedDB';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -31,10 +33,54 @@ function formatTime(iso: string) {
 
 type Filter = '7' | '30';
 
+interface DailyState {
+  checkedIn: boolean;
+  breakStarted: boolean;
+  breakEnded: boolean;
+  checkedOut: boolean;
+}
+
+interface FullDailyState {
+  hasShift: boolean;
+  hasLeave: boolean;
+  state: DailyState;
+}
+
+/**
+ * Derive which EventType buttons are enabled given the current daily state.
+ */
+function resolveAllowedActions(full: FullDailyState | null): Set<EventType> {
+  const allowed = new Set<EventType>();
+  if (!full) return allowed;
+  if (!full.hasShift || full.hasLeave) return allowed;
+
+  const { checkedIn, breakStarted, breakEnded, checkedOut } = full.state;
+
+  if (checkedOut) return allowed;
+
+  if (!checkedIn) {
+    allowed.add('checkin');
+    return allowed;
+  }
+
+  // Checked in, on break
+  if (breakStarted && !breakEnded) {
+    allowed.add('break_end');
+    return allowed;
+  }
+
+  // Checked in, not on break (either never started or already ended)
+  if (!breakStarted) allowed.add('break_start');
+  allowed.add('checkout');
+
+  return allowed;
+}
+
 export default function EmployeeCheckinPage() {
   const { t } = useTranslation();
   const { user, permissions } = useAuth();
-  const { lastSyncTime, isOnline, isSyncing, queueLength, enqueue } = useOfflineSync();
+  const { lastSyncTime, isOnline, isSyncing, queueLength, enqueue, getTodayOfflineState } = useOfflineSync();
+  const { showToast } = useToast();
 
   const [filter, setFilter] = useState<Filter>('7');
   const [historyVersion, setHistoryVersion] = useState(0);
@@ -45,9 +91,50 @@ export default function EmployeeCheckinPage() {
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fingerprintRef = useRef<string | null>(null);
 
+  // ── Daily state machine ──────────────────────────────────────────────────
+  const [fullDailyState, setFullDailyState] = useState<FullDailyState | null>(null);
+  const [stateLoading, setStateLoading] = useState(true);
+
   const initials = user
     ? `${user.name?.[0] ?? ''}${user.surname ? user.surname[0] : ''}`.toUpperCase()
     : '';
+
+  // ── Load today's state ───────────────────────────────────────────────────
+  const loadDailyState = useCallback(async () => {
+    if (!user || user.role !== 'employee') {
+      setStateLoading(false);
+      return;
+    }
+    setStateLoading(true);
+    try {
+      if (isOnline) {
+        const res = await client.get('/attendance/daily-state');
+        const data = (res.data?.data ?? res.data) as FullDailyState;
+        setFullDailyState(data);
+        // Persist server-confirmed state to localStorage so offline mode
+        // can restore it accurately if the user loses connectivity.
+        if (data?.state && user.id) {
+          persistDailyAttendanceState(user.id, data.state);
+        }
+      } else {
+        // Offline: derive from localStorage (server-confirmed) + IndexedDB queue
+        const offlineState = await getTodayOfflineState(user.id);
+        setFullDailyState({
+          hasShift: true, // assume shift exists offline — backend validates on sync
+          hasLeave: false,
+          state: offlineState,
+        });
+      }
+    } catch {
+      setFullDailyState(null);
+    } finally {
+      setStateLoading(false);
+    }
+  }, [user, isOnline, getTodayOfflineState]);
+
+  useEffect(() => {
+    void loadDailyState();
+  }, [loadDailyState, lastSyncTime]);
 
   const CLOCK_ACTIONS: { type: EventType; label: string; color: string }[] = [
     { type: 'checkin',     label: t('terminal.checkin'),    color: '#16a34a' },
@@ -56,8 +143,60 @@ export default function EmployeeCheckinPage() {
     { type: 'checkout',    label: t('terminal.checkout'),   color: '#dc2626' },
   ];
 
+  // ── State-machine validation ─────────────────────────────────────────────
+  function validateAction(eventType: EventType): boolean {
+    if (!fullDailyState) {
+      showToast(t('attendance.stateLoading'), 'warning');
+      return false;
+    }
+    if (!fullDailyState.hasShift || fullDailyState.hasLeave) {
+      showToast(t('attendance.noShiftToday'), 'error');
+      return false;
+    }
+
+    const { checkedIn, breakStarted, breakEnded, checkedOut } = fullDailyState.state;
+
+    if (checkedOut) {
+      showToast(t('attendance.alreadyCheckedOut'), 'error');
+      return false;
+    }
+    if (eventType === 'checkin' && checkedIn) {
+      showToast(t('attendance.alreadyCheckedIn'), 'error');
+      return false;
+    }
+    if (eventType === 'break_start' && !checkedIn) {
+      showToast(t('attendance.checkInFirst'), 'error');
+      return false;
+    }
+    if (eventType === 'break_start' && breakStarted) {
+      showToast(t('attendance.invalidAction'), 'error');
+      return false;
+    }
+    if (eventType === 'break_end' && !breakStarted) {
+      showToast(t('attendance.breakStartFirst'), 'error');
+      return false;
+    }
+    if (eventType === 'break_end' && breakEnded) {
+      showToast(t('attendance.invalidAction'), 'error');
+      return false;
+    }
+    if (eventType === 'checkout' && !checkedIn) {
+      showToast(t('attendance.checkInFirst'), 'error');
+      return false;
+    }
+    if (eventType === 'checkout' && breakStarted && !breakEnded) {
+      showToast(t('attendance.mustEndBreakFirst'), 'error');
+      return false;
+    }
+    return true;
+  }
+
   async function handleAction(eventType: EventType) {
-    if (actionLoading) return;
+    if (actionLoading || stateLoading) return;
+
+    // Frontend state-machine guard
+    if (!validateAction(eventType)) return;
+
     setActionLoading(true);
     setActionMsg(null);
 
@@ -77,7 +216,19 @@ export default function EmployeeCheckinPage() {
           user_id: user?.id,
           device_fingerprint: fingerprintRef.current || undefined,
         });
-        setActionMsg({ text: 'Timbratura salvata offline — verrà sincronizzata automaticamente', ok: true });
+        // Optimistically update local daily state
+        setFullDailyState((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, state: { ...prev.state } };
+          if (eventType === 'checkin')     next.state.checkedIn    = true;
+          if (eventType === 'break_start') next.state.breakStarted = true;
+          if (eventType === 'break_end')   next.state.breakEnded   = true;
+          if (eventType === 'checkout')    next.state.checkedOut   = true;
+          // Persist updated state so it survives page reloads
+          if (user?.id) persistDailyAttendanceState(user.id, next.state);
+          return next;
+        });
+        setActionMsg({ text: t('terminal.saved_offline'), ok: true });
       } else {
         // Use /sync endpoint — /checkin requires a QR token and is for terminal use only.
         // /sync accepts authenticated direct clock-ins without a QR token.
@@ -97,14 +248,26 @@ export default function EmployeeCheckinPage() {
         });
         const result = (res.data as any)?.data ?? res.data;
         if ((result?.failed ?? 0) > 0) {
-          throw new Error(result?.errors?.[0] ?? 'Errore durante la timbratura');
+          throw new Error(result?.errors?.[0] ?? t('common.error'));
         }
-        setActionMsg({ text: 'Timbratura registrata con successo', ok: true });
+        // Update local state to reflect the recorded action
+        setFullDailyState((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, state: { ...prev.state } };
+          if (eventType === 'checkin')     next.state.checkedIn    = true;
+          if (eventType === 'break_start') next.state.breakStarted = true;
+          if (eventType === 'break_end')   next.state.breakEnded   = true;
+          if (eventType === 'checkout')    next.state.checkedOut   = true;
+          // Persist updated state so offline mode can read it later
+          if (user?.id) persistDailyAttendanceState(user.id, next.state);
+          return next;
+        });
+        setActionMsg({ text: t('attendance.successMessage'), ok: true });
         // Increment historyVersion to trigger a real re-fetch of attendance history
         window.setTimeout(() => setHistoryVersion((v) => v + 1), 1500);
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Errore durante la timbratura';
+      const msg = err?.response?.data?.error ?? err?.message ?? t('common.error');
       setActionMsg({ text: msg, ok: false });
     } finally {
       setActionLoading(false);
@@ -133,7 +296,7 @@ export default function EmployeeCheckinPage() {
         const res = await listMyAttendanceEvents({ dateFrom, deviceFingerprint });
         if (alive) setEvents(res.events);
       } catch {
-        if (alive) setError('Errore nel caricamento delle presenze');
+        if (alive) setError(t('checkin.noHistory'));
       } finally {
         if (alive) setLoading(false);
       }
@@ -170,6 +333,8 @@ export default function EmployeeCheckinPage() {
     }
   }
 
+  const allowedActions = resolveAllowedActions(fullDailyState);
+
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -205,7 +370,7 @@ export default function EmployeeCheckinPage() {
             {user ? `${user.name}${user.surname ? ` ${user.surname}` : ''}` : t('checkin.title')}
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-body)' }}>
-            {t('checkin.subtitle')}
+            {stateLoading ? t('attendance.stateLoading') : t('checkin.subtitle')}
           </div>
         </div>
       </div>
@@ -227,10 +392,40 @@ export default function EmployeeCheckinPage() {
         }}>
           <span style={{ fontSize: 16 }}>{!isOnline ? '📵' : isSyncing ? '🔄' : '⏳'}</span>
           {!isOnline
-            ? 'Modalità offline — le timbrature verranno sincronizzate automaticamente'
+            ? t('terminal.offline_mode')
             : isSyncing
-            ? 'Sincronizzazione in corso...'
-            : `${queueLength} ${queueLength === 1 ? 'timbratura in attesa' : 'timbrature in attesa'} di sincronizzazione`}
+            ? t('terminal.events_syncing', { count: queueLength })
+            : t('terminal.events_pending', { count: queueLength })}
+        </div>
+      )}
+
+      {/* No-shift warning */}
+      {!stateLoading && fullDailyState && !fullDailyState.hasShift && (
+        <div style={{
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 16px', fontSize: 13, fontWeight: 600,
+          fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 8,
+          background: 'rgba(220,38,38,0.10)',
+          border: '1px solid rgba(220,38,38,0.30)',
+          color: '#dc2626',
+        }}>
+          <span style={{ fontSize: 16 }}>🚫</span>
+          {t('attendance.noShiftToday')}
+        </div>
+      )}
+
+      {/* Already checked out info */}
+      {!stateLoading && fullDailyState?.state.checkedOut && (
+        <div style={{
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 16px', fontSize: 13, fontWeight: 600,
+          fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 8,
+          background: 'rgba(22,163,74,0.10)',
+          border: '1px solid rgba(22,163,74,0.30)',
+          color: '#16a34a',
+        }}>
+          <span style={{ fontSize: 16 }}>✅</span>
+          {t('attendance.alreadyCheckedOut')}
         </div>
       )}
 
@@ -249,32 +444,36 @@ export default function EmployeeCheckinPage() {
           textTransform: 'uppercase', letterSpacing: '0.08em',
           fontFamily: 'var(--font-display)', marginBottom: 4,
         }}>
-          Timbra
+          {t('checkin.actionTypes')}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {CLOCK_ACTIONS.map(({ type, label, color }) => (
-            <button
-              key={type}
-              onClick={() => void handleAction(type)}
-              disabled={actionLoading}
-              style={{
-                padding: '14px 10px',
-                borderRadius: 10,
-                border: `1.5px solid ${color}55`,
-                background: `${color}15`,
-                color,
-                fontSize: 13, fontWeight: 800,
-                cursor: actionLoading ? 'not-allowed' : 'pointer',
-                fontFamily: 'var(--font-display)',
-                letterSpacing: 0.5,
-                opacity: actionLoading ? 0.6 : 1,
-                transition: 'all 0.15s',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          {CLOCK_ACTIONS.map(({ type, label, color }) => {
+            const isAllowed = allowedActions.has(type);
+            const isDisabled = actionLoading || stateLoading || !isAllowed;
+            return (
+              <button
+                key={type}
+                onClick={() => void handleAction(type)}
+                disabled={isDisabled}
+                style={{
+                  padding: '14px 10px',
+                  borderRadius: 10,
+                  border: `1.5px solid ${color}55`,
+                  background: `${color}15`,
+                  color,
+                  fontSize: 13, fontWeight: 800,
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
+                  fontFamily: 'var(--font-display)',
+                  letterSpacing: 0.5,
+                  opacity: isDisabled ? 0.35 : 1,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {actionLoading && (

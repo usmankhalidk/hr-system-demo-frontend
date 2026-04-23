@@ -113,3 +113,20 @@ export async function listMyAttendanceEvents(params?: {
   const { data } = await client.get('/attendance/my', { params: requestParams });
   return data.data as AttendanceListResponse;
 }
+
+export interface DailyStateResponse {
+  hasShift: boolean;
+  hasLeave: boolean;
+  state: {
+    checkedIn: boolean;
+    breakStarted: boolean;
+    breakEnded: boolean;
+    checkedOut: boolean;
+  };
+}
+
+/** Get today's attendance state for the calling employee. Used to initialise the state machine. */
+export async function getDailyState(): Promise<DailyStateResponse> {
+  const { data } = await client.get('/attendance/daily-state');
+  return (data?.data ?? data) as DailyStateResponse;
+}
