@@ -3,7 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Lock } from 'lucide-react';
 import { Spinner } from '../../components/ui/Spinner';
 import { Toggle } from '../../components/ui/Toggle';
-import { MANAGED_ROLE_KEYS, ROLE_COLORS, ManagedRoleKey, isRoleEligibleForModule } from './permissionCatalog';
+import { 
+  MANAGED_ROLE_KEYS, 
+  ROLE_COLORS, 
+  ManagedRoleKey, 
+  isRoleEligibleForModule,
+  canManageRole
+} from './permissionCatalog';
+import { useAuth } from '../../context/AuthContext';
 
 // store_terminal is a valid role but doesn't need to be managed in the permissions UI
 const GRID_ROLE_KEYS = MANAGED_ROLE_KEYS.filter((r) => r !== 'store_terminal');
@@ -31,8 +38,14 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
   onToggle,
 }) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
+
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
   const tModule = (moduleKey: string) => (t as (k: string) => string)(`permissions.modules.${moduleKey}`);
+
+  const visibleRoleKeys = GRID_ROLE_KEYS.filter(roleKey => 
+    canManageRole(user?.role || '', user?.isSuperAdmin || false, roleKey)
+  );
 
   const implementedModules = modules.filter(m => m.implemented);
   const upcomingModules = modules.filter(m => !m.implemented);
@@ -63,7 +76,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
             }}>
               {t('permissions.colModule')}
             </th>
-            {GRID_ROLE_KEYS.map((roleKey) => (
+            {visibleRoleKeys.map((roleKey) => (
               <th key={roleKey} style={{
                 padding: '16px 10px',
                 textAlign: 'center',
@@ -130,7 +143,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                     </span>
                   </div>
                 </td>
-                {GRID_ROLE_KEYS.map((roleKey) => {
+                {visibleRoleKeys.map((roleKey) => {
                   const cellKey = `${mod.key}:${roleKey}`;
                   const isSaving = !!saving[cellKey];
                   const isSaved = lastSaved === cellKey;
@@ -138,6 +151,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                   // Handle casting properly
                   const isEligible = isRoleEligibleForModule(roleKey, mod.key as any);
                   const isTerminaliRestricted = mod.key === 'terminali' && (roleKey === 'store_manager' || roleKey === 'employee');
+                  const isGestioneAccessiAdmin = mod.key === 'gestione_accessi' && roleKey === 'admin';
                   return (
                     <td key={roleKey} style={{
                       padding: '14px 10px',
@@ -150,7 +164,11 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                         ) : isSaved ? (
                           <CheckCircle2 size={18} color="var(--success)" style={{ animation: 'popIn 0.22s cubic-bezier(0.34,1.56,0.64,1)' }} />
                         ) : (
-                          <Toggle checked={enabled} onChange={() => onToggle(mod.key, roleKey)} disabled={isSaving || !isEligible || isTerminaliRestricted} />
+                          <Toggle 
+                            checked={isGestioneAccessiAdmin ? true : enabled} 
+                            onChange={() => onToggle(mod.key, roleKey)} 
+                            disabled={isSaving || !isEligible || isTerminaliRestricted || isGestioneAccessiAdmin} 
+                          />
                         )}
                       </div>
                     </td>
@@ -163,7 +181,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
           {/* Upcoming modules section header */}
           {upcomingModules.length > 0 && (
             <tr>
-              <td colSpan={GRID_ROLE_KEYS.length + 1} style={{
+              <td colSpan={visibleRoleKeys.length + 1} style={{
                 padding: '10px 20px 8px',
                 background: 'var(--surface-warm)',
               }}>
@@ -228,7 +246,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                     </div>
                   </div>
                 </td>
-                {GRID_ROLE_KEYS.map((roleKey) => (
+                {visibleRoleKeys.map((roleKey) => (
                   <td key={roleKey} style={{
                     padding: '12px 10px',
                     textAlign: 'center',
