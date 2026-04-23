@@ -2313,7 +2313,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
 const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
-  const { user, targetCompanyId } = useAuth();
+  const { user, targetCompanyId, allowedCompanyIds } = useAuth();
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -2942,7 +2942,7 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ canEdit, canFeedback }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
-  const { user, targetCompanyId } = useAuth();
+  const { user, targetCompanyId, allowedCompanyIds } = useAuth();
   const { socket } = useSocket();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -2965,7 +2965,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
   const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
 
-  const effectiveCompanyId = targetCompanyId ?? user?.companyId ?? undefined;
+  const hasMultiCompanyScope = (allowedCompanyIds?.length ?? 0) > 1;
+  const effectiveCompanyId = hasMultiCompanyScope
+    ? undefined
+    : (targetCompanyId ?? (user?.isSuperAdmin ? undefined : user?.companyId ?? undefined));
   const scopedCompanyId = user?.isSuperAdmin ? undefined : effectiveCompanyId;
 
   const fetch = useCallback(async () => {
