@@ -463,6 +463,17 @@ export default function ShiftDrawer({
       if (isStoreManager && shift?.status === 'confirmed' && !isOffDay) {
         statusOut = undefined;
       }
+      const isNoBreakOut = isNoBreak;
+      const isFlexibleOut = breakTypeOut === 'flexible';
+
+      // Final safety check to avoid 500 error on backend (casting '' to TIME)
+      if (!isOffDay && (!form.start_time || !form.end_time)) {
+        setFormErrors({
+          start_time: form.start_time ? undefined : t('shifts.validation.startRequired'),
+          end_time: form.end_time ? undefined : t('shifts.validation.endRequired'),
+        });
+        return;
+      }
 
       const startTimeOut = isOffDay ? (form.start_time || '00:00') : form.start_time;
       const endTimeOut = isOffDay ? (form.end_time || '00:01') : form.end_time;
@@ -472,10 +483,10 @@ export default function ShiftDrawer({
         date: form.date,
         start_time: startTimeOut,
         end_time: endTimeOut,
-        break_type: breakTypeOut,
-        break_start: (isOffDay || isNoBreak || isFlexible) ? null : (form.break_start || null),
-        break_end: (isOffDay || isNoBreak || isFlexible) ? null : (form.break_end || null),
-        break_minutes: (isOffDay || isNoBreak) ? null : (isFlexible ? (form.break_minutes ? parseInt(form.break_minutes, 10) : null) : null),
+        break_type: breakTypeOut as 'fixed' | 'flexible',
+        break_start: (isOffDay || isNoBreakOut || isFlexibleOut) ? null : (form.break_start || null),
+        break_end: (isOffDay || isNoBreakOut || isFlexibleOut) ? null : (form.break_end || null),
+        break_minutes: (isOffDay || isNoBreakOut) ? null : (isFlexibleOut ? (form.break_minutes ? parseInt(form.break_minutes, 10) : null) : null),
         is_split: isOffDay ? false : form.is_split,
         split_start2: (isOffDay || !form.is_split) ? null : (form.split_start2 || null),
         split_end2: (isOffDay || !form.is_split) ? null : (form.split_end2 || null),
@@ -1092,7 +1103,7 @@ export default function ShiftDrawer({
             </div>
           </div>
 
-          {form.is_off_day ? (
+          {form.is_off_day && (
             <div style={{
               marginBottom: 20,
               borderRadius: 10,
@@ -1110,10 +1121,18 @@ export default function ShiftDrawer({
                 {t('shifts.offDayExplain', 'A dedicated off-day tag will be shown in the calendar. Switch back to Working day to restore normal shift controls.')}
               </span>
             </div>
-          ) : (
-            <>
+          )}
+
+          {!form.is_off_day && (
+            <div style={{ marginTop: 20 }}>
               {/* ─── Section: Orario ────────────── */}
-              <SectionDivider label={t('shifts.sectionOrario')} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 12 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  {t('shifts.sectionOrario')}
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
                 <TimePicker
                   label={t('shifts.form.startTime')}
@@ -1138,7 +1157,25 @@ export default function ShiftDrawer({
               </div>
 
               {/* ─── Section: Pausa ─────────────── */}
-              <SectionDivider label={t('shifts.sectionBreak')} optional />
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                marginTop: 18, marginBottom: 12,
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                  color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                }}>
+                  {t('shifts.sectionBreak')}
+                </span>
+                <span style={{
+                  fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
+                  background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                  borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                }}>
+                  {t('common.optionalAbbr', 'Opz.')}
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
                 {(['none', 'fixed', 'flexible'] as const).map((bt) => {
@@ -1242,7 +1279,26 @@ export default function ShiftDrawer({
               )}
 
               {/* ─── Section: Turno spezzato ─────── */}
-              <SectionDivider label={t('shifts.sectionSplit')} optional />
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                marginTop: 18, marginBottom: 12,
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                  color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                }}>
+                  {t('shifts.sectionSplit')}
+                </span>
+                <span style={{
+                  fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
+                  background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                  borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                }}>
+                  {t('common.optionalAbbr', 'Opz.')}
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
+
               <div
                 role="switch"
                 aria-checked={form.is_split}
@@ -1315,7 +1371,18 @@ export default function ShiftDrawer({
               )}
 
               {/* ─── Section: Stato ─────────────── */}
-              <SectionDivider label={t('shifts.form.status')} />
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                marginTop: 18, marginBottom: 12,
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                  color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                }}>
+                  {t('shifts.form.status')}
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
               {user?.role === 'store_manager' && shift?.status === 'confirmed' ? (
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.45 }}>
                   <strong style={{ color: 'var(--primary)' }}>{t('shifts.status.confirmed')}</strong>
@@ -1374,7 +1441,7 @@ export default function ShiftDrawer({
                   })}
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {/* ─── Notes ──────────────────────── */}

@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { recordCheckin, EventType } from '../../api/attendance';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { useOfflineSync } from '../../context/OfflineSyncContext';
+import { useToast } from '../../context/ToastContext';
+import client from '../../api/client';
+import { persistDailyAttendanceState } from '../../utils/indexedDB';
 
 // ── Event definitions ────────────────────────────────────────────────────────
 const EVENTS: { type: EventType; labelKey: string; bg: string; shadow: string }[] = [
@@ -15,6 +18,17 @@ const EVENTS: { type: EventType; labelKey: string; bg: string; shadow: string }[
 ];
 
 type Stage = 'ready' | 'loading' | 'success' | 'error';
+
+interface DailyState {
+  hasShift: boolean;
+  hasLeave: boolean;
+  state: {
+    checkedIn: boolean;
+    breakStarted: boolean;
+    breakEnded: boolean;
+    checkedOut: boolean;
+  };
+}
 
 // ── Helper ──────────────────────────────────────────────────────────────────
 function generateUUID() {
@@ -28,12 +42,45 @@ function generateUUID() {
   });
 }
 
+/**
+ * Derive which buttons should be enabled based on today's attendance state.
+ */
+function resolveAllowedActions(daily: DailyState): Set<EventType> {
+  const allowed = new Set<EventType>();
+  if (!daily.hasShift || daily.hasLeave) return allowed; // no shift or on leave → nothing
+
+  const { checkedIn, breakStarted, breakEnded, checkedOut } = daily.state;
+
+  if (checkedOut) return allowed; // already checked out → nothing
+
+  if (!checkedIn) {
+    allowed.add('checkin');
+    return allowed;
+  }
+
+  // Checked in
+  if (breakStarted && !breakEnded) {
+    // On break → only break_end allowed
+    allowed.add('break_end');
+    return allowed;
+  }
+
+  // Not on break (either never started or break ended)
+  if (!breakStarted || breakEnded) {
+    if (!breakStarted) allowed.add('break_start'); // can still start break if not done
+    allowed.add('checkout');
+  }
+
+  return allowed;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ScanPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [stage, setStage]           = useState<Stage>('ready');
   const [tappedType, setTappedType] = useState<EventType | null>(null);
@@ -41,23 +88,73 @@ export default function ScanPage() {
   const [clock, setClock]           = useState(() => new Date());
   const fingerprintRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const id = setInterval(() => setClock(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  // ── Daily state machine ──────────────────────────────────────────────────
+  const [dailyState, setDailyState] = useState<DailyState | null>(null);
+  const [stateLoading, setStateLoading] = useState(true);
+
+  const { enqueue, isOnline, getTodayOfflineState } = useOfflineSync();
 
   const token = params.get('token') ?? '';
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
 
   useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     if (!user || user.role !== 'employee') return;
     if (!token) return;
-    // Registration is required only after an employee scans QR and is not registered.
     if (user.requiresDeviceRegistration === true) {
       const next = encodeURIComponent('/presenze/scan' + (token ? `?token=${token}` : ''));
       navigate(`/device/register?next=${next}`, { replace: true });
     }
   }, [user, token, navigate]);
+
+  // ── Load today's attendance state ────────────────────────────────────────
+  const loadDailyState = useCallback(async () => {
+    if (!user || user.role !== 'employee') {
+      setStateLoading(false);
+      return;
+    }
+    setStateLoading(true);
+    try {
+      if (isOnline) {
+        const res = await client.get('/attendance/daily-state');
+        const data = (res.data?.data ?? res.data) as DailyState;
+        setDailyState(data);
+        // Persist server-confirmed state to localStorage so offline mode
+        // can restore it accurately if the user loses connectivity.
+        if (data?.state && user.id) {
+          persistDailyAttendanceState(user.id, data.state);
+        }
+      } else {
+        // Offline: derive from localStorage (server-confirmed) + IndexedDB queue
+        const offlineState = await getTodayOfflineState(user.id);
+        // When offline we can't verify shift — optimistically allow check-in if not checked in yet
+        // The backend will reject invalid events on sync. Show a shift warning only if explicitly no events at all.
+        setDailyState({
+          hasShift: true, // assume shift exists in offline mode (backend will reject if not)
+          hasLeave: false,
+          state: offlineState,
+        });
+      }
+    } catch {
+      // On error, fall back to a permissive state that lets checkin proceed
+      // Backend enforces validation so this is safe
+      setDailyState({
+        hasShift: true,
+        hasLeave: false,
+        state: { checkedIn: false, breakStarted: false, breakEnded: false, checkedOut: false },
+      });
+    } finally {
+      setStateLoading(false);
+    }
+  }, [user, isOnline, getTodayOfflineState]);
+
+  useEffect(() => {
+    void loadDailyState();
+  }, [loadDailyState]);
 
   // ── Non-employee role guard ────────────────────────────────────────────────
   if (user && user.role !== 'employee') {
@@ -120,11 +217,65 @@ export default function ScanPage() {
     );
   }
 
-  const { enqueue, isOnline } = useOfflineSync();
+  // ── Compute allowed actions from today's state ───────────────────────────
+  const allowedActions = dailyState ? resolveAllowedActions(dailyState) : new Set<EventType>();
+
+  // ── Validate action before proceeding ────────────────────────────────────
+  function validateAction(eventType: EventType): boolean {
+    if (!dailyState) return false;
+
+    if (!dailyState.hasShift || dailyState.hasLeave) {
+      showToast(t('attendance.noShiftToday'), 'error');
+      return false;
+    }
+
+    const { checkedIn, breakStarted, breakEnded, checkedOut } = dailyState.state;
+
+    if (checkedOut) {
+      showToast(t('attendance.alreadyCheckedOut'), 'error');
+      return false;
+    }
+
+    if (eventType === 'checkin' && checkedIn) {
+      showToast(t('attendance.alreadyCheckedIn'), 'error');
+      return false;
+    }
+    if (eventType === 'break_start' && !checkedIn) {
+      showToast(t('attendance.checkInFirst'), 'error');
+      return false;
+    }
+    if (eventType === 'break_start' && breakStarted) {
+      showToast(t('attendance.invalidAction'), 'error');
+      return false;
+    }
+    if (eventType === 'break_end' && !breakStarted) {
+      showToast(t('attendance.breakStartFirst'), 'error');
+      return false;
+    }
+    if (eventType === 'break_end' && breakEnded) {
+      showToast(t('attendance.invalidAction'), 'error');
+      return false;
+    }
+    if (eventType === 'checkout' && !checkedIn) {
+      showToast(t('attendance.checkInFirst'), 'error');
+      return false;
+    }
+    if (eventType === 'checkout' && breakStarted && !breakEnded) {
+      showToast(t('attendance.mustEndBreakFirst'), 'error');
+      return false;
+    }
+
+    return true;
+  }
 
   // ── API call or Offline Queue ─────────────────────────────────────────────
   async function handleAction(eventType: EventType) {
     if (stage === 'loading') return;
+    if (stateLoading) return;
+
+    // State-machine validation (frontend guard)
+    if (!validateAction(eventType)) return;
+
     setTappedType(eventType);
     setStage('loading');
     setErrorMsg('');
@@ -178,6 +329,20 @@ export default function ScanPage() {
             unique_id: user?.uniqueId || undefined,
             device_fingerprint: fingerprintRef.current || undefined,
           });
+
+          // Optimistically update local daily state
+          setDailyState((prev) => {
+            if (!prev) return prev;
+            const next = { ...prev, state: { ...prev.state } };
+            if (eventType === 'checkin')     next.state.checkedIn    = true;
+            if (eventType === 'break_start') next.state.breakStarted = true;
+            if (eventType === 'break_end')   next.state.breakEnded   = true;
+            if (eventType === 'checkout')    next.state.checkedOut   = true;
+            // Persist updated state so it survives page reloads and offline transitions
+            if (user?.id) persistDailyAttendanceState(user.id, next.state);
+            return next;
+          });
+
           setStage('success');
           // Match the online experience exactly
           window.setTimeout(() => {
@@ -281,9 +446,41 @@ export default function ScanPage() {
           {user?.name} {user?.surname}
         </div>
         <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.50)', marginTop: 5 }}>
-          {t('scan.chooseAction')}
+          {stateLoading
+            ? t('attendance.stateLoading')
+            : t('scan.chooseAction')}
         </div>
       </div>
+
+      {/* No-shift banner */}
+      {!stateLoading && dailyState && !dailyState.hasShift && (
+        <div style={{
+          padding: '12px 20px',
+          borderRadius: 10,
+          background: 'rgba(239,68,68,0.15)',
+          border: '1px solid rgba(239,68,68,0.45)',
+          color: '#fca5a5',
+          fontSize: 14, fontWeight: 600,
+          maxWidth: 400, width: '100%', textAlign: 'center',
+        }}>
+          {t('attendance.noShiftToday')}
+        </div>
+      )}
+
+      {/* Checkout done banner */}
+      {!stateLoading && dailyState?.state.checkedOut && (
+        <div style={{
+          padding: '12px 20px',
+          borderRadius: 10,
+          background: 'rgba(22,163,74,0.15)',
+          border: '1px solid rgba(22,163,74,0.45)',
+          color: '#86efac',
+          fontSize: 14, fontWeight: 600,
+          maxWidth: 400, width: '100%', textAlign: 'center',
+        }}>
+          {t('attendance.alreadyCheckedOut')}
+        </div>
+      )}
 
       {/* Error banner */}
       {stage === 'error' && (
@@ -306,13 +503,16 @@ export default function ScanPage() {
         gap: 14, width: '100%', maxWidth: 400,
       }}>
         {EVENTS.map(({ type, labelKey, bg, shadow }) => {
-          const isActive = tappedType === type && stage === 'loading';
-          const isDimmed = stage === 'loading' && tappedType !== type;
+          const isActive  = tappedType === type && stage === 'loading';
+          const isDimmed  = stage === 'loading' && tappedType !== type;
+          const isAllowed = allowedActions.has(type);
+          const isDisabled = stage === 'loading' || stateLoading || !isAllowed;
+
           return (
             <button
               key={type}
-              onClick={() => handleAction(type)}
-              disabled={stage === 'loading'}
+              onClick={() => void handleAction(type)}
+              disabled={isDisabled}
               data-testid={`scan-action-${type}`}
               style={{
                 padding: '38px 12px',
@@ -322,11 +522,11 @@ export default function ScanPage() {
                 color: '#fff',
                 fontWeight: 900,
                 fontSize: 15,
-                cursor: stage === 'loading' ? 'not-allowed' : 'pointer',
-                boxShadow: isActive || isDimmed ? 'none' : `0 8px 24px ${shadow}`,
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                boxShadow: isActive || isDimmed || !isAllowed ? 'none' : `0 8px 24px ${shadow}`,
                 transition: 'transform 0.12s ease, opacity 0.15s, box-shadow 0.15s',
                 transform: isActive ? 'scale(0.95)' : 'scale(1)',
-                opacity: isDimmed ? 0.4 : 1,
+                opacity: (isDimmed || !isAllowed) ? 0.35 : 1,
                 letterSpacing: 0.8,
                 fontFamily: 'var(--font-display)',
                 lineHeight: 1.3,
