@@ -171,9 +171,16 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     
     setUploading(true);
     try {
+      const visibleToRoles = visibility === 'hr' 
+        ? ['admin', 'hr'] 
+        : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
+
       await updateDocumentGeneric(documentId, { 
         title: `${editableTitle}${fileExtension}`, 
-        employee_id: manualEmployeeId 
+        employee_id: manualEmployeeId,
+        requires_signature: requiresSignature,
+        expires_at: expiresAt || null,
+        visible_to_roles: visibleToRoles
       });
       showToast(t('documents.uploaded'), 'success');
       onSuccess();

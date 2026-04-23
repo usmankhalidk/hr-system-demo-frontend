@@ -211,7 +211,15 @@ export async function uploadDocumentUnified(
 }
 
 
-export async function updateDocumentGeneric(id: number, payload: { title: string; employee_id: number | null }): Promise<void> {
+export interface DocumentUpdatePayload {
+  title: string;
+  employee_id: number | null;
+  requires_signature?: boolean;
+  expires_at?: string | null;
+  visible_to_roles?: string[];
+}
+
+export async function updateDocumentGeneric(id: number, payload: DocumentUpdatePayload): Promise<void> {
   await apiClient.put(`/documents/${id}`, payload);
 }
 
