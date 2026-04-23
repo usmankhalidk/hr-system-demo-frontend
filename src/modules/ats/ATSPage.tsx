@@ -1481,21 +1481,21 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       type="number"
                       value={weeklyHoursInput}
                       onChange={(e) => setWeeklyHoursInput(e.target.value)}
-                      placeholder="40"
+                      placeholder={t('ats.weeklyHoursPlaceholder', '40')}
                     />
                     <Input
                       label={t('ats.salaryMin', 'Salary min')}
                       type="number"
                       value={salaryMinInput}
                       onChange={(e) => setSalaryMinInput(e.target.value)}
-                      placeholder="1200"
+                      placeholder={t('ats.salaryMinPlaceholder', '1200')}
                     />
                     <Input
                       label={t('ats.salaryMax', 'Salary max')}
                       type="number"
                       value={salaryMaxInput}
                       onChange={(e) => setSalaryMaxInput(e.target.value)}
-                      placeholder="1800"
+                      placeholder={t('ats.salaryMaxPlaceholder', '1800')}
                     />
                   </div>
                   {(errors.weeklyHours || errors.salary) && (
@@ -1746,7 +1746,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
             )}
             </div>
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4, minHeight: 44 }}>
               {step === 1 && (
                 <>
                   <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
@@ -2958,10 +2958,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
-  const [addResumePath, setAddResumePath] = useState('');
+  const [addCvFile, setAddCvFile] = useState<File | null>(null);
   const [addCoverLetter, setAddCoverLetter] = useState('');
-  const [addTagInput, setAddTagInput] = useState('');
-  const [addTags, setAddTags] = useState<string[]>([]);
   const [addGdprConsent, setAddGdprConsent] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
   const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
@@ -3097,12 +3095,11 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         email: addEmail.trim() || undefined,
         phone: addPhone.trim() || undefined,
         jobPostingId: parsedAddJobId,
+        storeId: addSelectedJob?.storeId ?? undefined,
         linkedinUrl: addLinkedinUrl.trim() || undefined,
-        resumePath: addResumePath.trim() || undefined,
-        cvPath: addResumePath.trim() || undefined,
         coverLetter: addCoverLetter.trim() || undefined,
         gdprConsent: addGdprConsent,
-        tags: addTags.length > 0 ? addTags : undefined,
+        resumeFile: addCvFile,
         source: 'internal_manual',
         appliedAt: new Date().toISOString(),
       });
@@ -3150,10 +3147,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
     setAddEmail('');
     setAddPhone('');
     setAddLinkedinUrl('');
-    setAddResumePath('');
+    setAddCvFile(null);
     setAddCoverLetter('');
-    setAddTagInput('');
-    setAddTags([]);
     setAddGdprConsent(false);
   }, []);
 
@@ -3286,20 +3281,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
     setShowAddModal(false);
     setAddModalJobs([]);
     resetAddCandidateForm();
-  };
-
-  const appendCandidateTag = (rawTag: string) => {
-    const tag = rawTag.trim();
-    if (!tag) return;
-    setAddTags((prev) => {
-      if (prev.some((existing) => existing.toLowerCase() === tag.toLowerCase())) return prev;
-      return [...prev, tag];
-    });
-    setAddTagInput('');
-  };
-
-  const removeCandidateTag = (tag: string) => {
-    setAddTags((prev) => prev.filter((current) => current !== tag));
   };
 
   return (
@@ -3755,42 +3736,67 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
                     label={t('employees.firstName', 'First name')}
                     value={addFirstName}
                     onChange={(e) => setAddFirstName(e.target.value)}
-                    placeholder="Mario"
+                    placeholder={t('ats.addCandidateFirstNamePh', 'Mario')}
                     autoFocus
                   />
                   <Input
                     label={t('employees.lastName', 'Last name')}
                     value={addLastName}
                     onChange={(e) => setAddLastName(e.target.value)}
-                    placeholder="Rossi"
+                    placeholder={t('ats.addCandidateLastNamePh', 'Rossi')}
                   />
                   <Input
-                    label="Email"
+                    label={t('login.email', 'Email')}
                     type="email"
                     value={addEmail}
                     onChange={(e) => setAddEmail(e.target.value)}
-                    placeholder="mario@email.com"
+                    placeholder={t('ats.addCandidateEmailPh', 'mario@email.com')}
                   />
                   <Input
                     label={t('ats.phone')}
                     type="tel"
                     value={addPhone}
                     onChange={(e) => setAddPhone(e.target.value)}
-                    placeholder="+39 345..."
+                    placeholder={t('ats.addCandidatePhonePh', '+39 345...')}
                   />
-                  <Input
-                    label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
-                    type="url"
-                    value={addLinkedinUrl}
-                    onChange={(e) => setAddLinkedinUrl(e.target.value)}
-                    placeholder="https://linkedin.com/in/..."
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <Input
+                      label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
+                      type="url"
+                      value={addLinkedinUrl}
+                      onChange={(e) => setAddLinkedinUrl(e.target.value)}
+                      placeholder={t('ats.addCandidateLinkedinPh', 'https://linkedin.com/in/...')}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: '1px dashed rgba(201,151,58,0.45)',
+                    borderRadius: 12,
+                    padding: 14,
+                    background: 'rgba(201,151,58,0.06)',
+                    display: 'grid',
+                    gap: 8,
+                  }}
+                >
+                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {t('ats.candidateCvUpload', 'CV / Resume')}
+                  </label>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                    {t('ats.candidateCvUploadHint', 'PDF, DOC or DOCX — max 5 MB. Optional for internal entries; attach when available.')}
+                  </p>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf"
+                    onChange={(e) => setAddCvFile(e.target.files?.[0] ?? null)}
+                    style={{ fontSize: 13 }}
                   />
-                  <Input
-                    label={t('publicCareers.cvLabel', 'CV / Resume URL')}
-                    value={addResumePath}
-                    onChange={(e) => setAddResumePath(e.target.value)}
-                    placeholder="https://..."
-                  />
+                  {addCvFile && (
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {addCvFile.name}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -3807,72 +3813,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
                     style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
                   />
                   <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{addCoverLetter.length}/1000</div>
-                </div>
-
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: '#fff', display: 'grid', gap: 8 }}>
-                  <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                    {t('ats.jobTags')}
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8 }}>
-                    <input
-                      className="field-input"
-                      value={addTagInput}
-                      onChange={(e) => setAddTagInput(e.target.value)}
-                      placeholder={t('ats.jobTagsInputPlaceholder', 'Type a tag and press Enter')}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          appendCandidateTag(addTagInput);
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => appendCandidateTag(addTagInput)}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        border: '1px solid rgba(201,151,58,0.42)',
-                        background: 'rgba(201,151,58,0.14)',
-                        color: '#8a6318',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Plus size={15} />
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {addTags.length > 0 ? addTags.map((tag) => (
-                      <span
-                        key={`candidate-tag-${tag}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '4px 9px',
-                          borderRadius: 999,
-                          fontSize: 12,
-                          background: '#FEF4DA',
-                          color: '#5C3E05',
-                          border: '1px solid #F4DEAB',
-                          fontWeight: 700,
-                        }}
-                      >
-                        <span>{tag}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeCandidateTag(tag)}
-                          style={{ border: 'none', background: 'transparent', color: '#7a5715', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
-                  </div>
                 </div>
 
                 <label style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)' }}>

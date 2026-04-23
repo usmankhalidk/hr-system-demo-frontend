@@ -50,6 +50,9 @@ export interface OnboardingTask {
   templateCategory: OnboardingTemplate['category'];
   templateLinkUrl: string | null;
   templatePriority: 'high' | 'medium' | 'low';
+  assignedByUserId: number | null;
+  assignedByName: string | null;
+  assignedByAvatarFilename: string | null;
   completed: boolean;
   completedAt: string | null;
   completionNote: string | null;

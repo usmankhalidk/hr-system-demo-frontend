@@ -199,7 +199,13 @@ export async function getCandidates(params?: {
   jobId?: number;
   companyId?: number;
 }): Promise<Candidate[]> {
-  const { data } = await apiClient.get('/ats/candidates', { params });
+  const { data } = await apiClient.get('/ats/candidates', {
+    params: {
+      status: params?.status,
+      job_id: params?.jobId,
+      company_id: params?.companyId,
+    },
+  });
   return (data.data.candidates ?? []) as Candidate[];
 }
 
@@ -212,6 +218,7 @@ export async function createCandidate(payload: {
   tags?: string[];
   cvPath?: string;
   resumePath?: string;
+  resumeFile?: File | null;
   linkedinUrl?: string;
   coverLetter?: string;
   source?: string;
@@ -221,7 +228,47 @@ export async function createCandidate(payload: {
   consentAcceptedAt?: string;
   appliedAt?: string;
 }): Promise<Candidate> {
-  const { data } = await apiClient.post('/ats/candidates', payload);
+  if (payload.resumeFile) {
+    const formData = new FormData();
+    formData.append('full_name', payload.fullName);
+    if (payload.email) formData.append('email', payload.email);
+    if (payload.phone) formData.append('phone', payload.phone);
+    if (payload.jobPostingId != null) formData.append('job_posting_id', String(payload.jobPostingId));
+    if (payload.storeId != null) formData.append('store_id', String(payload.storeId));
+    if (payload.tags?.length) formData.append('tags', JSON.stringify(payload.tags));
+    if (payload.linkedinUrl) formData.append('linkedin_url', payload.linkedinUrl);
+    if (payload.coverLetter) formData.append('cover_letter', payload.coverLetter);
+    if (payload.source) formData.append('source', payload.source);
+    if (payload.sourceRef) formData.append('source_ref', payload.sourceRef);
+    if (payload.applicantLocale) formData.append('applicant_locale', payload.applicantLocale);
+    if (payload.consentAcceptedAt) formData.append('consent_accepted_at', payload.consentAcceptedAt);
+    if (payload.appliedAt) formData.append('applied_at', payload.appliedAt);
+    formData.append('gdpr_consent', payload.gdprConsent ? 'true' : 'false');
+    formData.append('resume', payload.resumeFile);
+    const { data } = await apiClient.post('/ats/candidates', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data.candidate as Candidate;
+  }
+
+  const { data } = await apiClient.post('/ats/candidates', {
+    full_name: payload.fullName,
+    email: payload.email,
+    phone: payload.phone,
+    job_posting_id: payload.jobPostingId,
+    store_id: payload.storeId,
+    tags: payload.tags,
+    cv_path: payload.cvPath,
+    resume_path: payload.resumePath,
+    linkedin_url: payload.linkedinUrl,
+    cover_letter: payload.coverLetter,
+    source: payload.source,
+    source_ref: payload.sourceRef,
+    gdpr_consent: payload.gdprConsent,
+    applicant_locale: payload.applicantLocale,
+    consent_accepted_at: payload.consentAcceptedAt,
+    applied_at: payload.appliedAt,
+  });
   return data.data.candidate as Candidate;
 }
 

@@ -16,6 +16,8 @@ import {
   User2,
   Users,
 } from 'lucide-react';
+import ReactCountryFlag from 'react-country-flag';
+import { Country } from 'country-state-city';
 import {
   applyToPublicJob,
   getPublicJobDetail,
@@ -106,7 +108,8 @@ const COPY: Record<UiLanguage, {
   sendReply: string;
   applyTitle: string;
   applySubtitle: string;
-  fullNamePlaceholder: string;
+  firstNamePlaceholder: string;
+  lastNamePlaceholder: string;
   emailPlaceholder: string;
   phonePlaceholder: string;
   linkedinPlaceholder: string;
@@ -192,7 +195,8 @@ const COPY: Record<UiLanguage, {
     sendReply: 'Send reply',
     applyTitle: 'Apply for this role',
     applySubtitle: 'Submit your profile directly to the recruiting team.',
-    fullNamePlaceholder: 'Full name',
+    firstNamePlaceholder: 'First name',
+    lastNamePlaceholder: 'Last name',
     emailPlaceholder: 'Email address',
     phonePlaceholder: 'Phone number (optional)',
     linkedinPlaceholder: 'LinkedIn URL (optional)',
@@ -278,7 +282,8 @@ const COPY: Record<UiLanguage, {
     sendReply: 'Invia risposta',
     applyTitle: 'Candidati a questo ruolo',
     applySubtitle: 'Invia il tuo profilo direttamente al team recruiting.',
-    fullNamePlaceholder: 'Nome e cognome',
+    firstNamePlaceholder: 'Nome',
+    lastNamePlaceholder: 'Cognome',
     emailPlaceholder: 'Indirizzo email',
     phonePlaceholder: 'Numero di telefono (opzionale)',
     linkedinPlaceholder: 'URL LinkedIn (opzionale)',
@@ -370,6 +375,16 @@ function formatRole(role: string, uiLanguage: UiLanguage): string {
   return ROLE_LABEL[uiLanguage][role] ?? role.replace(/_/g, ' ');
 }
 
+const COUNTRY_ROWS = Country.getAllCountries();
+
+function normalizeCountryCode(value: string | null | undefined): string {
+  const raw = (value ?? '').trim();
+  if (!raw) return '';
+  if (/^[A-Za-z]{2}$/.test(raw)) return raw.toUpperCase();
+  const byName = COUNTRY_ROWS.find((c) => c.name.toLowerCase() === raw.toLowerCase());
+  return byName?.isoCode ?? '';
+}
+
 function formatLocation(job: PublicJob, remoteLabel: string): string {
   const parts = [job.location.address, job.location.city, job.location.state, job.location.postalCode, job.location.country]
     .filter(Boolean);
@@ -423,7 +438,8 @@ export default function PublicJobDetailPage() {
   } | null>(null);
   const [hiringTeam, setHiringTeam] = useState<PublicHiringContact[]>([]);
 
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
@@ -504,6 +520,7 @@ export default function PublicJobDetailPage() {
     ? `/careers/${encodeURIComponent(companyMeta.slug)}`
     : fallbackBackPath;
   const isJobClosed = job?.status === 'closed';
+  const storeCountryCode = job ? normalizeCountryCode(job.jobCountry ?? job.location.country) : '';
 
   useEffect(() => {
     if (!job) return;
@@ -634,6 +651,12 @@ export default function PublicJobDetailPage() {
       return;
     }
 
+    const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ').trim();
+    if (!fullName) {
+      setSubmitMessage(uiLanguage === 'it' ? 'Inserisci nome e cognome.' : 'Please enter your first and last name.');
+      return;
+    }
+
     setSubmitting(true);
     setSubmitMessage(null);
 
@@ -654,7 +677,8 @@ export default function PublicJobDetailPage() {
       setSubmitMessage(browserLanguage === 'it'
         ? 'Grazie per la tua candidatura. Ti contatteremo presto.'
         : 'Thank you for applying. We will be in touch soon.');
-      setFullName('');
+      setFirstName('');
+      setLastName('');
       setEmail('');
       setPhone('');
       setLinkedinUrl('');
@@ -864,14 +888,38 @@ export default function PublicJobDetailPage() {
               </p>
 
               <form onSubmit={handleSubmit} className="careers-form-grid">
-                <div className="careers-form-row">
+                <div
+                  className="careers-form-row"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: 12,
+                  }}
+                >
                   <input
                     className="careers-form-input"
-                    value={fullName}
-                    onChange={(event) => setFullName(event.target.value)}
-                    placeholder={copy.fullNamePlaceholder}
-                    required
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    placeholder={copy.firstNamePlaceholder}
+                    autoComplete="given-name"
                   />
+                  <input
+                    className="careers-form-input"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    placeholder={copy.lastNamePlaceholder}
+                    autoComplete="family-name"
+                  />
+                </div>
+
+                <div
+                  className="careers-form-row"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: 12,
+                  }}
+                >
                   <input
                     className="careers-form-input"
                     type="email"
@@ -879,24 +927,26 @@ export default function PublicJobDetailPage() {
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder={copy.emailPlaceholder}
                     required
+                    autoComplete="email"
                   />
-                </div>
-
-                <div className="careers-form-row">
                   <input
                     className="careers-form-input"
+                    type="tel"
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
                     placeholder={copy.phonePlaceholder}
-                  />
-                  <input
-                    className="careers-form-input"
-                    type="url"
-                    value={linkedinUrl}
-                    onChange={(event) => setLinkedinUrl(event.target.value)}
-                    placeholder={copy.linkedinPlaceholder}
+                    autoComplete="tel"
                   />
                 </div>
+
+                <input
+                  className="careers-form-input"
+                  type="url"
+                  value={linkedinUrl}
+                  onChange={(event) => setLinkedinUrl(event.target.value)}
+                  placeholder={copy.linkedinPlaceholder}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
 
                 <textarea
                   className="careers-form-textarea"
@@ -908,13 +958,22 @@ export default function PublicJobDetailPage() {
                 />
                 <div className="careers-form-help">{coverLetter.length}/1000</div>
 
-                <div style={{ display: 'grid', gap: 6 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: 8,
+                    padding: 14,
+                    borderRadius: 12,
+                    border: '1px dashed rgba(201,151,58,0.45)',
+                    background: 'rgba(201,151,58,0.06)',
+                  }}
+                >
                   <label style={{ fontSize: 12.5, color: '#374151', fontWeight: 700 }}>
                     {copy.cvLabel}
                   </label>
                   <input
                     type="file"
-                    accept=".pdf,.doc,.docx"
+                    accept=".pdf,.doc,.docx,application/pdf"
                     onChange={(event) => setResume(event.target.files?.[0] ?? null)}
                     required
                   />
@@ -975,8 +1034,13 @@ export default function PublicJobDetailPage() {
                       {storeLogoUrl ? <img src={storeLogoUrl} alt={job.storeName ?? copy.assignedStore} /> : <StoreIcon size={16} />}
                     </div>
                     <div>
-                      <strong style={{ display: 'block', color: '#111827' }}>{job.storeName ?? copy.assignedStore}</strong>
-                      <span style={{ color: '#6b7280', fontSize: 12 }}>
+                      <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#111827' }}>
+                        {storeCountryCode ? (
+                          <ReactCountryFlag countryCode={storeCountryCode} svg style={{ width: '1.1em', height: '1.1em', borderRadius: 2 }} title={storeCountryCode} />
+                        ) : null}
+                        {job.storeName ?? copy.assignedStore}
+                      </strong>
+                      <span style={{ color: '#6b7280', fontSize: 12, display: 'block', marginTop: 2 }}>
                         {job.storeCode ? `Code ${job.storeCode}` : copy.storeCodeNotSet}
                       </span>
                     </div>
