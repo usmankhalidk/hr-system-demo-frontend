@@ -11,6 +11,8 @@ export interface PersistedDailyState {
   breakStarted: boolean;
   breakEnded: boolean;
   checkedOut: boolean;
+  hasShift: boolean;
+  hasLeave: boolean;
   date: string; // YYYY-MM-DD — used to auto-expire stale entries
 }
 
@@ -57,6 +59,8 @@ export function getPersistedDailyAttendanceState(
       breakStarted: !!parsed.breakStarted,
       breakEnded: !!parsed.breakEnded,
       checkedOut: !!parsed.checkedOut,
+      hasShift: !!parsed.hasShift,
+      hasLeave: !!parsed.hasLeave,
     };
   } catch (err) {
     console.warn('[AttendanceState] Failed to read persisted state from localStorage:', err);

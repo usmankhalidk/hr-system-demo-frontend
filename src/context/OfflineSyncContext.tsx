@@ -17,6 +17,8 @@ export interface DailyOfflineState {
   breakStarted: boolean;
   breakEnded: boolean;
   checkedOut: boolean;
+  hasShift: boolean;
+  hasLeave: boolean;
 }
 
 interface OfflineSyncContextValue {
@@ -194,6 +196,8 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       breakStarted: false,
       breakEnded: false,
       checkedOut: false,
+      hasShift: true,  // Default to true if no persisted state (be permissive)
+      hasLeave: false, // Default to false if no persisted state
     };
     try {
       // ── Source 1: localStorage persisted state (from last server sync) ──
@@ -205,6 +209,8 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
           state.breakStarted = state.breakStarted || persisted.breakStarted;
           state.breakEnded   = state.breakEnded   || persisted.breakEnded;
           state.checkedOut   = state.checkedOut   || persisted.checkedOut;
+          state.hasShift     = persisted.hasShift;
+          state.hasLeave     = persisted.hasLeave;
         }
       }
 
