@@ -125,17 +125,19 @@ export default function ScanPage() {
         setDailyState(data);
         // Persist server-confirmed state to localStorage so offline mode
         // can restore it accurately if the user loses connectivity.
-        if (data?.state && user.id) {
-          persistDailyAttendanceState(user.id, data.state);
+        if (data && user.id) {
+          persistDailyAttendanceState(user.id, {
+            ...data.state,
+            hasShift: data.hasShift,
+            hasLeave: data.hasLeave
+          });
         }
       } else {
         // Offline: derive from localStorage (server-confirmed) + IndexedDB queue
         const offlineState = await getTodayOfflineState(user.id);
-        // When offline we can't verify shift — optimistically allow check-in if not checked in yet
-        // The backend will reject invalid events on sync. Show a shift warning only if explicitly no events at all.
         setDailyState({
-          hasShift: true, // assume shift exists in offline mode (backend will reject if not)
-          hasLeave: false,
+          hasShift: offlineState.hasShift,
+          hasLeave: offlineState.hasLeave,
           state: offlineState,
         });
       }
@@ -339,7 +341,13 @@ export default function ScanPage() {
             if (eventType === 'break_end')   next.state.breakEnded   = true;
             if (eventType === 'checkout')    next.state.checkedOut   = true;
             // Persist updated state so it survives page reloads and offline transitions
-            if (user?.id) persistDailyAttendanceState(user.id, next.state);
+            if (user?.id) {
+              persistDailyAttendanceState(user.id, {
+                ...next.state,
+                hasShift: next.hasShift,
+                hasLeave: next.hasLeave,
+              });
+            }
             return next;
           });
 
