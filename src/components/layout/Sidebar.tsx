@@ -106,6 +106,12 @@ const IconUmbrella = () => (
     <path d="M23 12a11.05 11.05 0 00-22 0zm-5 7a3 3 0 01-6 0v-7" />
   </svg>
 );
+const IconBell = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 01-3.46 0"/>
+  </svg>
+);
 const IconQr = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
@@ -210,6 +216,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'notifications.title', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
       { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
@@ -231,6 +238,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'notifications.title', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
@@ -250,6 +258,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'notifications.title', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -266,6 +275,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.stores', path: '/negozi', icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'notifications.title', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.terminals', path: '/terminali', icon: <IconTerminal />, permissionKey: 'terminali' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
     ],
@@ -275,6 +285,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.onboarding', path: '/onboarding', icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti', path: '/documenti', icon: <IconDoc />, permissionKey: 'documenti' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
+      { labelKey: 'notifications.title', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.turni', path: '/turni', icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.presenze', path: '/presenze/checkin', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },

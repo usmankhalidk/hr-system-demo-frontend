@@ -47,6 +47,7 @@ const HrDeviceResetPage = lazy(() => import('./modules/device/HrDeviceResetPage'
 const EmailSettingsPage = lazy(() => import('./modules/email/EmailSettingsPage'));
 const PublicCareersPage = lazy(() => import('./modules/publicCareers/PublicCareersPage'));
 const PublicJobDetailPage = lazy(() => import('./modules/publicCareers/PublicJobDetailPage'));
+const NotificationsCenterPage = lazy(() => import('./modules/notifications/NotificationsCenterPage'));
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -162,6 +163,12 @@ function AppRoutes() {
       <Route path="/profilo" element={
         <ProtectedRoute>
           <Layout title={t('profile.title')}><ProfilePage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/notifiche" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+          <Layout title={t('notifications.title')}><NotificationsCenterPage /></Layout>
         </ProtectedRoute>
       } />
 
