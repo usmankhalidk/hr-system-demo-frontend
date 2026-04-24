@@ -11,6 +11,7 @@ import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
 import { getCompanyGroups, createCompanyGroup, getGroupRoleVisibility, updateGroupRoleVisibility } from '../../api/companyGroups';
 import { getCompanies } from '../../api/companies';
+import { useAuth } from '../../context/AuthContext';
 import type { Company } from '../../types';
 
 import type { CompanyGroup, GroupRoleVisibility, GroupVisibilityCompany } from '../../api/companyGroups';
@@ -20,6 +21,7 @@ const defaultVisibility: GroupRoleVisibility = { hr: false, areaManager: false }
 export default function GroupRoleVisibilityPanel() {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState<CompanyGroup[]>([]);
@@ -118,6 +120,8 @@ export default function GroupRoleVisibilityPanel() {
         areaManager: localVisibility.areaManager,
       });
       setServerVisibility(JSON.parse(JSON.stringify(localVisibility)));
+      // Notify other open tabs to refresh their permissions immediately
+      localStorage.setItem('hr_permissions_updated', Date.now().toString());
       showToast(t('permissions.groupVisibility.visibilitySavedSuccess'), 'success');
     } catch (err) {
       setErrorMsg(translateApiError(err, t, t('permissions.errorSave')));
@@ -135,7 +139,7 @@ export default function GroupRoleVisibilityPanel() {
   }
 
   const ROLE_ITEMS: { key: 'hr' | 'areaManager'; label: string; hint: string; color: string }[] = [
-    { key: 'hr',          label: t('permissions.groupVisibility.hrRoleShort'),          hint: t('permissions.groupVisibility.crossCompanyHint'), color: '#0284C7' },
+    { key: 'hr', label: t('permissions.groupVisibility.hrRoleShort'), hint: t('permissions.groupVisibility.crossCompanyHint'), color: '#0284C7' },
     { key: 'areaManager', label: t('permissions.groupVisibility.areaManagerRoleShort'), hint: t('permissions.groupVisibility.crossCompanyHint'), color: '#15803D' },
   ];
 
@@ -324,48 +328,58 @@ export default function GroupRoleVisibilityPanel() {
                 flexWrap: 'wrap',
                 width: '100%',
               }}>
-                {selectedCompanies.length === 0 ? (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {isIsolatedSelection
-                      ? t('permissions.groupVisibility.noIsolatedCompanies', { defaultValue: 'No isolated companies found.' })
-                      : t('permissions.groupVisibility.noCompaniesInGroup', { defaultValue: 'No companies linked to this group yet.' })}
-                  </span>
-                ) : selectedCompanies.map((company) => {
-                  const roleActive = key === 'hr' ? company.hasActiveHr : company.hasActiveAreaManager;
-                  return (
-                    <span
-                      key={`${key}-${company.id}`}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 8px',
-                        borderRadius: 999,
-                        border: `1px solid ${roleActive ? '#15803D55' : 'var(--border)'}`,
-                        background: roleActive ? 'rgba(21,128,61,0.10)' : 'var(--surface)',
-                        color: roleActive ? '#166534' : 'var(--text-secondary)',
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      <span>{company.name}</span>
-                      {roleActive && (
-                        <span style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: '#166534',
-                          border: '1px solid #16A34A66',
+                {(() => {
+                  const displayCompanies = localVisibility[key]
+                    ? selectedCompanies
+                    : selectedCompanies.filter((c) => c.id === user?.companyId);
+
+                  if (displayCompanies.length === 0) {
+                    return (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {isIsolatedSelection
+                          ? t('permissions.groupVisibility.noIsolatedCompanies', { defaultValue: 'No isolated companies found.' })
+                          : t('permissions.groupVisibility.noCompaniesInGroup', { defaultValue: 'No companies linked to this group yet.' })}
+                      </span>
+                    );
+                  }
+
+                  return displayCompanies.map((company) => {
+                    const roleActive = key === 'hr' ? company.hasActiveHr : company.hasActiveAreaManager;
+                    return (
+                      <span
+                        key={`${key}-${company.id}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '4px 8px',
                           borderRadius: 999,
-                          padding: '0 5px',
-                          lineHeight: 1.5,
-                          background: 'rgba(34,197,94,0.14)',
-                        }}>
-                          {t('permissions.groupVisibility.activeTag', { defaultValue: 'Active' })}
-                        </span>
-                      )}
-                    </span>
-                  );
-                })}
+                          border: `1px solid ${roleActive ? '#15803D55' : 'var(--border)'}`,
+                          background: roleActive ? 'rgba(21,128,61,0.10)' : 'var(--surface)',
+                          color: roleActive ? '#166534' : 'var(--text-secondary)',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        <span>{company.name}</span>
+                        {roleActive && (
+                          <span style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: '#166534',
+                            border: '1px solid #16A34A66',
+                            borderRadius: 999,
+                            padding: '0 5px',
+                            lineHeight: 1.5,
+                            background: 'rgba(34,197,94,0.14)',
+                          }}>
+                            {t('permissions.groupVisibility.activeTag', { defaultValue: 'Active' })}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  });
+                })()}
               </div>
             </div>
           ))}
