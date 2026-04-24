@@ -9,6 +9,7 @@ import { useOfflineSync } from '../../context/OfflineSyncContext';
 import { useToast } from '../../context/ToastContext';
 import client from '../../api/client';
 import { persistDailyAttendanceState } from '../../utils/indexedDB';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -81,6 +82,7 @@ export default function EmployeeCheckinPage() {
   const { user, permissions } = useAuth();
   const { lastSyncTime, isOnline, isSyncing, queueLength, enqueue, getTodayOfflineState } = useOfflineSync();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
 
   const [filter, setFilter] = useState<Filter>('7');
   const [historyVersion, setHistoryVersion] = useState(0);
@@ -113,15 +115,19 @@ export default function EmployeeCheckinPage() {
         setFullDailyState(data);
         // Persist server-confirmed state to localStorage so offline mode
         // can restore it accurately if the user loses connectivity.
-        if (data?.state && user.id) {
-          persistDailyAttendanceState(user.id, data.state);
+        if (data && user.id) {
+          persistDailyAttendanceState(user.id, {
+            ...data.state,
+            hasShift: data.hasShift,
+            hasLeave: data.hasLeave
+          });
         }
       } else {
         // Offline: derive from localStorage (server-confirmed) + IndexedDB queue
         const offlineState = await getTodayOfflineState(user.id);
         setFullDailyState({
-          hasShift: true, // assume shift exists offline — backend validates on sync
-          hasLeave: false,
+          hasShift: offlineState.hasShift,
+          hasLeave: offlineState.hasLeave,
           state: offlineState,
         });
       }
@@ -225,7 +231,13 @@ export default function EmployeeCheckinPage() {
           if (eventType === 'break_end')   next.state.breakEnded   = true;
           if (eventType === 'checkout')    next.state.checkedOut   = true;
           // Persist updated state so it survives page reloads
-          if (user?.id) persistDailyAttendanceState(user.id, next.state);
+          if (user?.id) {
+            persistDailyAttendanceState(user.id, {
+              ...next.state,
+              hasShift: next.hasShift,
+              hasLeave: next.hasLeave,
+            });
+          }
           return next;
         });
         setActionMsg({ text: t('terminal.saved_offline'), ok: true });
@@ -259,7 +271,13 @@ export default function EmployeeCheckinPage() {
           if (eventType === 'break_end')   next.state.breakEnded   = true;
           if (eventType === 'checkout')    next.state.checkedOut   = true;
           // Persist updated state so offline mode can read it later
-          if (user?.id) persistDailyAttendanceState(user.id, next.state);
+          if (user?.id) {
+            persistDailyAttendanceState(user.id, {
+              ...next.state,
+              hasShift: next.hasShift,
+              hasLeave: next.hasLeave,
+            });
+          }
           return next;
         });
         setActionMsg({ text: t('attendance.successMessage'), ok: true });
@@ -429,8 +447,8 @@ export default function EmployeeCheckinPage() {
         </div>
       )}
 
-      {/* Clock-in action buttons */}
-      <div style={{
+      {/* Clock-in action buttons - Only visible on mobile */}
+      {isMobile && <div style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderTop: '3px solid var(--accent)',
@@ -495,7 +513,7 @@ export default function EmployeeCheckinPage() {
             {actionMsg.text}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Steps card */}
       <div style={{
