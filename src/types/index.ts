@@ -107,6 +107,7 @@ export interface Employee {
   storeName?: string;
   supervisorName?: string;
   companyName?: string;
+  companyGroupName?: string | null;
   // Sensitive — only returned for admin/hr or self
   personalEmail?: string | null;
   dateOfBirth?: string | null;
@@ -151,6 +152,7 @@ export interface EmployeeAssociationStore {
   name: string;
   code: string;
   isActive: boolean;
+  logoFilename?: string | null;
   employees: EmployeeAssociationEntry[];
 }
 
@@ -159,6 +161,8 @@ export interface EmployeeAssociationCompany {
   name: string;
   slug: string;
   isActive: boolean;
+  logoFilename?: string | null;
+  groupName?: string | null;
   stores: EmployeeAssociationStore[];
   unassignedEmployees: EmployeeAssociationEntry[];
   employeeCount: number;

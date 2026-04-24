@@ -10,6 +10,8 @@ import { Select } from '../../components/ui/Select';
 import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
 import { getCompanyGroups, createCompanyGroup, getGroupRoleVisibility, updateGroupRoleVisibility } from '../../api/companyGroups';
+import { getCompanies } from '../../api/companies';
+import type { Company } from '../../types';
 
 import type { CompanyGroup, GroupRoleVisibility, GroupVisibilityCompany } from '../../api/companyGroups';
 
@@ -22,6 +24,7 @@ export default function GroupRoleVisibilityPanel() {
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState<CompanyGroup[]>([]);
   const [groupId, setGroupId] = useState<number | null>(null);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
 
   const [serverVisibility, setServerVisibility] = useState<GroupRoleVisibility>(defaultVisibility);
   const [localVisibility, setLocalVisibility] = useState<GroupRoleVisibility>(defaultVisibility);
@@ -42,9 +45,10 @@ export default function GroupRoleVisibilityPanel() {
       setLoading(true);
       setErrorMsg(null);
       try {
-        const g = await getCompanyGroups();
+        const [g, companies] = await Promise.all([getCompanyGroups(), getCompanies()]);
         setGroups(g);
-        setGroupId((prev) => prev ?? (g[0]?.id ?? null));
+        setAllCompanies(companies);
+        setGroupId((prev) => prev ?? (g[0]?.id ?? -1));
       } catch {
         setErrorMsg(t('permissions.groupVisibility.errorLoadGroups'));
       } finally {
@@ -71,6 +75,19 @@ export default function GroupRoleVisibilityPanel() {
       }
     })();
   }, [groupId, t]);
+
+  const isIsolatedSelection = groupId === -1;
+  const selectedCompanies = isIsolatedSelection
+    ? allCompanies
+      .filter((company) => company.groupId == null)
+      .map((company) => ({
+        id: company.id,
+        name: company.name,
+        isActive: company.isActive,
+        hasActiveHr: false,
+        hasActiveAreaManager: false,
+      }))
+    : groupCompanies;
 
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
@@ -167,17 +184,16 @@ export default function GroupRoleVisibilityPanel() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {groups.length > 0 && (
-            <div style={{ minWidth: 200 }}>
-              <Select
-                value={groupId ?? ''}
-                onChange={(e) => setGroupId(e.target.value ? parseInt(e.target.value, 10) : null)}
-                disabled={saving || groups.length === 0}
-              >
-                {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </Select>
-            </div>
-          )}
+          <div style={{ minWidth: 200 }}>
+            <Select
+              value={groupId ?? -1}
+              onChange={(e) => setGroupId(e.target.value ? parseInt(e.target.value, 10) : null)}
+              disabled={saving}
+            >
+              <option value={-1}>{t('permissions.groupVisibility.isolatedCompaniesOption', 'Isolated companies')}</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </Select>
+          </div>
           <button
             onClick={() => setShowNewGroup((v) => !v)}
             title={t('permissions.groupVisibility.createGroupButton')}
@@ -237,7 +253,7 @@ export default function GroupRoleVisibilityPanel() {
       )}
 
       {/* Visibility toggles */}
-      {groups.length === 0 ? (
+      {groupId == null ? (
         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
           {t('common.noData')}
         </div>
@@ -281,12 +297,13 @@ export default function GroupRoleVisibilityPanel() {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{hint}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 3 }}>
                     {(() => {
-                      const activeForRole = groupCompanies.filter((c) => key === 'hr' ? c.hasActiveHr : c.hasActiveAreaManager).length;
+                      const coverageCompanies = selectedCompanies;
+                      const activeForRoleSafe = coverageCompanies.filter((c) => key === 'hr' ? c.hasActiveHr : c.hasActiveAreaManager).length;
                       return t('permissions.groupVisibility.coverageSummary', {
-                        active: activeForRole,
-                        total: groupCompanies.length,
+                        active: activeForRoleSafe,
+                        total: coverageCompanies.length,
                         role: label,
-                        defaultValue: `${activeForRole}/${groupCompanies.length} companies have active ${label}`,
+                        defaultValue: `${activeForRoleSafe}/${coverageCompanies.length} companies have active ${label}`,
                       });
                     })()}
                   </div>
@@ -295,7 +312,7 @@ export default function GroupRoleVisibilityPanel() {
               <Toggle
                 checked={localVisibility[key]}
                 onChange={() => setLocalVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
-                disabled={saving}
+                disabled={saving || isIsolatedSelection}
               />
 
               <div style={{
@@ -307,11 +324,13 @@ export default function GroupRoleVisibilityPanel() {
                 flexWrap: 'wrap',
                 width: '100%',
               }}>
-                {groupCompanies.length === 0 ? (
+                {selectedCompanies.length === 0 ? (
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {t('permissions.groupVisibility.noCompaniesInGroup', { defaultValue: 'No companies linked to this group yet.' })}
+                    {isIsolatedSelection
+                      ? t('permissions.groupVisibility.noIsolatedCompanies', { defaultValue: 'No isolated companies found.' })
+                      : t('permissions.groupVisibility.noCompaniesInGroup', { defaultValue: 'No companies linked to this group yet.' })}
                   </span>
-                ) : groupCompanies.map((company) => {
+                ) : selectedCompanies.map((company) => {
                   const roleActive = key === 'hr' ? company.hasActiveHr : company.hasActiveAreaManager;
                   return (
                     <span
@@ -354,7 +373,7 @@ export default function GroupRoleVisibilityPanel() {
       )}
 
       {/* Save bar */}
-      {dirty && (
+      {dirty && !isIsolatedSelection && (
         <div style={{
           padding: '12px 20px',
           borderTop: '1px solid var(--border-light)',

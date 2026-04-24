@@ -11,7 +11,7 @@ import {
   uploadEmployeeAvatar,
   resetEmployeeDevice,
 } from '../../api/employees';
-import { getAvatarUrl } from '../../api/client';
+import { getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
 import { getTrainings, getMedicals, createTraining, updateTraining, createMedical, updateMedical } from '../../api/trainings';
 import { getApiErrorCode, translateApiError } from '../../utils/apiErrors';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +19,8 @@ import { useToast } from '../../context/ToastContext';
 import { Employee, EmployeeAssociationEntry, EmployeeAssociationsResponse, UserRole, Training, MedicalCheck, TrainingType } from '../../types';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import CustomSelect from '../../components/ui/CustomSelect';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { Modal } from '../../components/ui/Modal';
@@ -27,7 +29,7 @@ import { DatePicker } from '../../components/ui/DatePicker';
 import { EmployeeForm } from './EmployeeForm';
 import { MessageBoard } from '../messages/MessageBoard';
 import { ComposeMessage } from '../messages/ComposeMessage';
-import { getEmployeeTasks, assignTasks, getTemplates, createTemplate, OnboardingProgress, OnboardingTemplate } from '../../api/onboarding';
+import { getEmployeeTasks, assignTasks, getTemplates, createTemplate, OnboardingProgress, OnboardingTemplate, OnboardingTask } from '../../api/onboarding';
 import { DocumentManager } from '../documents/components/DocumentManager';
 import MonthlyCalendar from '../shifts/MonthlyCalendar';
 import { Shift, listShifts } from '../../api/shifts';
@@ -71,7 +73,7 @@ const ONBOARDING_CATEGORY_META: Record<OnboardingTemplate['category'], { icon: s
 const ONBOARDING_PRIORITY_COLORS: Record<'high' | 'medium' | 'low', string> = {
   high: '#DC2626',
   medium: '#D97706',
-  low: '#0EA5E9',
+  low: '#15803D',
 };
 function getAvatarColor(name: string): string {
   let hash = 0;
@@ -205,7 +207,7 @@ function SectionPanel({
 }
 
 // ── Onboarding Section ─────────────────────────────────────────────────────────
-function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName, employeeName, isAdminOrHr }: { employeeId: number; employeeCompanyId: number | null; employeeCompanyName: string | null; employeeName: string; isAdminOrHr: boolean }) {
+function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName, employeeStoreName, employeeAvatarFilename, employeeName, isAdminOrHr, companyLogoFilename, companyGroupName, storeLogoFilename }: { employeeId: number; employeeCompanyId: number | null; employeeCompanyName: string | null; employeeStoreName: string | null; employeeAvatarFilename: string | null | undefined; employeeName: string; isAdminOrHr: boolean; companyLogoFilename?: string | null; companyGroupName?: string | null; storeLogoFilename?: string | null }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
@@ -332,6 +334,12 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
     return map;
   }, [progress]);
 
+  const assignedTaskByTemplateId = useMemo(() => {
+    const m = new Map<number, OnboardingTask>();
+    (progress?.tasks ?? []).forEach((task) => m.set(task.templateId, task));
+    return m;
+  }, [progress]);
+
   const templatesByPhase = useMemo(() => {
     const map = new Map<'day1' | 'week1' | 'month1' | 'ongoing', OnboardingTemplate[]>();
     map.set('day1', []);
@@ -344,6 +352,18 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
     });
     return map;
   }, [templates]);
+
+  const storeLogoUrl = getStoreLogoUrl(storeLogoFilename ?? null);
+  const storeMarkInitials = (employeeStoreName || employeeCompanyName || '?')
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '?';
+  const categorySelectOptions = useMemo(
+    () => Object.entries(ONBOARDING_CATEGORY_META).map(([k, v]) => ({ value: k, label: `${v.icon} ${v.label}` })),
+    [],
+  );
 
   const headerAction = isAdminOrHr ? (
     <div style={{ display: 'flex', gap: 8 }}>
@@ -425,39 +445,52 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
                 </div>
                 <div style={{ display: 'grid', gap: 7 }}>
                   {phaseTasks.map((task) => (
-                    <div key={task.id} style={{ padding: '9px 10px', border: '1px solid var(--border-light)', borderRadius: 8, background: 'var(--surface-warm)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div
+                      key={task.id}
+                      style={{
+                        border: '1px solid var(--border-light)',
+                        borderRadius: 8,
+                        background: 'var(--surface-warm)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: '9px 10px',
+                      }}
+                    >
                       <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: task.completed ? 'rgba(21,128,61,0.12)' : 'var(--background)', border: `2px solid ${task.completed ? '#15803D' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {task.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 13, color: task.completed ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.completed ? 'line-through' : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span style={{ fontSize: 13, color: task.completed ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.completed ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {task.templateName}
                           </span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: ONBOARDING_PRIORITY_COLORS[task.templatePriority] ?? 'var(--text-muted)', textTransform: 'uppercase' }}>{task.templatePriority}</span>
-                          <Badge variant={task.completed ? 'success' : 'warning'}>
+                          <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: task.completed ? '#15803D' : '#C9973A', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
                             {task.completed ? t('onboarding.statusComplete', 'Complete') : t('onboarding.statusInProgress', 'In progress')}
-                          </Badge>
+                          </span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: ONBOARDING_PRIORITY_COLORS[task.templatePriority] ?? 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{task.templatePriority}</span>
                         </div>
                         {task.templateDescription && (
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{task.templateDescription}</div>
                         )}
-                        <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
-                            {ONBOARDING_CATEGORY_META[task.templateCategory]?.icon} {ONBOARDING_CATEGORY_META[task.templateCategory]?.label ?? task.templateCategory}
-                          </span>
-                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
-                            {ONBOARDING_PHASE_META[task.templateTaskType]?.icon} {ONBOARDING_PHASE_META[task.templateTaskType]?.label ?? task.templateTaskType}
-                          </span>
-                          {templateMetaById.get(task.templateId)?.createdByName && (
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <span>{t('common.createdBy', 'Created by')}:</span>
-                              <span style={{ width: 16, height: 16, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 700 }}>
-                                {templateMetaById.get(task.templateId)?.createdByAvatarFilename
-                                  ? <img src={getAvatarUrl(templateMetaById.get(task.templateId)?.createdByAvatarFilename ?? '') ?? ''} alt={templateMetaById.get(task.templateId)?.createdByName ?? 'user'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  : (templateMetaById.get(task.templateId)?.createdByName ?? '?').slice(0, 1).toUpperCase()}
+                        <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                              {ONBOARDING_CATEGORY_META[task.templateCategory]?.icon} {ONBOARDING_CATEGORY_META[task.templateCategory]?.label ?? task.templateCategory}
+                            </span>
+                            <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                              {ONBOARDING_PHASE_META[task.templateTaskType]?.icon} {ONBOARDING_PHASE_META[task.templateTaskType]?.label ?? task.templateTaskType}
+                            </span>
+                          </div>
+                          {task.assignedByName && (
+                            <span style={{ fontSize: 9, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto' }}>
+                              <span>{t('onboarding.assignedBy', 'Assigned by')}</span>
+                              <span style={{ width: 15, height: 15, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 8, fontWeight: 700 }}>
+                                {task.assignedByAvatarFilename
+                                  ? <img src={getAvatarUrl(task.assignedByAvatarFilename) ?? ''} alt={task.assignedByName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : task.assignedByName.slice(0, 1).toUpperCase()}
                               </span>
-                              <span>{templateMetaById.get(task.templateId)?.createdByName}</span>
+                              <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{task.assignedByName}</span>
                             </span>
                           )}
                         </div>
@@ -484,8 +517,46 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
         )}
       >
         <div style={{ display: 'grid', gap: 10 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {employeeName} {employeeCompanyId ? `• #${employeeCompanyId}` : ''}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, rowGap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 200px', minWidth: 0 }}>
+              <span style={{
+                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 800, color: 'var(--primary)', overflow: 'hidden',
+              }}>
+                {storeLogoUrl
+                  ? <img src={storeLogoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : storeMarkInitials}
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>
+                  {employeeStoreName || t('employees.storeField', 'Store')}
+                </div>
+                <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 1, lineHeight: 1.3 }}>
+                  {employeeCompanyName || '—'}
+                  {employeeCompanyId != null ? ` · #${employeeCompanyId}` : ''}
+                  {companyGroupName ? ` · ${companyGroupName}` : ''}
+                </div>
+              </div>
+            </div>
+            <div style={{ width: 1, height: 28, background: 'var(--border-light)', flexShrink: 0, alignSelf: 'center' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 180px', minWidth: 0 }}>
+              <span style={{
+                width: 32, height: 32, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                border: '1px solid var(--border)', background: 'var(--surface-warm)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 800, color: 'var(--primary)',
+              }}>
+                {employeeAvatarFilename
+                  ? <img src={getAvatarUrl(employeeAvatarFilename) ?? ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : employeeName.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>{employeeName}</div>
+                <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 1 }}>ID {employeeId}</div>
+              </div>
+            </div>
           </div>
           {templatesLoading ? (
             <div style={{ padding: '18px 0', textAlign: 'center' }}><Spinner size="sm" /></div>
@@ -500,47 +571,66 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
                       {phase === 'day1' ? '🚀 Day 1' : phase === 'week1' ? '📚 Week 1' : phase === 'month1' ? '🎯 Month 1' : '⭐ Ongoing'}
                     </div>
                     <div style={{ display: 'grid', gap: 7 }}>
-                      {phaseTemplates.map((template) => (
-                        <label key={template.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, border: '1px solid var(--border-light)', borderRadius: 8, background: 'var(--surface-warm)', padding: '8px 10px' }}>
-                          <input
-                            type="checkbox"
-                            checked={selectedTemplateIds.has(template.id)}
-                            onChange={() => setSelectedTemplateIds((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(template.id)) next.delete(template.id); else next.add(template.id);
-                              return next;
-                            })}
-                          />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                              <span>{template.name}</span>
-                              <span style={{ fontSize: 10, color: ONBOARDING_PRIORITY_COLORS[template.priority] ?? 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>{template.priority}</span>
-                            </div>
-                            {template.description && (
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{template.description}</div>
-                            )}
-                            <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                              <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
-                                {ONBOARDING_CATEGORY_META[template.category]?.icon} {ONBOARDING_CATEGORY_META[template.category]?.label ?? template.category}
-                              </span>
-                              <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
-                                {ONBOARDING_PHASE_META[template.taskType]?.icon} {ONBOARDING_PHASE_META[template.taskType]?.label ?? template.taskType}
-                              </span>
-                              {template.createdByName && (
-                                <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                  <span>{t('common.createdBy', 'Created by')}:</span>
-                                  <span style={{ width: 16, height: 16, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 700 }}>
-                                    {template.createdByAvatarFilename
-                                      ? <img src={getAvatarUrl(template.createdByAvatarFilename) ?? ''} alt={template.createdByName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      : template.createdByName.slice(0, 1).toUpperCase()}
-                                  </span>
-                                  <span>{template.createdByName}</span>
-                                </span>
+                      {phaseTemplates.map((template) => {
+                        const at = assignedTaskByTemplateId.get(template.id);
+                        const hasAssigner = Boolean(at?.assignedByName);
+                        return (
+                          <label
+                            key={template.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 8,
+                              fontSize: 12.5,
+                              border: '1px solid var(--border-light)',
+                              borderRadius: 8,
+                              background: 'var(--surface-warm)',
+                              padding: '8px 10px',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              style={{ marginTop: 2 }}
+                              checked={selectedTemplateIds.has(template.id)}
+                              onChange={() => setSelectedTemplateIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(template.id)) next.delete(template.id); else next.add(template.id);
+                                return next;
+                              })}
+                            />
+                            <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600 }}>{template.name}</span>
+                                <span style={{ fontSize: 9, color: ONBOARDING_PRIORITY_COLORS[template.priority] ?? 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>{template.priority}</span>
+                              </div>
+                              {template.description && (
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.35 }}>{template.description}</div>
                               )}
+                              <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                  <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                                    {ONBOARDING_CATEGORY_META[template.category]?.icon} {ONBOARDING_CATEGORY_META[template.category]?.label ?? template.category}
+                                  </span>
+                                  <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', background: 'var(--background)', color: 'var(--text-secondary)' }}>
+                                    {ONBOARDING_PHASE_META[template.taskType]?.icon} {ONBOARDING_PHASE_META[template.taskType]?.label ?? template.taskType}
+                                  </span>
+                                </div>
+                                {hasAssigner && at && (
+                                  <span style={{ fontSize: 9, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                                    <span>{t('onboarding.assignedBy', 'Assigned by')}</span>
+                                    <span style={{ width: 15, height: 15, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 8, fontWeight: 700 }}>
+                                      {at.assignedByAvatarFilename
+                                        ? <img src={getAvatarUrl(at.assignedByAvatarFilename) ?? ''} alt={at.assignedByName!} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        : at.assignedByName!.slice(0, 1).toUpperCase()}
+                                    </span>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{at.assignedByName}</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </label>
-                      ))}
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -562,57 +652,95 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
           </>
         )}
       >
-        <div style={{ display: 'grid', gap: 10 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {employeeCompanyName ?? t('common.company', 'Company')} {employeeCompanyId ? `• #${employeeCompanyId}` : ''}
-          </div>
-          <input
+        <div style={{ display: 'grid', gap: 14 }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            {t('onboarding.modalSubtitleCreate', 'Create a reusable task template for this company.')}
+            {' '}
+            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+              {employeeCompanyName ?? t('common.company', 'Company')}
+              {employeeCompanyId ? ` · #${employeeCompanyId}` : ''}
+            </span>
+          </p>
+          <Input
+            label={`${t('onboarding.templateName')} *`}
             value={createForm.name}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder={t('onboarding.taskName', 'Task name')}
-            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+            placeholder={t('onboarding.templateNamePlaceholder', 'e.g. Complete employment paperwork')}
+            required
           />
-          <textarea
-            value={createForm.description}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
-            placeholder={t('onboarding.description', 'Description')}
-            rows={3}
-            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, resize: 'vertical', boxSizing: 'border-box' }}
-          />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+              {t('onboarding.templateDesc', t('onboarding.description', 'Description'))}
+            </label>
+            <textarea
+              value={createForm.description}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder={t('onboarding.templateDescPlaceholder', 'Optional instructions or details…')}
+              rows={3}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+              {t('onboarding.taskType')}
+            </label>
             <select value={createForm.taskType} onChange={(e) => setCreateForm((prev) => ({ ...prev, taskType: e.target.value as OnboardingTemplate['taskType'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
               {Object.entries(ONBOARDING_PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
             </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+              {t('onboarding.taskCategory')}
+            </label>
+            <CustomSelect
+              value={createForm.category}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, category: ((value as OnboardingTemplate['category']) ?? 'other') }))}
+              options={categorySelectOptions}
+              searchable
+              isClearable={false}
+              menuMaxHeight={220}
+              controlMinHeight={40}
+              searchPlaceholder={t('common.search', 'Search...')}
+              noOptionsMessage={t('common.noData', 'No options found')}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+              {t('onboarding.taskPriority')}
+            </label>
             <select value={createForm.priority} onChange={(e) => setCreateForm((prev) => ({ ...prev, priority: e.target.value as OnboardingTemplate['priority'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
               <option value="high">{t('onboarding.priorityHigh', 'High')}</option>
               <option value="medium">{t('onboarding.priorityMedium', 'Medium')}</option>
               <option value="low">{t('onboarding.priorityLow', 'Low')}</option>
             </select>
           </div>
-          <select value={createForm.category} onChange={(e) => setCreateForm((prev) => ({ ...prev, category: e.target.value as OnboardingTemplate['category'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
-            {Object.entries(ONBOARDING_CATEGORY_META).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-          </select>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <input
+            <Input
               type="number"
-              value={createForm.sortOrder}
+              label={t('onboarding.sortOrder', 'Sort order')}
+              value={String(createForm.sortOrder)}
               onChange={(e) => setCreateForm((prev) => ({ ...prev, sortOrder: Number(e.target.value) }))}
-              placeholder={t('onboarding.sortOrder', 'Sort order')}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
             />
-            <input
-              type="number"
-              value={createForm.dueDays}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, dueDays: e.target.value }))}
-              placeholder={t('onboarding.dueDays', 'Due days')}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
-            />
+            <div>
+              <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                {t('onboarding.dueDays', 'Due days after hire')}
+              </label>
+              <input
+                type="number"
+                className="field-input"
+                value={createForm.dueDays}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, dueDays: e.target.value }))}
+                placeholder={t('onboarding.noDueDate', 'Optional')}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+              />
+            </div>
           </div>
-          <input
+          <Input
+            type="url"
+            label={t('onboarding.linkUrl', 'Reference link (optional)')}
             value={createForm.linkUrl}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, linkUrl: e.target.value }))}
-            placeholder={t('onboarding.linkUrl', 'Reference link (optional)')}
-            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+            placeholder="https://…"
           />
         </div>
       </Modal>
@@ -883,20 +1011,40 @@ export function EmployeeDetail() {
     }
   };
 
-  const supervisorAssociation = useMemo(() => {
-    if (!employee?.supervisorId || !associations) return null;
+  const primaryAssocCompany = useMemo(() => {
+    if (!associations || !employee) return null;
+    return associations.companies.find((c) => c.id === employee.companyId) ?? associations.companies[0] ?? null;
+  }, [associations, employee]);
 
-    for (const company of associations.companies) {
-      for (const store of company.stores) {
-        const found = store.employees.find((entry) => entry.id === employee.supervisorId);
-        if (found) return found;
-      }
-      const unassigned = company.unassignedEmployees.find((entry) => entry.id === employee.supervisorId);
-      if (unassigned) return unassigned;
-    }
+  const currentAssocStore = useMemo(() => {
+    if (!primaryAssocCompany || employee?.storeId == null) return null;
+    return primaryAssocCompany.stores.find((s) => s.id === employee.storeId) ?? null;
+  }, [primaryAssocCompany, employee?.storeId]);
 
-    return null;
-  }, [associations, employee?.supervisorId]);
+  const associationEntriesFlat = useMemo((): EmployeeAssociationEntry[] => {
+    if (!primaryAssocCompany) return [];
+    const out: EmployeeAssociationEntry[] = [];
+    primaryAssocCompany.stores.forEach((s) => {
+      s.employees.forEach((e) => out.push(e));
+    });
+    primaryAssocCompany.unassignedEmployees.forEach((e) => out.push(e));
+    return out;
+  }, [primaryAssocCompany]);
+
+  const hrAssociationEntry = useMemo(
+    () => associationEntriesFlat.find((e) => e.role === 'hr' && (e.storeId == null || e.storeId === employee?.storeId))
+      ?? associationEntriesFlat.find((e) => e.role === 'hr'),
+    [associationEntriesFlat, employee?.storeId],
+  );
+  const areaAssociationEntry = useMemo(
+    () => associationEntriesFlat.find((e) => e.role === 'area_manager' && (e.storeId == null || e.storeId === employee?.storeId))
+      ?? associationEntriesFlat.find((e) => e.role === 'area_manager'),
+    [associationEntriesFlat, employee?.storeId],
+  );
+  const storeManagerAssociationEntry = useMemo(
+    () => associationEntriesFlat.find((e) => e.role === 'store_manager' && e.storeId === employee?.storeId),
+    [associationEntriesFlat, employee?.storeId],
+  );
 
   if (loading) {
     return (
@@ -925,76 +1073,6 @@ export function EmployeeDetail() {
     : employee.workingType === 'part_time'
     ? t('employees.partTime')
     : '—';
-
-  const renderAssociationEmployee = (item: EmployeeAssociationEntry, keyPrefix: string) => {
-    const full = `${item.name} ${item.surname}`.trim();
-    const initialsLabel = `${item.name?.[0] ?? ''}${item.surname?.[0] ?? ''}`.toUpperCase() || 'U';
-    const avatarUrl = getAvatarUrl(item.avatarFilename);
-    return (
-      <div
-        key={`${keyPrefix}-${item.id}`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 10,
-          padding: '8px 10px',
-          border: '1px solid var(--border-light)',
-          borderRadius: 'var(--radius-sm)',
-          background: 'var(--surface)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <div style={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            overflow: 'hidden',
-            background: avatarUrl ? 'transparent' : getAvatarColor(full),
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            flexShrink: 0,
-          }}>
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={full} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : initialsLabel}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}>
-              {full}
-            </div>
-            <div style={{
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}>
-              {item.email}
-            </div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <Badge variant={ROLE_BADGE_VARIANT[item.role]}>{tRole(item.role, item.isSuperAdmin)}</Badge>
-          <Badge variant={item.status === 'active' ? 'success' : 'danger'}>
-            {item.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
-          </Badge>
-        </div>
-      </div>
-    );
-  };
 
   const shiftMonthLabel = shiftMonthCursor.toLocaleDateString(i18n.language.startsWith('it') ? 'it-IT' : 'en-GB', {
     month: 'long',
@@ -1616,8 +1694,13 @@ export function EmployeeDetail() {
             employeeId={employeeId}
             employeeCompanyId={employee.companyId}
             employeeCompanyName={employee.companyName ?? null}
+            employeeStoreName={employee.storeName ?? null}
+            employeeAvatarFilename={employee.avatarFilename}
             employeeName={fullName}
             isAdminOrHr={isAdminOrHr}
+            companyLogoFilename={primaryAssocCompany?.logoFilename}
+            companyGroupName={primaryAssocCompany?.groupName ?? null}
+            storeLogoFilename={currentAssocStore?.logoFilename}
           />
         </div>
       )}
@@ -1639,159 +1722,145 @@ export function EmployeeDetail() {
               {t('employees.associationsEmpty')}
             </div>
           ) : (
-            <div style={{ padding: '8px 0 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: '8px 0 6px' }}>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
-                gap: 8,
-                padding: '10px',
+                gap: 10,
+                padding: 12,
                 border: '1px solid var(--border-light)',
                 borderRadius: 'var(--radius-sm)',
                 background: 'var(--surface-warm)',
-              }}>
-                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    1. {t('employees.companyField')}
-                  </div>
-                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {employee.companyName ?? '—'}
-                  </div>
-                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
-                    {t(`employees.associationScope_${associations.scope}`)} · {t('employees.associationsCompaniesCount', { count: associations.summary.companyCount })}
-                  </div>
+              }}
+              >
+                {/* Company */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                  {(() => {
+                    const cname = primaryAssocCompany?.name ?? employee.companyName ?? '—';
+                    const cLogo = getCompanyLogoUrl(primaryAssocCompany?.logoFilename ?? null);
+                    const cinits = cname.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || '—';
+                    return (
+                      <>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+                          border: '1px solid var(--border)', background: cLogo ? 'transparent' : getAvatarColor(cname),
+                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
+                        }}>
+                          {cLogo
+                            ? <img src={cLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : cinits}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{cname}</div>
+                          {primaryAssocCompany?.groupName && (
+                            <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.35 }}>{primaryAssocCompany.groupName}</div>
+                          )}
+                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('ats.storeCountLabel', { count: primaryAssocCompany?.stores.length ?? 0 })}</div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
-                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    2. {t('common.store')}
-                  </div>
-                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {employee.storeName ?? t('employees.noStore', 'No store')}
-                  </div>
-                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
-                    {t('employees.associationsStoresCount', { count: associations.summary.storeCount })}
-                  </div>
+                {/* Store */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                  {(() => {
+                    const sname = currentAssocStore?.name ?? employee.storeName ?? t('employees.noStore', 'No store');
+                    const sLogo = getStoreLogoUrl(currentAssocStore?.logoFilename ?? null);
+                    const sinit = sname.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || 'ST';
+                    const empN = currentAssocStore?.employees.length ?? 0;
+                    return (
+                      <>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+                          border: '1px solid var(--border)', background: sLogo ? 'transparent' : getAvatarColor(sname),
+                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
+                        }}>
+                          {sLogo
+                            ? <img src={sLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : sinit}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{sname}</div>
+                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('employees.associationsEmployeesCount', { count: empN })}</div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
-                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    3. {t('employees.supervisorField')}
-                  </div>
-                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {employee.supervisorName ?? '—'}
-                  </div>
-                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
-                    {supervisorAssociation?.email ?? t('employees.associationsNoEmployees')}
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 9px', background: 'var(--surface)' }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    4. {t('employees.colName')}
-                  </div>
-                  <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {fullName}
-                  </div>
-                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
-                    {employee.email} · {tRole(employee.role)}
-                  </div>
-                </div>
-              </div>
-
-              {associations.companies.map((company) => (
-                <div key={company.id} style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  background: 'var(--surface)',
-                  overflow: 'hidden',
-                }}>
-                  <div style={{
-                    padding: '10px 12px',
-                    borderBottom: '1px solid var(--border-light)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    background: 'linear-gradient(135deg, rgba(13,33,55,0.04) 0%, rgba(201,151,58,0.08) 100%)',
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{company.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{company.slug}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Badge variant={company.isActive ? 'success' : 'danger'}>
-                        {company.isActive ? t('employees.statusActive') : t('employees.statusInactive')}
-                      </Badge>
-                      <Badge variant="neutral">{t('employees.associationsStoresCount', { count: company.stores.length })}</Badge>
-                      <Badge variant="neutral">{t('employees.associationsEmployeesCount', { count: company.employeeCount })}</Badge>
-                    </div>
-                  </div>
-
-                  <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {company.stores.length === 0 ? (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {t('employees.associationsNoStores')}
-                      </div>
-                    ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-                        {company.stores.map((store) => (
-                          <div key={store.id} style={{
-                            border: '1px solid var(--border-light)',
-                            borderRadius: 'var(--radius-sm)',
-                            padding: '9px',
-                            background: 'var(--surface-warm)',
-                          }}>
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 8,
-                              marginBottom: 7,
-                            }}>
-                              <div>
-                                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{store.name}</div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{store.code}</div>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Badge variant={store.isActive ? 'success' : 'danger'}>
-                                  {store.isActive ? t('employees.statusActive') : t('employees.statusInactive')}
-                                </Badge>
-                                <Badge variant="neutral">{t('employees.associationsEmployeesCount', { count: store.employees.length })}</Badge>
-                              </div>
-                            </div>
-                            {store.employees.length === 0 ? (
-                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                {t('employees.associationsNoEmployees')}
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {store.employees.map((entry) => renderAssociationEmployee(entry, `store-${store.id}`))}
-                              </div>
+                {/* HR */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                  {(() => {
+                    const hr = hrAssociationEntry;
+                    if (!hr) {
+                      return (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('employees.scopeHrEmpty', 'No HR found for this store')}</div>
+                      );
+                    }
+                    const hrf = `${hr.name} ${hr.surname}`.trim();
+                    const hUrl = getAvatarUrl(hr.avatarFilename);
+                    const hinit = `${hr.name?.[0] ?? ''}${hr.surname?.[0] ?? ''}`.toUpperCase() || 'H';
+                    const hrIsSupervisor = employee.supervisorId != null && employee.supervisorId === hr.id;
+                    return (
+                      <>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                          border: '1px solid var(--border)', background: hUrl ? 'transparent' : getAvatarColor(hrf),
+                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
+                        }}>
+                          {hUrl
+                            ? <img src={hUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : hinit}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{hrf}</span>
+                            {hrIsSupervisor && (
+                              <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#9A6808', border: '1px solid rgba(201,151,58,0.5)', borderRadius: 4, padding: '1px 5px' }}>{t('employees.supervisorTag', 'Supervisor')}</span>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {company.unassignedEmployees.length > 0 && (
-                      <div style={{
-                        border: '1px dashed var(--border)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: 10,
-                        background: 'rgba(13,33,55,0.03)',
-                      }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                          {t('employees.associationsUnassigned')}
+                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{hr.storeName ?? t('employees.scopeStoresAll', 'All stores / HQ')}</div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {company.unassignedEmployees.map((entry) => renderAssociationEmployee(entry, `unassigned-${company.id}`))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                      </>
+                    );
+                  })()}
                 </div>
-              ))}
+
+                {/* Area manager */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                  {(() => {
+                    const am = areaAssociationEntry;
+                    if (!am) {
+                      return (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('employees.scopeAreaEmpty', 'No area manager found for this store')}</div>
+                      );
+                    }
+                    const amf = `${am.name} ${am.surname}`.trim();
+                    const aUrl = getAvatarUrl(am.avatarFilename);
+                    const ainit = `${am.name?.[0] ?? ''}${am.surname?.[0] ?? ''}`.toUpperCase() || 'A';
+                    const sm = storeManagerAssociationEntry;
+                    const smLine = sm ? `${sm.name} ${sm.surname}`.trim() : t('common.notSet', '—');
+                    return (
+                      <>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                          border: '1px solid var(--border)', background: aUrl ? 'transparent' : getAvatarColor(amf),
+                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
+                        }}>
+                          {aUrl
+                            ? <img src={aUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : ainit}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{amf}</div>
+                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('employees.scopeStoreManagerLine', { name: smLine })}</div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
           )}
         </SectionPanel>

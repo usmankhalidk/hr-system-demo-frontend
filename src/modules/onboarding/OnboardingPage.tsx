@@ -72,7 +72,7 @@ const CATEGORY_META: Record<OnboardingTemplate['category'], { icon: string; labe
 const PRIORITY_COLORS: Record<string, string> = {
   high: '#DC2626',
   medium: '#D97706',
-  low: '#6B7280',
+  low: '#15803D',
 };
 
 function getCategoryMeta(category: OnboardingTemplate['category'] | OnboardingTask['templateCategory']) {
@@ -612,7 +612,7 @@ const TemplatesPanel: React.FC = () => {
         const employeeRows = employeesResponse.employees.filter((employee) => employee.role === 'employee');
         setAssignEmployees(employeeRows);
         setAssignTemplates(templatesResponse);
-        setAssignSelected(new Set(templatesResponse.map((template) => template.id)));
+        setAssignSelected(new Set());
         setAssignEmployeeId((prev) => (employeeRows.some((employee) => String(employee.id) === prev) ? prev : ''));
       })
       .catch(() => {
@@ -1573,6 +1573,11 @@ const TemplatesPanel: React.FC = () => {
                                 <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[template.priority] ?? 'var(--text-muted)' }}>
                                   {t(`onboarding.priority${template.priority === 'high' ? 'High' : template.priority === 'medium' ? 'Medium' : 'Low'}`)}
                                 </span>
+                                {template.createdByName && (
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                    {t('common.createdBy', 'Created by')}: {template.createdByName}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </label>
@@ -1833,6 +1838,13 @@ const EmployeeDrawer: React.FC<{
                               {task.completedAt && (
                                 <div style={{ fontSize: 10, color: '#15803D', marginTop: 3 }}>✓ {fmtDate(task.completedAt)}</div>
                               )}
+                              {task.assignedByName && (
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                    {t('onboarding.assignedBy', 'Assigned by')}: {task.assignedByName}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             {/* Admin actions */}
                             {isAdmin && (
@@ -2013,7 +2025,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
       setBulkEmployees(unassignedEmployees);
       setBulkTemplates(templatesRes);
       setBulkSelectedEmployeeIds(new Set(unassignedEmployees.map((emp) => emp.id)));
-      setBulkSelectedTemplateIds(new Set(templatesRes.map((tmpl) => tmpl.id)));
+      setBulkSelectedTemplateIds(new Set());
     }).catch(() => {
       setBulkEmployees([]);
       setBulkTemplates([]);
@@ -2089,6 +2101,38 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
       };
     })
   ), [stores, t]);
+
+  const bulkCompanySelectOptions = useMemo<SelectOption[]>(() => (
+    companies.map((company) => {
+      const logoUrl = getCompanyLogoUrl(company.logoFilename);
+      const ownerLabel = company.ownerName
+        ? `${company.ownerName}${company.ownerSurname ? ` ${company.ownerSurname}` : ''}`
+        : t('companies.ownerMissing', 'No owner assigned');
+      return {
+        value: String(company.id),
+        label: company.name,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(13,33,55,0.08)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {logoUrl ? (
+                <img src={logoUrl} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--primary)' }}>{company.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {company.name}
+              </span>
+              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {(company.groupName || t('common.none', 'None'))} • {ownerLabel} • {(company.storeCount ?? 0)} {t('employees.storesLabel', 'Stores')}
+              </span>
+            </span>
+          </div>
+        ),
+      };
+    })
+  ), [companies, t]);
 
   return (
     <div>
@@ -2289,54 +2333,148 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{t('onboarding.assignModalTitle', 'Bulk Assign Tasks')}</div>
           <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{t('onboarding.lookupHint')}</div>
         </div>
-        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ width: 250 }}>
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ width: '100%' }}>
+            <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              <Building2 size={13} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} /> {t('nav.companies', 'Companies')}
+            </label>
             <CustomSelect
               value={bulkCompanyId || null}
               onChange={(value) => setBulkCompanyId(value ?? '')}
-              options={overviewCompanyOptions}
+              options={bulkCompanySelectOptions}
               placeholder={t('employees.selectCompany', 'Select company')}
               searchable
               isClearable={false}
+              searchPlaceholder={t('common.search', 'Search...')}
+              noOptionsMessage={t('common.noData', 'No options found')}
+              menuMaxHeight={280}
               controlMinHeight={40}
             />
           </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{t('employees.title', 'Employees')} ({bulkEmployees.length})</div>
-            <div style={{ maxHeight: 160, overflowY: 'auto', display: 'grid', gap: 6 }}>
-              {bulkEmployees.map((emp) => (
-                <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
-                  <input
-                    type="checkbox"
-                    checked={bulkSelectedEmployeeIds.has(emp.id)}
-                    onChange={() => setBulkSelectedEmployeeIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(emp.id)) next.delete(emp.id); else next.add(emp.id);
-                      return next;
-                    })}
-                  />
-                  {emp.name} {emp.surname}
-                </label>
-              ))}
+            <div style={{ maxHeight: 200, overflowY: 'auto', display: 'grid', gap: 8 }}>
+              {bulkLoading ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>…</div>
+              ) : bulkEmployees.map((emp) => {
+                const url = getAvatarUrl(emp.avatarFilename);
+                return (
+                  <label
+                    key={emp.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 10,
+                      fontSize: 12.5,
+                      padding: '6px 4px',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={bulkSelectedEmployeeIds.has(emp.id)}
+                        onChange={() => setBulkSelectedEmployeeIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(emp.id)) next.delete(emp.id); else next.add(emp.id);
+                          return next;
+                        })}
+                      />
+                      {url ? (
+                        <img src={url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                      ) : (
+                        <span style={{
+                          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                          background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10, fontWeight: 700, color: 'var(--primary)',
+                        }}>
+                          {(emp.name?.[0] ?? '')}{(emp.surname?.[0] ?? '')}
+                        </span>
+                      )}
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {emp.name} {emp.surname}
+                      </span>
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', maxWidth: '42%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {emp.storeName || '—'}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{t('onboarding.tabTemplates', 'Tasks')} ({bulkTemplates.length})</div>
-            <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gap: 6 }}>
-              {bulkTemplates.map((tmpl) => (
-                <label key={tmpl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
-                  <input
-                    type="checkbox"
-                    checked={bulkSelectedTemplateIds.has(tmpl.id)}
-                    onChange={() => setBulkSelectedTemplateIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(tmpl.id)) next.delete(tmpl.id); else next.add(tmpl.id);
-                      return next;
-                    })}
-                  />
-                  {tmpl.name}
-                </label>
-              ))}
+            <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 2 }}>
+              {bulkLoading ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>…</div>
+              ) : (
+                PHASE_ORDER.map((phase) => {
+                  const list = bulkTemplates.filter((x) => getTemplatePhase(x) === phase).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+                  if (list.length === 0) return null;
+                  const meta = PHASE_META[phase];
+                  return (
+                    <div key={`bulk-${phase}`}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 14 }}>{meta.icon}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>{t(meta.labelKey)}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>{list.length}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                        {list.map((tmpl) => (
+                          <label
+                            key={tmpl.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 10,
+                              background: 'var(--surface)',
+                              border: `1px solid ${meta.border}`,
+                              borderLeft: `4px solid ${meta.color}`,
+                              borderRadius: 10,
+                              padding: '10px 10px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={bulkSelectedTemplateIds.has(tmpl.id)}
+                              onChange={() => setBulkSelectedTemplateIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(tmpl.id)) next.delete(tmpl.id); else next.add(tmpl.id);
+                                return next;
+                              })}
+                              style={{ marginTop: 2, accentColor: 'var(--primary)' }}
+                            />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{tmpl.name}</div>
+                              {tmpl.description && (
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.35 }}>{tmpl.description}</div>
+                              )}
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                                <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', color: 'var(--text-secondary)', background: 'var(--background)' }}>
+                                  {getCategoryMeta(tmpl.category).icon} {getCategoryMeta(tmpl.category).label}
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[tmpl.priority] ?? 'var(--text-muted)', textTransform: 'uppercase' }}>
+                                  {t(`onboarding.priority${tmpl.priority === 'high' ? 'High' : tmpl.priority === 'medium' ? 'Medium' : 'Low'}`)}
+                                </span>
+                                {tmpl.createdByName && (
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                    {t('common.createdBy', 'Created by')}: {tmpl.createdByName}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
           <Button

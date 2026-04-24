@@ -226,9 +226,16 @@ export function EmployeeList() {
       key: 'companyName' as keyof Employee,
       label: t('employees.colCompany'),
       render: (row: Employee) => (
-        <span style={{ fontSize: '13px', color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)', maxWidth: 160, display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {truncateText(row.companyName, 16)}
-        </span>
+        <div style={{ display: 'grid', gap: 2, maxWidth: 170 }}>
+          <span style={{ fontSize: '13px', color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {truncateText(row.companyName, 16)}
+          </span>
+          {row.companyGroupName ? (
+            <span style={{ fontSize: '10.5px', color: '#9A6808', display: 'inline-block', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {truncateText(row.companyGroupName, 18)}
+            </span>
+          ) : null}
+        </div>
       ),
     }] : []),
     {
