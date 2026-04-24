@@ -39,6 +39,8 @@ export interface JobPosting {
   contractType: string | null;
   salaryMin: number | null;
   salaryMax: number | null;
+  salaryPeriod: string | null;
+  targetRole: string | null;
   title: string;
   description: string | null;
   tags: string[];
@@ -143,6 +145,8 @@ export async function createJob(payload: {
   contractType?: string;
   salaryMin?: number;
   salaryMax?: number;
+  salaryPeriod?: string;
+  targetRole?: string;
 }): Promise<JobPosting> {
   const { data } = await apiClient.post('/ats/jobs', payload);
   return data.data.job as JobPosting;
@@ -171,6 +175,8 @@ export async function updateJob(
     contractType: string | null;
     salaryMin: number | null;
     salaryMax: number | null;
+    salaryPeriod: string | null;
+    targetRole: string | null;
   }>,
 ): Promise<JobPosting> {
   const { data } = await apiClient.patch(`/ats/jobs/${id}`, payload);

@@ -17,7 +17,6 @@ import {
   MapPin,
   Phone,
   Plus,
-  ShieldCheck,
   Sparkles,
   Store as StoreIcon,
   Trash2,
@@ -40,7 +39,8 @@ import { CitySelect, CountrySelect, StateSelect } from '../../components/locatio
 import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
-import { Company, Store } from '../../types';
+import { getEmployees } from '../../api/employees';
+import { Company, Employee, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
   getCandidates, createCandidate, updateCandidateStage, deleteCandidate,
@@ -105,33 +105,6 @@ function countryNameFromCode(value: string | null | undefined): string {
   if (!code) return '-';
   const found = COUNTRY_ROWS.find((country) => country.isoCode === code);
   return found?.name ?? code;
-}
-
-function extractPersonNames(input: unknown): string[] {
-  const toName = (value: unknown): string => {
-    if (typeof value === 'string') return value.trim();
-    if (!value || typeof value !== 'object') return '';
-
-    const record = value as Record<string, unknown>;
-    const fullName = typeof record.fullName === 'string' ? record.fullName.trim() : '';
-    if (fullName) return fullName;
-
-    const name = typeof record.name === 'string' ? record.name.trim() : '';
-    const surname = typeof record.surname === 'string' ? record.surname.trim() : '';
-    const joined = [name, surname].filter(Boolean).join(' ').trim();
-    if (joined) return joined;
-
-    const label = typeof record.label === 'string' ? record.label.trim() : '';
-    if (label) return label;
-
-    return '';
-  };
-
-  const names = Array.isArray(input)
-    ? input.map((item) => toName(item)).filter(Boolean)
-    : [toName(input)].filter(Boolean);
-
-  return Array.from(new Set(names));
 }
 
 type ComplianceCheck = {
@@ -337,6 +310,8 @@ interface JobModalProps {
     status: JobStatus;
     salaryMin: number | null;
     salaryMax: number | null;
+    salaryPeriod: string | null;
+    targetRole: string | null;
   }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
@@ -352,6 +327,13 @@ type JobModalErrors = {
   companyId?: string;
   jobType?: string;
   remoteType?: string;
+};
+
+type TeamContact = {
+  id: number;
+  name: string;
+  role: 'admin' | 'hr' | 'area_manager';
+  avatarFilename?: string | null;
 };
 
 const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultCompanyId, onSave, onClose, saving }) => {
@@ -383,8 +365,11 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
   const [weeklyHoursInput, setWeeklyHoursInput] = useState(job?.weeklyHours !== null && job?.weeklyHours !== undefined ? String(job.weeklyHours) : '');
   const [salaryMinInput, setSalaryMinInput] = useState(job?.salaryMin !== null && job?.salaryMin !== undefined ? String(job.salaryMin) : '');
   const [salaryMaxInput, setSalaryMaxInput] = useState(job?.salaryMax !== null && job?.salaryMax !== undefined ? String(job.salaryMax) : '');
+  const [salaryPeriod, setSalaryPeriod] = useState(job?.salaryPeriod ?? '');
   const [contractType, setContractType] = useState(job?.contractType ?? '');
+  const [targetRole, setTargetRole] = useState(job?.targetRole ?? '');
   const [errors, setErrors] = useState<JobModalErrors>({});
+  const [companyEmployees, setCompanyEmployees] = useState<Employee[]>([]);
 
   const companyOptions = useMemo(() => {
     const opts = companies.map((company) => ({
@@ -426,6 +411,27 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       setStoreId('');
     }
   }, [storeId, storesForSelectedCompany]);
+
+  useEffect(() => {
+    const selectedCompanyId = Number.parseInt(companyId, 10);
+    if (Number.isNaN(selectedCompanyId)) {
+      setCompanyEmployees([]);
+      return;
+    }
+    let mounted = true;
+    getEmployees({ targetCompanyId: selectedCompanyId, status: 'active', includeStoreTerminals: false, limit: 500 })
+      .then((res) => {
+        if (!mounted) return;
+        setCompanyEmployees(res.employees ?? []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setCompanyEmployees([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [companyId]);
 
   const addTag = (value: string) => {
     const normalized = value.trim();
@@ -531,6 +537,8 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       status,
       salaryMin: parseOptionalInt(salaryMinInput),
       salaryMax: parseOptionalInt(salaryMaxInput),
+      salaryPeriod: salaryPeriod || null,
+      targetRole: targetRole || null,
     });
   };
 
@@ -556,11 +564,6 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
     return getCompanyLogoUrl(selected?.logoFilename);
   }, [companies, companyId]);
 
-  const selectedCompanyRecord = useMemo(() => {
-    if (!companyId) return null;
-    return companies.find((item) => String(item.id) === companyId) ?? null;
-  }, [companies, companyId]);
-
   const companyInitials = useMemo(() => {
     const raw = selectedCompanyName === '-' ? '' : selectedCompanyName;
     const initials = raw
@@ -580,27 +583,48 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
     return parsed.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
   }, [selectedCompanyMeta?.createdAt]);
 
-  const ownerAvatarUrl = useMemo(() => {
-    return getAvatarUrl(selectedCompanyMeta?.ownerAvatarFilename ?? null);
-  }, [selectedCompanyMeta?.ownerAvatarFilename]);
+  const roleCounts = useMemo(() => {
+    const counts = { hr: 0, area_manager: 0, store_manager: 0, employee: 0 };
+    for (const person of companyEmployees) {
+      if (person.role === 'hr') counts.hr += 1;
+      else if (person.role === 'area_manager') counts.area_manager += 1;
+      else if (person.role === 'store_manager') counts.store_manager += 1;
+      else if (person.role === 'employee') counts.employee += 1;
+    }
+    return counts;
+  }, [companyEmployees]);
 
-  const hrManagerNames = useMemo(() => {
-    return extractPersonNames(
-      (selectedCompanyRecord as Record<string, unknown> | null)?.hrManagers
-      ?? (selectedCompanyRecord as Record<string, unknown> | null)?.hr_managers
-      ?? (selectedCompanyRecord as Record<string, unknown> | null)?.hrManagerNames
-      ?? (selectedCompanyRecord as Record<string, unknown> | null)?.hr_manager_names,
-    );
-  }, [selectedCompanyRecord]);
-
-  const areaManagerNames = useMemo(() => {
-    return extractPersonNames(
-      (selectedCompanyRecord as Record<string, unknown> | null)?.areaManagers
-      ?? (selectedCompanyRecord as Record<string, unknown> | null)?.area_managers
-      ?? (selectedCompanyRecord as Record<string, unknown> | null)?.areaManagerNames
-      ?? (selectedCompanyRecord as Record<string, unknown> | null)?.area_manager_names,
-    );
-  }, [selectedCompanyRecord]);
+  const teamContacts = useMemo<TeamContact[]>(() => {
+    const selectedStoreId = Number.parseInt(storeId, 10);
+    const effectiveStoreId = Number.isNaN(selectedStoreId) ? null : selectedStoreId;
+    const contacts: TeamContact[] = [];
+    if (selectedCompanyMeta?.ownerLabel) {
+      contacts.push({
+        id: -1,
+        name: selectedCompanyMeta.ownerLabel,
+        role: 'admin',
+        avatarFilename: selectedCompanyMeta.ownerAvatarFilename ?? null,
+      });
+    }
+    for (const person of companyEmployees) {
+      if (person.role !== 'hr' && person.role !== 'area_manager') continue;
+      if (effectiveStoreId !== null && person.storeId !== null && person.storeId !== effectiveStoreId) continue;
+      const fullName = [person.name, person.surname].filter(Boolean).join(' ').trim() || person.email;
+      contacts.push({
+        id: person.id,
+        name: fullName,
+        role: person.role,
+        avatarFilename: person.avatarFilename ?? null,
+      });
+    }
+    const seen = new Set<string>();
+    return contacts.filter((contact) => {
+      const key = `${contact.role}-${contact.name.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [companyEmployees, selectedCompanyMeta, storeId]);
 
   const formCompletion = useMemo(() => {
     const checks: boolean[] = [
@@ -933,7 +957,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
   const currentUserRoleLabel = user ? t(`roles.${user.role}`, user.role) : t('common.user', 'User');
   const superAdminLabel = t('roles.super_admin', 'Super admin');
   const currentUserRoleDisplay = currentUserRoleLabel.replace(/_/g, ' ').toUpperCase();
-  const hasTeamMembers = Boolean(selectedCompanyMeta?.ownerLabel) || hrManagerNames.length > 0 || areaManagerNames.length > 0;
+  const hasTeamMembers = teamContacts.length > 0;
   const jobTypeDisplay = jobType ? t(`ats.jobType_${JOB_TYPE_LABEL[jobType]}`, jobType) : t('common.notSet', 'Not set');
   const remoteTypeDisplay = remoteType ? t(`ats.remoteType_${remoteType}`, remoteType) : t('common.notSet', 'Not set');
   const roleTags = tags.filter((tag) => tag.trim().length > 0);
@@ -1105,24 +1129,17 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                   {t('ats.teamContactsLabel', 'Team contacts')}
                 </span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {selectedCompanyMeta?.ownerLabel ? (
-                    <span style={{ borderRadius: 999, border: '1px solid rgba(255,255,255,0.24)', background: 'rgba(255,255,255,0.12)', color: '#F8FAFC', fontSize: 11.5, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.22)', fontSize: 9, fontWeight: 800 }}>
-                        {ownerAvatarUrl ? <img src={ownerAvatarUrl} alt={selectedCompanyMeta.ownerLabel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(selectedCompanyMeta.ownerLabel)}
+                  {teamContacts.map((contact) => (
+                    <span key={`${contact.role}-${contact.id}-${contact.name}`} style={{ borderRadius: 10, border: '1px solid rgba(255,255,255,0.24)', background: 'rgba(255,255,255,0.12)', color: '#F8FAFC', fontSize: 11.5, padding: '5px 8px', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ width: 20, height: 20, borderRadius: '50%', overflow: 'hidden', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.22)', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>
+                        {contact.avatarFilename
+                          ? <img src={getAvatarUrl(contact.avatarFilename) ?? ''} alt={contact.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : initials(contact.name)}
                       </span>
-                      <span>{selectedCompanyMeta.ownerLabel}</span>
-                    </span>
-                  ) : null}
-                  {hrManagerNames.map((name) => (
-                    <span key={`hr-${name}`} style={{ borderRadius: 999, border: '1px solid rgba(153,228,180,0.5)', background: 'rgba(22,163,74,0.18)', color: '#DCFCE7', fontSize: 11.5, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <ShieldCheck size={11} />
-                      {name}
-                    </span>
-                  ))}
-                  {areaManagerNames.map((name) => (
-                    <span key={`area-${name}`} style={{ borderRadius: 999, border: '1px solid rgba(148,163,184,0.48)', background: 'rgba(71,85,105,0.28)', color: '#E2E8F0', fontSize: 11.5, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <Users size={11} />
-                      {name}
+                      <span style={{ display: 'grid', lineHeight: 1.2 }}>
+                        <span style={{ fontWeight: 700 }}>{contact.name}</span>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.72)' }}>{t(`roles.${contact.role}`)}</span>
+                      </span>
                     </span>
                   ))}
                   {!hasTeamMembers ? (
@@ -1196,7 +1213,11 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}><BriefcaseBusiness size={12} color="#CBD5E1" />{jobTypeDisplay}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}><Globe2 size={12} color="#CBD5E1" />{remoteTypeDisplay}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}><Clock3 size={12} color="#CBD5E1" />{weeklyHoursInput.trim() || '-'} {t('ats.hoursPerWeek', 'hrs/week')}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}><Wallet size={12} color="#CBD5E1" />{salaryMinInput.trim() || '-'} - {salaryMaxInput.trim() || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}>
+                    <Wallet size={12} color="#CBD5E1" />
+                    {salaryMinInput.trim() || '-'} - {salaryMaxInput.trim() || '-'}
+                    {salaryPeriod ? ` (${t(`ats.salaryPeriod${salaryPeriod.charAt(0).toUpperCase()}${salaryPeriod.slice(1)}`, salaryPeriod)})` : ''}
+                  </div>
                   {remoteType && remoteType !== 'remote' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}>
                       <MapPin size={12} color="#CBD5E1" />
@@ -1230,11 +1251,11 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
             <div style={{ borderRadius: 12, border: hiringVisibilityTone.border, background: hiringVisibilityTone.background, padding: 11, color: hiringVisibilityTone.bodyColor, fontSize: 12.5, lineHeight: 1.5, display: 'grid', gap: 6 }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, color: hiringVisibilityTone.titleColor }}>
                 <User2 size={13} /> {t('ats.hiringVisibilityTitle', 'Hiring visibility')}
-              </div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ borderRadius: 999, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: hiringVisibilityTone.badgeBg, border: hiringVisibilityTone.badgeBorder, color: hiringVisibilityTone.badgeColor }}>
+                <span style={{ borderRadius: 999, padding: '1px 7px', fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: hiringVisibilityTone.badgeBg, border: hiringVisibilityTone.badgeBorder, color: hiringVisibilityTone.badgeColor }}>
                   {t(`ats.status_${status}`, status)}
                 </span>
+              </div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <span>{hiringVisibilityCopy}</span>
               </div>
             </div>
@@ -1475,7 +1496,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr 1fr' }}>
                     <Input
                       label={t('ats.weeklyHours')}
                       type="number"
@@ -1497,6 +1518,26 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       onChange={(e) => setSalaryMaxInput(e.target.value)}
                       placeholder={t('ats.salaryMaxPlaceholder', '1800')}
                     />
+                    <div>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                        {t('ats.salaryPeriod', 'Salary period')}
+                      </label>
+                      <CustomSelect
+                        value={salaryPeriod || null}
+                        onChange={(value) => setSalaryPeriod((value as string | null) ?? '')}
+                        options={[
+                          { value: 'hourly', label: t('ats.salaryPeriodHourly', 'Per hour') },
+                          { value: 'daily', label: t('ats.salaryPeriodDaily', 'Per day') },
+                          { value: 'weekly', label: t('ats.salaryPeriodWeekly', 'Per week') },
+                          { value: 'monthly', label: t('ats.salaryPeriodMonthly', 'Per month') },
+                          { value: 'yearly', label: t('ats.salaryPeriodYearly', 'Per year') },
+                        ]}
+                        searchable={false}
+                        isClearable
+                        placeholder={t('ats.salaryPeriod', 'Salary period')}
+                        disabled={saving}
+                      />
+                    </div>
                   </div>
                   {(errors.weeklyHours || errors.salary) && (
                     <div style={{ marginTop: -6, color: '#B91C1C', fontSize: 12 }}>
@@ -1608,6 +1649,26 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     placeholder={t('ats.selectStore')}
                     disabled={saving || !companyId}
                     isClearable
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                    {t('ats.targetRole', 'Target role')}
+                  </label>
+                  <CustomSelect
+                    value={targetRole || null}
+                    onChange={(value) => setTargetRole((value as string | null) ?? '')}
+                    options={[
+                      { value: 'hr', label: `${t('roles.hr')} (${roleCounts.hr})` },
+                      { value: 'area_manager', label: `${t('roles.area_manager')} (${roleCounts.area_manager})` },
+                      { value: 'store_manager', label: `${t('roles.store_manager')} (${roleCounts.store_manager})` },
+                      { value: 'employee', label: `${t('roles.employee')} (${roleCounts.employee})` },
+                    ]}
+                    searchable={false}
+                    isClearable
+                    placeholder={t('ats.targetRole', 'Target role')}
+                    disabled={saving || !companyId}
                   />
                 </div>
 
@@ -2407,6 +2468,8 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     status: JobStatus;
     salaryMin: number | null;
     salaryMax: number | null;
+    salaryPeriod: string | null;
+    targetRole: string | null;
   }) => {
     setSaving(true);
     try {
@@ -2432,6 +2495,8 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           contractType: payload.contractType || null,
           salaryMin: payload.salaryMin,
           salaryMax: payload.salaryMax,
+          salaryPeriod: payload.salaryPeriod,
+          targetRole: payload.targetRole,
         });
         setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
         showToast(t('ats.jobUpdated'), 'success');
@@ -2457,6 +2522,8 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           contractType: payload.contractType || undefined,
           salaryMin: payload.salaryMin ?? undefined,
           salaryMax: payload.salaryMax ?? undefined,
+          salaryPeriod: payload.salaryPeriod ?? undefined,
+          targetRole: payload.targetRole ?? undefined,
         });
         setJobs((prev) => [created, ...prev]);
         showToast(t('ats.jobCreated'), 'success');

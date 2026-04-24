@@ -107,6 +107,7 @@ export interface Employee {
   storeName?: string;
   supervisorName?: string;
   companyName?: string;
+  companyGroupName?: string | null;
   // Sensitive — only returned for admin/hr or self
   personalEmail?: string | null;
   dateOfBirth?: string | null;
