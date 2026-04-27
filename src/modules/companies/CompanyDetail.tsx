@@ -492,7 +492,7 @@ export default function CompanyDetail() {
     { label: t('companies.location', 'Location'), value: companyLocation || null },
     { label: t('companies.currency', 'Currency'), value: company.currency },
   ];
-  const heroTitleOffset = 'clamp(108px, 24vw, 132px)';
+  const heroTitleOffset = 'clamp(136px, 32vw, 160px)';
   const bannerActionLabel = company.bannerFilename
     ? t('companies.reuploadBanner', 'Re-upload banner')
     : t('companies.uploadBanner', 'Upload banner');

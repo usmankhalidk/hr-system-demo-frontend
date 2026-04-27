@@ -123,8 +123,8 @@ const QuickLink: React.FC<QuickLinkProps> = ({ to, label, description, icon, col
     padding: '14px 18px', background: 'var(--primary)',
     borderRadius: 'var(--radius)', textDecoration: 'none',
     border: `1px solid ${color}30`,
-    flex: isMobile ? '1 1 calc(50% - 8px)' : '1 1 180px',
-    minWidth: isMobile ? 'calc(50% - 8px)' : '180px',
+    flex: isMobile ? '1 1 100%' : '1 1 180px',
+    minWidth: isMobile ? '100%' : '180px',
   }}>
     <div style={{
       width: 36, height: 36, borderRadius: 8,

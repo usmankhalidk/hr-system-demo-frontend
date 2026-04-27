@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
@@ -16,15 +16,16 @@ import { getCompanies } from '../../../api/companies';
 import { Employee, Company } from '../../../types';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 import { DatePicker } from '../../../components/ui/DatePicker';
+import CustomSelect, { SelectOption } from '../../../components/ui/CustomSelect';
 import { ModalBackdrop, ModalHeader, inputStyle, labelStyle, IconTag, IconPen, IconTrash } from './DocUtils';
 
 // ── Upload Document Modal ──────────────────────────────────────────────────
 
-export const UploadModal: React.FC<{ 
-  employeeId: number; 
-  employeeName: string; 
-  onClose: () => void; 
-  onSuccess: () => void 
+export const UploadModal: React.FC<{
+  employeeId: number;
+  employeeName: string;
+  onClose: () => void;
+  onSuccess: () => void
 }> = ({ employeeId, employeeName, onClose, onSuccess }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
@@ -83,7 +84,7 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { allowedCompanyIds } = useAuth();
-  
+
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +98,7 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { 
+    try {
       const [allCats, allComps] = await Promise.all([
         getCategories(true),
         getCompanies(),
@@ -121,6 +122,16 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
     (c) => !categories.some((cat) => cat.companyId === c.id)
   );
 
+  const companyOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: '', label: t('documents.selectCompany') },
+      ...companiesWithoutCategory.map(c => ({
+        value: String(c.id),
+        label: c.name
+      }))
+    ];
+  }, [companiesWithoutCategory, t]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetCompanyId = companiesWithoutCategory.length === 1 ? companiesWithoutCategory[0].id : selectedCompanyId;
@@ -131,11 +142,11 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
       return;
     }
     setSaving(true);
-    try { 
-      await createCategory(newName.trim(), targetCompanyId); 
-      setNewName(''); 
-      showToast(t('documents.categoryCreated'), 'success'); 
-      await load(); 
+    try {
+      await createCategory(newName.trim(), targetCompanyId);
+      setNewName('');
+      showToast(t('documents.categoryCreated'), 'success');
+      await load();
     }
     catch { showToast(t('common.error'), 'error'); }
     finally { setSaving(false); }
@@ -148,10 +159,10 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
   };
 
   const handleToggle = async (cat: DocumentCategory) => {
-    try { 
-      await updateCategory(cat.id, { isActive: !cat.isActive, companyId: cat.companyId, currentCompanyId: cat.companyId }); 
-      showToast(t('documents.categoryUpdated'), 'success'); 
-      await load(); 
+    try {
+      await updateCategory(cat.id, { isActive: !cat.isActive, companyId: cat.companyId, currentCompanyId: cat.companyId });
+      showToast(t('documents.categoryUpdated'), 'success');
+      await load();
     }
     catch { showToast(t('common.error'), 'error'); }
   };
@@ -166,16 +177,16 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
       await deleteCategory(categoryToDelete.id, categoryToDelete.companyId);
       showToast(t('documents.categoryDeleted'), 'success');
       await load();
-    } catch (error) { 
+    } catch (error) {
       console.error('Delete category failed:', error);
-      showToast(t('common.error'), 'error'); 
-    } 
+      showToast(t('common.error'), 'error');
+    }
     finally {
       setCategoryToDelete(null);
     }
   };
 
-  const filteredCategories = showInactive 
+  const filteredCategories = showInactive
     ? categories.filter(c => !c.isActive)
     : categories.filter(c => c.isActive);
 
@@ -191,10 +202,13 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('documents.companyLabel')}</label>
-              <select value={selectedCompanyId || ''} onChange={(e) => setSelectedCompanyId(Number(e.target.value))} style={inputStyle}>
-                <option value="">{t('documents.selectCompany')}</option>
-                {companiesWithoutCategory.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <CustomSelect
+                options={companyOptions}
+                value={selectedCompanyId ? String(selectedCompanyId) : ''}
+                onChange={(val) => setSelectedCompanyId(val ? Number(val) : null)}
+                placeholder={t('documents.selectCompany')}
+                isClearable={false}
+              />
             </div>
             <button type="submit" disabled={saving || !newName.trim() || (!selectedCompanyId && companiesWithoutCategory.length > 1)} style={{ width: '100%', padding: '11px 14px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: (saving || !newName.trim() || (!selectedCompanyId && companiesWithoutCategory.length > 1)) ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, opacity: (saving || !newName.trim() || (!selectedCompanyId && companiesWithoutCategory.length > 1)) ? 0.6 : 1, marginTop: 4 }}>
               {saving ? '...' : `+ ${t('documents.newCategory')}`}
@@ -247,10 +261,10 @@ export const CategoriesModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
 export const EditDocumentModal: React.FC<{ doc: any; onClose: () => void; onSuccess: () => void }> = ({ doc, onClose, onSuccess }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmps, setLoadingEmps] = useState(true);
-  
+
   const fileName = doc.fileName || doc.title || '';
   const lastDot = fileName.lastIndexOf('.');
   const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;

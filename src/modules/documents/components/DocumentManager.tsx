@@ -17,6 +17,7 @@ import { DocumentsTable } from './DocumentsTable';
 import { UploadModal, CategoriesModal, EditDocumentModal } from './Modals';
 import { IconUpload, IconTrash, IconTag, IconSearch, IconHistory, IconFolder, IconFolderSelected, IconClose, IconChevronRight } from './DocUtils';
 import { UnifiedUploadWizard } from '../UnifiedUploadModal';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
 
 interface DocumentManagerProps {
   employeeId?: number;
@@ -32,6 +33,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const { t } = useTranslation();
   const { user, loading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
 
   const [docs, setDocs] = useState<EmployeeDocument[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
@@ -140,32 +142,68 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
       {/* ── Header Toolbar ────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        justifyContent: 'space-between',
+        alignItems: isMobile ? 'stretch' : 'center',
+        flexWrap: 'wrap',
+        gap: isMobile ? 16 : 20
+      }}>
         {(!isEmployee || employeeId) && (
-          <div style={{ display: 'flex', gap: 8, background: 'rgba(0,0,0,0.03)', padding: 5, borderRadius: 12, border: '1px solid var(--border-light)' }}>
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            background: 'rgba(0,0,0,0.03)',
+            padding: 5,
+            borderRadius: 12,
+            border: '1px solid var(--border-light)',
+            width: isMobile ? '100%' : 'auto',
+            justifyContent: isMobile ? 'center' : 'flex-start'
+          }}>
             <button
               onClick={() => { setView('active'); setSelectedCompanyId(null); }}
-              style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: view === 'active' ? 'var(--surface)' : 'transparent', color: view === 'active' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 700, boxShadow: view === 'active' ? '0 4px 12px rgba(0,0,0,0.08)' : 'none', transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)' }}>
+              style={{
+                padding: '8px 20px',
+                flex: isMobile ? 1 : 'none',
+                textAlign: 'center',
+                borderRadius: 9, border: 'none', background: view === 'active' ? 'var(--surface)' : 'transparent', color: view === 'active' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 700, boxShadow: view === 'active' ? '0 4px 12px rgba(0,0,0,0.08)' : 'none', transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)'
+              }}>
               {t('common.active', 'Active')}
             </button>
             {isTrashEnabled && canManage && (
               <button
                 onClick={() => { setView('trash'); setSelectedCompanyId(null); }}
-                style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: view === 'trash' ? 'var(--surface)' : 'transparent', color: view === 'trash' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 700, boxShadow: view === 'trash' ? '0 4px 12px rgba(0,0,0,0.08)' : 'none', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)' }}>
+                style={{
+                  padding: '8px 20px',
+                  flex: isMobile ? 1 : 'none',
+                  justifyContent: 'center',
+                  borderRadius: 9, border: 'none', background: view === 'trash' ? 'var(--surface)' : 'transparent', color: view === 'trash' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 700, boxShadow: view === 'trash' ? '0 4px 12px rgba(0,0,0,0.08)' : 'none', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)'
+                }}>
                 <IconTrash /> {t('documents.trash', 'Trash')}
               </button>
             )}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: 12,
+          alignItems: isMobile ? 'stretch' : 'center',
+          width: isMobile ? '100%' : 'auto'
+        }}>
           {!employeeId && (
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', width: isMobile ? '100%' : 'auto' }}>
               <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><IconSearch /></span>
               <input
                 value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('common.search')}
-                style={{ padding: '10px 16px 10px 42px', borderRadius: 12, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, width: 260, transition: 'border-color 0.2s', outline: 'none' }}
+                style={{
+                  padding: '10px 16px 10px 42px', borderRadius: 12, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14,
+                  width: isMobile ? '100%' : 260,
+                  transition: 'border-color 0.2s', outline: 'none'
+                }}
                 onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
                 onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
               />
@@ -173,18 +211,33 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           )}
 
           {!isEmployee && !isStoreManager && canManage && view === 'active' && (
-            <>
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              width: isMobile ? '100%' : 'auto',
+              flexDirection: 'row'
+            }}>
               <button
                 onClick={() => setShowCategories(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 700, transition: 'all 0.2s' }}>
-                <IconTag /> {t('documents.manageCategories', 'Categories')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: isMobile ? '10px 10px' : '10px 18px',
+                  justifyContent: 'center', flex: isMobile ? 1 : 'none',
+                  borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 700, transition: 'all 0.2s'
+                }}>
+                <IconTag /> {isMobile ? t('documents.categories', 'Categories') : t('documents.manageCategories', 'Categories')}
               </button>
               <button
                 onClick={() => setShowUpload(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 12, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, boxShadow: '0 8px 16px rgba(var(--primary-rgb), 0.25)', transition: 'all 0.2s' }}>
-                <IconUpload /> {t('documents.uploadDoc', 'Upload Document')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: isMobile ? '10px 10px' : '10px 20px',
+                  justifyContent: 'center', flex: isMobile ? 1 : 'none',
+                  borderRadius: 12, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, boxShadow: '0 8px 16px rgba(var(--primary-rgb), 0.25)', transition: 'all 0.2s'
+                }}>
+                <IconUpload /> {isMobile ? t('documents.upload', 'Upload') : t('documents.uploadDoc', 'Upload Document')}
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -193,8 +246,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       {!loading && !isEmployee && !isStoreManager && !employeeId && !search.trim() && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))',
-          gap: 20,
+          gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(185px, 1fr))',
+          gap: isMobile ? 12 : 20,
           opacity: loading ? 0.5 : 1,
           transition: 'opacity 0.2s',
           width: '100%',
@@ -207,8 +260,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                 key={company.id}
                 onClick={() => setSelectedCompanyId(isSelected ? null : company.id)}
                 style={{
-                  padding: '18px 16px',
-                  borderRadius: 20,
+                  padding: isMobile ? '12px 10px' : '18px 16px',
+                  borderRadius: isMobile ? 16 : 20,
                   background: isSelected ? 'var(--surface)' : '#f9f9f9',
                   border: isSelected ? '3px solid #002D5B' : '1px solid #eee',
                   cursor: 'pointer',
@@ -216,8 +269,9 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                   boxShadow: isSelected ? '0 12px 32px rgba(0,45,91,0.1)' : 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 16,
-                  position: 'relative'
+                  gap: isMobile ? 10 : 16,
+                  position: 'relative',
+                  minWidth: 0
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected) {
@@ -232,17 +286,17 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                   }
                 }}
               >
-                <div style={{ flexShrink: 0 }}>
+                <div style={{ flexShrink: 0, transform: isMobile ? 'scale(0.85)' : 'none' }}>
                   <IconFolder />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 750, color: '#002D5B', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.02em' }}>
+                  <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 750, color: '#002D5B', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.02em' }}>
                     {company.name}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: isMobile ? 10 : 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {getCompanyCategories(company.id)}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+                  <div style={{ fontSize: isMobile ? 11 : 12, color: 'var(--text-muted)', fontWeight: 600 }}>
                     {getCompanyFileCount(company.id)} {t('documents.filesLabel', 'Files')}
                   </div>
                 </div>
@@ -271,16 +325,16 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           position: 'relative',
           zIndex: 1
         }}>
-          <div style={{ padding: '32px 40px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.005)' }}>
+          <div style={{ padding: isMobile ? '20px 20px' : '32px 40px', borderBottom: '1px solid var(--border-light)', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', background: 'rgba(0,0,0,0.005)', gap: 16 }}>
             <div>
-              <h3 style={{ fontSize: 22, fontWeight: 900, color: '#002D5B', margin: 0, letterSpacing: '-0.04em' }}>
+              <h3 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 900, color: '#002D5B', margin: 0, letterSpacing: '-0.04em' }}>
                 {search.trim() && !selectedCompanyId && !employeeId ? t('documents.searchResults', 'Search Results') :
                   employeeId ? `${t('documents.title', 'Documents')} - ${employeeName}` :
                     isEmployee ? t('documents.myDocuments', 'My Documents') :
                       isStoreManager ? t('documents.storeDocuments', 'Store Documents') :
                         `${getCompanyName(selectedCompanyId)}`}
               </h3>
-              <p style={{ margin: '8px 0 0 0', fontSize: 14, color: 'var(--text-muted)', fontWeight: 600 }}>
+              <p style={{ margin: '8px 0 0 0', fontSize: isMobile ? 12 : 14, color: 'var(--text-muted)', fontWeight: 600 }}>
                 {search.trim() && !selectedCompanyId && !employeeId ? t('documents.searchResultsDesc', 'Showing matches from all accessible companies') :
                   employeeId ? t('documents.personalDocsDesc', 'Viewing personal and payroll documents') :
                     isEmployee ? t('documents.myDocsDesc', 'Your personal documents and salary records') :
@@ -288,16 +342,6 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                         t('documents.companyViewDesc', 'Viewing all documents associated with this company')}
               </p>
             </div>
-            {!isEmployee && !isStoreManager && !employeeId && (
-              <button
-                onClick={() => setSelectedCompanyId(null)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 14, fontWeight: 800, transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f8f8f8'; e.currentTarget.style.borderColor = 'var(--text-muted)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
-              >
-                {t('documents.closeCompany', 'Close View')} <IconClose />
-              </button>
-            )}
           </div>
 
           <div style={{ padding: '0 12px 12px 12px' }}>
