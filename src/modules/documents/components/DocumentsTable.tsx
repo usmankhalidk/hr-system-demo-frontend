@@ -47,7 +47,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const [previewDocName, setPreviewDocName] = useState<string>('');
   const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-  const isMobile = useBreakpoint('md');
+  const { isMobile } = useBreakpoint();
   const pageSize = 10;
 
   // Reset to page 1 when docs change (e.g. search or filter)
