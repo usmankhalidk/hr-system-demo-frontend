@@ -11,9 +11,10 @@ import {
   DocumentCategory,
   getDocumentPreviewUrlGeneric
 } from '../../../api/documents';
-import { IconDownload, IconPen, IconTrash, IconRestore, mimeIcon, IconEye, ModalBackdrop, ModalHeader } from './DocUtils';
+import { IconDownload, IconPen, IconTrash, IconRestore, mimeIcon, IconEye, ModalBackdrop, ModalHeader, IconDots } from './DocUtils';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 import { Pagination } from '../../../components/ui/Pagination';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
 
 interface DocumentsTableProps {
   docs: EmployeeDocument[];
@@ -45,6 +46,8 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>('');
   const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const { isMobile } = useBreakpoint();
   const pageSize = 10;
 
   // Reset to page 1 when docs change (e.g. search or filter)
@@ -265,15 +268,77 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                   )}
                 </td>
               )}
-              <td style={{ padding: '12px 14px' }}>
+              <td style={{ padding: isMobile ? '8px 10px' : '12px 14px', position: 'relative' }}>
                 <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   {isTrash ? (
                     <button 
                       onClick={() => handleRestore(doc)} 
                       title={t('documents.restore', 'Restore')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 6, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: isMobile ? '6px 12px' : '5px 12px', borderRadius: 6, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                       <IconRestore /> {t('documents.restore', 'Restore')}
                     </button>
+                  ) : isMobile ? (
+                    <>
+                      <button 
+                        onClick={() => setOpenMenuId(openMenuId === doc.id ? null : doc.id)}
+                        style={{ 
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                          width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)', 
+                          background: openMenuId === doc.id ? 'var(--background)' : 'var(--surface)', 
+                          color: 'var(--text-secondary)', cursor: 'pointer' 
+                        }}
+                      >
+                        <IconDots />
+                      </button>
+                      {openMenuId === doc.id && (
+                        <>
+                          <div 
+                            style={{ position: 'fixed', inset: 0, zIndex: 998 }} 
+                            onClick={() => setOpenMenuId(null)} 
+                          />
+                          <div style={{ 
+                            position: 'absolute', top: '100%', right: 10, zIndex: 999, 
+                            background: 'var(--surface)', border: '1px solid var(--border)', 
+                            borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', 
+                            padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
+                            minWidth: 140, animation: 'slideUp 0.15s ease'
+                          }}>
+                            <button 
+                              onClick={() => { handlePreview(doc); setOpenMenuId(null); }} 
+                              disabled={previewLoadingId === doc.id}
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontWeight: 500 }}>
+                              <span style={{ opacity: 0.7 }}><IconEye /></span> {t('common.preview', 'Preview')}
+                            </button>
+                            <button 
+                              onClick={() => { handleDownload(doc); setOpenMenuId(null); }} 
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontWeight: 500 }}>
+                              <span style={{ opacity: 0.7 }}><IconDownload /></span> {t('documents.download')}
+                            </button>
+                            {onEdit && canManage && (
+                              <button 
+                                onClick={() => { onEdit(doc); setOpenMenuId(null); }} 
+                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontWeight: 500 }}>
+                                <span style={{ opacity: 0.7 }}><IconPen /></span> {t('common.edit')}
+                              </button>
+                            )}
+                            {doc.requiresSignature && !doc.signedAt && Number(doc.employeeId || doc.employee_id) === user?.id && (
+                              <button 
+                                onClick={() => { handleSignClick(doc); setOpenMenuId(null); }} 
+                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontWeight: 600 }}>
+                                <IconPen /> {t('documents.sign')}
+                              </button>
+                            )}
+                            {canManage && (
+                              <button 
+                                onClick={() => { handleDeleteClick(doc); setOpenMenuId(null); }} 
+                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: 'none', background: 'rgba(220,38,38,0.05)', color: '#DC2626', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontWeight: 600, marginTop: 4 }}>
+                                <IconTrash /> {t('common.delete')}
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </>
                   ) : (
                     <>
                       <button 

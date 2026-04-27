@@ -16,6 +16,7 @@ import ShiftDrawer from './ShiftDrawer';
 import ShiftTemplatesPanel from './ShiftTemplatesPanel';
 import ExternalAffluenceLivePanel from './ExternalAffluenceLivePanel';
 import CalendarActivitiesModal from './CalendarActivitiesModal';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -129,6 +130,7 @@ function IconUpload() {
 export default function ShiftsPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const { isMobile } = useBreakpoint();
 
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState<Date>(getWeekStart(new Date()));
@@ -516,52 +518,116 @@ export default function ShiftsPage() {
         </div>
 
         {canEdit && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setTemplatesOpen(true)}
-            >
-              <IconTemplate />
-              {t('shifts.templates', 'Template')}
-            </button>
-            {viewMode === 'week' && (
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            width: isMobile ? '100%' : 'auto',
+            flexDirection: isMobile ? 'column' : 'row'
+          }}>
+            {isMobile ? (
               <>
-                <button className="btn btn-secondary" onClick={handleCopyWeek}>
-                  <IconCopy />
-                  {t('shifts.copyWeek')}
+                {/* Row 1: Templates, Copy week, Export CSV */}
+                <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }}
+                    onClick={() => setTemplatesOpen(true)}
+                  >
+                    <IconTemplate />
+                    {t('shifts.templates', 'Templates')}
+                  </button>
+                  {viewMode === 'week' ? (
+                    <>
+                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={handleCopyWeek}>
+                        <IconCopy />
+                        {t('shifts.copyWeek')}
+                      </button>
+                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={() => handleExport('csv')}>
+                        <IconDownload />
+                        {isMobile ? 'CSV' : t('shifts.export')}
+                      </button>
+                    </>
+                  ) : (
+                    <div style={{ flex: 2 }} />
+                  )}
+                </div>
+
+                {/* Row 2: Export Excel, Import, New shift */}
+                <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                  {viewMode === 'week' ? (
+                    <>
+                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={() => handleExport('xlsx')}>
+                        <IconDownload />
+                        {isMobile ? 'Excel' : t('shifts.exportExcel')}
+                      </button>
+                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
+                        <IconUpload />
+                        {t('shifts.importShifts')}
+                      </button>
+                    </>
+                  ) : (
+                    <div style={{ flex: 2 }} />
+                  )}
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }}
+                    onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
+                  >
+                    <IconPlus />
+                    {t('shifts.newShift', 'New shift')}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setTemplatesOpen(true)}
+                >
+                  <IconTemplate />
+                  {t('shifts.templates', 'Template')}
                 </button>
-                <button className="btn btn-secondary" onClick={() => handleExport('csv')}>
-                  <IconDownload />
-                  {t('shifts.export')}
-                </button>
-                <button className="btn btn-secondary" onClick={() => handleExport('xlsx')}>
-                  <IconDownload />
-                  {t('shifts.exportExcel')}
-                </button>
-                <button className="btn btn-secondary" onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
-                  <IconUpload />
-                  {t('shifts.importShifts')}
+                {viewMode === 'week' && (
+                  <>
+                    <button className="btn btn-secondary" onClick={handleCopyWeek}>
+                      <IconCopy />
+                      {t('shifts.copyWeek')}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => handleExport('csv')}>
+                      <IconDownload />
+                      {t('shifts.export')}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => handleExport('xlsx')}>
+                      <IconDownload />
+                      {t('shifts.exportExcel')}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
+                      <IconUpload />
+                      {t('shifts.importShifts')}
+                    </button>
+                  </>
+                )}
+                {viewMode === 'week' && storeFilter && (
+                  <button
+                    className={`btn ${affluenceOpen ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setAffluenceOpen((o) => !o)}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                    {t('shifts.affluence_btn')}
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
+                >
+                  <IconPlus />
+                  {t('shifts.newShift', 'Nuovo turno')}
                 </button>
               </>
             )}
-            {viewMode === 'week' && storeFilter && (
-              <button
-                className={`btn ${affluenceOpen ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setAffluenceOpen((o) => !o)}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-                {t('shifts.affluence_btn')}
-              </button>
-            )}
-            <button
-              className="btn btn-primary"
-              onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
-            >
-              <IconPlus />
-              {t('shifts.newShift', 'Nuovo turno')}
-            </button>
           </div>
         )}
       </div>
@@ -675,10 +741,18 @@ export default function ShiftsPage() {
           </div>
 
           {/* ── RIGHT: store filter + loading indicator ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexShrink: 0,
+            width: isMobile ? '100%' : 'auto',
+            marginTop: isMobile ? 8 : 0
+          }}>
             <button
               className={`btn ${activitiesModalOpen ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => openActivitiesModal()}
+              style={{ flex: isMobile ? '0 0 auto' : 'none' }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -697,7 +771,10 @@ export default function ShiftsPage() {
                   fontFamily: 'var(--font-body)', fontSize: 12,
                   background: 'var(--surface)', color: 'var(--text-primary)',
                   cursor: 'pointer', outline: 'none',
-                  minWidth: 150, maxWidth: 220,
+                  minWidth: isMobile ? 0 : 150,
+                  maxWidth: isMobile ? 'none' : 220,
+                  flex: isMobile ? 1 : 'none',
+                  width: isMobile ? '100%' : 'auto'
                 }}
               >
                 <option value="">{t('shifts.allStores', 'Tutti i negozi')}</option>
