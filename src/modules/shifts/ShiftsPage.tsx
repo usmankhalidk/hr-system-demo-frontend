@@ -162,6 +162,18 @@ export default function ShiftsPage() {
   const [windowDisplaySaving, setWindowDisplaySaving] = useState(false);
   const [activitiesModalOpen, setActivitiesModalOpen] = useState(false);
   const [activitiesModalDate, setActivitiesModalDate] = useState<string | null>(null);
+  const mobileActionGridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: 8,
+    width: '100%',
+  };
+  const mobileActionButtonStyle: React.CSSProperties = {
+    justifyContent: 'center',
+    padding: '8px 4px',
+    fontSize: 12,
+    width: '100%',
+  };
 
   const canEdit = user ? (user.isSuperAdmin || MANAGEMENT_ROLES.includes(user.role)) : false;
   const isStoreManager = user?.role === 'store_manager';
@@ -196,9 +208,24 @@ export default function ShiftsPage() {
 
     const activities = results
       .flat()
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
-    setWindowDisplayActivities(activities);
+    // Expand activities across their date range
+    const expandedActivities: WindowDisplayActivity[] = [];
+    for (const activity of activities) {
+      const start = new Date(activity.startDate + 'T12:00:00');
+      const end = new Date(activity.endDate + 'T12:00:00');
+      
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = formatDateDisplay(d);
+        expandedActivities.push({
+          ...activity,
+          date: dateStr, // Set date to each day in the range for backward compatibility
+        });
+      }
+    }
+
+    setWindowDisplayActivities(expandedActivities);
   }, [getVisibleWindowDisplayMonths]);
 
   useEffect(() => {
@@ -407,7 +434,8 @@ export default function ShiftsPage() {
   async function handleWindowDisplaySave(payload: {
     id?: number;
     storeId: number;
-    date: string;
+    startDate: string;
+    endDate: string;
     activityType: StoreActivityType;
     activityIcon: string | null;
     customActivityName: string | null;
@@ -420,7 +448,8 @@ export default function ShiftsPage() {
     try {
       if (payload.id) {
         await updateWindowDisplay(payload.id, {
-          date: payload.date,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
           activityType: payload.activityType,
           activityIcon: payload.activityIcon,
           customActivityName: payload.customActivityName,
@@ -431,7 +460,8 @@ export default function ShiftsPage() {
       } else {
         await createWindowDisplay({
           storeId: payload.storeId,
-          date: payload.date,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
           activityType: payload.activityType,
           activityIcon: payload.activityIcon,
           customActivityName: payload.customActivityName,
@@ -526,59 +556,55 @@ export default function ShiftsPage() {
             flexDirection: isMobile ? 'column' : 'row'
           }}>
             {isMobile ? (
-              <>
-                {/* Row 1: Templates, Copy week, Export CSV */}
-                <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }}
-                    onClick={() => setTemplatesOpen(true)}
-                  >
-                    <IconTemplate />
-                    {t('shifts.templates', 'Templates')}
-                  </button>
-                  {viewMode === 'week' ? (
-                    <>
-                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={handleCopyWeek}>
-                        <IconCopy />
-                        {t('shifts.copyWeek')}
-                      </button>
-                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={() => handleExport('csv')}>
-                        <IconDownload />
-                        {isMobile ? 'CSV' : t('shifts.export')}
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ flex: 2 }} />
-                  )}
-                </div>
-
-                {/* Row 2: Export Excel, Import, New shift */}
-                <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-                  {viewMode === 'week' ? (
-                    <>
-                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={() => handleExport('xlsx')}>
-                        <IconDownload />
-                        {isMobile ? 'Excel' : t('shifts.exportExcel')}
-                      </button>
-                      <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }} onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
-                        <IconUpload />
-                        {t('shifts.importShifts')}
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ flex: 2 }} />
-                  )}
-                  <button
-                    className="btn btn-primary"
-                    style={{ flex: 1, justifyContent: 'center', padding: '8px 4px', fontSize: 12 }}
-                    onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
-                  >
-                    <IconPlus />
-                    {t('shifts.newShift', 'New shift')}
-                  </button>
-                </div>
-              </>
+              <div style={mobileActionGridStyle}>
+                <button
+                  className="btn btn-secondary"
+                  style={mobileActionButtonStyle}
+                  onClick={() => setTemplatesOpen(true)}
+                >
+                  <IconTemplate />
+                  {t('shifts.templates', 'Templates')}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  style={mobileActionButtonStyle}
+                  onClick={() => openActivitiesModal()}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <line x1="3" y1="9" x2="21" y2="9" />
+                  </svg>
+                  {t('shifts.windowDisplayAction', 'Activity')}
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={mobileActionButtonStyle}
+                  onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
+                >
+                  <IconPlus />
+                  {t('shifts.newShift', 'New shift')}
+                </button>
+                {viewMode === 'week' && (
+                  <>
+                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={handleCopyWeek}>
+                      <IconCopy />
+                      {t('shifts.copyWeek')}
+                    </button>
+                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={() => handleExport('csv')}>
+                      <IconDownload />
+                      {t('shifts.export')}
+                    </button>
+                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={() => handleExport('xlsx')}>
+                      <IconDownload />
+                      {t('shifts.exportExcel')}
+                    </button>
+                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
+                      <IconUpload />
+                      {t('shifts.importShifts')}
+                    </button>
+                  </>
+                )}
+              </div>
             ) : (
               <>
                 <button
@@ -650,14 +676,15 @@ export default function ShiftsPage() {
         }}>
 
           {/* ── LEFT: view toggle + navigation + today ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
 
             {/* View toggle pill */}
-            <div style={{
+            <div className="shifts-view-toggle" style={{
               display: 'flex',
               background: 'var(--background)',
               border: '1.5px solid var(--border)',
               borderRadius: 8, padding: 2, gap: 2, flexShrink: 0,
+              width: isMobile ? '100%' : 'auto',
             }}>
               {(['day', 'week', 'month'] as ViewMode[]).map((mode) => (
                 <button
@@ -675,6 +702,7 @@ export default function ShiftsPage() {
                     fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
                     transition: 'background 0.15s, color 0.15s',
                     whiteSpace: 'nowrap',
+                    flex: isMobile ? 1 : 'none',
                   }}
                 >
                   {mode === 'day' ? t('shifts.dayView', 'Giorno') : mode === 'week' ? t('shifts.weekView', 'Settimana') : t('shifts.monthView', 'Mese')}
@@ -683,10 +711,17 @@ export default function ShiftsPage() {
             </div>
 
             {/* Divider */}
-            <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0, margin: '0 2px' }} />
+            {!isMobile && <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0, margin: '0 2px' }} />}
 
             {/* Navigation: prev · period label · next */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+            <div className="shifts-navigation" style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 2, 
+              flexShrink: 0,
+              width: isMobile ? '100%' : 'auto',
+              marginTop: isMobile ? 8 : 0,
+            }}>
               <button
                 className="btn btn-ghost"
                 onClick={() => navigate(-1)}
@@ -698,18 +733,20 @@ export default function ShiftsPage() {
 
               <div style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
-                minWidth: 130, textAlign: 'center', userSelect: 'none', padding: '0 4px',
+                minWidth: isMobile ? 0 : 130,
+                flex: isMobile ? 1 : 'none',
+                textAlign: 'center', userSelect: 'none', padding: '0 4px',
               }}>
                 <span style={{
                   fontFamily: 'var(--font-display)', fontWeight: 700,
-                  fontSize: 14, color: 'var(--primary)', lineHeight: 1.1,
+                  fontSize: isMobile ? 13 : 14, color: 'var(--primary)', lineHeight: 1.1,
                   whiteSpace: 'nowrap',
                 }}>
                   {periodLabel}
                 </span>
                 {periodPrefix && (
                   <span style={{
-                    fontSize: 10, color: 'var(--text-muted)', marginTop: 2,
+                    fontSize: isMobile ? 9 : 10, color: 'var(--text-muted)', marginTop: 2,
                     fontWeight: 500, whiteSpace: 'nowrap',
                   }}>
                     {periodPrefix}
@@ -727,20 +764,22 @@ export default function ShiftsPage() {
               </button>
             </div>
 
-            {/* Today */}
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                const now = new Date();
-                setCurrentDate(viewMode === 'day' ? now : viewMode === 'week' ? getWeekStart(now) : now);
-              }}
-              style={{ fontSize: 12, padding: '5px 14px', fontWeight: 600, flexShrink: 0 }}
-            >
-              {t('shifts.today', 'Oggi')}
-            </button>
+            {/* Today (desktop only) */}
+            {!isMobile && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  const now = new Date();
+                  setCurrentDate(viewMode === 'day' ? now : viewMode === 'week' ? getWeekStart(now) : now);
+                }}
+                style={{ fontSize: 12, padding: '5px 14px', fontWeight: 600, flexShrink: 0 }}
+              >
+                {t('shifts.today', 'Oggi')}
+              </button>
+            )}
           </div>
 
-          {/* ── RIGHT: store filter + loading indicator ── */}
+          {/* ── RIGHT: store filter + loading indicator + mobile menu ── */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -749,22 +788,39 @@ export default function ShiftsPage() {
             width: isMobile ? '100%' : 'auto',
             marginTop: isMobile ? 8 : 0
           }}>
-            <button
-              className={`btn ${activitiesModalOpen ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => openActivitiesModal()}
-              style={{ flex: isMobile ? '0 0 auto' : 'none' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <line x1="3" y1="9" x2="21" y2="9" />
-              </svg>
-              {t('shifts.windowDisplayAction', 'Activity')}
-            </button>
+            {/* Today button (mobile) */}
+            {isMobile && (
+              <button
+                className="btn btn-secondary shifts-today-button"
+                onClick={() => {
+                  const now = new Date();
+                  setCurrentDate(viewMode === 'day' ? now : viewMode === 'week' ? getWeekStart(now) : now);
+                }}
+                style={{ fontSize: 12, padding: '5px 14px', fontWeight: 600, flexShrink: 0 }}
+              >
+                {t('shifts.today', 'Today')}
+              </button>
+            )}
+
+            {/* Activity button (desktop) */}
+            {!isMobile && (
+              <button
+                className={`btn ${activitiesModalOpen ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => openActivitiesModal()}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="3" y1="9" x2="21" y2="9" />
+                </svg>
+                {t('shifts.windowDisplayAction', 'Activity')}
+              </button>
+            )}
 
             {!isStoreManager && stores.length > 0 && (
               <select
                 value={storeFilter ?? ''}
                 onChange={(e) => setStoreFilter(e.target.value ? Number(e.target.value) : null)}
+                className="shifts-store-filter"
                 style={{
                   padding: '6px 10px',
                   border: '1.5px solid var(--border)', borderRadius: 7,

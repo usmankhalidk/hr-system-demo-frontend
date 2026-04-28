@@ -120,19 +120,36 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
     if (!open || !containerRef.current) return;
 
     const updatePosition = () => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
+      const rect = containerRef.current!.getBoundingClientRect();
+      const popupWidth = 272; // min-width of popup
+      const popupHeight = 380; // approximate height of popup
       const viewportWidth = window.innerWidth;
-      const calendarWidth = 272; // Matching the minWidth in the popup style
-
+      const viewportHeight = window.innerHeight;
+      
+      // Check if popup would go off-screen to the right
       let left = rect.left;
-      // If the calendar would overflow the right edge of the screen, shift it left
-      if (left + calendarWidth > viewportWidth - 12) {
-        left = Math.max(12, viewportWidth - calendarWidth - 12);
+      if (left + popupWidth > viewportWidth - 10) {
+        // Align to right edge of viewport with 10px margin
+        left = viewportWidth - popupWidth - 10;
+      }
+      
+      // Ensure it doesn't go off-screen to the left
+      if (left < 10) {
+        left = 10;
       }
 
+      // Adjust top position to ensure popup appears below the input
+      // Add the input height (38px) plus a larger gap (12px)
+      let top = rect.top + 38 + 12;
+      
+      // Check if popup would go off-screen at the bottom
+      if (top + popupHeight > viewportHeight - 10) {
+        // Position above the input instead
+        top = rect.top - popupHeight - 5;
+      }
+      
       setCoords({
-        top: rect.top,
+        top: top,
         left: left,
         width: rect.width
       });
@@ -252,9 +269,8 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
       style={{
         position: 'fixed',
         zIndex: 99999,
-        top: finalPlacement === 'bottom' ? (coords.top + 38 + 5) : (coords.top - 5),
+        top: coords.top,
         left: coords.left,
-        transform: finalPlacement === 'bottom' ? 'none' : 'translateY(-100%)',
         minWidth: '272px',
         background: 'var(--surface)',
         border: '1px solid var(--border)',

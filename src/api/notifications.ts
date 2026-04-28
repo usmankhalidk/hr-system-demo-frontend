@@ -13,6 +13,13 @@ export interface Notification {
   createdAt: string;
   /** Locale in which title/message were stored (e.g. 'it', 'en'). */
   locale?: string;
+  /** Category/module this notification belongs to */
+  category?: string;
+  /** Recipient details populated for company-scope feeds. */
+  recipientName?: string | null;
+  recipientSurname?: string | null;
+  recipientRole?: string | null;
+  recipientAvatarFilename?: string | null;
 }
 
 export interface NotificationsPage {
@@ -21,14 +28,24 @@ export interface NotificationsPage {
   unreadCount: number;
   limit: number;
   offset: number;
+  scope?: 'mine' | 'company';
 }
 
 export async function getNotifications(params?: {
   unreadOnly?: boolean;
   limit?: number;
   offset?: number;
+  scope?: 'mine' | 'company';
 }): Promise<NotificationsPage> {
-  const { data } = await apiClient.get('/notifications', { params });
+  const { unreadOnly, limit, offset, scope } = params ?? {};
+  const { data } = await apiClient.get('/notifications', {
+    params: {
+      unread_only: unreadOnly,
+      limit,
+      offset,
+      scope,
+    },
+  });
   return data.data as NotificationsPage;
 }
 
@@ -55,3 +72,32 @@ export async function updateUserLocale(locale: 'it' | 'en'): Promise<void> {
   await apiClient.patch('/auth/locale', { locale });
 }
 
+export interface RecentRecipient {
+  userId: number;
+  name: string;
+  surname: string;
+  avatarFilename: string | null;
+}
+
+/**
+ * Fetches recent users (last 24 hours) who received notifications for a specific event type.
+ * Used to display avatars in the settings modal.
+ */
+export async function getRecentRecipients(eventKey: string, companyId?: number): Promise<RecentRecipient[]> {
+  const params = companyId ? { company_id: companyId } : {};
+  const { data } = await apiClient.get(`/notifications/settings/${eventKey}/recipients`, { params });
+  return data.data.recipients as RecentRecipient[];
+}
+
+/**
+ * Updates the roles and priority for a specific notification event type.
+ */
+export async function updateNotificationRoles(
+  eventKey: string, 
+  roles: string[], 
+  priority?: string,
+  companyId?: number
+): Promise<void> {
+  const params = companyId ? { company_id: companyId } : {};
+  await apiClient.patch(`/notifications/settings/${eventKey}`, { roles, priority }, { params });
+}

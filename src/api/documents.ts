@@ -172,15 +172,20 @@ export interface NotificationSetting {
   eventKey: string;
   enabled: boolean;
   roles: string[];
+  priority?: string;
+  locale?: string;
+  category?: string;
 }
 
-export async function getNotificationSettings(): Promise<NotificationSetting[]> {
-  const { data } = await apiClient.get('/notifications/settings');
+export async function getNotificationSettings(companyId?: number): Promise<NotificationSetting[]> {
+  const params = companyId ? { company_id: companyId } : {};
+  const { data } = await apiClient.get('/notifications/settings', { params });
   return data.data.settings as NotificationSetting[];
 }
 
-export async function updateNotificationSetting(eventKey: string, enabled: boolean, roles?: string[]): Promise<NotificationSetting> {
-  const { data } = await apiClient.patch(`/notifications/settings/${eventKey}`, { enabled, roles });
+export async function updateNotificationSetting(eventKey: string, enabled: boolean, roles?: string[], companyId?: number): Promise<NotificationSetting> {
+  const params = companyId ? { company_id: companyId } : {};
+  const { data } = await apiClient.patch(`/notifications/settings/${eventKey}`, { enabled, roles }, { params });
   return data.data.setting as NotificationSetting;
 }
 

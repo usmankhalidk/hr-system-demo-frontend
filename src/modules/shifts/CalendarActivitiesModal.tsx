@@ -33,7 +33,8 @@ interface CalendarActivitiesModalProps {
   onSave: (payload: {
     id?: number;
     storeId: number;
-    date: string;
+    startDate: string;
+    endDate: string;
     activityType: StoreActivityType;
     activityIcon: string | null;
     customActivityName: string | null;
@@ -146,7 +147,8 @@ export default function CalendarActivitiesModal({
   const [monthPickerYear, setMonthPickerYear] = useState(currentDate.getFullYear());
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
-  const [formDate, setFormDate] = useState('');
+  const [formStartDate, setFormStartDate] = useState('');
+  const [formEndDate, setFormEndDate] = useState('');
   const [formType, setFormType] = useState<StoreActivityType>('window_display');
   const [formIcon, setFormIcon] = useState('');
   const [formCustomActivityName, setFormCustomActivityName] = useState('');
@@ -326,7 +328,8 @@ export default function CalendarActivitiesModal({
     if (!open || !selectedStoreId) return;
 
     if (selectedActivity) {
-      setFormDate(selectedActivity.date);
+      setFormStartDate(selectedActivity.startDate);
+      setFormEndDate(selectedActivity.endDate);
       setFormType(selectedActivity.activityType);
       setFormIcon(selectedActivity.activityIcon ?? '');
       setFormCustomActivityName(selectedActivity.customActivityName ?? '');
@@ -335,7 +338,9 @@ export default function CalendarActivitiesModal({
       return;
     }
 
-    setFormDate(firstDayOfMonth(selectedMonth));
+    const firstDay = firstDayOfMonth(selectedMonth);
+    setFormStartDate(firstDay);
+    setFormEndDate(firstDay);
     setFormType('window_display');
     setFormIcon('');
     setFormCustomActivityName('');
@@ -441,13 +446,18 @@ export default function CalendarActivitiesModal({
       return;
     }
 
-    if (!formDate) {
-      setLocalError(t('shifts.windowDisplayDateRequired', 'Select a date first.'));
+    if (!formStartDate || !formEndDate) {
+      setLocalError(t('shifts.windowDisplayDateRequired', 'Select start and end dates.'));
       return;
     }
 
-    if (formDate < monthMinDate || formDate > monthMaxDate) {
-      setLocalError(t('shifts.windowDisplayDateOutOfMonth', 'Date must stay in the selected month.'));
+    if (formEndDate < formStartDate) {
+      setLocalError(t('shifts.windowDisplayEndDateBeforeStart', 'End date must be on or after start date.'));
+      return;
+    }
+
+    if (formStartDate < monthMinDate || formEndDate > monthMaxDate) {
+      setLocalError(t('shifts.windowDisplayDateOutOfMonth', 'Dates must stay within the selected month.'));
       return;
     }
 
@@ -470,7 +480,8 @@ export default function CalendarActivitiesModal({
       await onSave({
         id: selectedActivity?.id,
         storeId: selectedStoreId,
-        date: formDate,
+        startDate: formStartDate,
+        endDate: formEndDate,
         activityType: formType,
         activityIcon: formIcon.trim() || null,
         customActivityName: isCustomActivityType(formType) ? normalizedCustomActivityName : null,
@@ -491,7 +502,9 @@ export default function CalendarActivitiesModal({
     setBusy(true);
     try {
       await onDelete(selectedActivity.id, selectedActivity.companyId);
-      setFormDate(firstDayOfMonth(selectedMonth));
+      const firstDay = firstDayOfMonth(selectedMonth);
+      setFormStartDate(firstDay);
+      setFormEndDate(firstDay);
       setFormType('window_display');
       setFormIcon('');
       setFormCustomActivityName('');
@@ -1004,7 +1017,7 @@ export default function CalendarActivitiesModal({
                           </span>
                         )}
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>
-                          {activity?.date ?? selectedMonth}
+                          {activity ? `${activity.startDate}${activity.startDate !== activity.endDate ? ` → ${activity.endDate}` : ''}` : selectedMonth}
                         </span>
                       </div>
                     </button>
@@ -1147,13 +1160,23 @@ export default function CalendarActivitiesModal({
                     </div>
                   )}
 
-                  <DatePicker
-                    label={t('common.date', 'Date')}
-                    value={formDate}
-                    onChange={setFormDate}
-                    disabled={!canManage || isBusy}
-                  />
+                  {/* Date Range - Full Width Row with Two DatePickers */}
+                  <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                    <DatePicker
+                      label={t('shifts.activityStartDate', 'Start Date')}
+                      value={formStartDate}
+                      onChange={setFormStartDate}
+                      disabled={!canManage || isBusy}
+                    />
+                    <DatePicker
+                      label={t('shifts.activityEndDate', 'End Date')}
+                      value={formEndDate}
+                      onChange={setFormEndDate}
+                      disabled={!canManage || isBusy}
+                    />
+                  </div>
 
+                  {/* Duration and Month in same row */}
                   <Input
                     label={t('shifts.activityDurationHours', 'Duration (hours)')}
                     type="number"
@@ -1204,7 +1227,7 @@ export default function CalendarActivitiesModal({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {canManage
-                      ? t('shifts.activityMappingHint', 'One activity can be stored for each store per month.')
+                      ? t('shifts.activityMappingHint', 'Activities can span multiple days within a month.')
                       : t('shifts.activityReadOnlyHint', 'Read-only mode: you can view activities but cannot edit.')}
                     <span style={{ display: 'block', marginTop: 2 }}>
                       {t('shifts.activityMonthLimitHint', 'Allowed date range')}: {monthMinDate} - {monthMaxDate}

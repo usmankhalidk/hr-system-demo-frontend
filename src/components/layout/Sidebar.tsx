@@ -64,6 +64,12 @@ const IconMessage = () => (
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
+const IconBell = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8" />
+    <path d="M13.73 21a2 2 0 01-3.46 0" />
+  </svg>
+);
 const IconMail = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
@@ -209,6 +215,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.presenze', path: '/presenze', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
       { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
@@ -230,6 +237,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.presenze', path: '/presenze', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
@@ -249,6 +257,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.presenze', path: '/presenze', icon: <IconClock />, permissionKey: 'presenze' },
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
+      { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
@@ -265,6 +274,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.anomalies', path: '/anomalie', icon: <IconAnomaly />, permissionKey: 'anomalie' },
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.stores', path: '/negozi', icon: <IconStore />, permissionKey: 'negozi' },
+      { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.terminals', path: '/terminali', icon: <IconTerminal />, permissionKey: 'terminali' },
       { labelKey: 'nav.settings', path: '/impostazioni', icon: <IconSettings />, permissionKey: 'impostazioni' },
@@ -274,6 +284,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.myProfile', path: '/profilo', icon: <IconPerson /> },
       { labelKey: 'nav.onboarding', path: '/onboarding', icon: <IconClipboard />, permissionKey: 'onboarding' },
       { labelKey: 'nav.documenti', path: '/documenti', icon: <IconDoc />, permissionKey: 'documenti' },
+      { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell /> },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.turni', path: '/turni', icon: <IconCalendar />, permissionKey: 'turni' },
       { labelKey: 'nav.presenze', path: '/presenze/checkin', icon: <IconClock />, permissionKey: 'presenze' },
