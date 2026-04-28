@@ -44,11 +44,15 @@ export interface LeaveRequest {
   companyName?: string | null;
   medicalCertificateName?: string | null;
   skippedApprovers?: string[];
+  approvedByRoles?: string[] | null;
   escalated?: boolean;
   isEmergencyOverride?: boolean;
   lastActionAt?: string | null;
   latestAction?: 'approved' | 'rejected' | null;
   latestActionAt?: string | null;
+  latestActionByName?: string | null;
+  latestActionBySurname?: string | null;
+  latestActionByRole?: string | null;
 }
 
 export interface LeaveBalance {
