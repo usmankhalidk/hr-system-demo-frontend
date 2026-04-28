@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare,
-  FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield, ArrowLeftRight, Monitor,
+  FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield, ArrowLeftRight, Monitor, Bell,
 } from 'lucide-react';
 import { getPermissions, updatePermissions } from '../../api/permissions';
 import { getCompanies } from '../../api/companies';
@@ -28,6 +28,7 @@ const MODULE_KEYS: GridModuleDef[] = [
   { key: 'permessi',     implemented: true,  icon: <CalendarOff size={15} /> },
   { key: 'saldi',        implemented: true,  icon: <Wallet size={15} /> },
   { key: 'messaggi',     implemented: true,  icon: <MessageSquare size={15} /> },
+  { key: 'notifiche',    implemented: true,  icon: <Bell size={15} /> },
   { key: 'gestione_accessi', implemented: true, icon: <Shield size={15} /> },
   { key: 'impostazioni', implemented: true,  icon: <Settings size={15} /> },
   { key: 'report',       implemented: false, icon: <BarChart2 size={15} /> },

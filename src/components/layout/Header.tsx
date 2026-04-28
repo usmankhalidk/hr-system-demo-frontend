@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, UserCircle2 } from 'lucide-react';
+import { AlertTriangle, Briefcase, CalendarClock, FileText, GraduationCap, LogOut, Settings, ShieldAlert, UserCircle2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 import { UserRole } from '../../types';
@@ -35,6 +36,21 @@ const PRIORITY_COLOR: Record<string, string> = {
   medium: '#C9973A',
   low:    '#6B7280',
 };
+
+const TYPE_VISUALS: Array<{ startsWith: string; icon: LucideIcon; color: string; bg: string }> = [
+  { startsWith: 'shift.', icon: CalendarClock, color: '#1D4ED8', bg: 'rgba(29,78,216,0.11)' },
+  { startsWith: 'leave.', icon: UserCircle2, color: '#B45309', bg: 'rgba(180,83,9,0.13)' },
+  { startsWith: 'attendance.', icon: AlertTriangle, color: '#B91C1C', bg: 'rgba(185,28,28,0.12)' },
+  { startsWith: 'document.', icon: FileText, color: '#0F766E', bg: 'rgba(15,118,110,0.12)' },
+  { startsWith: 'ats.', icon: Briefcase, color: '#7C3AED', bg: 'rgba(124,58,237,0.13)' },
+  { startsWith: 'onboarding.', icon: GraduationCap, color: '#0D9488', bg: 'rgba(13,148,136,0.13)' },
+  { startsWith: 'manager.', icon: ShieldAlert, color: '#334155', bg: 'rgba(51,65,85,0.13)' },
+];
+
+function typeVisual(type: string): { icon: LucideIcon; color: string; bg: string } {
+  const matched = TYPE_VISUALS.find((item) => type.startsWith(item.startsWith));
+  return matched ?? { icon: UserCircle2, color: '#0D2137', bg: 'rgba(13,33,55,0.10)' };
+}
 
 const MenuIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -315,6 +331,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
                 boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
                 zIndex: 50,
                 animation: 'popIn 0.18s cubic-bezier(0.16,1,0.3,1)',
+                overflow: 'hidden',
               }}>
                 <div style={{
                   padding: '14px 16px 10px',
@@ -365,74 +382,112 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
                       <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('notifications.empty')}</div>
                     </div>
                   ) : (
-                    notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        onClick={() => !n.isRead && handleMarkRead(n.id)}
-                        style={{
-                          padding: '12px 16px',
-                          borderBottom: '1px solid var(--border)',
-                          cursor: n.isRead ? 'default' : 'pointer',
-                          background: n.isRead ? 'transparent' : 'rgba(201,151,58,0.04)',
-                          transition: 'background 0.15s',
-                          display: 'flex',
-                          gap: 10,
-                          alignItems: 'flex-start',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!n.isRead) (e.currentTarget as HTMLElement).style.background = 'rgba(201,151,58,0.08)';
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!n.isRead) (e.currentTarget as HTMLElement).style.background = 'rgba(201,151,58,0.04)';
-                        }}
-                      >
-                        <div style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          marginTop: 5,
-                          flexShrink: 0,
-                          background: n.isRead ? 'transparent' : (PRIORITY_COLOR[n.priority] ?? '#C9973A'),
-                        }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: n.isRead ? 400 : 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                            {n.title}
-                          </div>
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>
-                            {n.message}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {timeAgo(n.createdAt, t)}
+                    notifications.map((n) => {
+                      const visual = typeVisual(n.type);
+                      const Icon = visual.icon;
+                      return (
+                        <div
+                          key={n.id}
+                          onClick={() => !n.isRead && handleMarkRead(n.id)}
+                          style={{
+                            padding: '11px 14px',
+                            borderBottom: '1px solid var(--border)',
+                            cursor: n.isRead ? 'default' : 'pointer',
+                            background: n.isRead ? 'rgba(22,163,74,0.05)' : 'rgba(201,151,58,0.08)',
+                            transition: 'background 0.15s',
+                            display: 'flex',
+                            gap: 10,
+                            alignItems: 'flex-start',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!n.isRead) (e.currentTarget as HTMLElement).style.background = 'rgba(201,151,58,0.12)';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!n.isRead) (e.currentTarget as HTMLElement).style.background = 'rgba(201,151,58,0.08)';
+                          }}
+                        >
+                          <span style={{
+                            width: 23,
+                            height: 23,
+                            borderRadius: 8,
+                            marginTop: 2,
+                            flexShrink: 0,
+                            color: visual.color,
+                            background: visual.bg,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            <Icon size={12} />
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: n.isRead ? 500 : 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                              {n.title}
                             </div>
-                            <span style={{
-                              fontSize: 10,
-                              fontWeight: 600,
-                              color: PRIORITY_COLOR[n.priority] ?? '#C9973A',
-                              background: `${PRIORITY_COLOR[n.priority] ?? '#C9973A'}15`,
-                              borderRadius: 4,
-                              padding: '1px 5px',
-                              fontFamily: 'var(--font-display)',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.03em',
-                            }}>
-                              {t(`notifications.priority_${n.priority}`)}
-                            </span>
-                            <span style={{
-                              fontSize: 10,
-                              color: 'var(--text-muted)',
-                              background: 'var(--background)',
-                              borderRadius: 4,
-                              padding: '1px 5px',
-                              fontFamily: 'var(--font-display)',
-                            }}>
-                              {typeLabel(n.type, t)}
-                            </span>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>
+                              {n.message}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {timeAgo(n.createdAt, t)}
+                              </div>
+                              <span style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: PRIORITY_COLOR[n.priority] ?? '#C9973A',
+                                background: `${PRIORITY_COLOR[n.priority] ?? '#C9973A'}15`,
+                                borderRadius: 4,
+                                padding: '1px 5px',
+                                fontFamily: 'var(--font-display)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.03em',
+                              }}>
+                                {t(`notifications.priority_${n.priority}`)}
+                              </span>
+                              <span style={{
+                                fontSize: 10,
+                                color: 'var(--text-muted)',
+                                background: 'var(--background)',
+                                borderRadius: 4,
+                                padding: '1px 5px',
+                                fontFamily: 'var(--font-display)',
+                              }}>
+                                {typeLabel(n.type, t)}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
+                </div>
+
+                <div style={{
+                  padding: '6px 10px',
+                  borderTop: '1px solid var(--border)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  background: 'var(--surface-warm)',
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDropOpen(false);
+                      navigate('/notifiche');
+                    }}
+                    style={{
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--primary)',
+                      borderRadius: 8,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      padding: '4px 9px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t('common.viewAll', 'View all')}
+                  </button>
                 </div>
               </div>
             )}

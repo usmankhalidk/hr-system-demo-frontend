@@ -115,7 +115,7 @@ export default function MonthlyCalendar({
   stores,
 }: MonthlyCalendarProps) {
   const { t } = useTranslation();
-  const MAX_VISIBLE_AVATARS = 4;
+  const MAX_VISIBLE_AVATARS = 3;
   const MAX_VISIBLE_DETAIL_ROWS = 4;
   const [hoveredActivityId, setHoveredActivityId] = React.useState<number | null>(null);
   const [hoveredSummaryTag, setHoveredSummaryTag] = React.useState<string | null>(null);
@@ -464,7 +464,7 @@ export default function MonthlyCalendar({
                 minHeight: 92,
                 borderRadius: 6,
                 border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
-                padding: 7,
+                padding: 6,
                 cursor: 'pointer',
                 background: isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)',
                 transition: 'background 0.15s',
@@ -671,11 +671,11 @@ export default function MonthlyCalendar({
               )}
 
               {employeeCount > 0 && (
-                <div style={{ marginTop: 5, minHeight: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ marginTop: 5, minHeight: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                   <span style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 5,
+                    gap: 4,
                     fontSize: '0.63rem',
                     fontWeight: 700,
                     color: 'var(--text-secondary)',
@@ -756,10 +756,10 @@ export default function MonthlyCalendar({
                           fontWeight: 900,
                           lineHeight: 1,
                           boxShadow: '0 1px 2px rgba(15,23,42,0.16)',
-                          zIndex: 30,
+                          zIndex: 8,
                         }}
                       >
-                        4+
+                        +{employeeCount - MAX_VISIBLE_AVATARS}
                       </span>
                     )}
                   </div>
