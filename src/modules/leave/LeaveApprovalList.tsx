@@ -24,16 +24,28 @@ const STATUS_COLORS: Record<LeaveStatus, { bg: string; color: string }> = {
   cancelled:                       { bg: 'rgba(0,0,0,0.05)',        color: 'var(--text-muted)' },
 };
 
-function StatusBadge({ status }: { status: LeaveStatus }) {
+function StatusBadge({ req }: { req: LeaveRequest }) {
   const { t } = useTranslation();
+  const { status } = req;
   const { bg, color } = STATUS_COLORS[status] ?? STATUS_COLORS.pending;
+  
+  let content = t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`);
+  if (status.includes('rejected') || status === 'rejected') {
+    const roleText = req.latestActionByRole ? t(`leave.approver_${req.latestActionByRole}`) : '';
+    const nameText = req.latestActionByName ? `${req.latestActionByName}` : '';
+    const rejector = roleText && nameText ? `${roleText} - ${nameText}` : (roleText || nameText || '');
+    if (rejector) {
+      content = `${t('leave.status_rejected')} - ${rejector}`;
+    }
+  }
+
   return (
     <span style={{
       display: 'inline-block', padding: '2px 10px', borderRadius: 20,
       fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
       background: bg, color, textTransform: 'uppercase',
     }}>
-      {t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`)}
+      {content}
     </span>
   );
 }
@@ -66,58 +78,41 @@ function ApprovalStepper({ req }: { req: LeaveRequest }) {
   const { t } = useTranslation();
   const isRejected = status === 'rejected';
 
-  function stepState(stepRole: ChainStep): 'completed' | 'current' | 'pending' | 'skipped' {
-    const skipped = skippedApprovers || [];
-    if (skipped.includes(stepRole)) return 'skipped';
-    
-    if (status === 'approved') return 'completed';
-    if (isEmergencyOverride && !status.includes('rejected')) return 'completed'; // Emergency override completes all steps visually
-    if (isRejected || status.includes('rejected')) return 'current';
-    
-    // Status-based completion logic
-    if (status === 'store manager approved' && stepRole === 'store_manager') return 'completed';
-    if (status === 'area manager approved') {
-       if (stepRole === 'store_manager' || stepRole === 'area_manager') return 'completed';
-    }
-    if (status === 'HR approved') {
-       if (stepRole === 'store_manager' || stepRole === 'area_manager' || stepRole === 'hr') return 'completed';
+  function stepState(stepRole: ChainStep): 'completed' | 'current' | 'pending' | 'rejected' {
+    // 1. Check if this specific role rejected the request
+    const isRejectedByThisRole = (status === 'rejected' || status.includes('rejected')) && req.latestActionByRole === stepRole;
+    if (isRejectedByThisRole) return 'rejected';
+
+    // 2. Check if this specific role approved the request
+    const isApprovedByThisRole = req.approvedByRoles?.includes(stepRole);
+    if (isApprovedByThisRole) return 'completed';
+
+    // 3. If the request is still in progress, mark the current active step
+    const isTerminalState = status === 'approved' || status === 'rejected' || status === 'cancelled' || status.includes('rejected');
+    if (!isTerminalState && currentApproverRole === stepRole) {
+      return 'current';
     }
 
-    const currentIdx = currentApproverRole ? CHAIN_STEPS.indexOf(currentApproverRole as ChainStep) : -1;
-    const stepIdx    = CHAIN_STEPS.indexOf(stepRole);
-
-    if (currentIdx === -1) return 'pending';
-    if (stepIdx < currentIdx) return 'completed';
-    if (stepIdx === currentIdx) return 'current';
     return 'pending';
   }
 
+  const activeChainSteps = CHAIN_STEPS.filter(step => !(skippedApprovers || []).includes(step));
+
   return (
     <div>
-      {isRejected && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          marginBottom: 8, fontSize: 11, fontWeight: 700,
-          color: 'var(--danger)', letterSpacing: 0.3, textTransform: 'uppercase',
-        }}>
-          <XIcon />
-          <XIcon />
-          {status.includes('rejected') ? t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`) : t('leave.status_rejected')}
-        </div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0, opacity: isRejected ? 0.45 : 1, transition: 'opacity 0.2s' }}>
-        {CHAIN_STEPS.map((step, idx) => {
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+        {activeChainSteps.map((step, idx) => {
           const state = stepState(step);
           const isCompleted = state === 'completed';
           const isCurrent   = state === 'current';
-          const isSkipped   = state === 'skipped';
+          const isRejectedState = state === 'rejected';
 
-          const circleBackground = isSkipped ? 'var(--warning-bg)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'transparent';
-          const circleBorder     = isSkipped ? 'var(--warning)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--border)';
-          const circleTextColor  = (isCompleted || isCurrent || isSkipped) ? '#fff' : 'var(--text-muted)';
-          const labelColor       = isSkipped ? 'var(--warning)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--text-muted)';
-          const nextState = idx < CHAIN_STEPS.length - 1 ? stepState(CHAIN_STEPS[idx + 1] as ChainStep) : 'pending';
-          const lineBackground   = nextState === 'pending' ? 'var(--border)' : (nextState === 'skipped' ? 'var(--warning)' : 'var(--accent)');
+          const circleBackground = isRejectedState ? 'var(--danger-bg)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'transparent';
+          const circleBorder     = isRejectedState ? 'var(--danger)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--border)';
+          const circleTextColor  = isRejectedState ? 'var(--danger)' : (isCompleted || isCurrent) ? '#fff' : 'var(--text-muted)';
+          const labelColor       = isRejectedState ? 'var(--danger)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--text-muted)';
+          const nextState = idx < activeChainSteps.length - 1 ? stepState(activeChainSteps[idx + 1] as ChainStep) : 'pending';
+          const lineBackground   = nextState === 'pending' || nextState === 'rejected' ? 'var(--border)' : 'var(--accent)';
 
           return (
             <React.Fragment key={step}>
@@ -127,13 +122,11 @@ function ApprovalStepper({ req }: { req: LeaveRequest }) {
                   background: circleBackground,
                   border: `2px solid ${circleBorder}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: isSkipped ? '#fff' : circleTextColor,
+                  color: circleTextColor,
                   transition: 'all 0.2s',
                   boxShadow: isCompleted ? '0 2px 8px rgba(201,151,58,0.35)' : isCurrent ? '0 2px 8px rgba(13,33,55,0.25)' : 'none',
                 }}>
-                  {isSkipped ? (
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>~</span>
-                  ) : isCompleted ? <CheckIcon /> : (
+                  {isCompleted ? <CheckIcon /> : isRejectedState ? <XIcon /> : (
                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{idx + 1}</span>
                   )}
                 </div>
@@ -152,7 +145,7 @@ function ApprovalStepper({ req }: { req: LeaveRequest }) {
                   {t(`leave.approver_${step}`)}
                 </div>
               </div>
-              {idx < CHAIN_STEPS.length - 1 && (
+              {idx < activeChainSteps.length - 1 && (
                 <div style={{
                   flex: 1, height: 2, marginBottom: 22,
                   background: lineBackground,
@@ -564,7 +557,7 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
 
                   {/* Status badge */}
                   <div style={{ flexShrink: 0 }}>
-                    <StatusBadge status={req.status} />
+                    <StatusBadge req={req} />
                   </div>
                 </div>
 
