@@ -30,7 +30,9 @@ export interface WindowDisplayActivity {
   companyId: number;
   storeId: number;
   storeName?: string | null;
-  date: string;
+  date: string; // Deprecated: use startDate
+  startDate: string;
+  endDate: string;
   yearMonth: string;
   flaggedBy: number;
   activityType: StoreActivityType;
@@ -68,7 +70,9 @@ export async function listWindowDisplayActivities(month: string, storeId?: numbe
 
 export async function createWindowDisplay(payload: {
   storeId: number;
-  date: string;
+  date?: string; // Deprecated: use startDate/endDate
+  startDate?: string;
+  endDate?: string;
   activityType?: StoreActivityType;
   activityIcon?: string | null;
   customActivityName?: string | null;
@@ -76,23 +80,31 @@ export async function createWindowDisplay(payload: {
   notes?: string | null;
   companyId?: number | null;
 }): Promise<WindowDisplayActivity> {
-  const res = await client.post('/window-display', {
-    storeId: payload.storeId,
-    date: payload.date,
-    activityType: payload.activityType,
-    activityIcon: payload.activityIcon,
-    customActivityName: payload.customActivityName,
-    durationHours: payload.durationHours,
+  const requestBody = {
+    store_id: payload.storeId,
+    date: payload.date, // Deprecated
+    start_date: payload.startDate,
+    end_date: payload.endDate,
+    activity_type: payload.activityType,
+    activity_icon: payload.activityIcon,
+    custom_activity_name: payload.customActivityName,
+    duration_hours: payload.durationHours,
     notes: payload.notes,
-    companyId: payload.companyId,
-  });
+    company_id: payload.companyId,
+  };
+  
+  console.log('Creating window display:', requestBody);
+  
+  const res = await client.post('/window-display', requestBody);
   return res.data.data as WindowDisplayActivity;
 }
 
 export async function updateWindowDisplay(
   id: number,
   payload: {
-    date?: string;
+    date?: string; // Deprecated: use startDate/endDate
+    startDate?: string;
+    endDate?: string;
     activityType?: StoreActivityType;
     activityIcon?: string | null;
     customActivityName?: string | null;
@@ -101,15 +113,21 @@ export async function updateWindowDisplay(
     companyId?: number | null;
   },
 ): Promise<WindowDisplayActivity> {
-  const res = await client.put(`/window-display/${id}`, {
-    date: payload.date,
-    activityType: payload.activityType,
-    activityIcon: payload.activityIcon,
-    customActivityName: payload.customActivityName,
-    durationHours: payload.durationHours,
+  const requestBody = {
+    date: payload.date, // Deprecated
+    start_date: payload.startDate,
+    end_date: payload.endDate,
+    activity_type: payload.activityType,
+    activity_icon: payload.activityIcon,
+    custom_activity_name: payload.customActivityName,
+    duration_hours: payload.durationHours,
     notes: payload.notes,
-    companyId: payload.companyId,
-  });
+    company_id: payload.companyId,
+  };
+  
+  console.log('Updating window display:', { id, requestBody });
+  
+  const res = await client.put(`/window-display/${id}`, requestBody);
   return res.data.data as WindowDisplayActivity;
 }
 
