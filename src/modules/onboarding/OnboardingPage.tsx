@@ -10,6 +10,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getAvatarUrl, getCompanyLogoUrl } from '../../api/client';
 import { getCompanies } from '../../api/companies';
 import { getStores } from '../../api/stores';
@@ -365,6 +366,7 @@ const AssignModal: React.FC<{
 const TemplatesPanel: React.FC = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
 
   const [templates, setTemplates] = useState<OnboardingTemplate[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -807,14 +809,39 @@ const TemplatesPanel: React.FC = () => {
   return (
     <div>
       {/* Header bar */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 520px', minWidth: 280, flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: isMobile ? 12 : 10,
+        marginBottom: 16
+      }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            gap: 8,
+            flex: isMobile ? '1 1 100%' : '1 1 520px',
+            width: isMobile ? '100%' : 'auto',
+            minWidth: isMobile ? 0 : 280,
+            flexWrap: 'wrap',
+            flexDirection: isMobile ? 'column' : 'row'
+          }}>
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('common.search')}
-              style={{ minWidth: 220, maxWidth: 280 }}
+              style={{
+                width: isMobile ? '100%' : 'auto',
+                minWidth: isMobile ? 0 : 220,
+                maxWidth: isMobile ? '100%' : 280
+              }}
             />
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none', padding: '0 2px' }}>
             <input
@@ -831,8 +858,16 @@ const TemplatesPanel: React.FC = () => {
             )}
           </label>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flex: '0 1 280px', minWidth: 220 }}>
-          <div style={{ width: 250 }}>
+        <div style={{
+          display: 'flex',
+          gap: 8,
+          alignItems: isMobile ? 'stretch' : 'center',
+          justifyContent: isMobile ? 'flex-start' : 'flex-end',
+          flex: isMobile ? '1 1 100%' : '0 1 280px',
+          width: isMobile ? '100%' : 'auto',
+          minWidth: isMobile ? 0 : 220
+        }}>
+          <div style={{ width: isMobile ? '100%' : 250 }}>
             <CustomSelect
               value={companyFilter}
               onChange={(value) => setCompanyFilter(value ?? 'all')}
@@ -872,16 +907,40 @@ const TemplatesPanel: React.FC = () => {
               );
             })}
           </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flex: '1 1 420px', minWidth: 320, flexWrap: 'wrap' }}>
+        <div style={{
+          display: 'flex',
+          gap: 8,
+          alignItems: isMobile ? 'stretch' : 'center',
+          justifyContent: isMobile ? 'flex-start' : 'flex-end',
+          width: isMobile ? '100%' : 'auto',
+          flex: isMobile ? '1 1 100%' : '1 1 420px',
+          minWidth: isMobile ? 0 : 320,
+          flexWrap: 'wrap',
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {activeCount} {t('onboarding.activeTasksCount', 'active tasks')}
           </span>
-          <Button variant="primary" size="sm" onClick={() => setAssignDrawerOpen(true)} style={{ minWidth: 130, height: 34, justifyContent: 'center' }}>
-            <UserPlus size={14} /> {t('onboarding.assignTasks')}
-          </Button>
-          <Button variant="primary" size="sm" onClick={openCreate} style={{ minWidth: 130, height: 34, justifyContent: 'center' }}>
-            + {t('onboarding.newTemplate', 'New Task')}
-          </Button>
+          <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto' }}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setAssignDrawerOpen(true)}
+              style={{ minWidth: isMobile ? 0 : 130, height: 34, justifyContent: 'center', flex: isMobile ? 1 : 'none' }}
+              fullWidth={isMobile}
+            >
+              <UserPlus size={14} /> {t('onboarding.assignTasks')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={openCreate}
+              style={{ minWidth: isMobile ? 0 : 130, height: 34, justifyContent: 'center', flex: isMobile ? 1 : 'none' }}
+              fullWidth={isMobile}
+            >
+              + {t('onboarding.newTemplate', 'New Task')}
+            </Button>
+          </div>
         </div>
       </div>
       </div>
@@ -1907,6 +1966,7 @@ type StatusFilter = 'all' | 'not_started' | 'in_progress' | 'complete';
 const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
 
   const [overview, setOverview] = useState<EmployeeOnboardingOverview[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -2145,12 +2205,38 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
       </div>
 
       {/* Filter bar */}
-      <div style={{ display: 'flex', marginBottom: 10, alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 300px', minWidth: 220 }}>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('common.search')} style={{ minWidth: 220, maxWidth: 280 }} />
+      <div style={{
+        display: 'flex',
+        marginBottom: isMobile ? 12 : 10,
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: isMobile ? 'stretch' : 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ flex: isMobile ? 'none' : '1 1 300px', minWidth: isMobile ? 0 : 220 }}>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('common.search')}
+            style={{
+              width: isMobile ? '100%' : 'auto',
+              minWidth: isMobile ? 0 : 220,
+              maxWidth: isMobile ? '100%' : 280
+            }}
+          />
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flex: '1 1 720px', minWidth: 320, flexWrap: 'wrap' }}>
-          <div style={{ width: 250 }}>
+        <div style={{
+          display: 'flex',
+          gap: 8,
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
+          justifyContent: isMobile ? 'flex-start' : 'flex-end',
+          flex: isMobile ? 'none' : '1 1 720px',
+          minWidth: isMobile ? 0 : 320,
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ width: isMobile ? '100%' : 250 }}>
             <CustomSelect
               value={companyFilter}
               onChange={(value) => setCompanyFilter(value ?? 'all')}
@@ -2168,7 +2254,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             />
           </div>
           {stores.length > 0 && (
-            <div style={{ width: 240 }}>
+            <div style={{ width: isMobile ? '100%' : 240 }}>
               <CustomSelect
                 value={storeFilter || null}
                 onChange={(value) => setStoreFilter(value ?? '')}
@@ -2189,8 +2275,28 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 5, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: isMobile ? 'stretch' : 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+        marginBottom: 20,
+        flexWrap: 'wrap'
+      }}>
+        <div style={{
+          display: 'flex',
+          gap: 5,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+          padding: 4,
+          flexWrap: isMobile ? 'nowrap' : 'wrap',
+          overflowX: isMobile ? 'auto' : 'visible',
+          width: isMobile ? '100%' : 'auto',
+          msOverflowStyle: 'none',
+          scrollbarWidth: 'none'
+        }}>
           {statusOpts.map((opt) => (
             <button
               key={opt.key}
@@ -2201,6 +2307,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                 color: statusFilter === opt.key ? '#fff' : 'var(--text-secondary)',
                 fontWeight: statusFilter === opt.key ? 600 : 400, fontSize: 12,
                 fontFamily: 'var(--font-body)', transition: 'all 0.15s',
+                flexShrink: 0,
               }}
             >
               {opt.label}
@@ -2208,7 +2315,17 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
           ))}
         </div>
         {isAdmin && counts.not_started > 0 && (
-          <Button variant="secondary" size="sm" loading={bulkAssigning} onClick={() => setBulkDrawerOpen(true)} style={{ height: 32 }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={bulkAssigning}
+            onClick={() => setBulkDrawerOpen(true)}
+            style={{
+              height: 32,
+              width: isMobile ? '100%' : 'auto',
+              justifyContent: 'center'
+            }}
+          >
             📋 {t('onboarding.bulkAssignBtn', { count: counts.not_started })}
           </Button>
         )}
@@ -2836,6 +2953,7 @@ type Tab = 'templates' | 'overview' | 'mytasks';
 export default function OnboardingPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { isMobile } = useBreakpoint();
 
   const role    = user?.role ?? '';
   const isAdmin = ADMIN_HR.includes(role);
@@ -2865,13 +2983,21 @@ export default function OnboardingPage() {
       `}</style>
 
       {/* Hero header */}
-      <div style={{ padding: '18px 16px 0' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(135deg, var(--primary) 0%, #1a3a5c 60%, #0f2030 100%)', padding: '32px 32px 28px', borderRadius: 22, border: '1px solid rgba(255,255,255,0.14)', boxShadow: '0 12px 30px rgba(10,26,43,0.25)' }}>
+      <div style={{ padding: isMobile ? '10px 10px 0' : '18px 16px 0' }}>
+        <div style={{
+          maxWidth: 1200,
+          margin: '0 auto',
+          background: 'linear-gradient(135deg, var(--primary) 0%, #1a3a5c 60%, #0f2030 100%)',
+          padding: isMobile ? '20px 16px 18px' : '32px 32px 28px',
+          borderRadius: 22,
+          border: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: '0 12px 30px rgba(10,26,43,0.25)'
+        }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(201,151,58,0.25)', border: '1px solid rgba(201,151,58,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🚀</div>
-                <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
+                <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: isMobile ? 18 : 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
                   {t('nav.onboarding', 'Onboarding')}
                 </h1>
               </div>
@@ -2884,15 +3010,15 @@ export default function OnboardingPage() {
 
             {/* Live stats pills */}
             {stats && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: isMobile ? 6 : 8, flexWrap: 'wrap' }}>
                 {[
                   { label: t('onboarding.heroInProgress'), value: stats.inProgress, color: 'rgba(201,151,58,0.8)' },
                   { label: t('onboarding.heroComplete'),    value: stats.complete,    color: 'rgba(74,222,128,0.8)' },
                   { label: t('onboarding.heroAvg'),         value: `${stats.avgPercentage}%`, color: 'rgba(255,255,255,0.6)' },
                 ].map((s) => (
-                  <div key={s.label} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 99, padding: '5px 12px', backdropFilter: 'blur(8px)' }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>{s.label} </span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.value}</span>
+                  <div key={s.label} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 99, padding: isMobile ? '4px 10px' : '5px 12px', backdropFilter: 'blur(8px)' }}>
+                    <span style={{ fontSize: isMobile ? 10 : 11, color: 'rgba(255,255,255,0.55)' }}>{s.label} </span>
+                    <span style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: s.color }}>{s.value}</span>
                   </div>
                 ))}
               </div>
@@ -2900,18 +3026,30 @@ export default function OnboardingPage() {
           </div>
 
           {/* Pill tabs */}
-          <div style={{ display: 'flex', gap: 4, marginTop: 22, background: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 4, width: 'fit-content' }}>
+          <div style={{
+            display: 'flex',
+            gap: 4,
+            marginTop: 22,
+            background: 'rgba(255,255,255,0.08)',
+            borderRadius: 12,
+            padding: 4,
+            width: isMobile ? '100%' : 'fit-content',
+            justifyContent: isMobile ? 'center' : 'flex-start'
+          }}>
             {tabs.filter((t) => t.visible).map((tb) => (
               <button
                 key={tb.key}
                 onClick={() => setTab(tb.key)}
                 style={{
-                  padding: '7px 18px', border: 'none', borderRadius: 9, cursor: 'pointer',
+                  padding: isMobile ? '7px 0' : '7px 18px',
+                  flex: isMobile ? 1 : 'none',
+                  border: 'none', borderRadius: 9, cursor: 'pointer',
                   background: tab === tb.key ? '#fff' : 'transparent',
                   color: tab === tb.key ? 'var(--primary)' : 'rgba(255,255,255,0.65)',
-                  fontWeight: tab === tb.key ? 700 : 400, fontSize: 13,
+                  fontWeight: tab === tb.key ? 700 : 400, fontSize: isMobile ? 12 : 13,
                   fontFamily: 'var(--font-body)', transition: 'all 0.15s',
                   boxShadow: tab === tb.key ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  textAlign: 'center',
                 }}
               >
                 {tb.label}
@@ -2922,7 +3060,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '22px 32px 28px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '12px 10px 24px' : '22px 32px 28px' }}>
         {tab === 'templates' && isAdmin    && <TemplatesPanel />}
         {tab === 'overview'  && canOverview && <OverviewPanel isAdmin={isAdmin} />}
         {tab === 'mytasks'                  && <MyTasksPanel />}

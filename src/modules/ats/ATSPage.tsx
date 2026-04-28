@@ -62,25 +62,25 @@ const NEXT_STAGE: Partial<Record<CandidateStatus, CandidateStatus>> = {
 };
 
 const STAGE_COLOR: Record<CandidateStatus, string> = {
-  received:  '#0284C7',
-  review:    '#7C3AED',
+  received: '#0284C7',
+  review: '#7C3AED',
   interview: '#C9973A',
-  hired:     '#15803D',
-  rejected:  '#DC2626',
+  hired: '#15803D',
+  rejected: '#DC2626',
 };
 
 const STAGE_BG: Record<CandidateStatus, string> = {
-  received:  'rgba(2,132,199,0.08)',
-  review:    'rgba(124,58,237,0.08)',
+  received: 'rgba(2,132,199,0.08)',
+  review: 'rgba(124,58,237,0.08)',
   interview: 'rgba(201,151,58,0.10)',
-  hired:     'rgba(21,128,61,0.08)',
-  rejected:  'rgba(220,38,38,0.07)',
+  hired: 'rgba(21,128,61,0.08)',
+  rejected: 'rgba(220,38,38,0.07)',
 };
 
 const STATUS_COLOR: Record<JobStatus, string> = {
-  draft:     '#6B7280',
+  draft: '#6B7280',
   published: '#15803D',
-  closed:    '#DC2626',
+  closed: '#DC2626',
 };
 
 const JOB_TYPE_LABEL: Record<JobType, string> = {
@@ -652,23 +652,23 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
     const done = checks.filter(Boolean).length;
     const total = checks.length;
     return Math.round((done / total) * 100);
-    }, [
-      title,
-      description,
-      companyId,
-      jobType,
-      remoteType,
-      department,
-      contractType,
-      weeklyHoursInput,
-      salaryMinInput,
-      salaryMaxInput,
-      tags,
-      locationOverride.country,
-      locationOverride.city,
-      storesForSelectedCompany.length,
-      storeId,
-    ]);
+  }, [
+    title,
+    description,
+    companyId,
+    jobType,
+    remoteType,
+    department,
+    contractType,
+    weeklyHoursInput,
+    salaryMinInput,
+    salaryMaxInput,
+    tags,
+    locationOverride.country,
+    locationOverride.city,
+    storesForSelectedCompany.length,
+    storeId,
+  ]);
 
   const companySelectOptions = useMemo<SelectOption[]>(() => {
     return companyOptions.map((company) => {
@@ -1159,7 +1159,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                   <div style={{ width: `${formCompletion}%`, height: '100%', background: 'linear-gradient(90deg, #EAC26E, #C9973A)' }} />
                 </div>
 
-                  <div style={{ display: 'grid', gap: 5, marginTop: 2 }}>
+                <div style={{ display: 'grid', gap: 5, marginTop: 2 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}>
                     <StoreIcon size={12} color="#CBD5E1" />
                     <span>{selectedStoreMeta?.name ?? '-'}</span>
@@ -1347,464 +1347,464 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
             </div>
 
             <div style={{ display: 'grid', gap: 12 }}>
-            {step === 1 && (
-              <>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                    <FileText size={14} /> {t('ats.coreRoleDetails', 'Core role details')}
-                  </div>
-
-                  <Input
-                    label={`${t('ats.jobTitle')} *`}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                    placeholder={t('ats.jobTitlePlaceholder')}
-                    autoFocus
-                  />
-                  {errors.title && <div style={{ marginTop: -8, color: '#B91C1C', fontSize: 12 }}>{errors.title}</div>}
-
-                  <div>
-                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                      {t('ats.jobDescription')} *
-                    </label>
-                    <textarea
-                      className="field-input"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={6}
-                      placeholder={t('ats.jobDescriptionPlaceholder')}
-                      style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
-                    />
-                  </div>
-                  {errors.description && <div style={{ marginTop: -8, color: '#B91C1C', fontSize: 12 }}>{errors.description}</div>}
-
-                  <div>
-                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                      {t('ats.jobTags')}
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center' }}>
-                      <input
-                        className="field-input"
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        placeholder={t('ats.jobTagsInputPlaceholder', 'Type a tag and press Enter')}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            addTag(tagInput);
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          padding: '8px 12px',
-                          fontSize: 13.5,
-                          borderRadius: 'var(--radius)',
-                          border: '1px solid var(--border)',
-                          outline: 'none',
-                          display: 'block',
-                          background: '#fff',
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => addTag(tagInput)}
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 10,
-                          border: '1px solid rgba(201,151,58,0.42)',
-                          background: 'rgba(201,151,58,0.14)',
-                          color: '#8a6318',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                        }}
-                        aria-label={t('common.add', 'Add')}
-                      >
-                        <Plus size={15} />
-                      </button>
-                    </div>
-                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {tags.map((tag) => (
-                        <span
-                          key={tag}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '4px 10px',
-                            borderRadius: 999,
-                            fontSize: 12,
-                            background: '#E9F8EE',
-                            color: '#1D6B3A',
-                            border: '1px solid #BFE8CC',
-                            fontWeight: 700,
-                          }}
-                        >
-                          <span>{tag}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeTag(tag)}
-                            style={{ border: 'none', background: 'transparent', color: '#1D6B3A', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-                            aria-label={`Remove ${tag}`}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                    <BriefcaseBusiness size={14} /> {t('ats.contractAndSchedule', 'Contract and schedule')}
-                  </div>
-                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
-                    <div>
-                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                        {t('ats.jobType')}
-                      </label>
-                      <CustomSelect
-                        value={jobType || null}
-                        onChange={(value) => setJobType((value as JobType | null) ?? '')}
-                        options={jobTypeSelectOptions}
-                        isClearable
-                        searchable={false}
-                        placeholder={t('ats.selectJobType', 'Select job type')}
-                        disabled={saving}
-                        error={errors.jobType}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                        {t('ats.remoteMode', 'Work arrangement')}
-                      </label>
-                      <CustomSelect
-                        value={remoteType || null}
-                        onChange={(value) => setRemoteType((value as RemoteType | null) ?? '')}
-                        options={remoteTypeSelectOptions}
-                        isClearable
-                        searchable={false}
-                        placeholder={t('ats.selectRemoteMode', 'Select work arrangement')}
-                        disabled={saving}
-                        error={errors.remoteType}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr 1fr' }}>
-                    <Input
-                      label={t('ats.weeklyHours')}
-                      type="number"
-                      value={weeklyHoursInput}
-                      onChange={(e) => setWeeklyHoursInput(e.target.value)}
-                      placeholder={t('ats.weeklyHoursPlaceholder', '40')}
-                    />
-                    <Input
-                      label={t('ats.salaryMin', 'Salary min')}
-                      type="number"
-                      value={salaryMinInput}
-                      onChange={(e) => setSalaryMinInput(e.target.value)}
-                      placeholder={t('ats.salaryMinPlaceholder', '1200')}
-                    />
-                    <Input
-                      label={t('ats.salaryMax', 'Salary max')}
-                      type="number"
-                      value={salaryMaxInput}
-                      onChange={(e) => setSalaryMaxInput(e.target.value)}
-                      placeholder={t('ats.salaryMaxPlaceholder', '1800')}
-                    />
-                    <div>
-                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                        {t('ats.salaryPeriod', 'Salary period')}
-                      </label>
-                      <CustomSelect
-                        value={salaryPeriod || null}
-                        onChange={(value) => setSalaryPeriod((value as string | null) ?? '')}
-                        options={[
-                          { value: 'hourly', label: t('ats.salaryPeriodHourly', 'Per hour') },
-                          { value: 'daily', label: t('ats.salaryPeriodDaily', 'Per day') },
-                          { value: 'weekly', label: t('ats.salaryPeriodWeekly', 'Per week') },
-                          { value: 'monthly', label: t('ats.salaryPeriodMonthly', 'Per month') },
-                          { value: 'yearly', label: t('ats.salaryPeriodYearly', 'Per year') },
-                        ]}
-                        searchable={false}
-                        isClearable
-                        placeholder={t('ats.salaryPeriod', 'Salary period')}
-                        disabled={saving}
-                      />
-                    </div>
-                  </div>
-                  {(errors.weeklyHours || errors.salary) && (
-                    <div style={{ marginTop: -6, color: '#B91C1C', fontSize: 12 }}>
-                      {errors.weeklyHours ?? errors.salary}
-                    </div>
-                  )}
-
-                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
-                    <Input
-                      label={t('ats.contractType')}
-                      value={contractType}
-                      onChange={(e) => setContractType(e.target.value)}
-                      placeholder={t('ats.contractTypePlaceholder')}
-                    />
-                    <Input
-                      label={departmentLabel}
-                      value={department}
-                      onChange={(e) => setDepartment(e.target.value)}
-                      placeholder={t('ats.departmentPlaceholder')}
-                    />
-                  </div>
-                </div>
-
-                {remoteType && remoteType !== 'remote' && (
+              {step === 1 && (
+                <>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                        <MapPin size={14} /> {t('ats.jobLocation', 'Job location')}
+                      <FileText size={14} /> {t('ats.coreRoleDetails', 'Core role details')}
                     </div>
 
-                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
-                      <CountrySelect
-                        value={locationOverride.country || null}
-                        onChange={(next) => setLocationOverride((prev) => ({ ...prev, country: next ?? '', state: '', city: '' }))}
-                        label={t('ats.jobCountryOverrideLabel', 'Country')}
-                        placeholder={t('ats.jobCountryOverrideLabel', 'Country')}
-                        disabled={saving}
-                      />
+                    <Input
+                      label={`${t('ats.jobTitle')} *`}
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required
+                      placeholder={t('ats.jobTitlePlaceholder')}
+                      autoFocus
+                    />
+                    {errors.title && <div style={{ marginTop: -8, color: '#B91C1C', fontSize: 12 }}>{errors.title}</div>}
 
-                      <StateSelect
-                        countryCode={locationOverride.country || null}
-                        value={locationOverride.state || null}
-                        onChange={(next) => setLocationOverride((prev) => ({ ...prev, state: next ?? '', city: '' }))}
-                        label={t('ats.jobStateOverrideLabel', 'State')}
-                        placeholder={t('ats.jobStateOverrideLabel', 'State')}
-                        disabled={saving}
+                    <div>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                        {t('ats.jobDescription')} *
+                      </label>
+                      <textarea
+                        className="field-input"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={6}
+                        placeholder={t('ats.jobDescriptionPlaceholder')}
+                        style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
                       />
+                    </div>
+                    {errors.description && <div style={{ marginTop: -8, color: '#B91C1C', fontSize: 12 }}>{errors.description}</div>}
 
+                    <div>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                        {t('ats.jobTags')}
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center' }}>
+                        <input
+                          className="field-input"
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          placeholder={t('ats.jobTagsInputPlaceholder', 'Type a tag and press Enter')}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addTag(tagInput);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: '8px 12px',
+                            fontSize: 13.5,
+                            borderRadius: 'var(--radius)',
+                            border: '1px solid var(--border)',
+                            outline: 'none',
+                            display: 'block',
+                            background: '#fff',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addTag(tagInput)}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            border: '1px solid rgba(201,151,58,0.42)',
+                            background: 'rgba(201,151,58,0.14)',
+                            color: '#8a6318',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                          }}
+                          aria-label={t('common.add', 'Add')}
+                        >
+                          <Plus size={15} />
+                        </button>
+                      </div>
+                      <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {tags.map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '4px 10px',
+                              borderRadius: 999,
+                              fontSize: 12,
+                              background: '#E9F8EE',
+                              color: '#1D6B3A',
+                              border: '1px solid #BFE8CC',
+                              fontWeight: 700,
+                            }}
+                          >
+                            <span>{tag}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeTag(tag)}
+                              style={{ border: 'none', background: 'transparent', color: '#1D6B3A', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                              aria-label={`Remove ${tag}`}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
+                      <BriefcaseBusiness size={14} /> {t('ats.contractAndSchedule', 'Contract and schedule')}
+                    </div>
+                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
                       <div>
-                        <CitySelect
-                          countryCode={locationOverride.country || null}
-                          stateCode={locationOverride.state || null}
-                          value={locationOverride.city || null}
-                          onChange={(next) => setLocationOverride((prev) => ({ ...prev, city: next ?? '' }))}
-                          label={t('ats.jobCityOverrideLabel', 'City')}
-                          placeholder={t('ats.jobCityOverrideLabel', 'City')}
+                        <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                          {t('ats.jobType')}
+                        </label>
+                        <CustomSelect
+                          value={jobType || null}
+                          onChange={(value) => setJobType((value as JobType | null) ?? '')}
+                          options={jobTypeSelectOptions}
+                          isClearable
+                          searchable={false}
+                          placeholder={t('ats.selectJobType', 'Select job type')}
                           disabled={saving}
+                          error={errors.jobType}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                          {t('ats.remoteMode', 'Work arrangement')}
+                        </label>
+                        <CustomSelect
+                          value={remoteType || null}
+                          onChange={(value) => setRemoteType((value as RemoteType | null) ?? '')}
+                          options={remoteTypeSelectOptions}
+                          isClearable
+                          searchable={false}
+                          placeholder={t('ats.selectRemoteMode', 'Select work arrangement')}
+                          disabled={saving}
+                          error={errors.remoteType}
                         />
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr' }}>
+                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr 1fr' }}>
                       <Input
-                        label={t('ats.jobPostalCodeOverrideLabel', 'Postal code')}
-                        value={locationOverride.postalCode}
-                        onChange={(e) => setLocationOverride((prev) => ({ ...prev, postalCode: e.target.value }))}
-                        placeholder={t('ats.jobPostalCodeOverrideLabel', 'Postal code')}
+                        label={t('ats.weeklyHours')}
+                        type="number"
+                        value={weeklyHoursInput}
+                        onChange={(e) => setWeeklyHoursInput(e.target.value)}
+                        placeholder={t('ats.weeklyHoursPlaceholder', '40')}
                       />
                       <Input
-                        label={t('ats.jobAddressOverrideLabel', 'Address')}
-                        value={locationOverride.address}
-                        onChange={(e) => setLocationOverride((prev) => ({ ...prev, address: e.target.value }))}
-                        placeholder={t('ats.jobAddressOverrideLabel', 'Address')}
+                        label={t('ats.salaryMin', 'Salary min')}
+                        type="number"
+                        value={salaryMinInput}
+                        onChange={(e) => setSalaryMinInput(e.target.value)}
+                        placeholder={t('ats.salaryMinPlaceholder', '1200')}
+                      />
+                      <Input
+                        label={t('ats.salaryMax', 'Salary max')}
+                        type="number"
+                        value={salaryMaxInput}
+                        onChange={(e) => setSalaryMaxInput(e.target.value)}
+                        placeholder={t('ats.salaryMaxPlaceholder', '1800')}
+                      />
+                      <div>
+                        <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                          {t('ats.salaryPeriod', 'Salary period')}
+                        </label>
+                        <CustomSelect
+                          value={salaryPeriod || null}
+                          onChange={(value) => setSalaryPeriod((value as string | null) ?? '')}
+                          options={[
+                            { value: 'hourly', label: t('ats.salaryPeriodHourly', 'Per hour') },
+                            { value: 'daily', label: t('ats.salaryPeriodDaily', 'Per day') },
+                            { value: 'weekly', label: t('ats.salaryPeriodWeekly', 'Per week') },
+                            { value: 'monthly', label: t('ats.salaryPeriodMonthly', 'Per month') },
+                            { value: 'yearly', label: t('ats.salaryPeriodYearly', 'Per year') },
+                          ]}
+                          searchable={false}
+                          isClearable
+                          placeholder={t('ats.salaryPeriod', 'Salary period')}
+                          disabled={saving}
+                        />
+                      </div>
+                    </div>
+                    {(errors.weeklyHours || errors.salary) && (
+                      <div style={{ marginTop: -6, color: '#B91C1C', fontSize: 12 }}>
+                        {errors.weeklyHours ?? errors.salary}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+                      <Input
+                        label={t('ats.contractType')}
+                        value={contractType}
+                        onChange={(e) => setContractType(e.target.value)}
+                        placeholder={t('ats.contractTypePlaceholder')}
+                      />
+                      <Input
+                        label={departmentLabel}
+                        value={department}
+                        onChange={(e) => setDepartment(e.target.value)}
+                        placeholder={t('ats.departmentPlaceholder')}
                       />
                     </div>
                   </div>
-                )}
-              </>
-            )}
 
-            {step === 2 && (
-              <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
-                  <Sparkles size={14} /> {t('ats.platformSettings', 'Platform settings')}
-                </div>
+                  {remoteType && remoteType !== 'remote' && (
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
+                        <MapPin size={14} /> {t('ats.jobLocation', 'Job location')}
+                      </div>
 
-                <div>
-                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                    {t('nav.companies')} *
-                  </label>
-                  <CustomSelect
-                    value={companyId || null}
-                    onChange={(value) => setCompanyId(value ?? '')}
-                    options={companySelectOptions}
-                    placeholder={t('common.select', 'Select')}
-                    error={errors.companyId}
-                    isClearable
-                    disabled={saving}
-                  />
-                </div>
+                      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
+                        <CountrySelect
+                          value={locationOverride.country || null}
+                          onChange={(next) => setLocationOverride((prev) => ({ ...prev, country: next ?? '', state: '', city: '' }))}
+                          label={t('ats.jobCountryOverrideLabel', 'Country')}
+                          placeholder={t('ats.jobCountryOverrideLabel', 'Country')}
+                          disabled={saving}
+                        />
 
-                <div>
-                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                    {storeLabel}
-                  </label>
-                  <CustomSelect
-                    value={storeId || null}
-                    onChange={(value) => setStoreId(value ?? '')}
-                    options={storeSelectOptions}
-                    placeholder={t('ats.selectStore')}
-                    disabled={saving || !companyId}
-                    isClearable
-                  />
-                </div>
+                        <StateSelect
+                          countryCode={locationOverride.country || null}
+                          value={locationOverride.state || null}
+                          onChange={(next) => setLocationOverride((prev) => ({ ...prev, state: next ?? '', city: '' }))}
+                          label={t('ats.jobStateOverrideLabel', 'State')}
+                          placeholder={t('ats.jobStateOverrideLabel', 'State')}
+                          disabled={saving}
+                        />
 
-                <div>
-                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                    {t('ats.targetRole', 'Target role')}
-                  </label>
-                  <CustomSelect
-                    value={targetRole || null}
-                    onChange={(value) => setTargetRole((value as string | null) ?? '')}
-                    options={[
-                      { value: 'hr', label: `${t('roles.hr')} (${roleCounts.hr})` },
-                      { value: 'area_manager', label: `${t('roles.area_manager')} (${roleCounts.area_manager})` },
-                      { value: 'store_manager', label: `${t('roles.store_manager')} (${roleCounts.store_manager})` },
-                      { value: 'employee', label: `${t('roles.employee')} (${roleCounts.employee})` },
-                    ]}
-                    searchable={false}
-                    isClearable
-                    placeholder={t('ats.targetRole', 'Target role')}
-                    disabled={saving || !companyId}
-                  />
-                </div>
+                        <div>
+                          <CitySelect
+                            countryCode={locationOverride.country || null}
+                            stateCode={locationOverride.state || null}
+                            value={locationOverride.city || null}
+                            onChange={(next) => setLocationOverride((prev) => ({ ...prev, city: next ?? '' }))}
+                            label={t('ats.jobCityOverrideLabel', 'City')}
+                            placeholder={t('ats.jobCityOverrideLabel', 'City')}
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
 
-                <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+                      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr' }}>
+                        <Input
+                          label={t('ats.jobPostalCodeOverrideLabel', 'Postal code')}
+                          value={locationOverride.postalCode}
+                          onChange={(e) => setLocationOverride((prev) => ({ ...prev, postalCode: e.target.value }))}
+                          placeholder={t('ats.jobPostalCodeOverrideLabel', 'Postal code')}
+                        />
+                        <Input
+                          label={t('ats.jobAddressOverrideLabel', 'Address')}
+                          value={locationOverride.address}
+                          onChange={(e) => setLocationOverride((prev) => ({ ...prev, address: e.target.value }))}
+                          placeholder={t('ats.jobAddressOverrideLabel', 'Address')}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {step === 2 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
+                    <Sparkles size={14} /> {t('ats.platformSettings', 'Platform settings')}
+                  </div>
+
                   <div>
                     <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                      {t('ats.jobPostingLanguage')}
+                      {t('nav.companies')} *
                     </label>
                     <CustomSelect
-                      value={language}
-                      onChange={(value) => value && setLanguage(value as JobLanguage)}
-                      options={languageSelectOptions}
-                      isClearable={false}
-                      searchable={false}
+                      value={companyId || null}
+                      onChange={(value) => setCompanyId(value ?? '')}
+                      options={companySelectOptions}
+                      placeholder={t('common.select', 'Select')}
+                      error={errors.companyId}
+                      isClearable
                       disabled={saving}
                     />
                   </div>
+
                   <div>
                     <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                      {statusLabel}
+                      {storeLabel}
                     </label>
                     <CustomSelect
-                      value={status}
-                      onChange={(value) => value && setStatus(value as JobStatus)}
-                      options={statusSelectOptions}
-                      isClearable={false}
-                      searchable={false}
-                      disabled={saving}
+                      value={storeId || null}
+                      onChange={(value) => setStoreId(value ?? '')}
+                      options={storeSelectOptions}
+                      placeholder={t('ats.selectStore')}
+                      disabled={saving || !companyId}
+                      isClearable
                     />
                   </div>
-                </div>
 
-                <div style={{ border: '1px solid rgba(13,33,55,0.1)', borderRadius: 10, padding: 10, background: '#F8FBFF', color: '#334155', fontSize: 12.5, lineHeight: 1.55 }}>
-                  <strong>{t('ats.jobLanguageHint')}</strong>
-                </div>
-              </div>
-            )}
+                  <div>
+                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      {t('ats.targetRole', 'Target role')}
+                    </label>
+                    <CustomSelect
+                      value={targetRole || null}
+                      onChange={(value) => setTargetRole((value as string | null) ?? '')}
+                      options={[
+                        { value: 'hr', label: `${t('roles.hr')} (${roleCounts.hr})` },
+                        { value: 'area_manager', label: `${t('roles.area_manager')} (${roleCounts.area_manager})` },
+                        { value: 'store_manager', label: `${t('roles.store_manager')} (${roleCounts.store_manager})` },
+                        { value: 'employee', label: `${t('roles.employee')} (${roleCounts.employee})` },
+                      ]}
+                      searchable={false}
+                      isClearable
+                      placeholder={t('ats.targetRole', 'Target role')}
+                      disabled={saving || !companyId}
+                    />
+                  </div>
 
-            {step === 3 && (
-              <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, display: 'grid', gap: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid rgba(201,151,58,0.22)', background: '#fffdf6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                      {selectedCompanyLogoUrl
-                        ? <img src={selectedCompanyLogoUrl} alt={selectedCompanyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <Building2 size={14} color="#8a6318" />}
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+                    <div>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                        {t('ats.jobPostingLanguage')}
+                      </label>
+                      <CustomSelect
+                        value={language}
+                        onChange={(value) => value && setLanguage(value as JobLanguage)}
+                        options={languageSelectOptions}
+                        isClearable={false}
+                        searchable={false}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                        {statusLabel}
+                      </label>
+                      <CustomSelect
+                        value={status}
+                        onChange={(value) => value && setStatus(value as JobStatus)}
+                        options={statusSelectOptions}
+                        isClearable={false}
+                        searchable={false}
+                        disabled={saving}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ border: '1px solid rgba(13,33,55,0.1)', borderRadius: 10, padding: 10, background: '#F8FBFF', color: '#334155', fontSize: 12.5, lineHeight: 1.55 }}>
+                    <strong>{t('ats.jobLanguageHint')}</strong>
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid rgba(201,151,58,0.22)', background: '#fffdf6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                        {selectedCompanyLogoUrl
+                          ? <img src={selectedCompanyLogoUrl} alt={selectedCompanyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : <Building2 size={14} color="#8a6318" />}
+                      </div>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <strong style={{ color: '#111827', fontSize: 13 }}>{selectedCompanyName}</strong>
+                        <span style={{ fontSize: 11.5, color: '#64748b' }}>{selectedCompanyMeta?.groupName ?? t('ats.standaloneCompany', 'Standalone company')}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', justifyItems: 'end', gap: 4 }}>
+                      <span style={{ borderRadius: 999, border: '1px solid rgba(13,33,55,0.15)', background: '#fff', color: '#334155', fontSize: 11, fontWeight: 700, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Clock3 size={12} /> {t('common.justNow', 'Just now')}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#9A6808' }}>
+                        0 {t('ats.appliedLabel', 'applied')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
+                  <p style={{ margin: 0, color: '#4b5563', fontSize: 13.5, lineHeight: 1.55 }}>{description.trim() || '-'}</p>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                      {jobTypeDisplay}
+                    </span>
+                    <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                      {remoteTypeDisplay}
+                    </span>
+                    <span style={{ borderRadius: 999, background: status === 'closed' ? 'rgba(239,68,68,0.1)' : 'rgba(22,163,74,0.12)', border: status === 'closed' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(22,163,74,0.22)', color: status === 'closed' ? '#991b1b' : '#166534', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                      {t(`ats.status_${status}`)}
+                    </span>
+                    <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
+                      {language === 'it' ? '🇮🇹 IT' : language === 'en' ? '🇬🇧 EN' : '🇮🇹 🇬🇧 IT + EN'}
+                    </span>
+                    <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <MapPin size={12} />
+                      {remoteType === 'remote'
+                        ? t('ats.remoteType_remote', 'Remote')
+                        : remoteType
+                          ? `${locationOverride.city || '-'}, ${countryNameFromCode(locationOverride.country)}`
+                          : t('common.notSet', 'Not set')}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 8, gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', border: '1px dashed rgba(148,163,184,0.38)', borderRadius: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.74)' }}>
+                    <div style={{ display: 'grid', gap: 2 }}>
+                      <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.salaryRange', 'Salary range')}</strong>
+                      <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>€{salaryMinInput.trim() || '-'} - €{salaryMaxInput.trim() || '-'}</span>
                     </div>
                     <div style={{ display: 'grid', gap: 2 }}>
-                      <strong style={{ color: '#111827', fontSize: 13 }}>{selectedCompanyName}</strong>
-                      <span style={{ fontSize: 11.5, color: '#64748b' }}>{selectedCompanyMeta?.groupName ?? t('ats.standaloneCompany', 'Standalone company')}</span>
+                      <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.weeklyHours')}</strong>
+                      <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{weeklyHoursInput.trim() || '-'}</span>
+                    </div>
+                    <div style={{ display: 'grid', gap: 2 }}>
+                      <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{storeLabel}</strong>
+                      <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{selectedStoreMeta?.name ?? '-'}</span>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', justifyItems: 'end', gap: 4 }}>
-                    <span style={{ borderRadius: 999, border: '1px solid rgba(13,33,55,0.15)', background: '#fff', color: '#334155', fontSize: 11, fontWeight: 700, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Clock3 size={12} /> {t('common.justNow', 'Just now')}
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#9A6808' }}>
-                      0 {t('ats.appliedLabel', 'applied')}
-                    </span>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {tags.length > 0 ? tags.map((tag) => (
+                      <span key={`preview-${tag}`} style={{ fontSize: 11, borderRadius: 999, padding: '3px 9px', background: '#E9F8EE', color: '#1D6B3A', border: '1px solid #BFE8CC', fontWeight: 600 }}>
+                        {tag}
+                      </span>
+                    )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
                   </div>
-                </div>
 
-                <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
-                <p style={{ margin: 0, color: '#4b5563', fontSize: 13.5, lineHeight: 1.55 }}>{description.trim() || '-'}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        type="button"
+                        style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Heart size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Bookmark size={15} />
+                      </button>
+                    </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
-                    {jobTypeDisplay}
-                  </span>
-                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
-                    {remoteTypeDisplay}
-                  </span>
-                  <span style={{ borderRadius: 999, background: status === 'closed' ? 'rgba(239,68,68,0.1)' : 'rgba(22,163,74,0.12)', border: status === 'closed' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(22,163,74,0.22)', color: status === 'closed' ? '#991b1b' : '#166534', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
-                    {t(`ats.status_${status}`)}
-                  </span>
-                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
-                    {language === 'it' ? '🇮🇹 IT' : language === 'en' ? '🇬🇧 EN' : '🇮🇹 🇬🇧 IT + EN'}
-                  </span>
-                  <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <MapPin size={12} />
-                    {remoteType === 'remote'
-                      ? t('ats.remoteType_remote', 'Remote')
-                      : remoteType
-                        ? `${locationOverride.city || '-'}, ${countryNameFromCode(locationOverride.country)}`
-                        : t('common.notSet', 'Not set')}
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gap: 8, gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', border: '1px dashed rgba(148,163,184,0.38)', borderRadius: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.74)' }}>
-                  <div style={{ display: 'grid', gap: 2 }}>
-                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.salaryRange', 'Salary range')}</strong>
-                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>€{salaryMinInput.trim() || '-'} - €{salaryMaxInput.trim() || '-'}</span>
-                  </div>
-                  <div style={{ display: 'grid', gap: 2 }}>
-                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.weeklyHours')}</strong>
-                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{weeklyHoursInput.trim() || '-'}</span>
-                  </div>
-                  <div style={{ display: 'grid', gap: 2 }}>
-                    <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{storeLabel}</strong>
-                    <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>{selectedStoreMeta?.name ?? '-'}</span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {tags.length > 0 ? tags.map((tag) => (
-                    <span key={`preview-${tag}`} style={{ fontSize: 11, borderRadius: 999, padding: '3px 9px', background: '#E9F8EE', color: '#1D6B3A', border: '1px solid #BFE8CC', fontWeight: 600 }}>
-                      {tag}
-                    </span>
-                  )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <button
                       type="button"
-                      style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ border: 'none', background: 'transparent', color: '#9A6808', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}
                     >
-                      <Heart size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Bookmark size={15} />
+                      {t('publicCareers.viewDetails', 'View details')} <ArrowRight size={14} />
                     </button>
                   </div>
-
-                  <button
-                    type="button"
-                    style={{ border: 'none', background: 'transparent', color: '#9A6808', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}
-                  >
-                    {t('publicCareers.viewDetails', 'View details')} <ArrowRight size={14} />
-                  </button>
                 </div>
-              </div>
-            )}
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4, minHeight: 44 }}>
@@ -1896,7 +1896,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     ? [appliedJob.jobCity ?? appliedJob.city, appliedJob.jobState ?? appliedJob.state, appliedJob.jobCountry ?? appliedJob.country]
       .filter(Boolean)
       .join(', ')
-      || t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)
+    || t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)
     : null;
   const stageColor = STAGE_COLOR[candidate.status];
   const stageBg = STAGE_BG[candidate.status];
@@ -1908,7 +1908,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         setInterviews(items);
         setFeedbackDrafts(Object.fromEntries(items.map((iv) => [iv.id, iv.feedback ?? ''])));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [candidate.id]);
 
   const handleSaveFeedback = async (interviewId: number) => {
@@ -1955,386 +1955,386 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   return (
     <>
       <ModalBackdrop onClose={onClose} width={580}>
-      {/* Gradient header */}
-      <div style={{
-        background: `linear-gradient(135deg, ${stageColor}18 0%, ${stageColor}08 100%)`,
-        borderBottom: `3px solid ${stageColor}`,
-        padding: '24px 28px 20px',
-        position: 'relative',
-      }}>
-        <button onClick={onClose} style={{
-          position: 'absolute', top: 16, right: 16,
-          background: 'rgba(0,0,0,0.06)', border: 'none', cursor: 'pointer',
-          color: 'var(--text-muted)', fontSize: 18, lineHeight: 1,
-          width: 28, height: 28, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>×</button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {/* Avatar */}
-          <div style={{
-            width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
-            background: stageColor, color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18,
-            boxShadow: `0 4px 16px ${stageColor}40`,
-          }}>
-            {initials(candidate.fullName)}
-          </div>
-
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: 'var(--text-primary)', marginBottom: 4 }}>
-              {candidate.fullName}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{
-                background: stageColor, color: '#fff',
-                borderRadius: 99, padding: '2px 12px', fontSize: 11, fontWeight: 700,
-                letterSpacing: '0.04em', textTransform: 'uppercase',
-              }}>
-                {t(`ats.stage_${candidate.status}`)}
-              </span>
-              {jobTitle && (
-                <span style={{
-                  background: 'var(--surface)', color: 'var(--text-secondary)',
-                  border: '1px solid var(--border)', borderRadius: 99,
-                  padding: '2px 10px', fontSize: 11,
-                }}>
-                  📌 {jobTitle}
-                </span>
-              )}
-              {candidate.unread && (
-                <span style={{
-                  background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE',
-                  borderRadius: 99, padding: '2px 8px', fontSize: 10, fontWeight: 700,
-                }}>
-                  NEW
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-
-        {/* Contact grid */}
+        {/* Gradient header */}
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12,
-          background: 'var(--background)', borderRadius: 12, padding: '14px 16px',
+          background: `linear-gradient(135deg, ${stageColor}18 0%, ${stageColor}08 100%)`,
+          borderBottom: `3px solid ${stageColor}`,
+          padding: '24px 28px 20px',
+          position: 'relative',
         }}>
-          {[
-            { label: 'Email', value: candidate.email, href: candidate.email ? `mailto:${candidate.email}` : undefined },
-            { label: t('ats.phone'), value: candidate.phone, href: candidate.phone ? `tel:${candidate.phone}` : undefined },
-            { label: t('ats.source'), value: candidate.source },
-            { label: t('ats.appliedAt', 'Applied'), value: `${appliedAgoLabel} · ${appliedAtLabel}` },
-          ].filter((i) => i.value).map((item) => (
-            <div key={item.label}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
-                {item.label}
-              </div>
-              {item.href ? (
-                <a href={item.href} style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>
-                  {item.value}
-                </a>
-              ) : (
-                <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, textTransform: 'capitalize' }}>{item.value}</div>
-              )}
-            </div>
-          ))}
-        </div>
+          <button onClick={onClose} style={{
+            position: 'absolute', top: 16, right: 16,
+            background: 'rgba(0,0,0,0.06)', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 18, lineHeight: 1,
+            width: 28, height: 28, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>×</button>
 
-        {/* Applied job snapshot */}
-        {appliedJob && (
-          <div style={{
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            background: '#fff',
-            padding: '12px 14px',
-            display: 'grid',
-            gap: 8,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
-                <span style={{ fontSize: 10.5, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700 }}>
-                  {t('ats.appliedPosition', 'Applied position')}
-                </span>
-                <strong style={{ fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {appliedJob.title}
-                </strong>
-              </div>
-              <span style={{
-                borderRadius: 999,
-                border: '1px solid rgba(13,33,55,0.18)',
-                background: 'var(--background)',
-                color: STATUS_COLOR[appliedJob.status],
-                fontSize: 11,
-                fontWeight: 700,
-                padding: '2px 8px',
-                textTransform: 'uppercase',
-              }}>
-                {t(`ats.status_${appliedJob.status}`, appliedJob.status)}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              {appliedJobLocation && (
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <MapPin size={12} />
-                  {appliedJobLocation}
-                </span>
-              )}
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <BriefcaseBusiness size={12} />
-                {t(`ats.jobType_${JOB_TYPE_LABEL[appliedJob.jobType]}`, appliedJob.jobType)}
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Globe2 size={12} />
-                {t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)}
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Clock3 size={12} />
-                {appliedAgoLabel}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Tags */}
-        {candidate.tags.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {candidate.tags.map((tag) => (
-              <span key={tag} style={{
-                background: 'var(--accent-light, rgba(201,151,58,0.10))',
-                color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
-                borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
-              }}>
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Stage pipeline visual */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
-            Pipeline
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-            {(['received', 'review', 'interview', 'hired'] as CandidateStatus[]).map((s, idx) => {
-              const stageIdx = ['received', 'review', 'interview', 'hired', 'rejected'].indexOf(candidate.status);
-              const thisIdx = idx;
-              const isDone = candidate.status !== 'rejected' && stageIdx >= thisIdx;
-              const isCurrent = candidate.status !== 'rejected' && stageIdx === thisIdx;
-              const sc = STAGE_COLOR[s];
-              return (
-                <React.Fragment key={s}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: '50%',
-                      background: isDone ? sc : 'var(--border)',
-                      border: isCurrent ? `3px solid ${sc}` : 'none',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.2s',
-                      boxShadow: isCurrent ? `0 0 0 3px ${sc}22` : 'none',
-                    }}>
-                      {isDone && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
-                    </div>
-                    <div style={{ fontSize: 10, color: isDone ? sc : 'var(--text-muted)', fontWeight: isCurrent ? 700 : 400, marginTop: 4, textAlign: 'center' }}>
-                      {t(`ats.stage_${s}`)}
-                    </div>
-                  </div>
-                  {idx < 3 && (
-                    <div style={{
-                      height: 2, flex: 1, marginBottom: 18,
-                      background: candidate.status !== 'rejected' && stageIdx > idx ? sc : 'var(--border)',
-                      transition: 'background 0.3s',
-                    }} />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-          {candidate.status === 'rejected' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* Avatar */}
             <div style={{
-              marginTop: 8, padding: '6px 12px', background: '#FEF2F2',
-              border: '1px solid #FCA5A5', borderRadius: 8,
-              fontSize: 12, color: '#DC2626', fontWeight: 600, textAlign: 'center',
+              width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
+              background: stageColor, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18,
+              boxShadow: `0 4px 16px ${stageColor}40`,
             }}>
-              ✕ {t('ats.stage_rejected')}
+              {initials(candidate.fullName)}
             </div>
-          )}
-        </div>
 
-        {/* Interviews section */}
-        {(candidate.status === 'interview' || interviews.length > 0) && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                🗓 {t('ats.interviews')}
-                {interviews.length > 0 && (
-                  <span style={{ background: 'var(--primary)', color: 'var(--accent)', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>
-                    {interviews.length}
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: 'var(--text-primary)', marginBottom: 4 }}>
+                {candidate.fullName}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{
+                  background: stageColor, color: '#fff',
+                  borderRadius: 99, padding: '2px 12px', fontSize: 11, fontWeight: 700,
+                  letterSpacing: '0.04em', textTransform: 'uppercase',
+                }}>
+                  {t(`ats.stage_${candidate.status}`)}
+                </span>
+                {jobTitle && (
+                  <span style={{
+                    background: 'var(--surface)', color: 'var(--text-secondary)',
+                    border: '1px solid var(--border)', borderRadius: 99,
+                    padding: '2px 10px', fontSize: 11,
+                  }}>
+                    📌 {jobTitle}
+                  </span>
+                )}
+                {candidate.unread && (
+                  <span style={{
+                    background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE',
+                    borderRadius: 99, padding: '2px 8px', fontSize: 10, fontWeight: 700,
+                  }}>
+                    NEW
                   </span>
                 )}
               </div>
-              {canEdit && !showInterviewForm && (
-                <Button variant="secondary" size="sm" onClick={() => setShowInterviewForm(true)}>
-                  + {t('ats.addInterview')}
-                </Button>
-              )}
             </div>
+          </div>
+        </div>
 
-            {interviews.length === 0 && !showInterviewForm && (
-              <div style={{
-                background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
-                fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic',
-              }}>
-                {t('ats.noInterviews')}
-              </div>
-            )}
+        {/* Body */}
+        <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-            {interviews.map((iv) => (
-              <div key={iv.id} style={{
-                background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
-                marginBottom: 8, borderLeft: `3px solid ${STAGE_COLOR.interview}`,
-              }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 2 }}>
-                  🕐 {fmtDateTime(iv.scheduledAt)}
+          {/* Contact grid */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12,
+            background: 'var(--background)', borderRadius: 12, padding: '14px 16px',
+          }}>
+            {[
+              { label: 'Email', value: candidate.email, href: candidate.email ? `mailto:${candidate.email}` : undefined },
+              { label: t('ats.phone'), value: candidate.phone, href: candidate.phone ? `tel:${candidate.phone}` : undefined },
+              { label: t('ats.source'), value: candidate.source },
+              { label: t('ats.appliedAt', 'Applied'), value: `${appliedAgoLabel} · ${appliedAtLabel}` },
+            ].filter((i) => i.value).map((item) => (
+              <div key={item.label}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+                  {item.label}
                 </div>
-                {iv.location && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>📍 {iv.location}</div>
-                )}
-                {iv.notes && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{iv.notes}</div>
-                )}
-                {iv.feedback && (
-                  <div style={{
-                    fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
-                    fontStyle: 'italic', padding: '6px 10px',
-                    background: 'var(--surface)', borderRadius: 6, borderLeft: '2px solid var(--accent)',
-                  }}>
-                    "{iv.feedback}"
-                  </div>
-                )}
-                {canFeedback && (
-                  <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <textarea
-                      value={feedbackDrafts[iv.id] ?? ''}
-                      onChange={(e) => setFeedbackDrafts((prev) => ({ ...prev, [iv.id]: e.target.value }))}
-                      rows={2}
-                      placeholder={t('ats.feedbackPlaceholder')}
-                      style={{
-                        flex: 1,
-                        fontFamily: 'inherit',
-                        fontSize: 12,
-                        borderRadius: 8,
-                        border: '1px solid var(--border)',
-                        padding: '7px 9px',
-                        resize: 'vertical',
-                        background: 'var(--surface)',
-                      }}
-                    />
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleSaveFeedback(iv.id)}
-                      loading={savingFeedbackId === iv.id}
-                    >
-                      {t('common.save')}
-                    </Button>
-                  </div>
+                {item.href ? (
+                  <a href={item.href} style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>
+                    {item.value}
+                  </a>
+                ) : (
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, textTransform: 'capitalize' }}>{item.value}</div>
                 )}
               </div>
             ))}
+          </div>
 
-            {canEdit && showInterviewForm && (
-              <form onSubmit={handleCreateInterview} style={{
-                background: 'var(--background)', borderRadius: 12, padding: '16px',
-                display: 'flex', flexDirection: 'column', gap: 12,
-                border: '1px solid var(--border)',
+          {/* Applied job snapshot */}
+          {appliedJob && (
+            <div style={{
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              background: '#fff',
+              padding: '12px 14px',
+              display: 'grid',
+              gap: 8,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
+                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700 }}>
+                    {t('ats.appliedPosition', 'Applied position')}
+                  </span>
+                  <strong style={{ fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {appliedJob.title}
+                  </strong>
+                </div>
+                <span style={{
+                  borderRadius: 999,
+                  border: '1px solid rgba(13,33,55,0.18)',
+                  background: 'var(--background)',
+                  color: STATUS_COLOR[appliedJob.status],
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  textTransform: 'uppercase',
+                }}>
+                  {t(`ats.status_${appliedJob.status}`, appliedJob.status)}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {appliedJobLocation && (
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <MapPin size={12} />
+                    {appliedJobLocation}
+                  </span>
+                )}
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <BriefcaseBusiness size={12} />
+                  {t(`ats.jobType_${JOB_TYPE_LABEL[appliedJob.jobType]}`, appliedJob.jobType)}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Globe2 size={12} />
+                  {t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Clock3 size={12} />
+                  {appliedAgoLabel}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Tags */}
+          {candidate.tags.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {candidate.tags.map((tag) => (
+                <span key={tag} style={{
+                  background: 'var(--accent-light, rgba(201,151,58,0.10))',
+                  color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
+                  borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
+                }}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Stage pipeline visual */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+              Pipeline
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+              {(['received', 'review', 'interview', 'hired'] as CandidateStatus[]).map((s, idx) => {
+                const stageIdx = ['received', 'review', 'interview', 'hired', 'rejected'].indexOf(candidate.status);
+                const thisIdx = idx;
+                const isDone = candidate.status !== 'rejected' && stageIdx >= thisIdx;
+                const isCurrent = candidate.status !== 'rejected' && stageIdx === thisIdx;
+                const sc = STAGE_COLOR[s];
+                return (
+                  <React.Fragment key={s}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: isDone ? sc : 'var(--border)',
+                        border: isCurrent ? `3px solid ${sc}` : 'none',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.2s',
+                        boxShadow: isCurrent ? `0 0 0 3px ${sc}22` : 'none',
+                      }}>
+                        {isDone && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: isDone ? sc : 'var(--text-muted)', fontWeight: isCurrent ? 700 : 400, marginTop: 4, textAlign: 'center' }}>
+                        {t(`ats.stage_${s}`)}
+                      </div>
+                    </div>
+                    {idx < 3 && (
+                      <div style={{
+                        height: 2, flex: 1, marginBottom: 18,
+                        background: candidate.status !== 'rejected' && stageIdx > idx ? sc : 'var(--border)',
+                        transition: 'background 0.3s',
+                      }} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            {candidate.status === 'rejected' && (
+              <div style={{
+                marginTop: 8, padding: '6px 12px', background: '#FEF2F2',
+                border: '1px solid #FCA5A5', borderRadius: 8,
+                fontSize: 12, color: '#DC2626', fontWeight: 600, textAlign: 'center',
               }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                      {t('ats.interviewDate')} *
-                    </label>
-                    <input type="date" className="field-input" value={intDate} onChange={(e) => setIntDate(e.target.value)} required
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                      {t('ats.interviewTime')}
-                    </label>
-                    <input type="time" className="field-input" value={intTime} onChange={(e) => setIntTime(e.target.value)}
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                    {t('ats.interviewLocation')}
-                  </label>
-                  <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
-                    placeholder={t('ats.interviewLocationPlaceholder')}
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                    {t('common.notes')}
-                  </label>
-                  <textarea className="field-input" value={intNotes} onChange={(e) => setIntNotes(e.target.value)} rows={2}
-                    style={{ width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <Button variant="secondary" size="sm" type="button" onClick={() => setShowInterviewForm(false)}>
-                    {t('common.cancel')}
-                  </Button>
-                  <Button variant="primary" size="sm" type="submit" loading={savingInt}>
-                    {t('ats.scheduleInterview')}
-                  </Button>
-                </div>
-              </form>
+                ✕ {t('ats.stage_rejected')}
+              </div>
             )}
           </div>
-        )}
 
-        {/* Action footer */}
-        {canEdit && candidate.status !== 'hired' && candidate.status !== 'rejected' && (
-          <div style={{
-            display: 'flex', gap: 8, flexWrap: 'wrap',
-            paddingTop: 16, borderTop: '1px solid var(--border)',
-          }}>
-            {next && (
-              <Button variant="primary" onClick={() => onAdvance(next)} loading={saving} style={{ flex: 1, minWidth: 140 }}>
-                {t(`ats.advanceTo_${next}`)}
+          {/* Interviews section */}
+          {(candidate.status === 'interview' || interviews.length > 0) && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  🗓 {t('ats.interviews')}
+                  {interviews.length > 0 && (
+                    <span style={{ background: 'var(--primary)', color: 'var(--accent)', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>
+                      {interviews.length}
+                    </span>
+                  )}
+                </div>
+                {canEdit && !showInterviewForm && (
+                  <Button variant="secondary" size="sm" onClick={() => setShowInterviewForm(true)}>
+                    + {t('ats.addInterview')}
+                  </Button>
+                )}
+              </div>
+
+              {interviews.length === 0 && !showInterviewForm && (
+                <div style={{
+                  background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
+                  fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic',
+                }}>
+                  {t('ats.noInterviews')}
+                </div>
+              )}
+
+              {interviews.map((iv) => (
+                <div key={iv.id} style={{
+                  background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
+                  marginBottom: 8, borderLeft: `3px solid ${STAGE_COLOR.interview}`,
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 2 }}>
+                    🕐 {fmtDateTime(iv.scheduledAt)}
+                  </div>
+                  {iv.location && (
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>📍 {iv.location}</div>
+                  )}
+                  {iv.notes && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{iv.notes}</div>
+                  )}
+                  {iv.feedback && (
+                    <div style={{
+                      fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
+                      fontStyle: 'italic', padding: '6px 10px',
+                      background: 'var(--surface)', borderRadius: 6, borderLeft: '2px solid var(--accent)',
+                    }}>
+                      "{iv.feedback}"
+                    </div>
+                  )}
+                  {canFeedback && (
+                    <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <textarea
+                        value={feedbackDrafts[iv.id] ?? ''}
+                        onChange={(e) => setFeedbackDrafts((prev) => ({ ...prev, [iv.id]: e.target.value }))}
+                        rows={2}
+                        placeholder={t('ats.feedbackPlaceholder')}
+                        style={{
+                          flex: 1,
+                          fontFamily: 'inherit',
+                          fontSize: 12,
+                          borderRadius: 8,
+                          border: '1px solid var(--border)',
+                          padding: '7px 9px',
+                          resize: 'vertical',
+                          background: 'var(--surface)',
+                        }}
+                      />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleSaveFeedback(iv.id)}
+                        loading={savingFeedbackId === iv.id}
+                      >
+                        {t('common.save')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {canEdit && showInterviewForm && (
+                <form onSubmit={handleCreateInterview} style={{
+                  background: 'var(--background)', borderRadius: 12, padding: '16px',
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                  border: '1px solid var(--border)',
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewDate')} *
+                      </label>
+                      <input type="date" className="field-input" value={intDate} onChange={(e) => setIntDate(e.target.value)} required
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewTime')}
+                      </label>
+                      <input type="time" className="field-input" value={intTime} onChange={(e) => setIntTime(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                      {t('ats.interviewLocation')}
+                    </label>
+                    <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
+                      placeholder={t('ats.interviewLocationPlaceholder')}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                      {t('common.notes')}
+                    </label>
+                    <textarea className="field-input" value={intNotes} onChange={(e) => setIntNotes(e.target.value)} rows={2}
+                      style={{ width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <Button variant="secondary" size="sm" type="button" onClick={() => setShowInterviewForm(false)}>
+                      {t('common.cancel')}
+                    </Button>
+                    <Button variant="primary" size="sm" type="submit" loading={savingInt}>
+                      {t('ats.scheduleInterview')}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* Action footer */}
+          {canEdit && candidate.status !== 'hired' && candidate.status !== 'rejected' && (
+            <div style={{
+              display: 'flex', gap: 8, flexWrap: 'wrap',
+              paddingTop: 16, borderTop: '1px solid var(--border)',
+            }}>
+              {next && (
+                <Button variant="primary" onClick={() => onAdvance(next)} loading={saving} style={{ flex: 1, minWidth: 140 }}>
+                  {t(`ats.advanceTo_${next}`)}
+                </Button>
+              )}
+              <Button
+                variant="danger"
+                onClick={onReject}
+                loading={saving}
+                style={{ flex: 1, minWidth: 100 }}
+              >
+                {t('ats.reject')}
               </Button>
-            )}
-            <Button
-              variant="danger"
-              onClick={onReject}
-              loading={saving}
-              style={{ flex: 1, minWidth: 100 }}
-            >
-              {t('ats.reject')}
-            </Button>
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={saving}
-              style={{
-                background: 'var(--background)', border: '1px solid var(--border)',
-                color: 'var(--text-muted)', borderRadius: 'var(--radius)',
-                cursor: 'pointer', padding: '8px 12px', fontSize: 16, lineHeight: 1,
-                flexShrink: 0,
-              }}
-              title={t('common.delete')}
-            >
-              🗑
-            </button>
-          </div>
-        )}
-      </div>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={saving}
+                style={{
+                  background: 'var(--background)', border: '1px solid var(--border)',
+                  color: 'var(--text-muted)', borderRadius: 'var(--radius)',
+                  cursor: 'pointer', padding: '8px 12px', fontSize: 16, lineHeight: 1,
+                  flexShrink: 0,
+                }}
+                title={t('common.delete')}
+              >
+                🗑
+              </button>
+            </div>
+          )}
+        </div>
       </ModalBackdrop>
 
       {showDeleteConfirm && (
@@ -2374,6 +2374,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
 const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
   const { user, targetCompanyId, allowedCompanyIds } = useAuth();
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -2564,9 +2565,25 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   return (
     <div>
       {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'flex',
+        gap: 8,
+        marginBottom: 20,
+        alignItems: isMobile ? 'stretch' : 'center',
+        flexWrap: 'wrap',
+        flexDirection: isMobile ? 'column' : 'row'
+      }}>
         {/* Status filter pills */}
-        <div style={{ display: 'flex', gap: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4 }}>
+        <div style={{
+          display: 'flex',
+          gap: isMobile ? 4 : 6,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+          padding: 4,
+          width: isMobile ? '100%' : 'fit-content',
+          justifyContent: isMobile ? 'space-between' : 'flex-start'
+        }}>
           {[
             { value: '', label: t('common.all'), count: counts.all },
             { value: 'draft', label: t('ats.status_draft'), count: counts.draft },
@@ -2577,13 +2594,17 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               key={opt.value}
               onClick={() => setFilterStatus(opt.value)}
               style={{
-                padding: '5px 12px', border: 'none', borderRadius: 7,
+                padding: isMobile ? '5px 8px' : '5px 12px',
+                border: 'none', borderRadius: 7,
                 background: filterStatus === opt.value ? 'var(--primary)' : 'transparent',
                 color: filterStatus === opt.value ? '#fff' : 'var(--text-secondary)',
                 fontWeight: filterStatus === opt.value ? 600 : 400,
-                fontSize: 13, cursor: 'pointer', transition: 'all 0.15s',
+                fontSize: isMobile ? 12 : 13,
+                cursor: 'pointer', transition: 'all 0.15s',
                 display: 'flex', alignItems: 'center', gap: 5,
                 fontFamily: 'var(--font-body)',
+                flex: isMobile ? 1 : 'none',
+                justifyContent: 'center'
               }}
             >
               {opt.label}
@@ -2602,26 +2623,47 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         </div>
 
         {canEdit && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{
+            marginLeft: isMobile ? '0' : 'auto',
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            width: isMobile ? '100%' : 'auto',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'stretch' : 'center'
+          }}>
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              width: isMobile ? '100%' : 'auto'
+            }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (!careersPreviewUrl) return;
+                  window.open(careersPreviewUrl, '_blank', 'noopener,noreferrer');
+                }}
+                disabled={!careersPreviewUrl}
+                fullWidth={isMobile}
+              >
+                {t('ats.openCareersPage', 'Open careers page')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowComplianceModal(true)}
+                fullWidth={isMobile}
+              >
+                {t('ats.complianceCheck')}
+              </Button>
+            </div>
             <Button
-              variant="secondary"
+              variant="primary"
               size="sm"
-              onClick={() => {
-                if (!careersPreviewUrl) return;
-                window.open(careersPreviewUrl, '_blank', 'noopener,noreferrer');
-              }}
-              disabled={!careersPreviewUrl}
+              onClick={() => { setEditJob(null); setShowModal(true); }}
+              fullWidth={isMobile}
             >
-              {t('ats.openCareersPage', 'Open careers page')}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowComplianceModal(true)}
-            >
-              {t('ats.complianceCheck')}
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => { setEditJob(null); setShowModal(true); }}>
               <span style={{ fontSize: 16 }}>+</span> {t('ats.newJob')}
             </Button>
           </div>
@@ -3009,6 +3051,7 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ canEdit, canFeedback }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
   const { user, targetCompanyId, allowedCompanyIds } = useAuth();
   const { socket } = useSocket();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -3188,19 +3231,19 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   };
 
   const STAGE_LABELS: Record<CandidateStatus, string> = {
-    received:  t('ats.stage_received'),
-    review:    t('ats.stage_review'),
+    received: t('ats.stage_received'),
+    review: t('ats.stage_review'),
     interview: t('ats.stage_interview'),
-    hired:     t('ats.stage_hired'),
-    rejected:  t('ats.stage_rejected'),
+    hired: t('ats.stage_hired'),
+    rejected: t('ats.stage_rejected'),
   };
 
   const STAGE_ICON: Record<CandidateStatus, string> = {
-    received:  '📥',
-    review:    '🔍',
+    received: '📥',
+    review: '🔍',
     interview: '🎤',
-    hired:     '✅',
-    rejected:  '✕',
+    hired: '✅',
+    rejected: '✕',
   };
 
   const addSelectionJobs = addModalJobs.length > 0 ? addModalJobs : jobs;
@@ -3356,14 +3399,23 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   return (
     <div>
       {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative' }}>
+      <div style={{
+        display: 'flex',
+        gap: 10,
+        marginBottom: 20,
+        alignItems: isMobile ? 'stretch' : 'center',
+        flexWrap: 'wrap',
+        flexDirection: isMobile ? 'column' : 'row'
+      }}>
+        <div style={{ position: 'relative', width: isMobile ? '100%' : 'auto' }}>
           <select
             className="field-select"
             value={filterJob}
             onChange={(e) => setFilterJob(e.target.value)}
             style={{
-              minWidth: 200, padding: '8px 32px 8px 12px', fontSize: 13,
+              width: isMobile ? '100%' : 'auto',
+              minWidth: isMobile ? '0' : 200,
+              padding: '8px 32px 8px 12px', fontSize: 13,
               background: 'var(--surface)', border: '1px solid var(--border)',
               borderRadius: 10, color: 'var(--text-primary)', cursor: 'pointer',
               appearance: 'none',
@@ -3393,7 +3445,13 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         )}
 
         {canEdit && (
-          <Button variant="primary" size="sm" style={{ marginLeft: 'auto' }} onClick={openAddCandidateModal}>
+          <Button
+            variant="primary"
+            size="sm"
+            style={{ marginLeft: isMobile ? '0' : 'auto' }}
+            onClick={openAddCandidateModal}
+            fullWidth={isMobile}
+          >
             <span style={{ fontSize: 16 }}>+</span> {t('ats.addCandidate')}
           </Button>
         )}
@@ -3985,17 +4043,17 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
   }, [canViewRisks]);
 
   const ALERT_ICON: Record<string, string> = {
-    new_candidates:     '👤',
-    interview_today:    '🗓',
+    new_candidates: '👤',
+    interview_today: '🗓',
     candidates_pending: '⏳',
-    job_at_risk:        '⚠️',
+    job_at_risk: '⚠️',
   };
 
   const ALERT_COLOR: Record<string, string> = {
-    new_candidates:     '#0284C7',
-    interview_today:    '#7C3AED',
+    new_candidates: '#0284C7',
+    interview_today: '#7C3AED',
     candidates_pending: '#C9973A',
-    job_at_risk:        '#DC2626',
+    job_at_risk: '#DC2626',
   };
 
   const RISK_COLORS: Record<string, string> = {
@@ -4219,10 +4277,10 @@ export default function ATSPage() {
         {/* Stage pills */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {(Object.entries({
-            received:  STAGE_COLOR.received,
-            review:    STAGE_COLOR.review,
+            received: STAGE_COLOR.received,
+            review: STAGE_COLOR.review,
             interview: STAGE_COLOR.interview,
-            hired:     STAGE_COLOR.hired,
+            hired: STAGE_COLOR.hired,
           }) as [CandidateStatus, string][]).map(([stage, color]) => (
             <div key={stage} style={{
               background: 'rgba(255,255,255,0.06)',

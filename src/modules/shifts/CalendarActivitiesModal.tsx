@@ -9,6 +9,7 @@ import { getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/clie
 import { DatePicker } from '../../components/ui/DatePicker';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Input } from '../../components/ui/Input';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import {
   ACTIVITY_ICON_OPTIONS,
   getActivityDefaultIcon,
@@ -138,6 +139,7 @@ export default function CalendarActivitiesModal({
   onDelete,
 }: CalendarActivitiesModalProps) {
   const { t, i18n } = useTranslation();
+  const { isMobile } = useBreakpoint();
   const [selectedMonth, setSelectedMonth] = useState(formatIsoMonth(currentDate));
   const monthPickerRef = useRef<HTMLDivElement | null>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -542,6 +544,9 @@ export default function CalendarActivitiesModal({
           justifyContent: 'space-between',
           gap: 12,
           flexWrap: 'wrap',
+          position: isMobile ? 'sticky' : 'relative',
+          top: 0,
+          zIndex: 50,
         }}>
           <div>
             <div style={{ fontSize: 10, letterSpacing: 1.2, opacity: 0.68, textTransform: 'uppercase' }}>
@@ -556,7 +561,7 @@ export default function CalendarActivitiesModal({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
             <select
               value={selectedCompanyId ?? ''}
               onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
@@ -568,7 +573,8 @@ export default function CalendarActivitiesModal({
                 fontSize: 12,
                 padding: '0 10px',
                 fontWeight: 700,
-                minWidth: 190,
+                minWidth: isMobile ? '100%' : 190,
+                width: isMobile ? '100%' : 'auto',
                 height: 34,
               }}
             >
@@ -632,7 +638,7 @@ export default function CalendarActivitiesModal({
                   fontSize: 12,
                   padding: '0 12px',
                   fontWeight: 700,
-                  minWidth: 198,
+                  minWidth: isMobile ? 'calc(100% - 76px)' : 198,
                   minHeight: 30,
                   cursor: 'pointer',
                 }}
@@ -801,20 +807,25 @@ export default function CalendarActivitiesModal({
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '360px minmax(0, 1fr)',
+          gridTemplateColumns: isMobile ? '100% 100%' : '360px minmax(0, 1fr)',
           gap: 0,
           minHeight: 470,
           height: 'calc(92vh - 74px)',
           maxHeight: 'calc(92vh - 74px)',
-          overflow: 'hidden',
+          overflowX: isMobile ? 'auto' : 'hidden',
+          overflowY: 'hidden',
+          scrollSnapType: isMobile ? 'x mandatory' : 'none',
+          WebkitOverflowScrolling: 'touch',
         }}>
           <div style={{
-            borderRight: '1px solid var(--border)',
+            borderRight: isMobile ? 'none' : '1px solid var(--border)',
             background: 'var(--background)',
             overflowY: 'auto',
             overflowX: 'hidden',
             padding: 12,
             minHeight: 0,
+            scrollSnapAlign: 'start',
+            width: isMobile ? '100%' : 'auto',
           }}>
             <div style={{
               fontSize: 11,
@@ -1003,7 +1014,18 @@ export default function CalendarActivitiesModal({
             )}
           </div>
 
-          <div style={{ padding: 14, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{
+            padding: 14,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            scrollSnapAlign: 'start',
+            width: isMobile ? '100%' : 'auto',
+            background: 'var(--surface)',
+          }}>
             {!selectedStoreId ? (
               <div style={{
                 borderRadius: 10,

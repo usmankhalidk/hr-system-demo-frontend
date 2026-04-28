@@ -294,6 +294,16 @@ export default function SystemCompanyManagement() {
       }));
   }, [timezoneValues]);
 
+  const groupOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: 'standalone', label: t('companies.optionStandalone') },
+      ...companyGroups.map((g) => ({
+        value: String(g.id),
+        label: g.name,
+      })),
+    ];
+  }, [companyGroups, t]);
+
   const countryTimezoneSuggestions = useMemo(() => {
     const code = formProfile.country.trim().toUpperCase();
     if (!code) return [] as string[];
@@ -868,15 +878,19 @@ export default function SystemCompanyManagement() {
             placeholder={t('companies.placeholderName')}
             disabled={formSaving}
           />
-          <Select
-            label={t('companies.fieldGroup')}
-            value={formGroupId ?? ''}
-            onChange={(e) => { const raw = e.target.value; setFormGroupId(raw === '' ? null : parseInt(raw, 10)); }}
-            disabled={formSaving}
-          >
-            <option value="">{t('companies.optionStandalone')}</option>
-            {companyGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </Select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+              {t('companies.fieldGroup')}
+            </label>
+            <CustomSelect
+              options={groupOptions}
+              value={formGroupId != null ? String(formGroupId) : 'standalone'}
+              onChange={(val) => setFormGroupId(val === 'standalone' || !val ? null : parseInt(val, 10))}
+              placeholder={t('companies.optionStandalone')}
+              disabled={formSaving}
+              isClearable
+            />
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
             <Input

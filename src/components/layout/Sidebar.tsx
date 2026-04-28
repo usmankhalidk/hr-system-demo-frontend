@@ -320,13 +320,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
     return pathname === path || pathname.startsWith(`${path}/`);
   };
 
+  const effectiveCollapsed = isMobileView ? false : collapsed;
+
   return (
     <aside style={isMobileView ? {
       position: 'fixed',
       left: mobileOpen ? 0 : '-280px',
       top: 0,
-      height: '100vh',
-      width: '252px',
+      height: '100dvh',
+      width: '280px',
       zIndex: 200,
       transition: 'left 0.28s cubic-bezier(0.16,1,0.3,1)',
       background: 'var(--sidebar-bg)',
@@ -347,23 +349,23 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
       {/* ── Logo ── */}
       <div style={{
-        padding: collapsed ? '18px 0' : '20px 18px',
+        padding: effectiveCollapsed ? '18px 0' : '20px 18px',
         borderBottom: '1px solid rgba(255,255,255,0.07)',
         display: 'flex', alignItems: 'center', gap: '10px',
         flexShrink: 0, overflow: 'hidden',
-        justifyContent: collapsed ? 'center' : 'flex-start',
+        justifyContent: effectiveCollapsed ? 'center' : 'flex-start',
       }}>
         <img
           src={fusaroLogoUrl}
           alt="Fusaro Antonio 1893"
           style={{
-            width: collapsed ? 30 : 32,
-            height: collapsed ? 30 : 32,
+            width: effectiveCollapsed ? 30 : 32,
+            height: effectiveCollapsed ? 30 : 32,
             objectFit: 'contain',
             flexShrink: 0,
           }}
         />
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div style={{ overflow: 'hidden' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px', color: '#FFFFFF', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
               {t('nav.appName')}
@@ -378,14 +380,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       {/* ── User (click → profile) ── */}
       <NavLink
         to="/profilo"
-        title={collapsed ? t('nav.myProfile') : undefined}
+        title={effectiveCollapsed ? t('nav.myProfile') : undefined}
         onClick={() => { if (isMobileView && onMobileClose) onMobileClose(); }}
         style={({ isActive }) => ({
-          padding: collapsed ? '12px 0' : '14px 16px',
+          padding: effectiveCollapsed ? '12px 0' : '14px 16px',
           borderBottom: '1px solid rgba(255,255,255,0.07)',
           display: 'flex', alignItems: 'center', gap: '10px',
           overflow: 'hidden', flexShrink: 0,
-          justifyContent: collapsed ? 'center' : 'flex-start',
+          justifyContent: effectiveCollapsed ? 'center' : 'flex-start',
           textDecoration: 'none',
           background: isActive ? 'rgba(201,151,58,0.08)' : 'transparent',
           cursor: 'pointer',
@@ -410,7 +412,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
             />
           ) : initials}
         </div>
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div style={{ overflow: 'hidden', flex: 1 }}>
             <div style={{ color: 'rgba(255,255,255,0.92)', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
             <div style={{ color: roleColor, fontSize: '11px', fontWeight: 500, whiteSpace: 'nowrap', marginTop: '1px' }}>{roleLabel}</div>
@@ -420,7 +422,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
       {/* ── Navigation ── */}
       <nav className="sidebar-scroll" style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.28)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 10px 4px', marginBottom: '2px' }}>
             {t('nav.navigation')}
           </div>
@@ -433,17 +435,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
               to={item.path}
               end
               className="sidebar-item"
-              title={collapsed ? t(item.labelKey) : undefined}
+              title={effectiveCollapsed ? t(item.labelKey) : undefined}
               onClick={() => { if (isMobileView && onMobileClose) onMobileClose(); }}
               style={() => ({
                 display: 'flex', alignItems: 'center',
-                justifyContent: collapsed ? 'center' : 'flex-start',
+                justifyContent: effectiveCollapsed ? 'center' : 'flex-start',
                 gap: '10px',
-                padding: collapsed ? '10px 0' : '9px 10px',
+                padding: effectiveCollapsed ? '10px 0' : '9px 10px',
                 margin: '2px 0',
                 borderRadius: 'var(--radius-sm)',
-                borderLeft: isActive && !collapsed ? '2px solid var(--sidebar-active-border)' : '2px solid transparent',
-                paddingLeft: isActive && !collapsed ? '8px' : (collapsed ? '0' : '10px'),
+                borderLeft: isActive && !effectiveCollapsed ? '2px solid var(--sidebar-active-border)' : '2px solid transparent',
+                paddingLeft: isActive && !effectiveCollapsed ? '8px' : (effectiveCollapsed ? '0' : '10px'),
                 background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
                 color: isActive ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
                 textDecoration: 'none',
@@ -452,8 +454,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
               })}
             >
               <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
-              {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(item.labelKey)}</span>}
-              {!collapsed && !!item.badgeKey && (
+              {!effectiveCollapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(item.labelKey)}</span>}
+              {!effectiveCollapsed && !!item.badgeKey && (
                 <span style={{
                   marginLeft: 'auto',
                   fontSize: 10,
@@ -469,7 +471,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
                   {t(item.badgeKey)}
                 </span>
               )}
-              {!collapsed && item.labelKey === 'nav.messaggi' && unreadMessages > 0 && (
+              {!effectiveCollapsed && item.labelKey === 'nav.messaggi' && unreadMessages > 0 && (
                 <span style={{
                   background: 'var(--accent)',
                   color: 'white',
@@ -492,7 +494,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
       {/* ── Language switcher (full) + Logout ── */}
       <div style={{ padding: '8px', borderTop: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
-        {(isMobileView || !collapsed) && (
+        {(isMobileView || !effectiveCollapsed) && (
           <div style={{ marginBottom: 8 }}>
             <LanguageSwitcher variant="full" />
           </div>
@@ -500,18 +502,18 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
         <button
           className="sidebar-item"
           onClick={handleLogout}
-          title={collapsed ? t('nav.logout') : undefined}
+          title={effectiveCollapsed ? t('nav.logout') : undefined}
           style={{
             width: '100%', display: 'flex', alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            gap: '10px', padding: collapsed ? '10px 0' : '9px 10px',
+            justifyContent: effectiveCollapsed ? 'center' : 'flex-start',
+            gap: '10px', padding: effectiveCollapsed ? '10px 0' : '9px 10px',
             background: 'none', border: 'none',
             borderRadius: 'var(--radius-sm)',
             color: 'var(--sidebar-text)', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
           }}
         >
           <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}><IconLogout /></span>
-          {!collapsed && <span>{t('nav.logout')}</span>}
+          {!effectiveCollapsed && <span>{t('nav.logout')}</span>}
         </button>
       </div>
     </aside>

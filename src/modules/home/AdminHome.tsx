@@ -23,12 +23,27 @@ export interface AdminHomeData {
     activeStores: number;
     activeEmployees: number;
   };
+  dashboardStats: {
+    attendanceRate: number;
+    totalAbsences: number;
+    delays: number;
+    shiftCoverage: number;
+  };
+  staticStats: {
+    documentExpiryCount: number;
+    onboardingInProgress: number;
+    onboardingCompletionRate: number;
+    atsTotalCandidates: number;
+    atsInterviewCandidates: number;
+  };
   roleBreakdown: RoleBreakdownItem[];
   storeBreakdown?: StoreBreakdownItem[];
 }
 
 interface AdminHomeProps {
   data: AdminHomeData;
+  timeRange: string;
+  onTimeRangeChange: (range: string) => void;
 }
 
 const roleColors: Record<string, string> = {
@@ -43,7 +58,7 @@ const roleColors: Record<string, string> = {
 // ── Stat card ─────────────────────────────────────────────────────────────────
 interface StatCardProps {
   label: string;
-  value: number;
+  value: number | string;
   icon: React.ReactNode;
   accent: string;
   description?: string;
@@ -111,6 +126,53 @@ const IconArrow = () => (
     <path d="M5 12h14M12 5l7 7-7 7"/>
   </svg>
 );
+const IconActivity = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+  </svg>
+);
+const IconUserMinus = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+    <circle cx="8.5" cy="7" r="4"></circle>
+    <line x1="23" y1="11" x2="17" y2="11"></line>
+  </svg>
+);
+const IconClock = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"></circle>
+    <polyline points="12 6 12 12 16 14"></polyline>
+  </svg>
+);
+const IconCalendar = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+    <line x1="16" y1="2" x2="16" y2="6"></line>
+    <line x1="8" y1="2" x2="8" y2="6"></line>
+    <line x1="3" y1="10" x2="21" y2="10"></line>
+  </svg>
+);
+const IconDocument = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+    <polyline points="14 2 14 8 20 8"></polyline>
+    <line x1="16" y1="13" x2="8" y2="13"></line>
+    <line x1="16" y1="17" x2="8" y2="17"></line>
+    <polyline points="10 9 9 9 8 9"></polyline>
+  </svg>
+);
+const IconClipboard = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+  </svg>
+);
+const IconBriefcase = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+  </svg>
+);
 
 // ── Quick link ─────────────────────────────────────────────────────────────────
 interface QuickLinkProps {
@@ -123,8 +185,8 @@ const QuickLink: React.FC<QuickLinkProps> = ({ to, label, description, icon, col
     padding: '14px 18px', background: 'var(--primary)',
     borderRadius: 'var(--radius)', textDecoration: 'none',
     border: `1px solid ${color}30`,
-    flex: isMobile ? '1 1 calc(50% - 8px)' : '1 1 180px',
-    minWidth: isMobile ? 'calc(50% - 8px)' : '180px',
+    flex: isMobile ? '1 1 100%' : '1 1 180px',
+    minWidth: isMobile ? '100%' : '180px',
   }}>
     <div style={{
       width: 36, height: 36, borderRadius: 8,
@@ -175,8 +237,8 @@ const Panel: React.FC<{ title: string; subtitle?: string; children: React.ReactN
 );
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export const AdminHome: React.FC<AdminHomeProps> = ({ data }) => {
-  const { stats, roleBreakdown, storeBreakdown } = data;
+export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRangeChange }) => {
+  const { stats, dashboardStats, roleBreakdown, storeBreakdown } = data;
   const { t } = useTranslation();
   const { isMobile, isTablet } = useBreakpoint();
   const tRole = (role: string) => (t as (k: string) => string)(`roles.${role}`);
@@ -205,22 +267,74 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data }) => {
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '13px', margin: 0 }}>{t('home.admin.subtitle')}</p>
         </div>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: '6px',
-          padding: '6px 14px', background: 'rgba(201,151,58,0.15)',
-          border: '1px solid rgba(201,151,58,0.25)', borderRadius: '999px',
-          fontSize: '12px', fontWeight: 600, color: 'var(--accent)', whiteSpace: 'nowrap', flexShrink: 0,
-        }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }}/>
-          {t('common.systemActive')}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <select
+            value={timeRange}
+            onChange={(e) => onTimeRangeChange(e.target.value)}
+            style={{
+              padding: '6px 28px 6px 12px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(0,0,0,0.2)',
+              color: '#FFFFFF',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              appearance: 'none',
+              outline: 'none',
+              backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23FFFFFF%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 8px center',
+              backgroundSize: '14px',
+            }}
+          >
+            <option value="this_week" style={{ color: '#000' }}>This Week</option>
+            <option value="this_month" style={{ color: '#000' }}>This Month</option>
+            <option value="three_months" style={{ color: '#000' }}>Three Months</option>
+          </select>
+
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '6px 14px', background: 'rgba(201,151,58,0.15)',
+            border: '1px solid rgba(201,151,58,0.25)', borderRadius: '999px',
+            fontSize: '12px', fontWeight: 600, color: 'var(--accent)', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }}/>
+            {t('common.systemActive')}
+          </div>
         </div>
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
-        <StatCard label={t('home.admin.companies')} value={stats.companies} icon={<IconBuilding />} accent="#C9973A" description={t('home.admin.companiesDesc')} />
-        <StatCard label={t('home.admin.activeStores')} value={stats.activeStores} icon={<IconStore />} accent="#0284C7" description={t('home.admin.activeStoresDesc')} />
-        <StatCard label={t('home.admin.activeEmployees')} value={stats.activeEmployees} icon={<IconUsers />} accent="#15803D" description={t('home.admin.activeEmployeesDesc')} />
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : isTablet ? '1fr 1fr' : 'repeat(4, 1fr)', gap: '16px' }}>
+        <StatCard 
+          label="Attendance Rate" 
+          value={dashboardStats?.attendanceRate ? `${dashboardStats.attendanceRate}%` : '0%'} 
+          icon={<IconActivity />} 
+          accent="#15803D" 
+          description={timeRange === 'this_week' ? 'This week' : timeRange === 'three_months' ? 'Last 3 months' : 'This month'} 
+        />
+        <StatCard 
+          label="Total Absences" 
+          value={dashboardStats?.totalAbsences || 0} 
+          icon={<IconUserMinus />} 
+          accent="#EF4444" 
+          description={timeRange === 'this_week' ? 'This week' : timeRange === 'three_months' ? 'Last 3 months' : 'This month'} 
+        />
+        <StatCard 
+          label="Delays" 
+          value={dashboardStats?.delays || 0} 
+          icon={<IconClock />} 
+          accent="#D97706" 
+          description={timeRange === 'this_week' ? 'This week' : timeRange === 'three_months' ? 'Last 3 months' : 'This month'} 
+        />
+        <StatCard 
+          label="Shift Coverage" 
+          value={dashboardStats?.shiftCoverage ? `${dashboardStats.shiftCoverage}%` : '0%'} 
+          icon={<IconCalendar />} 
+          accent="#0284C7" 
+          description="Confirmed Shifts" 
+        />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', alignItems: 'start' }}>
@@ -323,6 +437,34 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data }) => {
           </div>
         </div>
       )}
+
+      {/* Static KPI Cards Row (Moved to bottom) */}
+      {data.staticStats && (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
+          <StatCard 
+            label="Document Expiry" 
+            value={data.staticStats.documentExpiryCount} 
+            icon={<IconDocument />} 
+            accent="#D97706" 
+            description="Documents expiring in 60 days" 
+          />
+          <StatCard 
+            label="Onboarding in progress" 
+            value={data.staticStats.onboardingInProgress} 
+            icon={<IconClipboard />} 
+            accent="#0284C7" 
+            description={`${data.staticStats.onboardingCompletionRate}% average completion`} 
+          />
+          <StatCard 
+            label="ATS Candidates" 
+            value={data.staticStats.atsTotalCandidates} 
+            icon={<IconBriefcase />} 
+            accent="#15803D" 
+            description={`${data.staticStats.atsInterviewCandidates} in interview stage`} 
+          />
+        </div>
+      )}
+
     </div>
   );
 };

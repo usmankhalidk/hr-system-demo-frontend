@@ -7,24 +7,25 @@ import { getEmployees } from '../../api/employees';
 import { Employee } from '../../types';
 import { createPortal } from 'react-dom';
 import { DatePicker } from '../../components/ui/DatePicker';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 // ── Components & Icons ──
 
 const IconUpload = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
   </svg>
 );
 
 const IconFile = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/>
+    <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" /><polyline points="13 2 13 9 20 9" />
   </svg>
 );
 
 const IconCheck = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
+    <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
@@ -41,7 +42,8 @@ const modalContentStyle: React.CSSProperties = {
   background: 'var(--surface)', borderRadius: 16, padding: 0,
   width: '100%', maxWidth: 500, maxHeight: '90vh', overflow: 'hidden',
   boxShadow: '0 24px 60px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column',
-  animation: 'popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+  animation: 'popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+  margin: '0 16px'
 };
 
 const inputStyle: React.CSSProperties = {
@@ -68,7 +70,8 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { user } = useAuth();
-  
+  const { isMobile } = useBreakpoint();
+
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -95,7 +98,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     // Validation
     const isZip = selected.name.toLowerCase().endsWith('.zip');
     const maxSize = isZip ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-    
+
     if (selected.size > maxSize) {
       showToast(isZip ? t('documents.errorBulk') : t('documents.errorUpload'), 'error');
       return;
@@ -114,10 +117,10 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     }
 
     setUploading(true);
-    
+
     try {
-      const visibleToRoles = visibility === 'hr' 
-        ? ['admin', 'hr'] 
+      const visibleToRoles = visibility === 'hr'
+        ? ['admin', 'hr']
         : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
 
       const response = await uploadDocumentUnified(file, {
@@ -134,16 +137,16 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
       } else if (response) {
         // Fallback to Manual Assignment
         setDocumentId(response.documentId);
-        
+
         const fileName = response.fileName || '';
         const lastDot = fileName.lastIndexOf('.');
         const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
         const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
-        
+
         setEditableTitle(initialTitle);
         setFileExtension(extension);
         setStep(3);
-        
+
         // Load employees for dropdown
         setLoadingEmps(true);
         try {
@@ -168,15 +171,15 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
   const handleManualSave = async () => {
     if (!documentId || !editableTitle.trim()) return;
-    
+
     setUploading(true);
     try {
-      const visibleToRoles = visibility === 'hr' 
-        ? ['admin', 'hr'] 
+      const visibleToRoles = visibility === 'hr'
+        ? ['admin', 'hr']
         : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
 
-      await updateDocumentGeneric(documentId, { 
-        title: `${editableTitle}${fileExtension}`, 
+      await updateDocumentGeneric(documentId, {
+        title: `${editableTitle}${fileExtension}`,
         employee_id: manualEmployeeId,
         requires_signature: requiresSignature,
         expires_at: expiresAt || null,
@@ -215,9 +218,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   {t('documents.assignedTo', 'Assigned to')}: <strong>{targetEmployeeName}</strong>
                 </div>
               )}
-              <label 
-                style={{ 
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+              <label
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   height: 180, border: '2px dashed var(--border)', borderRadius: 12, cursor: 'pointer',
                   transition: 'all 0.2s', background: 'var(--background)'
                 }}
@@ -247,7 +250,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                     {(file!.size / 1024 / 1024).toFixed(2)} MB
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setStep(1)}
                   style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
                 >
@@ -255,13 +258,13 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 </button>
               </div>
 
-              <div style={{ display: 'flex', gap: 20 }}>
+              <div style={{ display: 'flex', gap: isMobile ? 16 : 20, flexDirection: isMobile ? 'column' : 'row' }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>{t('documents.requiresSignature')}</label>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button 
+                    <button
                       onClick={() => setRequiresSignature(true)}
-                      style={{ 
+                      style={{
                         flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (requiresSignature ? 'var(--primary)' : 'var(--border)'),
                         background: requiresSignature ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
                         color: requiresSignature ? 'var(--primary)' : 'var(--text-secondary)',
@@ -271,9 +274,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                     >
                       {requiresSignature && <IconCheck />} {t('common.yes')}
                     </button>
-                    <button 
+                    <button
                       onClick={() => setRequiresSignature(false)}
-                      style={{ 
+                      style={{
                         flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (!requiresSignature ? 'var(--primary)' : 'var(--border)'),
                         background: !requiresSignature ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
                         color: !requiresSignature ? 'var(--primary)' : 'var(--text-secondary)',
@@ -289,9 +292,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   <label style={labelStyle}>
                     {t('documents.expiryDate')} {isHrOrAdmin && <span style={{ color: '#DC2626' }}>*</span>}
                   </label>
-                  <DatePicker 
-                    value={expiresAt} 
-                    onChange={setExpiresAt} 
+                  <DatePicker
+                    value={expiresAt}
+                    onChange={setExpiresAt}
                   />
                 </div>
               </div>
@@ -299,9 +302,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               <div>
                 <label style={labelStyle}>{t('documents.visibility')}</label>
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <button 
+                  <button
                     onClick={() => setVisibility('everyone')}
-                    style={{ 
+                    style={{
                       flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (visibility === 'everyone' ? 'var(--primary)' : 'var(--border)'),
                       background: visibility === 'everyone' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
                       color: visibility === 'everyone' ? 'var(--primary)' : 'var(--text-secondary)',
@@ -311,9 +314,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   >
                     {visibility === 'everyone' && <IconCheck />} {t('documents.visibilityEveryone')}
                   </button>
-                  <button 
+                  <button
                     onClick={() => setVisibility('hr')}
-                    style={{ 
+                    style={{
                       flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (visibility === 'hr' ? 'var(--primary)' : 'var(--border)'),
                       background: visibility === 'hr' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
                       color: visibility === 'hr' ? 'var(--primary)' : 'var(--text-secondary)',
@@ -325,8 +328,8 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   </button>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-                  {visibility === 'everyone' 
-                    ? t('documents.visibilityEveryoneDesc') 
+                  {visibility === 'everyone'
+                    ? t('documents.visibilityEveryoneDesc')
                     : t('documents.visibilityHRDesc')}
                 </p>
               </div>
@@ -341,10 +344,10 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               <div>
                 <label style={labelStyle}>{t('documents.fileName')}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input 
-                    value={editableTitle} 
-                    onChange={(e) => setEditableTitle(e.target.value)} 
-                    style={{ ...inputStyle, flex: 1 }} 
+                  <input
+                    value={editableTitle}
+                    onChange={(e) => setEditableTitle(e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }}
                     placeholder="Enter file name..."
                   />
                   <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{fileExtension}</span>
@@ -353,10 +356,10 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
               <div>
                 <label style={labelStyle}>{t('documents.assigned')}</label>
-                <select 
-                  value={manualEmployeeId || ''} 
-                  onChange={(e) => setManualEmployeeId(e.target.value ? Number(e.target.value) : null)} 
-                  style={inputStyle} 
+                <select
+                  value={manualEmployeeId || ''}
+                  onChange={(e) => setManualEmployeeId(e.target.value ? Number(e.target.value) : null)}
+                  style={inputStyle}
                   disabled={loadingEmps}
                 >
                   <option value="">{t('documents.selectEmployee')}</option>
@@ -378,18 +381,18 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
         {/* Footer */}
         <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 12, justifyContent: 'flex-end', background: 'var(--background)' }}>
-          <button 
+          <button
             onClick={onClose}
             style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
           >
             {t('common.cancel')}
           </button>
           {step === 2 ? (
-            <button 
+            <button
               onClick={handleSubmit}
               disabled={uploading}
-              style={{ 
-                padding: '10px 24px', borderRadius: 8, border: 'none', background: 'var(--primary)', 
+              style={{
+                padding: '10px 24px', borderRadius: 8, border: 'none', background: 'var(--primary)',
                 color: '#fff', cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
                 opacity: uploading ? 0.7 : 1, transition: 'all 0.2s',
                 boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
@@ -398,11 +401,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               {uploading ? t('common.loading') : t('documents.uploadWizardTitle')}
             </button>
           ) : step === 3 ? (
-            <button 
+            <button
               onClick={handleManualSave}
               disabled={uploading || !editableTitle.trim()}
-              style={{ 
-                padding: '10px 32px', borderRadius: 8, border: 'none', background: 'var(--primary)', 
+              style={{
+                padding: '10px 32px', borderRadius: 8, border: 'none', background: 'var(--primary)',
                 color: '#fff', cursor: (uploading || !editableTitle.trim()) ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
                 opacity: (uploading || !editableTitle.trim()) ? 0.7 : 1, transition: 'all 0.2s',
                 boxShadow: '0 4px 12px rgba(2,132,199,0.2)'

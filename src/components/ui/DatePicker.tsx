@@ -4,16 +4,16 @@ import { useTranslation } from 'react-i18next';
 
 // ── Locale data ───────────────────────────────────────────────────────────────
 const MONTHS: Record<string, string[]> = {
-  it: ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'],
-  en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+  it: ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'],
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
 };
 const MONTHS_SHORT: Record<string, string[]> = {
-  it: ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'],
-  en: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+  it: ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'],
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
 };
 const DAYS: Record<string, string[]> = {
-  it: ['Lu','Ma','Me','Gi','Ve','Sa','Do'],
-  en: ['Mo','Tu','We','Th','Fr','Sa','Su'],
+  it: ['Lu', 'Ma', 'Me', 'Gi', 'Ve', 'Sa', 'Do'],
+  en: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
 };
 const TODAY_LABEL: Record<string, string> = { it: 'Oggi', en: 'Today' };
 const PLACEHOLDER: Record<string, string> = { it: 'GG/MM/AAAA', en: 'MM/DD/YYYY' };
@@ -112,7 +112,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
       setYearStart(d.getFullYear() - (d.getFullYear() % YEAR_PAGE));
     }
   }, [value]);
-  
+
   // Portaling & Positioning
   const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
 
@@ -550,9 +550,9 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={open ? 'var(--accent)' : 'var(--text-muted)'}
           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transition: 'stroke 0.15s' }}>
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-          <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-          <line x1="3" y1="10" x2="21" y2="10"/>
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
         </svg>
         <span style={{ flex: 1, fontSize: '13.5px', fontFamily: 'var(--font-body)', color: display ? 'var(--text-primary)' : 'var(--text-disabled)' }}>
           {display || placeholder || PLACEHOLDER[lang]}
@@ -563,7 +563,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
           strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
           style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-          <polyline points="6 9 12 15 18 9"/>
+          <polyline points="6 9 12 15 18 9" />
         </svg>
       </div>
 

@@ -31,13 +31,14 @@ export const HomePage: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<string>('this_month');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    getHomeData()
+    getHomeData(timeRange)
       .then((result) => {
         if (!cancelled) {
           setData(result);
@@ -55,7 +56,7 @@ export const HomePage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [timeRange, t]);
 
   if (loading) {
     return (
@@ -94,7 +95,7 @@ export const HomePage: React.FC = () => {
 
   switch (user.role) {
     case 'admin':
-      return <AdminHome data={data as AdminHomeData} />;
+      return <AdminHome data={data as AdminHomeData} timeRange={timeRange} onTimeRangeChange={setTimeRange} />;
     case 'hr':
       return <HRHome data={data as HRHomeData} />;
     case 'area_manager':
