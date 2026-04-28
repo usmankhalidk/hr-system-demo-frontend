@@ -379,7 +379,7 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
   return (
     <SectionPanel title={t('nav.onboarding', 'Onboarding')} icon={
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
       </svg>
     } action={headerAction}>
       {loading ? (
@@ -458,7 +458,7 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
                       }}
                     >
                       <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: task.completed ? 'rgba(21,128,61,0.12)' : 'var(--background)', border: `2px solid ${task.completed ? '#15803D' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {task.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                        {task.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -751,23 +751,23 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
 // ── Icons ──────────────────────────────────────────────────────────────────────
 const IconUser = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
   </svg>
 );
 const IconFile = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
   </svg>
 );
 const IconTasks = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+    <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
   </svg>
 );
 const IconCertificate = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8 3h8l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/>
-    <path d="M8 13h8"/><path d="M8 17h5"/>
+    <path d="M8 3h8l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+    <path d="M8 13h8" /><path d="M8 17h5" />
   </svg>
 );
 const IconShifts = () => (
@@ -781,22 +781,22 @@ const IconShifts = () => (
 );
 const IconEdit = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 );
 const IconOff = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+    <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
   </svg>
 );
 const IconOn = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
+    <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 const IconBack = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="15 18 9 12 15 6"/>
+    <polyline points="15 18 9 12 15 6" />
   </svg>
 );
 
@@ -848,8 +848,8 @@ export function EmployeeDetail() {
   const [showCompose, setShowCompose] = useState(false);
 
   const employeeId = id && !isNaN(parseInt(id, 10)) ? parseInt(id, 10) : undefined;
-  const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr';
-  const isAdmin = user?.role === 'admin';
+  const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager' || user?.isSuperAdmin === true;
+  const isAdmin = user?.role === 'admin' || user?.isSuperAdmin === true;
   const isOwnProfile = user?.id === employee?.id;
   const canViewSensitive = isAdminOrHr || isOwnProfile;
   const canResetDevice = isAdminOrHr && employee?.role === 'employee';
@@ -921,7 +921,7 @@ export function EmployeeDetail() {
     setTrainingsLoading(true);
     Promise.all([getTrainings(employeeId), getMedicals(employeeId)])
       .then(([tr, med]) => { setTrainings(tr); setMedicals(med); })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setTrainingsLoading(false));
   }, [employeeId, canViewSensitive]);
 
@@ -1071,8 +1071,8 @@ export function EmployeeDetail() {
   const workingTypeLabel = employee.workingType === 'full_time'
     ? t('employees.fullTime')
     : employee.workingType === 'part_time'
-    ? t('employees.partTime')
-    : '—';
+      ? t('employees.partTime')
+      : '—';
 
   const shiftMonthLabel = shiftMonthCursor.toLocaleDateString(i18n.language.startsWith('it') ? 'it-IT' : 'en-GB', {
     month: 'long',
@@ -1086,258 +1086,271 @@ export function EmployeeDetail() {
   return (
     <div className="page-enter" style={{ maxWidth: '1000px', margin: '0 auto' }}>
 
-      {/* Back + actions row */}
+
+
+      {/* Sticky Header & Tabs */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 10,
-        flexWrap: 'wrap',
-        marginBottom: 12,
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        background: 'var(--background)',
+        paddingTop: '4px',
+        paddingBottom: '12px',
+        marginBottom: '12px',
+        boxShadow: '0 -100px 0 var(--background)',
       }}>
-        <button
-          onClick={() => navigate('/dipendenti')}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '5px',
-            fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-body)',
-            cursor: 'pointer', background: 'none', border: 'none', padding: 0,
-            fontWeight: 600, transition: 'color 0.15s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-        >
-          <IconBack /> {t('employees.backToList')}
-        </button>
+        {/* Back + actions row */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          flexWrap: 'wrap',
+          marginBottom: 12,
+          padding: '4px 2px',
+        }}>
+          <button
+            onClick={() => navigate('/dipendenti')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+              fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-body)',
+              cursor: 'pointer', background: 'none', border: 'none', padding: 0,
+              fontWeight: 600, transition: 'color 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+          >
+            <IconBack /> {t('employees.backToList')}
+          </button>
 
-        {isAdminOrHr && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setShowEditForm(true)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '6px 10px', borderRadius: 999,
-                border: '1px solid var(--border)',
-                background: 'var(--surface)',
-                color: 'var(--text-primary)', fontSize: 11.5, fontWeight: 700,
-                fontFamily: 'var(--font-body)', cursor: 'pointer',
-              }}
-            >
-              <IconEdit /> {t('common.edit')}
-            </button>
-
-            {!isOwnProfile && (
+          {isAdminOrHr && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <button
-                onClick={() => setShowCompose(true)}
+                onClick={() => setShowEditForm(true)}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '6px 10px', borderRadius: 999,
-                  border: '1px solid rgba(201,151,58,0.35)',
-                  background: 'rgba(201,151,58,0.10)',
-                  color: 'rgba(201,151,58,0.92)', fontSize: 11.5, fontWeight: 700,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-primary)', fontSize: 11.5, fontWeight: 700,
                   fontFamily: 'var(--font-body)', cursor: 'pointer',
                 }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                </svg>
-                {t('employees.sendMessage')}
+                <IconEdit /> {t('common.edit')}
               </button>
-            )}
 
-            {employee.status === 'active' ? (
-              <button
-                onClick={() => setShowDeactivateModal(true)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '6px 10px', borderRadius: 999,
-                  border: '1px solid rgba(220,38,38,0.42)',
-                  background: 'rgba(220,38,38,0.10)',
-                  color: '#DC2626', fontSize: 11.5, fontWeight: 700,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
-              >
-                <IconOff /> {t('common.deactivate')}
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowActivateModal(true)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '6px 10px', borderRadius: 999,
-                  border: '1px solid rgba(21,128,61,0.42)',
-                  background: 'rgba(21,128,61,0.10)',
-                  color: '#15803D', fontSize: 11.5, fontWeight: 700,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
-              >
-                <IconOn /> {t('common.activate')}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+              {!isOwnProfile && (
+                <button
+                  onClick={() => setShowCompose(true)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '6px 10px', borderRadius: 999,
+                    border: '1px solid rgba(201,151,58,0.35)',
+                    background: 'rgba(201,151,58,0.10)',
+                    color: 'rgba(201,151,58,0.92)', fontSize: 11.5, fontWeight: 700,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                  </svg>
+                  {t('employees.sendMessage')}
+                </button>
+              )}
 
-      {/* Hero card */}
-      <div style={{
-        background: 'linear-gradient(135deg, var(--primary) 0%, #1A3B5C 100%)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '28px 32px',
-        marginBottom: '24px',
-        boxShadow: '0 4px 24px rgba(13,33,55,0.22)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '24px',
-        flexWrap: 'wrap',
-      }}>
-        {/* Avatar with upload */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <div style={{
-            width: 72, height: 72, borderRadius: '50%',
-            background: employee.avatarFilename ? 'transparent' : avatarBg,
-            border: '3px solid rgba(201,151,58,0.40)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '24px', fontWeight: 700, color: '#fff',
-            fontFamily: 'var(--font-display)', letterSpacing: '0.04em',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.24)',
-            overflow: 'hidden',
-          }}>
-            {employee.avatarFilename ? (
-              <img
-                src={getAvatarUrl(employee.avatarFilename) ?? ''}
-                alt={fullName}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : initials}
-          </div>
-          {(isOwnProfile || isAdminOrHr) && (
-            <>
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={handleAvatarUpload}
-              />
-              <label
-                htmlFor="avatar-upload"
-                title={t('employees.changeAvatar')}
-                style={{
-                  position: 'absolute', bottom: 0, right: 0,
-                  width: 24, height: 24, borderRadius: '50%',
-                  background: 'var(--accent)', border: '2px solid var(--primary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: avatarUploading ? 'not-allowed' : 'pointer',
-                  opacity: avatarUploading ? 0.6 : 1,
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-              </label>
-            </>
+              {employee.status === 'active' ? (
+                <button
+                  onClick={() => setShowDeactivateModal(true)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '6px 10px', borderRadius: 999,
+                    border: '1px solid rgba(220,38,38,0.42)',
+                    background: 'rgba(220,38,38,0.10)',
+                    color: '#DC2626', fontSize: 11.5, fontWeight: 700,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer',
+                  }}
+                >
+                  <IconOff /> {t('common.deactivate')}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowActivateModal(true)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '6px 10px', borderRadius: 999,
+                    border: '1px solid rgba(21,128,61,0.42)',
+                    background: 'rgba(21,128,61,0.10)',
+                    color: '#15803D', fontSize: 11.5, fontWeight: 700,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer',
+                  }}
+                >
+                  <IconOn /> {t('common.activate')}
+                </button>
+              )}
+            </div>
           )}
         </div>
-
-        {/* Identity */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{
-            fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 700,
-            color: '#FFFFFF', margin: '0 0 8px', letterSpacing: '-0.02em',
-          }}>
-            {fullName}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>
-              {tRole(employee.role, employee.isSuperAdmin)}
-            </Badge>
-            <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
-              {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
-            </Badge>
-          </div>
-          <div style={{
-            marginTop: '10px', fontSize: '12.5px', color: 'rgba(255,255,255,0.55)',
-            display: 'flex', gap: '16px', flexWrap: 'wrap',
-          }}>
-            {employee.email && <span>{employee.email}</span>}
-            {employee.department && <span>· {employee.department}</span>}
-            {employee.storeName && <span>· {employee.storeName}</span>}
-            {employee.uniqueId && (
-              <span style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>
-                · ID: {employee.uniqueId}
-              </span>
+        {/* Hero card */}
+        <div style={{
+          background: 'linear-gradient(135deg, var(--primary) 0%, #1A3B5C 100%)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '28px 32px',
+          marginBottom: '16px',
+          boxShadow: '0 4px 24px rgba(13,33,55,0.22)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '24px',
+          flexWrap: 'wrap',
+        }}>
+          {/* Avatar with upload */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: '50%',
+              background: employee.avatarFilename ? 'transparent' : avatarBg,
+              border: '3px solid rgba(201,151,58,0.40)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '24px', fontWeight: 700, color: '#fff',
+              fontFamily: 'var(--font-display)', letterSpacing: '0.04em',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.24)',
+              overflow: 'hidden',
+            }}>
+              {employee.avatarFilename ? (
+                <img
+                  src={getAvatarUrl(employee.avatarFilename) ?? ''}
+                  alt={fullName}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : initials}
+            </div>
+            {(isOwnProfile || isAdminOrHr) && (
+              <>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={handleAvatarUpload}
+                />
+                <label
+                  htmlFor="avatar-upload"
+                  title={t('employees.changeAvatar')}
+                  style={{
+                    position: 'absolute', bottom: 0, right: 0,
+                    width: 24, height: 24, borderRadius: '50%',
+                    background: 'var(--accent)', border: '2px solid var(--primary)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: avatarUploading ? 'not-allowed' : 'pointer',
+                    opacity: avatarUploading ? 0.6 : 1,
+                  }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </label>
+              </>
             )}
+          </div>
+
+          {/* Identity */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{
+              fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 700,
+              color: '#FFFFFF', margin: '0 0 8px', letterSpacing: '-0.02em',
+            }}>
+              {fullName}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>
+                {tRole(employee.role, employee.isSuperAdmin)}
+              </Badge>
+              <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
+                {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
+              </Badge>
+            </div>
+            <div style={{
+              marginTop: '10px', fontSize: '12.5px', color: 'rgba(255,255,255,0.55)',
+              display: 'flex', gap: '16px', flexWrap: 'wrap',
+            }}>
+              {employee.email && <span>{employee.email}</span>}
+              {employee.department && <span>· {employee.department}</span>}
+              {employee.storeName && <span>· {employee.storeName}</span>}
+              {employee.uniqueId && (
+                <span style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>
+                  · ID: {employee.uniqueId}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Tabs Navigation */}
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '8px',
+          background: 'var(--surface)',
+          boxShadow: 'var(--shadow-xs)',
+        }}>
+          {[
+            { key: 'overview' as const, label: t('employees.tabOverview', 'Overview'), icon: <IconUser />, color: '#0D2137' },
+            { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1B4D3E' },
+            { key: 'qualifications' as const, label: t('employees.tabQualifications', 'Qualifications'), icon: <IconCertificate />, color: '#8B6914' },
+            { key: 'shifts' as const, label: t('employees.tabShifts', 'Shifts'), icon: <IconShifts />, color: '#1E4A7A' },
+            { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#4B5563' },
+          ].filter(tab => tab.key !== 'documents' || employee.role !== 'admin').map((tab) => {
+            const selected = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 13px',
+                  borderRadius: '16px',
+                  border: selected ? `1px solid ${tab.color}66` : `1px solid ${tab.color}20`,
+                  background: selected ? `${tab.color}18` : 'var(--surface-warm)',
+                  color: selected ? tab.color : 'var(--text-secondary)',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  fontFamily: 'var(--font-body)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: selected ? `0 8px 18px ${tab.color}18` : 'none',
+                }}
+                onMouseEnter={(event) => {
+                  if (!selected) {
+                    event.currentTarget.style.background = `${tab.color}14`;
+                    event.currentTarget.style.borderColor = `${tab.color}40`;
+                  }
+                }}
+                onMouseLeave={(event) => {
+                  if (!selected) {
+                    event.currentTarget.style.background = 'var(--surface-warm)';
+                    event.currentTarget.style.borderColor = `${tab.color}20`;
+                  }
+                }}
+              >
+                <span style={{
+                  display: 'inline-flex',
+                  color: selected ? '#fff' : 'var(--text-muted)',
+                  background: selected ? tab.color : 'transparent',
+                  borderRadius: 999,
+                  padding: selected ? 5 : 0,
+                }}>
+                  {tab.icon}
+                </span>
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '8px',
-        marginBottom: '24px',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '8px',
-        background: 'var(--surface)',
-        boxShadow: 'var(--shadow-xs)',
-      }}>
-        {[
-          { key: 'overview' as const, label: t('employees.tabOverview', 'Overview'), icon: <IconUser />, color: '#0D2137' },
-          { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1B4D3E' },
-          { key: 'qualifications' as const, label: t('employees.tabQualifications', 'Qualifications'), icon: <IconCertificate />, color: '#8B6914' },
-          { key: 'shifts' as const, label: t('employees.tabShifts', 'Shifts'), icon: <IconShifts />, color: '#1E4A7A' },
-          { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#4B5563' },
-        ].filter(tab => tab.key !== 'documents' || employee.role !== 'admin').map((tab) => {
-          const selected = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 13px',
-                borderRadius: '16px',
-                border: selected ? `1px solid ${tab.color}66` : `1px solid ${tab.color}20`,
-                background: selected ? `${tab.color}18` : 'var(--surface-warm)',
-                color: selected ? tab.color : 'var(--text-secondary)',
-                fontSize: '12.5px',
-                fontWeight: 800,
-                fontFamily: 'var(--font-body)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                boxShadow: selected ? `0 8px 18px ${tab.color}18` : 'none',
-              }}
-              onMouseEnter={(event) => {
-                if (!selected) {
-                  event.currentTarget.style.background = `${tab.color}14`;
-                  event.currentTarget.style.borderColor = `${tab.color}40`;
-                }
-              }}
-              onMouseLeave={(event) => {
-                if (!selected) {
-                  event.currentTarget.style.background = 'var(--surface-warm)';
-                  event.currentTarget.style.borderColor = `${tab.color}20`;
-                }
-              }}
-            >
-              <span style={{
-                display: 'inline-flex',
-                color: selected ? '#fff' : 'var(--text-muted)',
-                background: selected ? tab.color : 'transparent',
-                borderRadius: 999,
-                padding: selected ? 5 : 0,
-              }}>
-                {tab.icon}
-              </span>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
 
       {activeTab === 'documents' ? (
         <DocumentManager
@@ -1352,103 +1365,103 @@ export function EmployeeDetail() {
 
 
 
-        {/* General info */}
-        <SectionPanel title={t('employees.generalInfo')} icon={<IconUser />}>
-          <InfoRow label={t('employees.emailField')} value={employee.email} />
-          <InfoRow label={t('employees.colUniqueId')} value={
-            employee.uniqueId
-              ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12.5px', letterSpacing: '0.04em' }}>{employee.uniqueId}</span>
-              : '—'
-          } />
-          <InfoRow label={t('common.role')} value={
-            <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{tRole(employee.role, employee.isSuperAdmin)}</Badge>
-          } />
-          <InfoRow label={t('common.status')} value={
-            <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
-              {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
-            </Badge>
-          } />
-          <InfoRow
-            label={t('employees.deviceBindingField')}
-            value={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 auto' }}>
-                  {employee.deviceResetPending
-                    ? t('employees.deviceStatusResetPending')
-                    : employee.deviceRegistered
-                      ? t('employees.deviceStatusRegistered')
-                      : t('employees.deviceStatusNotRegistered')}
-                </span>
-                <Toggle
-                  checked={employee.deviceResetPending === true}
-                  disabled={!canResetDevice || deviceResetting || employee.deviceResetPending === true}
-                  onChange={handleDeviceReset}
+              {/* General info */}
+              <SectionPanel title={t('employees.generalInfo')} icon={<IconUser />}>
+                <InfoRow label={t('employees.emailField')} value={employee.email} />
+                <InfoRow label={t('employees.colUniqueId')} value={
+                  employee.uniqueId
+                    ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12.5px', letterSpacing: '0.04em' }}>{employee.uniqueId}</span>
+                    : '—'
+                } />
+                <InfoRow label={t('common.role')} value={
+                  <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{tRole(employee.role, employee.isSuperAdmin)}</Badge>
+                } />
+                <InfoRow label={t('common.status')} value={
+                  <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
+                    {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
+                  </Badge>
+                } />
+                <InfoRow
+                  label={t('employees.deviceBindingField')}
+                  value={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 auto' }}>
+                        {employee.deviceResetPending
+                          ? t('employees.deviceStatusResetPending')
+                          : employee.deviceRegistered
+                            ? t('employees.deviceStatusRegistered')
+                            : t('employees.deviceStatusNotRegistered')}
+                      </span>
+                      <Toggle
+                        checked={employee.deviceResetPending === true}
+                        disabled={!canResetDevice || deviceResetting || employee.deviceResetPending === true}
+                        onChange={handleDeviceReset}
+                      />
+                    </div>
+                  }
                 />
-              </div>
-            }
-          />
-          <InfoRow label={t('common.department')} value={employee.department ?? '—'} />
-          <InfoRow label={t('employees.companyField')} value={employee.companyName ?? '—'} />
-          <InfoRow label={t('common.store')} value={employee.storeName ?? '—'} />
-          <InfoRow label={t('employees.supervisorField')} value={employee.supervisorName ?? '—'} last />
-        </SectionPanel>
+                <InfoRow label={t('common.department')} value={employee.department ?? '—'} />
+                <InfoRow label={t('employees.companyField')} value={employee.companyName ?? '—'} />
+                <InfoRow label={t('common.store')} value={employee.storeName ?? '—'} />
+                <InfoRow label={t('employees.supervisorField')} value={employee.supervisorName ?? '—'} last />
+              </SectionPanel>
 
-        {/* Sensitive / contractual info */}
-        {canViewSensitive && (
-          <SectionPanel title={t('employees.contractualDetails')} icon={<IconFile />}>
-            <InfoRow label={t('employees.hireDateField')} value={formatDate(employee.hireDate, i18n.language)} />
-            <InfoRow label={t('employees.contractEndField')} value={
-              employee.contractEndDate
-                ? <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{formatDate(employee.contractEndDate, i18n.language)}</span>
-                : '—'
-            } />
-            <InfoRow label={t('employees.workingTypeField')} value={workingTypeLabel} />
-            <InfoRow label={t('employees.weeklyHoursField')} value={employee.weeklyHours != null ? `${employee.weeklyHours}h` : '—'} />
-            <InfoRow label={t('employees.personalEmailField')} value={employee.personalEmail ?? '—'} />
-            <InfoRow label={t('employees.dateOfBirthField')} value={formatDate(employee.dateOfBirth, i18n.language)} />
-            <InfoRow label={t('employees.ibanField')} value={
-              employee.iban
-                ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12px', letterSpacing: '0.06em' }}>{maskIban(employee.iban)}</span>
-                : '—'
-            } />
-            <InfoRow
-              label={t('employees.nationalityField')}
-              value={employee.nationality ? (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  {employee.country ? <ReactCountryFlag countryCode={employee.country} svg style={{ width: '1em', height: '1em' }} /> : null}
-                  <span>{employee.nationality}</span>
-                </span>
-              ) : '—'}
-            />
-            <InfoRow label={t('employees.genderField')} value={
-              employee.gender === 'M' ? t('employees.genderMale')
-              : employee.gender === 'F' ? t('employees.genderFemale')
-              : employee.gender === 'other' ? t('employees.genderOther')
-              : '—'
-            } />
-            <InfoRow
-              label={t('employees.addressField')}
-              value={[
-                employee.address,
-                employee.city,
-                employee.state,
-                employee.country,
-                employee.cap,
-              ].filter(Boolean).join(', ') || '—'}
-            />
-            <InfoRow label={t('companies.companyPhoneNumbers', 'Phone')} value={employee.phone ?? '—'} />
-            <InfoRow label={t('employees.firstAidField')} value={
-              <span style={{ color: employee.firstAidFlag ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
-                {employee.firstAidFlag ? t('common.yes') : t('common.no')}
-              </span>
-            } />
-            <InfoRow label={t('employees.maritalStatusField')} value={employee.maritalStatus ? t(MARITAL_STATUS_KEYS[employee.maritalStatus] ?? 'employees.maritalStatusField', { defaultValue: employee.maritalStatus }) : '—'} />
-            <InfoRow label={t('employees.contractTypeField')} value={employee.contractType ? t(CONTRACT_TYPE_KEYS[employee.contractType] ?? 'employees.contractTypeField', { defaultValue: employee.contractType }) : '—'} />
-            <InfoRow label={t('employees.probationField')} value={employee.probationMonths != null ? `${employee.probationMonths} ${t('employees.months')}` : '—'} />
-            <InfoRow label={t('employees.terminationDateField')} value={formatDate(employee.terminationDate, i18n.language)} />
-            <InfoRow label={t('employees.terminationTypeField')} value={employee.terminationType ? t(TERMINATION_TYPE_KEYS[employee.terminationType] ?? 'employees.terminationTypeField', { defaultValue: employee.terminationType }) : '—'} last />
-          </SectionPanel>
-        )}
+              {/* Sensitive / contractual info */}
+              {canViewSensitive && (
+                <SectionPanel title={t('employees.contractualDetails')} icon={<IconFile />}>
+                  <InfoRow label={t('employees.hireDateField')} value={formatDate(employee.hireDate, i18n.language)} />
+                  <InfoRow label={t('employees.contractEndField')} value={
+                    employee.contractEndDate
+                      ? <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{formatDate(employee.contractEndDate, i18n.language)}</span>
+                      : '—'
+                  } />
+                  <InfoRow label={t('employees.workingTypeField')} value={workingTypeLabel} />
+                  <InfoRow label={t('employees.weeklyHoursField')} value={employee.weeklyHours != null ? `${employee.weeklyHours}h` : '—'} />
+                  <InfoRow label={t('employees.personalEmailField')} value={employee.personalEmail ?? '—'} />
+                  <InfoRow label={t('employees.dateOfBirthField')} value={formatDate(employee.dateOfBirth, i18n.language)} />
+                  <InfoRow label={t('employees.ibanField')} value={
+                    employee.iban
+                      ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12px', letterSpacing: '0.06em' }}>{maskIban(employee.iban)}</span>
+                      : '—'
+                  } />
+                  <InfoRow
+                    label={t('employees.nationalityField')}
+                    value={employee.nationality ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {employee.country ? <ReactCountryFlag countryCode={employee.country} svg style={{ width: '1em', height: '1em' }} /> : null}
+                        <span>{employee.nationality}</span>
+                      </span>
+                    ) : '—'}
+                  />
+                  <InfoRow label={t('employees.genderField')} value={
+                    employee.gender === 'M' ? t('employees.genderMale')
+                      : employee.gender === 'F' ? t('employees.genderFemale')
+                        : employee.gender === 'other' ? t('employees.genderOther')
+                          : '—'
+                  } />
+                  <InfoRow
+                    label={t('employees.addressField')}
+                    value={[
+                      employee.address,
+                      employee.city,
+                      employee.state,
+                      employee.country,
+                      employee.cap,
+                    ].filter(Boolean).join(', ') || '—'}
+                  />
+                  <InfoRow label={t('companies.companyPhoneNumbers', 'Phone')} value={employee.phone ?? '—'} />
+                  <InfoRow label={t('employees.firstAidField')} value={
+                    <span style={{ color: employee.firstAidFlag ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      {employee.firstAidFlag ? t('common.yes') : t('common.no')}
+                    </span>
+                  } />
+                  <InfoRow label={t('employees.maritalStatusField')} value={employee.maritalStatus ? t(MARITAL_STATUS_KEYS[employee.maritalStatus] ?? 'employees.maritalStatusField', { defaultValue: employee.maritalStatus }) : '—'} />
+                  <InfoRow label={t('employees.contractTypeField')} value={employee.contractType ? t(CONTRACT_TYPE_KEYS[employee.contractType] ?? 'employees.contractTypeField', { defaultValue: employee.contractType }) : '—'} />
+                  <InfoRow label={t('employees.probationField')} value={employee.probationMonths != null ? `${employee.probationMonths} ${t('employees.months')}` : '—'} />
+                  <InfoRow label={t('employees.terminationDateField')} value={formatDate(employee.terminationDate, i18n.language)} />
+                  <InfoRow label={t('employees.terminationTypeField')} value={employee.terminationType ? t(TERMINATION_TYPE_KEYS[employee.terminationType] ?? 'employees.terminationTypeField', { defaultValue: employee.terminationType }) : '—'} last />
+                </SectionPanel>
+              )}
             </div>
           )}
 
@@ -1566,308 +1579,308 @@ export function EmployeeDetail() {
             </div>
           )}
 
-      {activeTab === 'qualifications' && !canViewSensitive && (
-        <SectionPanel title={t('employees.tabQualifications', 'Qualifications')} icon={<IconCertificate />}>
-          <div style={{ padding: '18px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-            {t('common.notAllowed', 'You do not have permission to view this section.')}
-          </div>
-        </SectionPanel>
-      )}
-
-      {/* Training Records */}
-      {activeTab === 'qualifications' && canViewSensitive && (
-        <div style={{ marginTop: 20 }}>
-          <SectionPanel title={t('employees.trainingSection')} icon={<IconFile />}>
-            {trainingsLoading ? (
-              <div style={{ padding: '20px', textAlign: 'center' }}><Spinner size="sm" /></div>
-            ) : (
-              <div>
-                {(['product', 'general', 'low_risk_safety', 'fire_safety'] as TrainingType[]).map((type) => {
-                  const record = trainings
-                    .filter(tr => tr.trainingType === type)
-                    .sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? ''))[0];
-                  return (
-                    <div key={type} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {t(`employees.trainingType_${type}`)}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {record ? (
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {formatDate(record.startDate, i18n.language)} → {formatDate(record.endDate, i18n.language)}
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
-                        )}
-                        {isAdminOrHr && (
-                          <Button size="sm" variant="secondary" onClick={() => {
-                            const toDateStr = (d: string | null | undefined) => d ? d.split('T')[0] : null;
-                            setEditingTraining({ trainingType: type, startDate: toDateStr(record?.startDate), endDate: toDateStr(record?.endDate), editing: record?.id ?? null });
-                            setTrainingFormOpen(true);
-                          }}>
-                            {record ? t('common.edit') : t('employees.addTraining')}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+          {activeTab === 'qualifications' && !canViewSensitive && (
+            <SectionPanel title={t('employees.tabQualifications', 'Qualifications')} icon={<IconCertificate />}>
+              <div style={{ padding: '18px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                {t('common.notAllowed', 'You do not have permission to view this section.')}
               </div>
-            )}
-          </SectionPanel>
-        </div>
-      )}
+            </SectionPanel>
+          )}
 
-      {/* Medical Checks */}
-      {activeTab === 'qualifications' && canViewSensitive && (
-        <div style={{ marginTop: 20 }}>
-          <SectionPanel
-            title={t('employees.medicalSection')}
-            icon={<IconFile />}
-            action={isAdminOrHr && medicals.length > 0 ? (
-              <Button size="sm" onClick={() => { setEditingMedical({ editing: null }); setMedicalFormOpen(true); }}>
-                {t('employees.addMedical')}
-              </Button>
-            ) : undefined}
-          >
-            {medicals.length === 0 ? (
-              <div style={{
-                padding: '24px 0 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                textAlign: 'center',
-              }}>
-                <span style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: '50%',
-                  background: 'var(--surface-warm)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--accent)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2v20" />
-                    <path d="M2 12h20" />
-                  </svg>
-                </span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {t('employees.noMedicals')}
-                </span>
-                {isAdminOrHr && (
-                  <Button size="sm" variant="accent" onClick={() => { setEditingMedical({ editing: null }); setMedicalFormOpen(true); }}>
-                    {t('employees.addMedical')}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              medicals.map((m, i) => (
-                <div key={m.id} style={{ padding: '10px 0', borderBottom: i < medicals.length - 1 ? '1px solid var(--border-light)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                    {t('employees.medicalStartDate')}: {formatDate(m.startDate, i18n.language)} &nbsp;|&nbsp; {t('employees.medicalEndDate')}: {formatDate(m.endDate, i18n.language)}
-                  </span>
-                  {isAdminOrHr && (
-                    <Button size="sm" variant="secondary" onClick={() => {
-                      const toDateStr = (d: string | null | undefined) => d ? d.split('T')[0] : null;
-                      setEditingMedical({ startDate: toDateStr(m.startDate), endDate: toDateStr(m.endDate), editing: m.id });
-                      setMedicalFormOpen(true);
-                    }}>
-                      {t('common.edit')}
-                    </Button>
-                  )}
-                </div>
-              ))
-            )}
-          </SectionPanel>
-        </div>
-      )}
-
-      {/* Onboarding Tasks */}
-      {activeTab === 'tasks' && (isAdminOrHr || isOwnProfile) && employeeId && (
-        <div style={{ marginTop: 20 }}>
-          <OnboardingSection
-            employeeId={employeeId}
-            employeeCompanyId={employee.companyId}
-            employeeCompanyName={employee.companyName ?? null}
-            employeeStoreName={employee.storeName ?? null}
-            employeeAvatarFilename={employee.avatarFilename}
-            employeeName={fullName}
-            isAdminOrHr={isAdminOrHr}
-            companyLogoFilename={primaryAssocCompany?.logoFilename}
-            companyGroupName={primaryAssocCompany?.groupName ?? null}
-            storeLogoFilename={currentAssocStore?.logoFilename}
-          />
-        </div>
-      )}
-
-{/* Role associations tree */}
-      {activeTab === 'tasks' && (
-      <div style={{ marginTop: 20 }}>
-        <SectionPanel title={t('employees.associationsSection')} icon={<IconUser />}>
-          {associationsLoading ? (
-            <div style={{ padding: '20px', textAlign: 'center' }}><Spinner size="sm" /></div>
-          ) : associationsError ? (
-            <div style={{ padding: '12px 0' }}>
-              <Alert variant="danger" title={t('common.error')}>
-                {associationsError}
-              </Alert>
-            </div>
-          ) : !associations || associations.companies.length === 0 ? (
-            <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              {t('employees.associationsEmpty')}
-            </div>
-          ) : (
-            <div style={{ padding: '8px 0 6px' }}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
-                gap: 10,
-                padding: 12,
-                border: '1px solid var(--border-light)',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--surface-warm)',
-              }}
-              >
-                {/* Company */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
-                  {(() => {
-                    const cname = primaryAssocCompany?.name ?? employee.companyName ?? '—';
-                    const cLogo = getCompanyLogoUrl(primaryAssocCompany?.logoFilename ?? null);
-                    const cinits = cname.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || '—';
-                    return (
-                      <>
-                        <div style={{
-                          width: 40, height: 40, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
-                          border: '1px solid var(--border)', background: cLogo ? 'transparent' : getAvatarColor(cname),
-                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
-                        }}>
-                          {cLogo
-                            ? <img src={cLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : cinits}
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{cname}</div>
-                          {primaryAssocCompany?.groupName && (
-                            <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.35 }}>{primaryAssocCompany.groupName}</div>
-                          )}
-                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('ats.storeCountLabel', { count: primaryAssocCompany?.stores.length ?? 0 })}</div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                {/* Store */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
-                  {(() => {
-                    const sname = currentAssocStore?.name ?? employee.storeName ?? t('employees.noStore', 'No store');
-                    const sLogo = getStoreLogoUrl(currentAssocStore?.logoFilename ?? null);
-                    const sinit = sname.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || 'ST';
-                    const empN = currentAssocStore?.employees.length ?? 0;
-                    return (
-                      <>
-                        <div style={{
-                          width: 40, height: 40, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
-                          border: '1px solid var(--border)', background: sLogo ? 'transparent' : getAvatarColor(sname),
-                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
-                        }}>
-                          {sLogo
-                            ? <img src={sLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : sinit}
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{sname}</div>
-                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('employees.associationsEmployeesCount', { count: empN })}</div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                {/* HR */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
-                  {(() => {
-                    const hr = hrAssociationEntry;
-                    if (!hr) {
+          {/* Training Records */}
+          {activeTab === 'qualifications' && canViewSensitive && (
+            <div style={{ marginTop: 20 }}>
+              <SectionPanel title={t('employees.trainingSection')} icon={<IconFile />}>
+                {trainingsLoading ? (
+                  <div style={{ padding: '20px', textAlign: 'center' }}><Spinner size="sm" /></div>
+                ) : (
+                  <div>
+                    {(['product', 'general', 'low_risk_safety', 'fire_safety'] as TrainingType[]).map((type) => {
+                      const record = trainings
+                        .filter(tr => tr.trainingType === type)
+                        .sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? ''))[0];
                       return (
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('employees.scopeHrEmpty', 'No HR found for this store')}</div>
-                      );
-                    }
-                    const hrf = `${hr.name} ${hr.surname}`.trim();
-                    const hUrl = getAvatarUrl(hr.avatarFilename);
-                    const hinit = `${hr.name?.[0] ?? ''}${hr.surname?.[0] ?? ''}`.toUpperCase() || 'H';
-                    const hrIsSupervisor = employee.supervisorId != null && employee.supervisorId === hr.id;
-                    return (
-                      <>
-                        <div style={{
-                          width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-                          border: '1px solid var(--border)', background: hUrl ? 'transparent' : getAvatarColor(hrf),
-                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
-                        }}>
-                          {hUrl
-                            ? <img src={hUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : hinit}
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{hrf}</span>
-                            {hrIsSupervisor && (
-                              <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#9A6808', border: '1px solid rgba(201,151,58,0.5)', borderRadius: 4, padding: '1px 5px' }}>{t('employees.supervisorTag', 'Supervisor')}</span>
+                        <div key={type} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {t(`employees.trainingType_${type}`)}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {record ? (
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                {formatDate(record.startDate, i18n.language)} → {formatDate(record.endDate, i18n.language)}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                            )}
+                            {isAdminOrHr && (
+                              <Button size="sm" variant="secondary" onClick={() => {
+                                const toDateStr = (d: string | null | undefined) => d ? d.split('T')[0] : null;
+                                setEditingTraining({ trainingType: type, startDate: toDateStr(record?.startDate), endDate: toDateStr(record?.endDate), editing: record?.id ?? null });
+                                setTrainingFormOpen(true);
+                              }}>
+                                {record ? t('common.edit') : t('employees.addTraining')}
+                              </Button>
                             )}
                           </div>
-                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{hr.storeName ?? t('employees.scopeStoresAll', 'All stores / HQ')}</div>
                         </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                {/* Area manager */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
-                  {(() => {
-                    const am = areaAssociationEntry;
-                    if (!am) {
-                      return (
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('employees.scopeAreaEmpty', 'No area manager found for this store')}</div>
                       );
-                    }
-                    const amf = `${am.name} ${am.surname}`.trim();
-                    const aUrl = getAvatarUrl(am.avatarFilename);
-                    const ainit = `${am.name?.[0] ?? ''}${am.surname?.[0] ?? ''}`.toUpperCase() || 'A';
-                    const sm = storeManagerAssociationEntry;
-                    const smLine = sm ? `${sm.name} ${sm.surname}`.trim() : t('common.notSet', '—');
-                    return (
-                      <>
-                        <div style={{
-                          width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-                          border: '1px solid var(--border)', background: aUrl ? 'transparent' : getAvatarColor(amf),
-                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
-                        }}>
-                          {aUrl
-                            ? <img src={aUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : ainit}
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{amf}</div>
-                          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('employees.scopeStoreManagerLine', { name: smLine })}</div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
+                    })}
+                  </div>
+                )}
+              </SectionPanel>
             </div>
           )}
-        </SectionPanel>
-      </div>
+
+          {/* Medical Checks */}
+          {activeTab === 'qualifications' && canViewSensitive && (
+            <div style={{ marginTop: 20 }}>
+              <SectionPanel
+                title={t('employees.medicalSection')}
+                icon={<IconFile />}
+                action={isAdminOrHr && medicals.length > 0 ? (
+                  <Button size="sm" onClick={() => { setEditingMedical({ editing: null }); setMedicalFormOpen(true); }}>
+                    {t('employees.addMedical')}
+                  </Button>
+                ) : undefined}
+              >
+                {medicals.length === 0 ? (
+                  <div style={{
+                    padding: '24px 0 20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    textAlign: 'center',
+                  }}>
+                    <span style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: '50%',
+                      background: 'var(--surface-warm)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--accent)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v20" />
+                        <path d="M2 12h20" />
+                      </svg>
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('employees.noMedicals')}
+                    </span>
+                    {isAdminOrHr && (
+                      <Button size="sm" variant="accent" onClick={() => { setEditingMedical({ editing: null }); setMedicalFormOpen(true); }}>
+                        {t('employees.addMedical')}
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  medicals.map((m, i) => (
+                    <div key={m.id} style={{ padding: '10px 0', borderBottom: i < medicals.length - 1 ? '1px solid var(--border-light)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                        {t('employees.medicalStartDate')}: {formatDate(m.startDate, i18n.language)} &nbsp;|&nbsp; {t('employees.medicalEndDate')}: {formatDate(m.endDate, i18n.language)}
+                      </span>
+                      {isAdminOrHr && (
+                        <Button size="sm" variant="secondary" onClick={() => {
+                          const toDateStr = (d: string | null | undefined) => d ? d.split('T')[0] : null;
+                          setEditingMedical({ startDate: toDateStr(m.startDate), endDate: toDateStr(m.endDate), editing: m.id });
+                          setMedicalFormOpen(true);
+                        }}>
+                          {t('common.edit')}
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </SectionPanel>
+            </div>
+          )}
+
+          {/* Onboarding Tasks */}
+          {activeTab === 'tasks' && (isAdminOrHr || isOwnProfile) && employeeId && (
+            <div style={{ marginTop: 20 }}>
+              <OnboardingSection
+                employeeId={employeeId}
+                employeeCompanyId={employee.companyId}
+                employeeCompanyName={employee.companyName ?? null}
+                employeeStoreName={employee.storeName ?? null}
+                employeeAvatarFilename={employee.avatarFilename}
+                employeeName={fullName}
+                isAdminOrHr={isAdminOrHr}
+                companyLogoFilename={primaryAssocCompany?.logoFilename}
+                companyGroupName={primaryAssocCompany?.groupName ?? null}
+                storeLogoFilename={currentAssocStore?.logoFilename}
+              />
+            </div>
+          )}
+
+          {/* Role associations tree */}
+          {activeTab === 'tasks' && (
+            <div style={{ marginTop: 20 }}>
+              <SectionPanel title={t('employees.associationsSection')} icon={<IconUser />}>
+                {associationsLoading ? (
+                  <div style={{ padding: '20px', textAlign: 'center' }}><Spinner size="sm" /></div>
+                ) : associationsError ? (
+                  <div style={{ padding: '12px 0' }}>
+                    <Alert variant="danger" title={t('common.error')}>
+                      {associationsError}
+                    </Alert>
+                  </div>
+                ) : !associations || associations.companies.length === 0 ? (
+                  <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                    {t('employees.associationsEmpty')}
+                  </div>
+                ) : (
+                  <div style={{ padding: '8px 0 6px' }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
+                      gap: 10,
+                      padding: 12,
+                      border: '1px solid var(--border-light)',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--surface-warm)',
+                    }}
+                    >
+                      {/* Company */}
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                        {(() => {
+                          const cname = primaryAssocCompany?.name ?? employee.companyName ?? '—';
+                          const cLogo = getCompanyLogoUrl(primaryAssocCompany?.logoFilename ?? null);
+                          const cinits = cname.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || '—';
+                          return (
+                            <>
+                              <div style={{
+                                width: 40, height: 40, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+                                border: '1px solid var(--border)', background: cLogo ? 'transparent' : getAvatarColor(cname),
+                                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
+                              }}>
+                                {cLogo
+                                  ? <img src={cLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : cinits}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{cname}</div>
+                                {primaryAssocCompany?.groupName && (
+                                  <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.35 }}>{primaryAssocCompany.groupName}</div>
+                                )}
+                                <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('ats.storeCountLabel', { count: primaryAssocCompany?.stores.length ?? 0 })}</div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Store */}
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                        {(() => {
+                          const sname = currentAssocStore?.name ?? employee.storeName ?? t('employees.noStore', 'No store');
+                          const sLogo = getStoreLogoUrl(currentAssocStore?.logoFilename ?? null);
+                          const sinit = sname.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || 'ST';
+                          const empN = currentAssocStore?.employees.length ?? 0;
+                          return (
+                            <>
+                              <div style={{
+                                width: 40, height: 40, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+                                border: '1px solid var(--border)', background: sLogo ? 'transparent' : getAvatarColor(sname),
+                                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
+                              }}>
+                                {sLogo
+                                  ? <img src={sLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : sinit}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{sname}</div>
+                                <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('employees.associationsEmployeesCount', { count: empN })}</div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* HR */}
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                        {(() => {
+                          const hr = hrAssociationEntry;
+                          if (!hr) {
+                            return (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('employees.scopeHrEmpty', 'No HR found for this store')}</div>
+                            );
+                          }
+                          const hrf = `${hr.name} ${hr.surname}`.trim();
+                          const hUrl = getAvatarUrl(hr.avatarFilename);
+                          const hinit = `${hr.name?.[0] ?? ''}${hr.surname?.[0] ?? ''}`.toUpperCase() || 'H';
+                          const hrIsSupervisor = employee.supervisorId != null && employee.supervisorId === hr.id;
+                          return (
+                            <>
+                              <div style={{
+                                width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                                border: '1px solid var(--border)', background: hUrl ? 'transparent' : getAvatarColor(hrf),
+                                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
+                              }}>
+                                {hUrl
+                                  ? <img src={hUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : hinit}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{hrf}</span>
+                                  {hrIsSupervisor && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#9A6808', border: '1px solid rgba(201,151,58,0.5)', borderRadius: 4, padding: '1px 5px' }}>{t('employees.supervisorTag', 'Supervisor')}</span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{hr.storeName ?? t('employees.scopeStoresAll', 'All stores / HQ')}</div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Area manager */}
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, background: 'var(--surface)' }}>
+                        {(() => {
+                          const am = areaAssociationEntry;
+                          if (!am) {
+                            return (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('employees.scopeAreaEmpty', 'No area manager found for this store')}</div>
+                            );
+                          }
+                          const amf = `${am.name} ${am.surname}`.trim();
+                          const aUrl = getAvatarUrl(am.avatarFilename);
+                          const ainit = `${am.name?.[0] ?? ''}${am.surname?.[0] ?? ''}`.toUpperCase() || 'A';
+                          const sm = storeManagerAssociationEntry;
+                          const smLine = sm ? `${sm.name} ${sm.surname}`.trim() : t('common.notSet', '—');
+                          return (
+                            <>
+                              <div style={{
+                                width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                                border: '1px solid var(--border)', background: aUrl ? 'transparent' : getAvatarColor(amf),
+                                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
+                              }}>
+                                {aUrl
+                                  ? <img src={aUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : ainit}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{amf}</div>
+                                <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{t('employees.scopeStoreManagerLine', { name: smLine })}</div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </SectionPanel>
+            </div>
+          )}
+        </>
       )}
-    </>
-  )}
 
 
 
