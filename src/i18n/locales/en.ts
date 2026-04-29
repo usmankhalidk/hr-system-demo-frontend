@@ -221,6 +221,7 @@ const en = {
       activeEmployees: 'Active employees',
       availableSlots: 'Available slots',
       todayShifts: "Today's shifts",
+      todayAnomalies: "Today's anomalies",
       todayAttendance: "Today's attendance",
       attendanceDesc: "Today's event summary",
       capacityTitle: 'Staff Capacity',
