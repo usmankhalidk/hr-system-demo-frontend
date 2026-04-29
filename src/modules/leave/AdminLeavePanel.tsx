@@ -1914,7 +1914,7 @@ export default function AdminLeavePanel() {
       {/* ── Calendar tab ────────────────────────────────────────────────── */}
       {panelTab === 'calendar' && (
         <div style={{ padding: '20px 24px 24px' }}>
-          <LeaveCalendar />
+          <LeaveCalendar onDayClick={(date) => { setCStart(date); setCEnd(date); setCreateOpen(true); }} onRefresh={fetchRequests} />
         </div>
       )}
 

@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight, Palmtree, Thermometer } from 'lucide-react';
-import { getLeaveRequests, LeaveRequest } from '../../api/leave';
+import { ChevronLeft, ChevronRight, Palmtree, Thermometer, X, CheckCheck, XCircle, FileText, Clock } from 'lucide-react';
+import { getLeaveRequests, LeaveRequest, approveLeaveRequest, rejectLeaveRequest, downloadCertificate } from '../../api/leave';
+import { getStores } from '../../api/stores';
+import { Store } from '../../types';
 import { getAvatarUrl } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { StatusBadge, ApprovalStepper } from './LeaveApprovalList';
+import { translateApiError } from '../../utils/apiErrors';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,12 +57,38 @@ function LegendDot({ color, label, icon }: { color: string; label: string; icon?
 
 const MAX_VISIBLE = 4;
 
-export default function LeaveCalendar() {
+export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: (date: string) => void; onRefresh?: () => void }) {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  
+  // Details Modal State
+  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
+  const [rejectNotes, setRejectNotes] = useState('');
+  const [rejectError, setRejectError] = useState<string | null>(null);
+
+  const [stores, setStores] = useState<Store[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<number | 'all'>('all');
+  const [fetchingStores, setFetchingStores] = useState(false);
+
+  const canFilterByStore = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager' || user?.isSuperAdmin;
+
+  useEffect(() => {
+    if (canFilterByStore) {
+      setFetchingStores(true);
+      getStores()
+        .then(setStores)
+        .catch(() => setStores([]))
+        .finally(() => setFetchingStores(false));
+    }
+  }, [canFilterByStore]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -66,7 +98,11 @@ export default function LeaveCalendar() {
     try {
       const firstDay = formatDate(new Date(year, month, 1));
       const lastDay = formatDate(new Date(year, month, daysInMonth(year, month)));
-      const res = await getLeaveRequests({ dateFrom: firstDay, dateTo: lastDay });
+      const params: any = { dateFrom: firstDay, dateTo: lastDay };
+      if (selectedStoreId !== 'all') {
+        params.storeId = selectedStoreId;
+      }
+      const res = await getLeaveRequests(params);
       // Exclude rejected & cancelled for calendar view
       setRequests(res.requests.filter((r) =>
         r.status !== 'rejected' &&
@@ -78,9 +114,59 @@ export default function LeaveCalendar() {
     } finally {
       setLoading(false);
     }
-  }, [year, month]);
+  }, [year, month, selectedStoreId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleApprove = async (req: LeaveRequest) => {
+    setActionLoading(true);
+    try {
+      await approveLeaveRequest(req.id);
+      showToast(t('leave.approved_success'), 'success');
+      setSelectedRequest(null);
+      fetchData();
+      if (onRefresh) onRefresh();
+    } catch (err: unknown) {
+      showToast(translateApiError(err, t, t('common.error_generic')) ?? t('common.error_generic'), 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectTarget) return;
+    if (!rejectNotes.trim()) {
+      setRejectError(t('leave.reject_notes_required'));
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await rejectLeaveRequest(rejectTarget.id, rejectNotes);
+      showToast(t('leave.rejected_success'), 'success');
+      setRejectTarget(null);
+      setSelectedRequest(null);
+      fetchData();
+      if (onRefresh) onRefresh();
+    } catch (err: unknown) {
+      setRejectError(translateApiError(err, t, t('common.error_generic')) ?? t('common.error_generic'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDownloadCert = async (req: LeaveRequest) => {
+    try {
+      const blob = await downloadCertificate(req.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = req.medicalCertificateName ?? 'certificato-medico';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast(t('leave.certificate_download_error'), 'error');
+    }
+  };
 
   // Build day -> requests map
   const dayMap = new Map<string, LeaveRequest[]>();
@@ -120,7 +206,6 @@ export default function LeaveCalendar() {
 
   const todayStr = formatDate(new Date());
 
-  // First day of month (0=Sun ... 6=Sat), convert to Mon-based (0=Mon ... 6=Sun)
   const firstDay = new Date(year, month, 1).getDay();
   const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
   const daysInMonthTotal = daysInMonth(year, month);
@@ -129,7 +214,6 @@ export default function LeaveCalendar() {
     ...Array(startOffset).fill(null),
     ...Array.from({ length: daysInMonthTotal }, (_, i) => new Date(year, month, i + 1)),
   ];
-  // Pad to complete last row
   while (cells.length % 7 !== 0) cells.push(null);
 
   const summaryHoverCardStyle: React.CSSProperties = {
@@ -145,7 +229,7 @@ export default function LeaveCalendar() {
     zIndex: 100,
   };
 
-  const renderAvatar = (req: LeaveRequest): React.ReactNode => {
+  const renderAvatar = (req: LeaveRequest, size = 18): React.ReactNode => {
     const avatarUrl = getAvatarUrl(req.userAvatarFilename);
     const initialsStr = initials(req.userName, req.userSurname);
     if (avatarUrl) {
@@ -153,22 +237,22 @@ export default function LeaveCalendar() {
         <img
           src={avatarUrl}
           alt=""
-          style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(148,163,184,0.45)' }}
+          style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(148,163,184,0.45)' }}
         />
       );
     }
     return (
       <span
         style={{
-          width: 18,
-          height: 18,
+          width: size,
+          height: size,
           borderRadius: '50%',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
           color: '#fff',
-          fontSize: '0.52rem',
+          fontSize: size <= 20 ? '0.52rem' : '0.8rem',
           fontWeight: 800,
           border: '1px solid rgba(148,163,184,0.45)',
         }}
@@ -176,6 +260,15 @@ export default function LeaveCalendar() {
         {initialsStr}
       </span>
     );
+  };
+
+  const effectiveApproverRole = user?.role === 'admin' ? 'admin' : user?.role;
+  const canAct = (req: LeaveRequest) => {
+    return req.status !== 'approved' &&
+      !req.status.includes('rejected') &&
+      req.status !== 'cancelled' &&
+      !!effectiveApproverRole &&
+      (user?.role === 'admin' || (user?.role === 'hr' && req.status !== 'HR approved') || req.currentApproverRole === effectiveApproverRole);
   };
 
   return (
@@ -201,6 +294,42 @@ export default function LeaveCalendar() {
         }}>
           {t('common.today', 'Today')}
         </button>
+
+        {canFilterByStore && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+              {t('employees.store_label', 'Store')}:
+            </span>
+            <select
+              value={selectedStoreId}
+              disabled={fetchingStores}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedStoreId(val === 'all' ? 'all' : parseInt(val, 10));
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--text)',
+                cursor: 'pointer',
+                outline: 'none',
+                minWidth: 180,
+                boxShadow: 'var(--shadow-xs)'
+              }}
+            >
+              <option value="all">{t('common.all_stores', 'All Stores')}</option>
+              {stores.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} {s.groupName ? `(${s.groupName})` : (s.companyName ? `(${s.companyName})` : '')}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Legend */}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -257,19 +386,23 @@ export default function LeaveCalendar() {
                     borderRadius: 6,
                     border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)',
                     padding: 7,
-                    cursor: 'default',
+                    cursor: 'pointer',
                     background: isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)',
                     transition: 'background 0.15s',
                     position: 'relative',
                     boxShadow: hasLeaves ? 'var(--shadow-xs)' : undefined,
                   }}
-                  onMouseEnter={(e) => {
+                  onMouseEnter={() => {
                     setHoveredDay(dateStr);
-                    e.currentTarget.style.background = 'var(--background)';
                   }}
-                  onMouseLeave={(e) => {
+                  onMouseLeave={() => {
                     setHoveredDay(null);
-                    e.currentTarget.style.background = isToday ? 'rgba(201, 151, 58, 0.06)' : 'var(--surface)';
+                  }}
+                  onClick={(e) => {
+                    // Only open day click if we didn't click a specific leave item
+                    if (e.target === e.currentTarget && onDayClick) {
+                      onDayClick(dateStr);
+                    }
                   }}
                 >
                   <div style={{
@@ -278,6 +411,7 @@ export default function LeaveCalendar() {
                     justifyContent: 'space-between',
                     gap: 6,
                     marginBottom: 6,
+                    pointerEvents: 'none',
                   }}>
                     <div style={{
                       fontWeight: isToday ? 700 : 500,
@@ -310,24 +444,35 @@ export default function LeaveCalendar() {
                         const Icon = isVacation ? Palmtree : Thermometer;
 
                         return (
-                          <div key={req.id} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            borderRadius: 6,
-                            border: `1px solid ${border}`,
-                            borderLeftWidth: 5,
-                            borderLeftStyle: 'solid',
-                            borderLeftColor: borderLeft,
-                            background: bg,
-                            color: color,
-                            padding: '3px 8px',
-                            fontSize: '0.65rem',
-                            fontWeight: 800,
-                            lineHeight: 1,
-                            position: 'relative',
-                            overflow: 'hidden',
-                          }}>
+                          <div 
+                            key={req.id} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedRequest(req);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              borderRadius: 6,
+                              border: `1px solid ${border}`,
+                              borderLeftWidth: 5,
+                              borderLeftStyle: 'solid',
+                              borderLeftColor: borderLeft,
+                              background: bg,
+                              color: color,
+                              padding: '3px 8px',
+                              fontSize: '0.65rem',
+                              fontWeight: 800,
+                              lineHeight: 1,
+                              position: 'relative',
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              transition: 'transform 0.1s',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                          >
                             <Icon size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
                             <span style={{ whiteSpace: 'nowrap' }}>
                               {isVacation ? t('leave.type_vacation', 'Vacation') : t('leave.type_sick', 'Sick leave')}
@@ -393,10 +538,19 @@ export default function LeaveCalendar() {
                                 {vacations.map((req, vIdx) => (
                                   <div
                                     key={req.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedRequest(req);
+                                    }}
                                     style={{
                                       padding: '4px 0',
                                       marginBottom: vIdx === vacations.length - 1 ? 0 : 4,
+                                      cursor: 'pointer',
+                                      borderRadius: 4,
+                                      transition: 'background 0.1s',
                                     }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.03)'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                                   >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                                       {renderAvatar(req)}
@@ -447,10 +601,19 @@ export default function LeaveCalendar() {
                                 {sickLeaves.map((req, sIdx) => (
                                   <div
                                     key={req.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedRequest(req);
+                                    }}
                                     style={{
                                       padding: '4px 0',
                                       marginBottom: sIdx === sickLeaves.length - 1 ? 0 : 4,
+                                      cursor: 'pointer',
+                                      borderRadius: 4,
+                                      transition: 'background 0.1s',
                                     }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.03)'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                                   >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                                       {renderAvatar(req)}
@@ -492,6 +655,168 @@ export default function LeaveCalendar() {
           </div>
         </div>
       )}
+
+      {/* Details Modal */}
+      {selectedRequest && (
+        <div 
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setSelectedRequest(null)}
+        >
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)' }} />
+          <div 
+            style={{ 
+              position: 'relative', width: '100%', maxWidth: 460, 
+              background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {renderAvatar(selectedRequest, 36)}
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{selectedRequest.userName} {selectedRequest.userSurname}</h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedRequest.userRole ? t(`roles.${selectedRequest.userRole}`, selectedRequest.userRole) : ''}</div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedRequest(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
+            </div>
+
+            <div style={{ padding: 24 }}>
+              <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={modalLabelStyle}>{t('leave.type_label')}</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                    {selectedRequest.leaveType === 'vacation' ? <Palmtree size={16} /> : <Thermometer size={16} />}
+                    {t(`leave.type_${selectedRequest.leaveType}`)}
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={modalLabelStyle}>{t('leave.col_status')}</label>
+                  <StatusBadge req={selectedRequest} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={modalLabelStyle}>{t('leave.col_period')}</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                  <Clock size={16} />
+                  {selectedRequest.leaveDurationType === 'short_leave'
+                    ? `${formatDate(new Date(selectedRequest.startDate))} · ${selectedRequest.shortStartTime ?? '--:--'} - ${selectedRequest.shortEndTime ?? '--:--'}`
+                    : formatDateRange(selectedRequest.startDate, selectedRequest.endDate)}
+                </div>
+              </div>
+
+              {selectedRequest.notes && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={modalLabelStyle}>{t('leave.notes_label')}</label>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic' }}>"{selectedRequest.notes}"</div>
+                </div>
+              )}
+
+              {selectedRequest.medicalCertificateName && (
+                <div style={{ marginBottom: 20 }}>
+                  <button 
+                    onClick={() => handleDownloadCert(selectedRequest)}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: 8, 
+                      padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                      background: 'var(--surface-warm)', color: 'var(--primary)',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                    }}
+                  >
+                    <FileText size={16} />
+                    {t('leave.certificate_btn')}
+                  </button>
+                </div>
+              )}
+
+              <div style={{ background: 'var(--background)', borderRadius: 12, padding: 16, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 12, letterSpacing: '0.5px' }}>
+                  {t('leave.approval_chain', 'Approval Flow')}
+                </div>
+                <ApprovalStepper req={selectedRequest} />
+              </div>
+
+              {canAct(selectedRequest) && (
+                <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                  <button
+                    onClick={() => handleApprove(selectedRequest)}
+                    disabled={actionLoading}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      padding: '12px 0', borderRadius: 10, border: 'none',
+                      background: 'var(--primary)', color: '#fff',
+                      fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(13,33,55,0.2)'
+                    }}
+                  >
+                    <CheckCheck size={18} />
+                    {t('leave.action_approve')}
+                  </button>
+                  <button
+                    onClick={() => setRejectTarget(selectedRequest)}
+                    disabled={actionLoading}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      padding: '12px 0', borderRadius: 10, border: '1.5px solid var(--danger)',
+                      background: 'transparent', color: 'var(--danger)',
+                      fontSize: 14, fontWeight: 700, cursor: 'pointer'
+                    }}
+                  >
+                    <XCircle size={18} />
+                    {t('leave.action_reject')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectTarget && (
+        <div 
+          style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setRejectTarget(null)}
+        >
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)' }} />
+          <div 
+            style={{ 
+              position: 'relative', width: '100%', maxWidth: 380, 
+              background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', padding: 24 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{t('leave.reject_title')}</h3>
+            <textarea
+              autoFocus
+              value={rejectNotes}
+              onChange={(e) => setRejectNotes(e.target.value)}
+              rows={3}
+              placeholder={t('leave.reject_notes_placeholder')}
+              style={{
+                width: '100%', padding: '12px', borderRadius: 8, border: '1.5px solid var(--border)',
+                fontFamily: 'inherit', fontSize: 14, resize: 'vertical', boxSizing: 'border-box'
+              }}
+            />
+            {rejectError && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>{rejectError}</div>}
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setRejectTarget(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                {t('common.cancel')}
+              </button>
+              <button 
+                onClick={handleReject} 
+                disabled={actionLoading}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--danger)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                {actionLoading ? t('common.saving') : t('leave.reject_confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -501,4 +826,9 @@ const navBtnStyle: React.CSSProperties = {
   border: '1px solid var(--border)', background: 'var(--surface)',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   cursor: 'pointer', color: 'var(--text)',
+};
+
+const modalLabelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+  textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6
 };

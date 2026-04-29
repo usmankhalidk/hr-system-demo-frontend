@@ -12,9 +12,11 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSubmitted: () => void;
+  initialStartDate?: string;
+  initialEndDate?: string;
 }
 
-export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
+export function LeaveRequestDrawer({ open, onClose, onSubmitted, initialStartDate, initialEndDate }: Props) {
   const { t } = useTranslation();
   const { showToast } = useToast();
 
@@ -22,8 +24,8 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
 
   const [leaveType, setLeaveType] = useState<LeaveType>('vacation');
   const [leaveDurationType, setLeaveDurationType] = useState<LeaveDurationType>('full_day');
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState(initialStartDate || today);
+  const [endDate, setEndDate] = useState(initialEndDate || today);
   const [shortStartTime, setShortStartTime] = useState('');
   const [shortEndTime, setShortEndTime] = useState('');
   const [notes, setNotes] = useState('');
@@ -36,13 +38,13 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted }: Props) {
       reset();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, initialStartDate, initialEndDate]);
 
   function reset() {
     setLeaveType('vacation');
     setLeaveDurationType('full_day');
-    setStartDate(today);
-    setEndDate(today);
+    setStartDate(initialStartDate || today);
+    setEndDate(initialEndDate || today);
     setShortStartTime('');
     setShortEndTime('');
     setNotes('');
