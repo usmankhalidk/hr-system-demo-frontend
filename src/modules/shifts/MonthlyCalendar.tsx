@@ -8,6 +8,7 @@ import { WindowDisplayActivity } from '../../api/windowDisplay';
 import { getAvatarUrl } from '../../api/client';
 import { getActivityIcon, getActivityPalette, getActivityTypeLabel } from './storeActivityCatalog';
 import { Store as StoreModel } from '../../types';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 interface MonthlyCalendarProps {
   shifts: Shift[];
@@ -115,6 +116,7 @@ export default function MonthlyCalendar({
   stores,
 }: MonthlyCalendarProps) {
   const { t } = useTranslation();
+  const { isMobile, isTablet } = useBreakpoint();
   const MAX_VISIBLE_AVATARS = 3;
   const MAX_VISIBLE_DETAIL_ROWS = 4;
   const [hoveredActivityKey, setHoveredActivityKey] = React.useState<string | null>(null);
@@ -340,12 +342,18 @@ export default function MonthlyCalendar({
   const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const cells: (Date | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
-  ];
-  // Pad to complete last row
-  while (cells.length % 7 !== 0) cells.push(null);
+  // On mobile/tablet, don't include empty cells - just show actual dates
+  const cells: (Date | null)[] = (isMobile || isTablet)
+    ? Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1))
+    : [
+        ...Array(startOffset).fill(null),
+        ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+      ];
+  
+  // Pad to complete last row only on desktop
+  if (!isMobile && !isTablet) {
+    while (cells.length % 7 !== 0) cells.push(null);
+  }
 
   const today = formatDate(new Date());
 
@@ -408,23 +416,29 @@ export default function MonthlyCalendar({
   };
 
   return (
-    <div style={{ padding: 16, overflowX: 'auto' }}>
-      <div style={{ minWidth: 1200 }}>
-        {/* Day headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 8 }}>
-        {DAY_LABELS.map((label) => (
-          <div key={label} style={{
-            textAlign: 'center', fontWeight: 600,
-            fontFamily: 'var(--font-display)', color: 'var(--primary)',
-            padding: '4px 0', fontSize: '0.85rem',
-          }}>
-            {label}
+    <div style={{ padding: 16, overflowX: (isMobile || isTablet) ? 'visible' : 'auto' }}>
+      <div style={{ minWidth: (isMobile || isTablet) ? 'auto' : 1200 }}>
+        {/* Day headers - hide on mobile and tablet */}
+        {!isMobile && !isTablet && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 8 }}>
+            {DAY_LABELS.map((label) => (
+              <div key={label} style={{
+                textAlign: 'center', fontWeight: 600,
+                fontFamily: 'var(--font-display)', color: 'var(--primary)',
+                padding: '4px 0', fontSize: '0.85rem',
+              }}>
+                {label}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
 
       {/* Day cells */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
+      <div style={{ 
+        display: (isMobile || isTablet) ? 'grid' : 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0, 1fr))' : 'repeat(7, minmax(0, 1fr))',
+        gap: (isMobile || isTablet) ? 12 : 4 
+      }}>
         {cells.map((date, idx) => {
           if (!date) {
             return <div key={`empty-${idx}`} style={{ minHeight: 104 }} />;
@@ -482,31 +496,51 @@ export default function MonthlyCalendar({
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                justifyContent: (isMobile || isTablet) ? 'space-between' : 'space-between',
                 gap: 6,
                 marginBottom: 6,
               }}>
-                <div style={{
-                  fontWeight: isToday ? 700 : 500,
-                  color: isToday ? 'var(--accent)' : 'var(--text)',
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '0.9rem',
-                  lineHeight: 1,
-                }}>
-                  {isToday ? (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 26, height: 26, borderRadius: '50%',
-                      background: 'var(--accent)', color: '#fff', fontWeight: 700,
-                      boxShadow: '0 0 0 3px rgba(201,151,58,0.16)',
+                {(isMobile || isTablet) ? (
+                  /* Mobile/Tablet: Date on left, Day name in center, Activities on right */
+                  <>
+                    {/* Date on left */}
+                    <div style={{
+                      fontWeight: isToday ? 700 : 600,
+                      color: isToday ? 'var(--accent)' : 'var(--text)',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '1rem',
+                      lineHeight: 1,
+                      minWidth: 40,
                     }}>
-                      {date.getDate()}
-                    </span>
-                  ) : date.getDate()}
-                </div>
+                      {isToday ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 32, height: 32, borderRadius: '50%',
+                          background: 'var(--accent)', color: '#fff', fontWeight: 700,
+                          boxShadow: '0 0 0 3px rgba(201,151,58,0.16)',
+                        }}>
+                          {date.getDate()}
+                        </span>
+                      ) : date.getDate()}
+                    </div>
 
-                {dayActivities.length > 0 && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {/* Day name in center */}
+                    <div style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      color: 'var(--text-muted)',
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                      fontFamily: 'var(--font-display)',
+                    }}>
+                      {DAY_LABELS[date.getDay() === 0 ? 6 : date.getDay() - 1]}
+                    </div>
+
+                    {/* Activities on right */}
+                    {dayActivities.length > 0 && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     {dayActivities.slice(0, 3).map((item) => {
                       const visual = activityVisual(item);
                       const activityLabel = getActivityTypeLabel(t, item.activityType, item.customActivityName);
@@ -628,6 +662,155 @@ export default function MonthlyCalendar({
                       </button>
                     )}
                   </div>
+                )}
+                  </>
+                ) : (
+                  /* Desktop: Date on left, activities on right */
+                  <>
+                    <div style={{
+                      fontWeight: isToday ? 700 : 500,
+                      color: isToday ? 'var(--accent)' : 'var(--text)',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '0.9rem',
+                      lineHeight: 1,
+                    }}>
+                      {isToday ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 26, height: 26, borderRadius: '50%',
+                          background: 'var(--accent)', color: '#fff', fontWeight: 700,
+                          boxShadow: '0 0 0 3px rgba(201,151,58,0.16)',
+                        }}>
+                          {date.getDate()}
+                        </span>
+                      ) : date.getDate()}
+                    </div>
+
+                    {dayActivities.length > 0 && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {dayActivities.slice(0, 3).map((item) => {
+                          const visual = activityVisual(item);
+                          const activityLabel = getActivityTypeLabel(t, item.activityType, item.customActivityName);
+                          const hoursLabel = item.durationHours != null ? `${item.durationHours}h` : null;
+                          const activityKey = `${dateStr}-${item.id}`;
+                          const isHovered = hoveredActivityKey === activityKey;
+                          const storeName = resolveStoreName(item.storeId, item.storeName);
+                          const posterName = userDisplayName(
+                            item.flaggedByName,
+                            item.flaggedBySurname,
+                            item.flaggedBy ? `${t('shifts.employee', 'Employee')} #${item.flaggedBy}` : t('common.not_available', 'Not available'),
+                          );
+                          return (
+                            <div
+                              key={item.id}
+                              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+                              onMouseEnter={() => setHoveredActivityKey(activityKey)}
+                              onMouseLeave={() => setHoveredActivityKey((current) => (current === activityKey ? null : current))}
+                            >
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onWindowDisplayClick?.(dateStr);
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: visual.color,
+                                  padding: '0 1px',
+                                  fontSize: '0.95rem',
+                                  fontWeight: 800,
+                                  lineHeight: 1,
+                                  cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                                }}
+                              >
+                                {visual.icon}
+                              </button>
+
+                              {isHovered && (
+                                <div 
+                                  style={{
+                                    position: 'absolute',
+                                    top: idx >= cells.length - 7 ? 'auto' : 'calc(100% + 2px)',
+                                    bottom: idx >= cells.length - 7 ? 'calc(100% + 2px)' : 'auto',
+                                    right: 0,
+                                    minWidth: 170,
+                                    maxWidth: 220,
+                                    borderRadius: 8,
+                                    border: `1px solid ${visual.border}`,
+                                    borderLeft: `3px solid ${visual.accentBorder}`,
+                                    background: solidColor(visual.background, '#f8fafc'),
+                                    boxShadow: 'var(--shadow-lg)',
+                                    padding: '7px 8px',
+                                    zIndex: 80,
+                                    pointerEvents: 'none',
+                                  }}
+                                >
+                                  <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    lineHeight: 1.2,
+                                    color: visual.color,
+                                  }}>
+                                    <span style={{ fontSize: '0.92rem', lineHeight: 1 }}>{visual.icon}</span>
+                                    <span>{activityLabel}</span>
+                                  </div>
+                                  {hoursLabel && (
+                                    <div style={{ marginTop: 4, fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                                      {t('shifts.activityDuration', 'Duration')}: {hoursLabel}
+                                    </div>
+                                  )}
+                                  <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                    {t('common.store', 'Store')}: {storeName}
+                                  </div>
+                                  <div style={{ marginTop: 2, fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.25 }}>
+                                    {t('shifts.activityPostedBy', 'Posted by')}: {posterName}
+                                  </div>
+                                  {item.notes && (
+                                    <div style={{ marginTop: 4, fontSize: '0.58rem', fontWeight: 600, color: 'var(--text-secondary)', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                                      {item.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {dayActivities.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onWindowDisplayClick?.(dateStr);
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              borderRadius: 999,
+                              border: '1px solid rgba(71,85,105,0.28)',
+                              background: 'rgba(226,232,240,0.9)',
+                              color: '#334155',
+                              padding: '1px 6px',
+                              fontSize: '0.56rem',
+                              fontWeight: 900,
+                              lineHeight: 1.2,
+                              cursor: onWindowDisplayClick ? 'pointer' : 'default',
+                            }}
+                          >
+                            +{dayActivities.length - 3}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

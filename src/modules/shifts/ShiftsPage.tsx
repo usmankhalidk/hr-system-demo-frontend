@@ -126,6 +126,15 @@ function IconUpload() {
     </svg>
   );
 }
+function IconMenu() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="1"/>
+      <circle cx="12" cy="5" r="1"/>
+      <circle cx="12" cy="19" r="1"/>
+    </svg>
+  );
+}
 
 export default function ShiftsPage() {
   const { t, i18n } = useTranslation();
@@ -162,6 +171,7 @@ export default function ShiftsPage() {
   const [windowDisplaySaving, setWindowDisplaySaving] = useState(false);
   const [activitiesModalOpen, setActivitiesModalOpen] = useState(false);
   const [activitiesModalDate, setActivitiesModalDate] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileActionGridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
@@ -551,61 +561,56 @@ export default function ShiftsPage() {
           <div style={{
             display: 'flex',
             gap: 8,
-            flexWrap: 'wrap',
-            width: isMobile ? '100%' : 'auto',
-            flexDirection: isMobile ? 'column' : 'row'
+            alignItems: 'center',
           }}>
+            {/* Mobile: Today button + Options icon */}
             {isMobile ? (
-              <div style={mobileActionGridStyle}>
+              <>
                 <button
                   className="btn btn-secondary"
-                  style={mobileActionButtonStyle}
-                  onClick={() => setTemplatesOpen(true)}
+                  onClick={() => {
+                    const now = new Date();
+                    setCurrentDate(viewMode === 'day' ? now : viewMode === 'week' ? getWeekStart(now) : now);
+                  }}
+                  style={{
+                    fontSize: 12,
+                    padding: '8px 14px',
+                    fontWeight: 600,
+                    height: 36,
+                  }}
                 >
-                  <IconTemplate />
-                  {t('shifts.templates', 'Templates')}
+                  {t('shifts.today', 'Today')}
                 </button>
                 <button
                   className="btn btn-secondary"
-                  style={mobileActionButtonStyle}
-                  onClick={() => openActivitiesModal()}
+                  onClick={() => setMobileMenuOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px 12px',
+                    height: 36,
+                    minWidth: 36,
+                    transition: 'all 0.2s ease',
+                    border: '1.5px solid var(--border)',
+                    background: 'var(--surface)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--primary)';
+                    e.currentTarget.style.color = '#fff';
+                    e.currentTarget.style.borderColor = 'var(--primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--surface)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                  }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <line x1="3" y1="9" x2="21" y2="9" />
-                  </svg>
-                  {t('shifts.windowDisplayAction', 'Activity')}
+                  <IconMenu />
                 </button>
-                <button
-                  className="btn btn-primary"
-                  style={mobileActionButtonStyle}
-                  onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
-                >
-                  <IconPlus />
-                  {t('shifts.newShift', 'New shift')}
-                </button>
-                {viewMode === 'week' && (
-                  <>
-                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={handleCopyWeek}>
-                      <IconCopy />
-                      {t('shifts.copyWeek')}
-                    </button>
-                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={() => handleExport('csv')}>
-                      <IconDownload />
-                      {t('shifts.export')}
-                    </button>
-                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={() => handleExport('xlsx')}>
-                      <IconDownload />
-                      {t('shifts.exportExcel')}
-                    </button>
-                    <button className="btn btn-secondary" style={mobileActionButtonStyle} onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
-                      <IconUpload />
-                      {t('shifts.importShifts')}
-                    </button>
-                  </>
-                )}
-              </div>
+              </>
             ) : (
+              /* Desktop: All buttons */
               <>
                 <button
                   className="btn btn-secondary"
@@ -664,12 +669,12 @@ export default function ShiftsPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 8,
+          gap: isMobile ? 2 : 8,
           marginBottom: 16,
           background: 'var(--surface)',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border)',
-          padding: '8px 16px',
+          padding: isMobile ? '8px 8px' : '8px 16px',
           boxShadow: 'var(--shadow-sm)',
           flexWrap: 'wrap',
           minHeight: 52,
@@ -779,7 +784,7 @@ export default function ShiftsPage() {
             )}
           </div>
 
-          {/* ── RIGHT: store filter + loading indicator + mobile menu ── */}
+          {/* ── RIGHT: store filter + loading indicator ── */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -788,21 +793,7 @@ export default function ShiftsPage() {
             width: isMobile ? '100%' : 'auto',
             marginTop: isMobile ? 8 : 0
           }}>
-            {/* Today button (mobile) */}
-            {isMobile && (
-              <button
-                className="btn btn-secondary shifts-today-button"
-                onClick={() => {
-                  const now = new Date();
-                  setCurrentDate(viewMode === 'day' ? now : viewMode === 'week' ? getWeekStart(now) : now);
-                }}
-                style={{ fontSize: 12, padding: '5px 14px', fontWeight: 600, flexShrink: 0 }}
-              >
-                {t('shifts.today', 'Today')}
-              </button>
-            )}
-
-            {/* Activity button (desktop) */}
+            {/* Activity button (desktop only) */}
             {!isMobile && (
               <button
                 className={`btn ${activitiesModalOpen ? 'btn-primary' : 'btn-secondary'}`}
@@ -1219,6 +1210,493 @@ export default function ShiftsPage() {
         onSave={handleWindowDisplaySave}
         onDelete={handleWindowDisplayDelete}
       />
+
+      {/* ── Mobile Options Sidebar ──────────────────────────────────── */}
+      {createPortal(
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1400,
+              background: 'rgba(13,33,55,0.55)',
+              backdropFilter: 'blur(3px)',
+              opacity: mobileMenuOpen ? 1 : 0,
+              pointerEvents: mobileMenuOpen ? 'auto' : 'none',
+              transition: 'opacity 0.3s ease',
+            }}
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: 'min(320px, 85vw)',
+              background: 'var(--surface)',
+              boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(100%)',
+              transition: 'transform 0.3s ease',
+              zIndex: 1401,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'var(--primary)',
+              color: '#fff',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              <div>
+                <div style={{
+                  fontSize: 10,
+                  letterSpacing: 1.2,
+                  opacity: 0.7,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}>
+                  {t('shifts.title', 'Shifts')}
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 800,
+                  fontSize: '1.1rem',
+                }}>
+                  {t('common.options', 'Options')}
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: 'none',
+                  color: '#fff',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: 20,
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Menu Items */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '16px 0',
+            }}>
+              {/* New Shift */}
+              <button
+                onClick={() => {
+                  setEditingShift(null);
+                  setDrawerOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '14px 20px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s',
+                  borderBottom: '1px solid var(--border)',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <IconPlus />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                    {t('shifts.newShift', 'New shift')}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                    {t('shifts.newShiftDesc', 'Create a new shift')}
+                  </div>
+                </div>
+              </button>
+
+              {/* Templates */}
+              <button
+                onClick={() => {
+                  setTemplatesOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '14px 20px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s',
+                  borderBottom: '1px solid var(--border)',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: 'rgba(30,74,122,0.12)',
+                  color: 'var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <IconTemplate />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                    {t('shifts.templates', 'Templates')}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                    {t('shifts.templatesDesc', 'Apply shift templates')}
+                  </div>
+                </div>
+              </button>
+
+              {/* Activity */}
+              <button
+                onClick={() => {
+                  openActivitiesModal();
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '14px 20px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s',
+                  borderBottom: '1px solid var(--border)',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: 'rgba(30,74,122,0.12)',
+                  color: 'var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <line x1="3" y1="9" x2="21" y2="9" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                    {t('shifts.windowDisplayAction', 'Activity')}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                    {t('shifts.activityDesc', 'Manage store activities')}
+                  </div>
+                </div>
+              </button>
+
+              {/* Week-specific options */}
+              {viewMode === 'week' && (
+                <>
+                  <div style={{
+                    padding: '12px 20px 8px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}>
+                    {t('shifts.weekView', 'Week')}
+                  </div>
+
+                  {/* Copy Week */}
+                  <button
+                    onClick={() => {
+                      handleCopyWeek();
+                      setMobileMenuOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '14px 20px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: 'rgba(30,74,122,0.12)',
+                      color: 'var(--primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <IconCopy />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                        {t('shifts.copyWeek', 'Copy week')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                        {t('shifts.copyWeekDesc', 'Duplicate to next week')}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Export CSV */}
+                  <button
+                    onClick={() => {
+                      handleExport('csv');
+                      setMobileMenuOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '14px 20px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: 'rgba(30,74,122,0.12)',
+                      color: 'var(--primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <IconDownload />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                        {t('shifts.export', 'Export CSV')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                        {t('shifts.exportDesc', 'Download as CSV file')}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Export Excel */}
+                  <button
+                    onClick={() => {
+                      handleExport('xlsx');
+                      setMobileMenuOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '14px 20px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: 'rgba(30,74,122,0.12)',
+                      color: 'var(--primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <IconDownload />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                        {t('shifts.exportExcel', 'Export Excel')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                        {t('shifts.exportExcelDesc', 'Download as Excel file')}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Import */}
+                  <button
+                    onClick={() => {
+                      setImportOpen(true);
+                      setImportResult(null);
+                      setImportFile(null);
+                      setMobileMenuOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '14px 20px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: 'rgba(30,74,122,0.12)',
+                      color: 'var(--primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <IconUpload />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                        {t('shifts.importShifts', 'Import shifts')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                        {t('shifts.importDesc', 'Upload from file')}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Affluence (if store selected) */}
+                  {storeFilter && (
+                    <button
+                      onClick={() => {
+                        setAffluenceOpen((o) => !o);
+                        setMobileMenuOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '14px 20px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'background 0.15s',
+                        borderBottom: '1px solid var(--border)',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        background: affluenceOpen ? 'linear-gradient(135deg, var(--primary), var(--accent))' : 'rgba(30,74,122,0.12)',
+                        color: affluenceOpen ? '#fff' : 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                          {t('shifts.affluence_btn', 'Affluence')}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                          {t('shifts.affluenceDesc', 'View store traffic')}
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
     </div>
   );
 }

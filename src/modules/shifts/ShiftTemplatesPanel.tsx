@@ -21,7 +21,8 @@ import { Store as StoreType, Employee } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { DatePicker } from '../../components/ui/DatePicker';
 
-// Shape of shift patterns stored in template_data
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+
 interface ShiftPattern {
   dayOfWeek: number; // 0=Mon … 6=Sun
   startTime: string; // 'HH:MM'
@@ -222,6 +223,7 @@ interface ShiftTemplatesPanelProps {
 
 export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPanelProps) {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
 
   const DAY_LABELS_FULL = [
     t('stores.dayMonday', 'Monday'),
@@ -1149,7 +1151,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                             </div>
                           </div>
 
-                          <div style={{ display: 'grid', gridTemplateColumns: d.breakType === 'none' ? '1fr 1fr' : d.breakType === 'flexible' ? '1fr 1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: d.breakType === 'none' ? (isMobile ? '1fr' : '1fr 1fr') : d.breakType === 'flexible' ? (isMobile ? '1fr' : '1fr 1fr 1fr') : (isMobile ? '1fr' : '1fr 1fr 1fr 1fr'), gap: 8 }}>
                             <div>
                               <label style={smallLabelStyle}>Shift Start *</label>
                               <input
@@ -1750,39 +1752,68 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                   }}>
                     {/* Template header row */}
                     <div style={{
-                      display: 'flex', alignItems: 'center', padding: '11px 14px',
-                      background: 'var(--surface-warm)', gap: 10,
+                      display: 'flex',
+                      flexDirection: isMobile ? 'column' : 'row',
+                      alignItems: isMobile ? 'stretch' : 'center',
+                      padding: '11px 14px',
+                      background: 'var(--surface-warm)',
+                      gap: isMobile ? 8 : 10,
                     }}>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(isExpanded ? null : tmpl.id)}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          color: 'var(--text-muted)', padding: 2, lineHeight: 1,
-                          transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
-                      </button>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontFamily: 'var(--font-display)', fontSize: 13 }}>{tmpl.name}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            fontSize: 11, color: 'var(--text-muted)',
-                            background: 'var(--border)', borderRadius: 999, padding: '2px 7px',
-                          }}>
-                            <StoreIcon size={11} />
-                            {storeName}
-                          </span>
-                          {patterns.length > 0 && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {patterns.length} {t('shifts.patterns', 'pattern')}
-                            </span>
-                          )}
+                      {/* Template name row */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        flex: isMobile ? 'none' : 1,
+                        minWidth: 0,
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(isExpanded ? null : tmpl.id)}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: 'var(--text-muted)', padding: 2, lineHeight: 1,
+                            transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+                        </button>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontFamily: 'var(--font-display)', fontSize: 13 }}>{tmpl.name}</div>
                         </div>
                       </div>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+
+                      {/* Store name tag row */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        paddingLeft: isMobile ? 26 : 0,
+                      }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 11, color: 'var(--text-muted)',
+                          background: 'var(--border)', borderRadius: 999, padding: '2px 7px',
+                        }}>
+                          <StoreIcon size={11} />
+                          {storeName}
+                        </span>
+                        {patterns.length > 0 && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {patterns.length} {t('shifts.patterns', 'pattern')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action buttons row */}
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        justifyContent: isMobile ? 'flex-end' : 'flex-start',
+                        paddingLeft: isMobile ? 26 : 0,
+                      }}>
                         <button
                           type="button"
                           onClick={() => openApply(tmpl)}
