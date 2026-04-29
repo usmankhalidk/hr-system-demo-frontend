@@ -84,6 +84,7 @@ export interface LeaveListParams {
   leaveType?: LeaveType;
   dateFrom?: string;
   dateTo?: string;
+  storeId?: number;
 }
 
 export interface LeaveListResponse {

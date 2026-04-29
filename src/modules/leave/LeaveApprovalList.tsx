@@ -24,7 +24,7 @@ const STATUS_COLORS: Record<LeaveStatus, { bg: string; color: string }> = {
   cancelled:                       { bg: 'rgba(0,0,0,0.05)',        color: 'var(--text-muted)' },
 };
 
-function StatusBadge({ req }: { req: LeaveRequest }) {
+export function StatusBadge({ req }: { req: LeaveRequest }) {
   const { t } = useTranslation();
   const { status } = req;
   const { bg, color } = STATUS_COLORS[status] ?? STATUS_COLORS.pending;
@@ -73,7 +73,7 @@ function XIcon() {
   );
 }
 
-function ApprovalStepper({ req }: { req: LeaveRequest }) {
+export function ApprovalStepper({ req }: { req: LeaveRequest }) {
   const { currentApproverRole, status, skippedApprovers, escalated, isEmergencyOverride } = req;
   const { t } = useTranslation();
   const isRejected = status === 'rejected';

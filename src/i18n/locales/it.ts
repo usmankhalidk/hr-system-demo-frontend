@@ -220,6 +220,7 @@ const it = {
       activeEmployees: 'Dipendenti attivi',
       availableSlots: 'Posti disponibili',
       todayShifts: 'Turni di oggi',
+      todayAnomalies: 'Anomalie di oggi',
       todayAttendance: 'Presenze oggi',
       attendanceDesc: 'Riepilogo eventi di oggi',
       capacityTitle: 'Capienza Personale',
