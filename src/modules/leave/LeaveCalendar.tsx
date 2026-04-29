@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Palmtree, Thermometer, X, CheckCheck, XCircle, FileText, Clock } from 'lucide-react';
 import { getLeaveRequests, LeaveRequest, approveLeaveRequest, rejectLeaveRequest, downloadCertificate } from '../../api/leave';
+import { getStores } from '../../api/stores';
+import { Store } from '../../types';
 import { getAvatarUrl } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -72,6 +74,22 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
   const [rejectNotes, setRejectNotes] = useState('');
   const [rejectError, setRejectError] = useState<string | null>(null);
 
+  const [stores, setStores] = useState<Store[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<number | 'all'>('all');
+  const [fetchingStores, setFetchingStores] = useState(false);
+
+  const canFilterByStore = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager' || user?.isSuperAdmin;
+
+  useEffect(() => {
+    if (canFilterByStore) {
+      setFetchingStores(true);
+      getStores()
+        .then(setStores)
+        .catch(() => setStores([]))
+        .finally(() => setFetchingStores(false));
+    }
+  }, [canFilterByStore]);
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -80,7 +98,11 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
     try {
       const firstDay = formatDate(new Date(year, month, 1));
       const lastDay = formatDate(new Date(year, month, daysInMonth(year, month)));
-      const res = await getLeaveRequests({ dateFrom: firstDay, dateTo: lastDay });
+      const params: any = { dateFrom: firstDay, dateTo: lastDay };
+      if (selectedStoreId !== 'all') {
+        params.storeId = selectedStoreId;
+      }
+      const res = await getLeaveRequests(params);
       // Exclude rejected & cancelled for calendar view
       setRequests(res.requests.filter((r) =>
         r.status !== 'rejected' &&
@@ -92,7 +114,7 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
     } finally {
       setLoading(false);
     }
-  }, [year, month]);
+  }, [year, month, selectedStoreId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -272,6 +294,42 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
         }}>
           {t('common.today', 'Today')}
         </button>
+
+        {canFilterByStore && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+              {t('employees.store_label', 'Store')}:
+            </span>
+            <select
+              value={selectedStoreId}
+              disabled={fetchingStores}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedStoreId(val === 'all' ? 'all' : parseInt(val, 10));
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--text)',
+                cursor: 'pointer',
+                outline: 'none',
+                minWidth: 180,
+                boxShadow: 'var(--shadow-xs)'
+              }}
+            >
+              <option value="all">{t('common.all_stores', 'All Stores')}</option>
+              {stores.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} {s.groupName ? `(${s.groupName})` : (s.companyName ? `(${s.companyName})` : '')}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Legend */}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
