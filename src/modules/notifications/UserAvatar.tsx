@@ -2,8 +2,8 @@ import React from "react";
 import { getAvatarUrl } from "../../api/client";
 
 interface UserAvatarProps {
-  name: string;
-  surname: string;
+  name: string | null | undefined;
+  surname: string | null | undefined;
   avatarFilename: string | null;
   size?: number;
   showTooltip?: boolean;
@@ -33,8 +33,12 @@ export default function UserAvatar({
   size = 24,
   showTooltip = true,
 }: UserAvatarProps) {
-  const fullName = `${name} ${surname}`.trim();
-  const initials = `${name.charAt(0)}${surname.charAt(0)}`.toUpperCase();
+  const safeName = name || "";
+  const safeSurname = surname || "";
+  const fullName = `${safeName} ${safeSurname}`.trim() || "?";
+  const initials = safeName && safeSurname 
+    ? `${safeName.charAt(0)}${safeSurname.charAt(0)}`.toUpperCase()
+    : fullName.charAt(0).toUpperCase();
   const bgColor = getAvatarColor(fullName);
 
   const avatarUrl = avatarFilename ? getAvatarUrl(avatarFilename) : null;
