@@ -105,6 +105,18 @@ function PersonalLeavePage() {
     if (userIsApprover) fetchPendingRequests();
   }, [fetchMyRequests, fetchBalance, fetchPendingRequests, userIsApprover]);
 
+  const [prefilledDate, setPrefilledDate] = useState<string | undefined>(undefined);
+
+  const handleDayClick = (date: string) => {
+    setPrefilledDate(date);
+    setDrawerOpen(true);
+  };
+
+  const handleCloseDrawer = () => {
+    setDrawerOpen(false);
+    setPrefilledDate(undefined);
+  };
+
   // ---------------------------------------------------------------------------
   // Tab styling
   // ---------------------------------------------------------------------------
@@ -146,7 +158,10 @@ function PersonalLeavePage() {
         </div>
         {user?.role !== 'store_terminal' && (
           <button
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => {
+              setPrefilledDate(undefined);
+              setDrawerOpen(true);
+            }}
             style={{
               padding: '10px 20px', borderRadius: 8, border: 'none',
               background: 'var(--primary)', color: '#fff',
@@ -209,7 +224,7 @@ function PersonalLeavePage() {
             />
           )}
           {activeTab === 'calendar' && (
-            <LeaveCalendar />
+            <LeaveCalendar onDayClick={handleDayClick} onRefresh={() => { fetchMyRequests(); if (userIsApprover) fetchPendingRequests(); }} />
           )}
         </div>
       </div>
@@ -217,9 +232,11 @@ function PersonalLeavePage() {
       {/* Leave request drawer */}
       <LeaveRequestDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={handleCloseDrawer}
+        initialStartDate={prefilledDate}
+        initialEndDate={prefilledDate}
         onSubmitted={() => {
-          setDrawerOpen(false);
+          handleCloseDrawer();
           fetchMyRequests();
           fetchBalance();
         }}

@@ -7,7 +7,7 @@ import { UserRole } from '../../types';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getUnreadCount } from '../../api/messages';
 import { getAvatarUrl } from '../../api/client';
-import fusaroLogoUrl from '../../assets/fusaro-logo.png';
+import fusaroLogoUrl from '../../assets/fusaro-logo-2.png';
 
 interface SidebarProps {
   collapsed: boolean;

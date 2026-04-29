@@ -98,5 +98,7 @@ export const MODULE_ROLE_ELIGIBILITY: Record<ModuleKey, readonly ManagedRoleKey[
 };
 
 export function isRoleEligibleForModule(role: ManagedRoleKey, moduleKey: ModuleKey): boolean {
-  return MODULE_ROLE_ELIGIBILITY[moduleKey].includes(role);
+  const eligibility = MODULE_ROLE_ELIGIBILITY[moduleKey];
+  if (!eligibility) return false;
+  return eligibility.includes(role);
 }

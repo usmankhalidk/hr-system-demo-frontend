@@ -6,7 +6,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { translateApiError } from '../../utils/apiErrors';
-import fusaroLogoUrl from '../../assets/fusaro-logo.png';
+import fusaroLogoUrl from '../../assets/fusaro-logo-2.png';
 
 /* ─── self-contained language pill — zero CSS-var dependency ─── */
 function LangPill() {
