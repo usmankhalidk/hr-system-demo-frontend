@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftRight, CalendarDays, Moon, Palmtree, Thermometer, Coffee, Store as StoreIcon } from 'lucide-react';
 import { Shift } from '../../api/shifts';
@@ -7,6 +7,7 @@ import { TransferAssignment } from '../../api/transfers';
 import { WindowDisplayActivity } from '../../api/windowDisplay';
 import { getAvatarUrl } from '../../api/client';
 import { getActivityIcon, getActivityPalette, getActivityTypeLabel } from './storeActivityCatalog';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 interface DayCalendarProps {
   shifts: Shift[];
@@ -123,7 +124,22 @@ export default function DayCalendar({
   onWindowDisplayClick,
 }: DayCalendarProps) {
   const { t, i18n } = useTranslation();
+  const { isMobile } = useBreakpoint();
+  const [legendOpen, setLegendOpen] = useState(false);
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
+
+  // Close legend when clicking outside
+  useEffect(() => {
+    if (!legendOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-legend-container]')) {
+        setLegendOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [legendOpen]);
   const dateStr = formatDate(date);
   const today = formatDate(new Date());
   const isToday = dateStr === today;
@@ -820,7 +836,122 @@ export default function DayCalendar({
         borderTop: '1px solid var(--border)',
         background: 'var(--surface-warm)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        {isMobile ? (
+          /* Mobile: Legend icon with click modal */
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'inline-flex' }} data-legend-container>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLegendOpen(!legendOpen);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 7,
+                  border: '1.5px solid var(--border)',
+                  background: legendOpen ? 'var(--primary)' : 'var(--surface)',
+                  color: legendOpen ? '#fff' : 'var(--text-primary)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                {t('shifts.legend', 'Legend')}
+              </button>
+
+              {legendOpen && (
+                <div style={{
+                  position: 'fixed',
+                  bottom: '80px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  minWidth: 280,
+                  maxWidth: 'calc(100vw - 40px)',
+                  borderRadius: 10,
+                  border: '1px solid var(--border)',
+                  background: '#fff',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
+                  padding: '12px',
+                  zIndex: 1000,
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+                    {t('shifts.legend', 'Legend')}
+                  </div>
+                  
+                  {/* Status legends */}
+                  {Object.entries(STATUS_META).map(([status, meta]) => (
+                    <div key={status} style={{ marginBottom: 8 }}>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '3px 8px 3px 5px', borderRadius: 5, fontSize: 11, fontWeight: 700,
+                        background: meta.bg, color: meta.text,
+                        border: `1px solid ${meta.border}`,
+                        boxShadow: status !== 'cancelled' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                        textDecoration: status === 'cancelled' ? 'line-through' : 'none',
+                        opacity: status === 'cancelled' ? 0.7 : 1,
+                        marginBottom: 4,
+                      }}>
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                          background: 'rgba(255,255,255,0.18)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.6rem', fontWeight: 800,
+                          color: status === 'cancelled' ? '#9ca3af' : 'rgba(255,255,255,0.9)',
+                        }}>
+                          {meta.abbr}
+                        </span>
+                        {t(meta.labelKey, meta.labelFb)}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3, paddingLeft: 4 }}>
+                        {t(meta.descKey, meta.descFb)}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Off day legend */}
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 700,
+                      background: OFF_DAY_META.bg, color: OFF_DAY_META.color,
+                      borderTop: `1px solid ${OFF_DAY_META.border}`,
+                      borderRight: `1px solid ${OFF_DAY_META.border}`,
+                      borderBottom: `1px solid ${OFF_DAY_META.border}`,
+                      borderLeft: `3px solid ${OFF_DAY_META.leftBorder}`,
+                      marginBottom: 4,
+                    }}>
+                      <Moon size={11} strokeWidth={2.4} />
+                      {t('shifts.form.offDay', 'Off day')}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3, paddingLeft: 4 }}>
+                      {t('shifts.offDayLegend', 'Date marked as non-working day')}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {canEdit && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                {t('shifts.clickToAdd', 'Click to add')}
+              </span>
+            )}
+          </div>
+        ) : (
+          /* Desktop: Full legend display */
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{
             fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
             letterSpacing: 0.6, textTransform: 'uppercase', marginRight: 4, flexShrink: 0,
@@ -923,6 +1054,7 @@ export default function DayCalendar({
             </span>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

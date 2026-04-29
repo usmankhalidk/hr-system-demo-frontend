@@ -122,7 +122,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
     const updatePosition = () => {
       const rect = containerRef.current!.getBoundingClientRect();
       const popupWidth = 272; // min-width of popup
-      const popupHeight = 380; // approximate height of popup
+      const popupHeight = 300; // approximate height of popup
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       
@@ -139,8 +139,8 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
       }
 
       // Adjust top position to ensure popup appears below the input
-      // Add the input height (38px) plus a larger gap (12px)
-      let top = rect.top + 38 + 12;
+      // Add the input height (38px) plus a small gap (4px)
+      let top = rect.top + 62;
       
       // Check if popup would go off-screen at the bottom
       if (top + popupHeight > viewportHeight - 10) {
@@ -282,7 +282,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
     >
       {/* ─ Header ─ */}
       <div style={{
-        background: 'var(--primary)', padding: '10px 12px',
+        background: 'var(--primary)', padding: '8px 12px',
         display: 'flex', alignItems: 'center', gap: '6px',
       }}>
         {view === 'year' ? (
@@ -444,7 +444,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
 
       {/* ─ Calendar grid ─ */}
       {view === 'calendar' && (
-        <div style={{ padding: '8px 10px 2px', background: 'var(--surface-warm)' }}>
+        <div style={{ padding: '10px 8px 0px', background: 'var(--surface-warm)' }}>
           {/* Day headers */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '4px' }}>
             {DAYS[lang].map(d => (
@@ -494,7 +494,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
       {/* ─ Footer ─ */}
       {view === 'calendar' && (
         <div style={{
-          borderTop: '1px solid var(--border-light)', padding: '6px 10px',
+          borderTop: '1px solid var(--border-light)', padding: '6px 8px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           {value ? (

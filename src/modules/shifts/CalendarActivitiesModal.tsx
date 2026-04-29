@@ -14,6 +14,7 @@ import {
   ACTIVITY_ICON_OPTIONS,
   getActivityDefaultIcon,
   getActivityIcon,
+  getActivityPalette,
   getActivityTypeLabel,
   isCustomActivityType,
   STORE_ACTIVITY_DEFINITIONS,
@@ -314,8 +315,14 @@ export default function CalendarActivitiesModal({
       return;
     }
 
+    // On mobile, don't auto-select a store - let user choose
+    if (isMobile) {
+      setSelectedStoreId(null);
+      return;
+    }
+
     setSelectedStoreId(availableStores[0].id);
-  }, [open, availableStores, selectedStoreId]);
+  }, [open, availableStores, selectedStoreId, isMobile]);
 
   const selectedStore = useMemo(
     () => availableStores.find((store) => store.id === selectedStoreId) ?? null,
@@ -524,13 +531,13 @@ export default function CalendarActivitiesModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1300,
+        zIndex: 130,
         background: 'rgba(13,33,55,0.52)',
         backdropFilter: 'blur(3px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 20,
+        padding: isMobile? 12 : 20,
       }}
       onClick={onClose}
     >
@@ -551,152 +558,421 @@ export default function CalendarActivitiesModal({
         <div style={{
           background: 'var(--primary)',
           color: '#fff',
-          padding: '14px 18px',
+          padding: isMobile ? '12px 14px' : '14px 18px',
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
           justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
+          gap: isMobile ? 10 : 12,
           position: isMobile ? 'sticky' : 'relative',
           top: 0,
           zIndex: 50,
         }}>
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: 1.2, opacity: 0.68, textTransform: 'uppercase' }}>
-              {viewMode === 'month'
-                ? t('shifts.monthView', 'Month')
-                : viewMode === 'week'
-                  ? t('shifts.weekView', 'Week')
-                  : t('shifts.dayView', 'Day')}
-            </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', marginTop: 2 }}>
-              {t('shifts.storeActivityMapping', 'Store activity mapping')} - {monthLabel}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
-            <select
-              value={selectedCompanyId ?? ''}
-              onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
-              style={{
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.28)',
-                background: 'rgba(255,255,255,0.12)',
-                color: '#fff',
-                fontSize: 12,
-                padding: '0 10px',
-                fontWeight: 700,
-                minWidth: isMobile ? '100%' : 190,
-                width: isMobile ? '100%' : 'auto',
-                height: 34,
-              }}
-            >
-              <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
-              {companyOptions.map((company) => (
-                <option key={company.id} value={company.id} style={{ color: '#111827' }}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-
-            <div
-              ref={monthPickerRef}
-              style={{
-                position: 'relative',
-              }}
-            >
-              <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              borderRadius: 10,
-              border: '1px solid rgba(255,255,255,0.28)',
-              background: 'rgba(255,255,255,0.12)',
-              padding: '2px',
-              }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMonth((prev) => shiftIsoMonth(prev, -1));
-                  setMonthPickerOpen(false);
-                }}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  border: '1px solid rgba(255,255,255,0.26)',
-                  background: 'rgba(255,255,255,0.16)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 15,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                }}
-                aria-label={t('common.previous', 'Previous')}
-              >
-                ‹
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMonthPickerOpen((prev) => !prev)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  borderRadius: 8,
-                  border: '1px solid rgba(255,255,255,0.28)',
-                  background: 'rgba(255,255,255,0.2)',
-                  color: '#fff',
-                  fontSize: 12,
-                  padding: '0 12px',
-                  fontWeight: 700,
-                  minWidth: isMobile ? 'calc(100% - 76px)' : 198,
-                  minHeight: 30,
-                  cursor: 'pointer',
-                }}
-              >
-                <CalendarDays size={14} />
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{monthLabel}</span>
-                <span style={{ fontSize: 10, opacity: 0.9 }}>{monthPickerOpen ? '▲' : '▼'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMonth((prev) => shiftIsoMonth(prev, 1));
-                  setMonthPickerOpen(false);
-                }}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  border: '1px solid rgba(255,255,255,0.26)',
-                  background: 'rgba(255,255,255,0.16)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 15,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                }}
-                aria-label={t('common.next', 'Next')}
-              >
-                ›
-              </button>
+          {isMobile ? (
+            /* Mobile header layout */
+            <>
+              {/* Top row: Title and Close icon */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: 1.2, opacity: 0.68, textTransform: 'uppercase' }}>
+                    {viewMode === 'month'
+                      ? t('shifts.monthView', 'Month')
+                      : viewMode === 'week'
+                        ? t('shifts.weekView', 'Week')
+                        : t('shifts.dayView', 'Day')}
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', marginTop: 2 }}>
+                    {t('shifts.storeActivityMapping', 'Store activity mapping')}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    color: '#fff',
+                    borderRadius: 8,
+                    width: 36,
+                    height: 36,
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 20,
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
               </div>
 
-              {monthPickerOpen && (
+              {/* Company filter */}
+              <select
+                value={selectedCompanyId ?? ''}
+                onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
+                style={{
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.28)',
+                  background: 'rgba(255,255,255,0.12)',
+                  color: '#fff',
+                  fontSize: 12,
+                  padding: '0 10px',
+                  fontWeight: 700,
+                  width: '100%',
+                  height: 34,
+                }}
+              >
+                <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
+                {companyOptions.map((company) => (
+                  <option key={company.id} value={company.id} style={{ color: '#111827' }}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Month picker */}
+              <div
+                ref={monthPickerRef}
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
                 <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 6px)',
-                  right: 0,
-                  width: 276,
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  background: '#ffffff',
-                  overflow: 'hidden',
-                  boxShadow: '0 18px 42px rgba(15,23,42,0.35)',
-                  zIndex: 40,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,0.28)',
+                  background: 'rgba(255,255,255,0.12)',
+                  padding: '2px',
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMonth((prev) => shiftIsoMonth(prev, -1));
+                      setMonthPickerOpen(false);
+                    }}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.26)',
+                      background: 'rgba(255,255,255,0.16)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 15,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                    }}
+                    aria-label={t('common.previous', 'Previous')}
+                  >
+                    ‹
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMonthPickerOpen((prev) => !prev)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.28)',
+                      background: 'rgba(255,255,255,0.2)',
+                      color: '#fff',
+                      fontSize: 12,
+                      padding: '0 12px',
+                      fontWeight: 700,
+                      minWidth: 180,
+                      minHeight: 30,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <CalendarDays size={14} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{monthLabel}</span>
+                    <span style={{ fontSize: 10, opacity: 0.9 }}>{monthPickerOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMonth((prev) => shiftIsoMonth(prev, 1));
+                      setMonthPickerOpen(false);
+                    }}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.26)',
+                      background: 'rgba(255,255,255,0.16)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 15,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                    }}
+                    aria-label={t('common.next', 'Next')}
+                  >
+                    ›
+                  </button>
+                </div>
+
+                {monthPickerOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 276,
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    background: '#ffffff',
+                    overflow: 'hidden',
+                    boxShadow: '0 18px 42px rgba(15,23,42,0.35)',
+                    zIndex: 40,
+                  }}>
+                    {/* Month picker content - keeping existing */}
+                    <div style={{
+                      background: 'var(--primary)',
+                      padding: '8px 10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => setMonthPickerYear((prev) => prev - 1)}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 6,
+                          border: '1px solid rgba(255,255,255,0.24)',
+                          background: 'rgba(255,255,255,0.12)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 800,
+                          lineHeight: 1,
+                        }}
+                        aria-label={t('common.previous', 'Previous')}
+                      >
+                        ‹
+                      </button>
+                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, color: '#fff', letterSpacing: 0.2 }}>
+                        {monthPickerYear}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMonthPickerYear((prev) => prev + 1)}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 6,
+                          border: '1px solid rgba(255,255,255,0.24)',
+                          background: 'rgba(255,255,255,0.12)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 800,
+                          lineHeight: 1,
+                        }}
+                        aria-label={t('common.next', 'Next')}
+                      >
+                        ›
+                      </button>
+                    </div>
+
+                    <div style={{ background: 'var(--surface-warm)', padding: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                        {monthPickerLabels.map((label, idx) => {
+                          const today = new Date();
+                          const isSelected = monthPickerYear === selectedMonthParts.year && idx === selectedMonthParts.monthIndex;
+                          const isCurrentMonth = monthPickerYear === today.getFullYear() && idx === today.getMonth();
+                          const monthDays = daysInMonth(monthPickerYear, idx);
+
+                          return (
+                            <button
+                              key={`${label}-${idx}`}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMonth(`${monthPickerYear}-${String(idx + 1).padStart(2, '0')}`);
+                                setMonthPickerOpen(false);
+                              }}
+                              style={{
+                                borderRadius: 7,
+                                border: isCurrentMonth && !isSelected ? '1.5px solid var(--primary)' : '1.5px solid transparent',
+                                background: isSelected ? 'var(--accent)' : 'transparent',
+                                color: isSelected ? '#fff' : isCurrentMonth ? 'var(--primary)' : 'var(--text-primary)',
+                                fontSize: 12,
+                                fontWeight: isSelected ? 800 : 700,
+                                padding: '7px 6px',
+                                textTransform: 'capitalize',
+                                cursor: 'pointer',
+                                boxShadow: isSelected ? '0 2px 8px rgba(201,151,58,0.35)' : 'none',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 1,
+                              }}
+                            >
+                              <span>{label}</span>
+                              <span style={{ fontSize: 10, fontWeight: 600, opacity: isSelected ? 0.88 : 0.7 }}>
+                                {monthDays}d
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Desktop header layout - unchanged */
+            <>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: 1.2, opacity: 0.68, textTransform: 'uppercase' }}>
+                  {viewMode === 'month'
+                    ? t('shifts.monthView', 'Month')
+                    : viewMode === 'week'
+                      ? t('shifts.weekView', 'Week')
+                      : t('shifts.dayView', 'Day')}
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', marginTop: 2 }}>
+                  {t('shifts.storeActivityMapping', 'Store activity mapping')} - {monthLabel}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <select
+                  value={selectedCompanyId ?? ''}
+                  onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
+                  style={{
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,255,255,0.28)',
+                    background: 'rgba(255,255,255,0.12)',
+                    color: '#fff',
+                    fontSize: 12,
+                    padding: '0 10px',
+                    fontWeight: 700,
+                    minWidth: 190,
+                    height: 34,
+                  }}
+                >
+                  <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
+                  {companyOptions.map((company) => (
+                    <option key={company.id} value={company.id} style={{ color: '#111827' }}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+
+                <div
+                  ref={monthPickerRef}
+                  style={{
+                    position: 'relative',
+                  }}
+                >
+                  <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,0.28)',
+                  background: 'rgba(255,255,255,0.12)',
+                  padding: '2px',
+                  }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMonth((prev) => shiftIsoMonth(prev, -1));
+                      setMonthPickerOpen(false);
+                    }}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.26)',
+                      background: 'rgba(255,255,255,0.16)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 15,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                    }}
+                    aria-label={t('common.previous', 'Previous')}
+                  >
+                    ‹
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMonthPickerOpen((prev) => !prev)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.28)',
+                      background: 'rgba(255,255,255,0.2)',
+                      color: '#fff',
+                      fontSize: 12,
+                      padding: '0 12px',
+                      fontWeight: 700,
+                      minWidth: 198,
+                      minHeight: 30,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <CalendarDays size={14} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{monthLabel}</span>
+                    <span style={{ fontSize: 10, opacity: 0.9 }}>{monthPickerOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMonth((prev) => shiftIsoMonth(prev, 1));
+                      setMonthPickerOpen(false);
+                    }}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.26)',
+                      background: 'rgba(255,255,255,0.16)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 15,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                    }}
+                    aria-label={t('common.next', 'Next')}
+                  >
+                    ›
+                  </button>
+                  </div>
+
+                  {monthPickerOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      right: 0,
+                      width: 276,
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      background: '#ffffff',
+                      overflow: 'hidden',
+                      boxShadow: '0 18px 42px rgba(15,23,42,0.35)',
+                      zIndex: 40,
                 }}>
                   <div style={{
                     background: 'var(--primary)',
@@ -795,6 +1071,7 @@ export default function CalendarActivitiesModal({
                 </div>
               )}
             </div>
+          </div>
 
             <button
               type="button"
@@ -815,31 +1092,33 @@ export default function CalendarActivitiesModal({
             >
               {t('common.close', 'Close')}
             </button>
-          </div>
+          </>
+          )}
         </div>
 
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '100% 100%' : '360px minmax(0, 1fr)',
+          display: isMobile ? 'flex' : 'grid',
+          flexDirection: isMobile ? 'column' : undefined,
+          gridTemplateColumns: isMobile ? undefined : '360px minmax(0, 1fr)',
           gap: 0,
           minHeight: 470,
           height: 'calc(92vh - 74px)',
           maxHeight: 'calc(92vh - 74px)',
-          overflowX: isMobile ? 'auto' : 'hidden',
-          overflowY: 'hidden',
-          scrollSnapType: isMobile ? 'x mandatory' : 'none',
-          WebkitOverflowScrolling: 'touch',
+          overflowX: 'hidden',
+          overflowY: isMobile ? 'auto' : 'hidden',
         }}>
-          <div style={{
-            borderRight: isMobile ? 'none' : '1px solid var(--border)',
-            background: 'var(--background)',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            padding: 12,
-            minHeight: 0,
-            scrollSnapAlign: 'start',
-            width: isMobile ? '100%' : 'auto',
-          }}>
+          {/* Store list - hide on mobile when store is selected */}
+          {(!isMobile || !selectedStoreId) && (
+            <div style={{
+              borderRight: isMobile ? 'none' : '1px solid var(--border)',
+              borderBottom: isMobile && selectedStoreId ? '1px solid var(--border)' : 'none',
+              background: 'var(--background)',
+              overflowY: isMobile ? 'visible' : 'auto',
+              overflowX: 'hidden',
+              padding: 12,
+              minHeight: 0,
+              width: '100%',
+            }}>
             <div style={{
               fontSize: 11,
               color: 'var(--text-muted)',
@@ -998,19 +1277,24 @@ export default function CalendarActivitiesModal({
 
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         {activity ? (
-                          <span style={{
-                            borderRadius: 999,
-                            border: '1px solid rgba(217,119,6,0.34)',
-                            borderLeft: '3px solid #d97706',
-                            background: 'rgba(254,243,199,0.85)',
-                            color: '#92400e',
-                            fontSize: 10,
-                            fontWeight: 800,
-                            padding: '2px 8px',
-                            lineHeight: 1.2,
-                          }}>
-                            {activityIcon} {getActivityTypeLabel(t, activity.activityType, activity.customActivityName)}
-                          </span>
+                          (() => {
+                            const palette = getActivityPalette(activity.activityType);
+                            return (
+                              <span style={{
+                                borderRadius: 999,
+                                border: `1px solid ${palette.border}`,
+                                borderLeft: `3px solid ${palette.accentBorder}`,
+                                background: palette.background,
+                                color: palette.color,
+                                fontSize: 10,
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                lineHeight: 1.2,
+                              }}>
+                                {activityIcon} {getActivityTypeLabel(t, activity.activityType, activity.customActivityName)}
+                              </span>
+                            );
+                          })()
                         ) : (
                           <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>
                             {t('shifts.noActivitySet', 'No activity set')}
@@ -1026,19 +1310,48 @@ export default function CalendarActivitiesModal({
               </div>
             )}
           </div>
+          )}
 
-          <div style={{
-            padding: 14,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            scrollSnapAlign: 'start',
-            width: isMobile ? '100%' : 'auto',
-            background: 'var(--surface)',
-          }}>
+          {/* Form section - show full screen on mobile when store is selected */}
+          {(!isMobile || selectedStoreId) && (
+            <div style={{
+              padding: 14,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              width: '100%',
+              height: isMobile && selectedStoreId ? '100%' : 'auto',
+              background: 'var(--surface)',
+            }}>
+            {/* Mobile: Back button to return to store list */}
+            {isMobile && selectedStoreId && (
+              <button
+                type="button"
+                onClick={() => setSelectedStoreId(null)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-primary)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                {t('common.back', 'Back to stores')}
+              </button>
+            )}
             {!selectedStoreId ? (
               <div style={{
                 borderRadius: 10,
@@ -1260,6 +1573,7 @@ export default function CalendarActivitiesModal({
               </>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>,

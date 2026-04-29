@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Settings,
   ShieldAlert,
+  Store,
   Trash2,
   UserCircle2,
   Users,
@@ -351,9 +352,9 @@ export default function NotificationsPage() {
     void fetchRecipients();
   }, [settingsOpen, canManageSettings, settingsCompanyId, t]);
 
-  // Fetch settings for all companies when settings modal opens (for progress bars)
+  // Fetch settings for all companies when page loads (for progress bars in dropdown)
   useEffect(() => {
-    if (!settingsOpen || !canManageSettings || companies.length === 0) return;
+    if (!canManageSettings || companies.length === 0) return;
     
     const fetchAllSettings = async () => {
       const allSettings: NotificationSetting[] = [];
@@ -368,7 +369,7 @@ export default function NotificationsPage() {
       setAllCompaniesSettings(allSettings);
     };
     void fetchAllSettings();
-  }, [settingsOpen, canManageSettings, companies]);
+  }, [canManageSettings, companies]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -590,8 +591,26 @@ export default function NotificationsPage() {
     // Calculate progress for each company
     for (const company of companies) {
       const companySettings = settingsByCompany.get(company.id) || [];
-      const enabled = companySettings.filter((s) => s.enabled).length;
       const total = NOTIFICATION_EVENT_DEFINITIONS.length;
+      
+      // If no settings exist in DB, all are enabled by default
+      if (companySettings.length === 0) {
+        progressMap.set(company.id, { enabled: total, total });
+        continue;
+      }
+      
+      // Create a map of existing settings
+      const settingsMap = new Map(companySettings.map(s => [s.eventKey, s]));
+      
+      // Count enabled: if setting exists, use its enabled value; if not, default to true
+      let enabled = 0;
+      for (const def of NOTIFICATION_EVENT_DEFINITIONS) {
+        const setting = settingsMap.get(def.eventKey);
+        if (!setting || setting.enabled) {
+          enabled++;
+        }
+      }
+      
       progressMap.set(company.id, { enabled, total });
     }
 
@@ -757,7 +776,9 @@ export default function NotificationsPage() {
                   borderRadius: 10,
                   overflow: "hidden",
                   border: "1px solid var(--border)",
-                  background: "rgba(13,33,55,0.08)",
+                  background: getCompanyLogoUrl(selectedFilterCompany.logoFilename) 
+                    ? "rgba(13,33,55,0.08)" 
+                    : "linear-gradient(135deg, #0D2137 0%, #0F766E 100%)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -770,28 +791,48 @@ export default function NotificationsPage() {
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   ) : (
-                    <span style={{ fontSize: 14, fontWeight: 800, color: "var(--primary)" }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>
                       {selectedFilterCompany.name.slice(0, 2).toUpperCase()}
                     </span>
                   )}
                 </span>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
-                    {selectedFilterCompany.name}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                      {selectedFilterCompany.name}
+                    </span>
+                    {selectedFilterCompany.groupName && (
+                      <span style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: "#0F766E",
+                        background: "rgba(15,118,110,0.12)",
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.03em",
+                      }}>
+                        {selectedFilterCompany.groupName}
+                      </span>
+                    )}
                   </div>
-                  {selectedFilterCompany.groupName && (
-                    <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginBottom: 3 }}>
-                      <span style={{ fontWeight: 600 }}>{t("companies.group", "Group")}:</span> {selectedFilterCompany.groupName}
-                    </div>
-                  )}
                   <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginBottom: 3 }}>
                     <span style={{ fontWeight: 600 }}>{t("companies.owner", "Owner")}:</span>{" "}
                     {selectedFilterCompany.ownerName
                       ? `${selectedFilterCompany.ownerName}${selectedFilterCompany.ownerSurname ? ` ${selectedFilterCompany.ownerSurname}` : ""}`
                       : t("companies.ownerMissing", "No owner")}
                   </div>
-                  <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
-                    <span style={{ fontWeight: 600 }}>{t("companies.employees", "Employees")}:</span> {selectedFilterCompany.employeeCount} | <span style={{ fontWeight: 600 }}>{t("companies.stores", "Stores")}:</span> {selectedFilterCompany.storeCount}
+                  <div style={{ fontSize: 10.5, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                      <Users size={11} color="#0284C7" />
+                      <span style={{ fontWeight: 600, color: "#0284C7" }}>{selectedFilterCompany.employeeCount}</span>
+                      <span style={{ fontWeight: 500, color: "var(--text-muted)", fontSize: 10 }}>{t("companies.employees", "Employees")}</span>
+                    </span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                      <Store size={11} color="#7C3AED" />
+                      <span style={{ fontWeight: 600, color: "#7C3AED" }}>{selectedFilterCompany.storeCount}</span>
+                      <span style={{ fontWeight: 500, color: "var(--text-muted)", fontSize: 10 }}>{t("companies.stores", "Stores")}</span>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -814,7 +855,7 @@ export default function NotificationsPage() {
                 {filteredNotifications.length}
               </span>
               <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                {t("notifications.ofTotal", "of {{total}}", { total })}
+                {t("notifications.ofTotal", "of {{total}}", { total: notificationCountByCompany.get(selectedFilterCompany.id) || 0 })}
               </span>
             </div>
 
@@ -829,10 +870,10 @@ export default function NotificationsPage() {
               <span style={{ fontSize: 10.5, fontWeight: 800, color: "#0D2137", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>
                 {t("notifications.stats", "Statistics")}
               </span>
-              <div style={{ display: "flex", gap: 12, justifyContent: "space-between" }}>
+              <div style={{ display: "flex", gap: 12, justifyContent: "space-around" }}>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#DC2626", fontFamily: "var(--font-display)" }}>
-                    {unreadCount}
+                    {filteredNotifications.filter(n => !n.isRead).length}
                   </div>
                   <div style={{ fontSize: 9.5, color: "var(--text-muted)", marginTop: 2 }}>
                     {t("notifications.unread", "Unread")}
@@ -840,7 +881,7 @@ export default function NotificationsPage() {
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#15803D", fontFamily: "var(--font-display)" }}>
-                    {readCount}
+                    {filteredNotifications.filter(n => n.isRead).length}
                   </div>
                   <div style={{ fontSize: 9.5, color: "var(--text-muted)", marginTop: 2 }}>
                     {t("notifications.read", "Read")}
@@ -848,7 +889,7 @@ export default function NotificationsPage() {
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#EA580C", fontFamily: "var(--font-display)" }}>
-                    {prioritySummary.urgent + prioritySummary.high}
+                    {filteredNotifications.filter(n => n.priority === 'urgent' || n.priority === 'high').length}
                   </div>
                   <div style={{ fontSize: 9.5, color: "var(--text-muted)", marginTop: 2 }}>
                     {t("notifications.highPriority", "High")}
@@ -964,6 +1005,7 @@ export default function NotificationsPage() {
             border: "1px solid var(--border)",
             background: "var(--surface)",
             overflow: "hidden",
+            minHeight: 340,
           }}
         >
           <div
@@ -997,7 +1039,7 @@ export default function NotificationsPage() {
               {scope === "company" &&
                 canViewCompanyFeed &&
                 companies.length > 0 && (
-                  <div ref={companyPickerRef} style={{ position: "relative" }}>
+                  <div ref={companyPickerRef} style={{ position: "relative", zIndex: 100 }}>
                     <button
                       type="button"
                       onClick={() =>
@@ -1006,27 +1048,30 @@ export default function NotificationsPage() {
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 8,
+                        gap: 6,
                         padding: selectedFilterCompany
-                          ? "6px 10px"
-                          : "6px 12px",
+                          ? "4px 8px"
+                          : "4px 10px",
                         border: "1px solid var(--border)",
-                        borderRadius: 8,
+                        borderRadius: 6,
                         background: "var(--surface)",
                         cursor: "pointer",
-                        minWidth: 180,
+                        minWidth: 160,
+                        height: 32,
                       }}
                     >
                       {selectedFilterCompany ? (
                         <>
                           <span
                             style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 6,
+                              width: 20,
+                              height: 20,
+                              borderRadius: 5,
                               overflow: "hidden",
                               border: "1px solid var(--border)",
-                              background: "rgba(13,33,55,0.08)",
+                              background: getCompanyLogoUrl(selectedFilterCompany.logoFilename)
+                                ? "rgba(13,33,55,0.08)"
+                                : "linear-gradient(135deg, #0D2137 0%, #0F766E 100%)",
                               display: "inline-flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -1052,9 +1097,9 @@ export default function NotificationsPage() {
                             ) : (
                               <span
                                 style={{
-                                  fontSize: 9,
+                                  fontSize: 8,
                                   fontWeight: 800,
-                                  color: "var(--primary)",
+                                  color: "#fff",
                                 }}
                               >
                                 {selectedFilterCompany.name
@@ -1069,33 +1114,16 @@ export default function NotificationsPage() {
                             <span
                               style={{
                                 display: "block",
-                                fontSize: 11.5,
+                                fontSize: 11,
                                 fontWeight: 700,
                                 color: "var(--text-primary)",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
+                                lineHeight: 1.2,
                               }}
                             >
                               {selectedFilterCompany.name}
-                            </span>
-                            <span
-                              style={{
-                                display: "block",
-                                fontSize: 9.5,
-                                color: "var(--text-muted)",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {notificationCountByCompany.get(
-                                selectedFilterCompany.id,
-                              ) || 0}{" "}
-                              {t(
-                                "notifications.notificationsCount",
-                                "notifications",
-                              )}
                             </span>
                           </span>
                         </>
@@ -1104,7 +1132,7 @@ export default function NotificationsPage() {
                           <span
                             style={{
                               flex: 1,
-                              fontSize: 11.5,
+                              fontSize: 11,
                               fontWeight: 600,
                               color: "var(--text-primary)",
                             }}
@@ -1123,7 +1151,7 @@ export default function NotificationsPage() {
                         </>
                       )}
                       <ChevronDown
-                        size={12}
+                        size={11}
                         color="var(--text-muted)"
                         style={{ flexShrink: 0 }}
                       />
@@ -1135,13 +1163,13 @@ export default function NotificationsPage() {
                           position: "absolute",
                           right: 0,
                           top: "calc(100% + 6px)",
-                          zIndex: 1000,
+                          zIndex: 10,
                           border: "1px solid var(--border)",
                           borderRadius: 10,
                           background: "var(--surface)",
                           boxShadow: "0 16px 30px rgba(0,0,0,0.15)",
                           minWidth: 320,
-                          maxHeight: 400,
+                          maxHeight: 280,
                           overflowY: "auto",
                         }}
                       >
@@ -1365,7 +1393,7 @@ export default function NotificationsPage() {
               {t("common.loading")}
             </div>
           ) : filteredNotifications.length === 0 ? (
-            <div style={{ padding: "34px 16px", textAlign: "center" }}>
+            <div style={{ padding: "34px 16px", textAlign: "center", position: "relative", zIndex: 1 }}>
               <div
                 style={{
                   display: "inline-flex",
