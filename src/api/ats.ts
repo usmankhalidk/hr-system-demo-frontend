@@ -18,9 +18,25 @@ export interface JobPosting {
   companySlug: string;
   companyName: string | null;
   companyLogoFilename: string | null;
+  companyGroupName: string | null;
+  companyCountry: string | null;
+  companyOwnerName: string | null;
+  companyOwnerSurname: string | null;
+  companyOwnerAvatarFilename: string | null;
+  companyStoreCount: number | null;
   storeId: number | null;
   storeName: string | null;
   storeLogoFilename: string | null;
+  storeCountry: string | null;
+  storeHrName: string | null;
+  storeHrSurname: string | null;
+  storeHrAvatarFilename: string | null;
+  storeAreaManagerName: string | null;
+  storeAreaManagerSurname: string | null;
+  storeAreaManagerAvatarFilename: string | null;
+  storeManagerName: string | null;
+  storeManagerSurname: string | null;
+  storeManagerAvatarFilename: string | null;
   location: string;
   city: string | null;
   state: string | null;
@@ -303,7 +319,11 @@ export async function createInterview(
   candidateId: number,
   payload: { scheduledAt: string; location?: string; notes?: string },
 ): Promise<Interview> {
-  const { data } = await apiClient.post(`/ats/candidates/${candidateId}/interviews`, payload);
+  const { data } = await apiClient.post(`/ats/candidates/${candidateId}/interviews`, {
+    scheduled_at: payload.scheduledAt,
+    location: payload.location,
+    notes: payload.notes,
+  });
   return data.data.interview as Interview;
 }
 

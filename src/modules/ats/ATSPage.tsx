@@ -15,6 +15,7 @@ import {
   Heart,
   Languages,
   MapPin,
+  Pencil,
   Phone,
   Plus,
   Sparkles,
@@ -35,8 +36,10 @@ import { translateApiError } from '../../utils/apiErrors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import { DatePicker } from '../../components/ui/DatePicker';
+import { TimePicker } from '../../components/ui/TimePicker';
 import { CitySelect, CountrySelect, StateSelect } from '../../components/location';
-import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
+import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl, getResumeUrl } from '../../api/client';
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
 import { getEmployees } from '../../api/employees';
@@ -44,12 +47,13 @@ import { Company, Employee, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
   getCandidates, createCandidate, updateCandidateStage, deleteCandidate,
-  getInterviews, createInterview, updateInterview,
+  getInterviews, createInterview, updateInterview, deleteInterview,
   getAlerts, getRisks,
   previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
+import DocumentPreviewModal from './DocumentPreviewModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1872,10 +1876,11 @@ interface CandidateModalProps {
 const CandidateModal: React.FC<CandidateModalProps> = ({
   candidate, jobs, canEdit, canFeedback, onClose, onAdvance, onReject, onDelete, saving,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [showInterviewForm, setShowInterviewForm] = useState(false);
+  const [editingInterviewId, setEditingInterviewId] = useState<number | null>(null);
   const [intDate, setIntDate] = useState('');
   const [intTime, setIntTime] = useState('09:00');
   const [intLocation, setIntLocation] = useState('');
@@ -1883,7 +1888,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [savingInt, setSavingInt] = useState(false);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
   const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
+  const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; filename: string } | null>(null);
 
   const appliedJob = candidate.jobPostingId
     ? jobs.find((j) => j.id === candidate.jobPostingId) ?? null
@@ -1892,6 +1899,11 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const appliedTimeSource = candidate.appliedAt ?? candidate.createdAt;
   const appliedAgoLabel = fmtRelativeTime(appliedTimeSource);
   const appliedAtLabel = fmtDateTime(appliedTimeSource);
+  const appliedDateOnly = new Date(appliedTimeSource).toLocaleDateString(i18n.language === 'it' ? 'it-IT' : 'en-GB', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
   const appliedJobLocation = appliedJob
     ? [appliedJob.jobCity ?? appliedJob.city, appliedJob.jobState ?? appliedJob.state, appliedJob.jobCountry ?? appliedJob.country]
       .filter(Boolean)
@@ -1901,6 +1913,38 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const stageColor = STAGE_COLOR[candidate.status];
   const stageBg = STAGE_BG[candidate.status];
   const next = NEXT_STAGE[candidate.status];
+
+  // Extract only the relative path from cvs/ or public-cv/ onwards
+  const displayResumePath = candidate.resumePath 
+    ? candidate.resumePath.includes('cvs/') 
+      ? candidate.resumePath.substring(candidate.resumePath.indexOf('cvs/'))
+      : candidate.resumePath.includes('public-cv/')
+      ? candidate.resumePath.substring(candidate.resumePath.indexOf('public-cv/'))
+      : candidate.resumePath
+    : null;
+
+  // Country flag helper
+  const getCountryFlag = (countryCode: string | null | undefined): string => {
+    if (!countryCode) return '';
+    const code = countryCode.toUpperCase();
+    const flags: Record<string, string> = {
+      'IT': '🇮🇹', 'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪', 
+      'ES': '🇪🇸', 'PT': '🇵🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭',
+      'AT': '🇦🇹', 'PL': '🇵🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰',
+    };
+    return flags[code] || '🌍';
+  };
+
+  // Format date based on language
+  const formatDate = (date: string | null | undefined, format: 'long' | 'short' = 'long'): string => {
+    if (!date) return '';
+    const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
+    return new Date(date).toLocaleDateString(locale, {
+      year: 'numeric',
+      month: format === 'long' ? 'long' : 'short',
+      day: 'numeric',
+    });
+  };
 
   useEffect(() => {
     getInterviews(candidate.id)
@@ -1930,22 +1974,51 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
   };
 
+  const handleDeleteInterview = async (interviewId: number) => {
+    setDeletingInterviewId(interviewId);
+    try {
+      await deleteInterview(interviewId);
+      setInterviews((prev) => prev.filter((iv) => iv.id !== interviewId));
+      showToast(t('ats.interviewDeleted', 'Interview deleted'), 'success');
+    } catch {
+      showToast(t('ats.interviewDeleteError', 'Failed to delete interview'), 'error');
+    } finally {
+      setDeletingInterviewId(null);
+    }
+  };
+
   const handleCreateInterview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!intDate) return;
     setSavingInt(true);
     try {
-      const scheduledAt = new Date(`${intDate}T${intTime}:00`).toISOString();
-      const iv = await createInterview(candidate.id, {
-        scheduledAt,
-        location: intLocation || undefined,
-        notes: intNotes || undefined,
-      });
-      setInterviews((prev) => [...prev, iv]);
+      // Ensure time has a value, default to 09:00 if empty
+      const timeValue = intTime || '09:00';
+      const scheduledAt = new Date(`${intDate}T${timeValue}:00`).toISOString();
+      
+      if (editingInterviewId) {
+        // Update existing interview
+        const updated = await updateInterview(editingInterviewId, {
+          scheduledAt,
+          notes: intNotes || undefined,
+        });
+        setInterviews((prev) => prev.map((iv) => (iv.id === editingInterviewId ? updated : iv)));
+        showToast(t('ats.interviewUpdated', 'Interview updated'), 'success');
+      } else {
+        // Create new interview
+        const iv = await createInterview(candidate.id, {
+          scheduledAt,
+          location: intLocation || undefined,
+          notes: intNotes || undefined,
+        });
+        setInterviews((prev) => [...prev, iv]);
+        showToast(t('ats.interviewCreated'), 'success');
+      }
+      
       setShowInterviewForm(false);
+      setEditingInterviewId(null);
       setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
-      showToast(t('ats.interviewCreated'), 'success');
-    } catch {
+    } catch (err) {
       showToast(t('ats.interviewError'), 'error');
     } finally {
       setSavingInt(false);
@@ -1959,7 +2032,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         <div style={{
           background: `linear-gradient(135deg, ${stageColor}18 0%, ${stageColor}08 100%)`,
           borderBottom: `3px solid ${stageColor}`,
-          padding: '24px 28px 20px',
+          padding: '16px 24px 16px',
           position: 'relative',
         }}>
           <button onClick={onClose} style={{
@@ -1969,6 +2042,17 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             width: 28, height: 28, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>×</button>
+
+          {/* Stage tag in top right */}
+          <div style={{ position: 'absolute', top: 20, right: 56 }}>
+            <span style={{
+              background: stageColor, color: '#fff',
+              borderRadius: 99, padding: '2px 12px', fontSize: 11, fontWeight: 700,
+              letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}>
+              {t(`ats.stage_${candidate.status}`)}
+            </span>
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Avatar */}
@@ -1987,13 +2071,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 {candidate.fullName}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{
-                  background: stageColor, color: '#fff',
-                  borderRadius: 99, padding: '2px 12px', fontSize: 11, fontWeight: 700,
-                  letterSpacing: '0.04em', textTransform: 'uppercase',
-                }}>
-                  {t(`ats.stage_${candidate.status}`)}
-                </span>
                 {jobTitle && (
                   <span style={{
                     background: 'var(--surface)', color: 'var(--text-secondary)',
@@ -2003,102 +2080,587 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     📌 {jobTitle}
                   </span>
                 )}
-                {candidate.unread && (
-                  <span style={{
-                    background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE',
-                    borderRadius: 99, padding: '2px 8px', fontSize: 10, fontWeight: 700,
-                  }}>
-                    NEW
-                  </span>
-                )}
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+                      · {appliedAgoLabel}
+                    </span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Body */}
-        <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Contact grid */}
+          {/* Candidate Information */}
           <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12,
             background: 'var(--background)', borderRadius: 12, padding: '14px 16px',
+            border: '1px solid var(--border)',
+            position: 'relative',
           }}>
-            {[
-              { label: 'Email', value: candidate.email, href: candidate.email ? `mailto:${candidate.email}` : undefined },
-              { label: t('ats.phone'), value: candidate.phone, href: candidate.phone ? `tel:${candidate.phone}` : undefined },
-              { label: t('ats.source'), value: candidate.source },
-              { label: t('ats.appliedAt', 'Applied'), value: `${appliedAgoLabel} · ${appliedAtLabel}` },
-            ].filter((i) => i.value).map((item) => (
-              <div key={item.label}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
-                  {item.label}
-                </div>
-                {item.href ? (
-                  <a href={item.href} style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>
-                    {item.value}
-                  </a>
-                ) : (
-                  <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, textTransform: 'capitalize' }}>{item.value}</div>
-                )}
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+              👤 {t('ats.candidateInfo', 'Candidate Information')}
+            </div>
+
+            {/* Source tag in top right */}
+            <div style={{ position: 'absolute', top: 14, right: 16 }}>
+              <span style={{
+                background: 'var(--accent-light, rgba(201,151,58,0.10))',
+                color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
+                borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 600,
+                textTransform: 'capitalize',
+              }}>
+                {candidate.source}
+              </span>
+            </div>
+            
+            {/* Full Name */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+                {t('common.fullName', 'Full Name')}
               </div>
-            ))}
+              <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
+                {candidate.fullName}
+              </div>
+            </div>
+
+            {/* Contact Grid with Icons */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 10 }}>
+              {candidate.email && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>📧</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                      Email
+                    </div>
+                    <a href={`mailto:${candidate.email}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                      {candidate.email}
+                    </a>
+                  </div>
+                </div>
+              )}
+              {candidate.phone && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>📞</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                      {t('ats.phone', 'Phone')}
+                    </div>
+                    <a href={`tel:${candidate.phone}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>
+                      {candidate.phone}
+                    </a>
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>📅</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                    {t('ats.appliedDate', 'Applied Date')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>
+                    {appliedDateOnly}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Resume/CV - Smaller Icon */}
+            {displayResumePath && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                  📄 {t('ats.resume', 'Resume / CV')}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  {/* Smaller Document Icon */}
+                  <div style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 6,
+                    background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 16,
+                    flexShrink: 0,
+                    boxShadow: '0 2px 6px rgba(220, 38, 38, 0.2)',
+                  }}>
+                    {displayResumePath.endsWith('.pdf') ? '📕' : displayResumePath.endsWith('.docx') || displayResumePath.endsWith('.doc') ? '📘' : '📄'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 1 }}>
+                      {displayResumePath.split('/').pop()}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                      {displayResumePath}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const url = getResumeUrl(candidate.resumePath);
+                      if (url) {
+                        setPreviewDoc({ url, filename: displayResumePath.split('/').pop() || 'resume.pdf' });
+                      }
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border)',
+                      background: 'var(--background)',
+                      color: 'var(--text-primary)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t('common.view', 'View')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Applied job snapshot */}
-          {appliedJob && (
+          {/* Cover Letter (if exists) */}
+          {candidate.coverLetter && (
             <div style={{
               border: '1px solid var(--border)',
               borderRadius: 12,
               background: '#fff',
-              padding: '12px 14px',
-              display: 'grid',
-              gap: 8,
+              padding: '14px 16px',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
-                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700 }}>
-                    {t('ats.appliedPosition', 'Applied position')}
-                  </span>
-                  <strong style={{ fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {appliedJob.title}
-                  </strong>
-                </div>
-                <span style={{
-                  borderRadius: 999,
-                  border: '1px solid rgba(13,33,55,0.18)',
-                  background: 'var(--background)',
-                  color: STATUS_COLOR[appliedJob.status],
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  textTransform: 'uppercase',
-                }}>
-                  {t(`ats.status_${appliedJob.status}`, appliedJob.status)}
-                </span>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+                ✉️ {t('ats.coverLetter', 'Cover Letter')}
               </div>
-
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                {appliedJobLocation && (
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    <MapPin size={12} />
-                    {appliedJobLocation}
-                  </span>
-                )}
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <BriefcaseBusiness size={12} />
-                  {t(`ats.jobType_${JOB_TYPE_LABEL[appliedJob.jobType]}`, appliedJob.jobType)}
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <Globe2 size={12} />
-                  {t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)}
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <Clock3 size={12} />
-                  {appliedAgoLabel}
-                </span>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {candidate.coverLetter}
               </div>
             </div>
+          )}
+
+          {/* Job Post Details - Enhanced */}
+          {appliedJob && (
+            <>
+              <div style={{
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                background: '#fff',
+                padding: '14px 16px',
+              }}>
+                {/* Header Row with Title and Target Role Tag */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                    💼 {t('ats.jobPostDetails', 'Job Post Details')}
+                  </div>
+                  {appliedJob.targetRole && (
+                    <span style={{
+                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: '#fff',
+                      borderRadius: 99,
+                      padding: '3px 10px',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      boxShadow: '0 2px 6px rgba(16, 185, 129, 0.25)',
+                    }}>
+                      {appliedJob.targetRole.replace('_', ' ')}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Title Row with Status Tag */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1, minWidth: 0 }}>
+                    {appliedJob.title}
+                  </h3>
+                  <span style={{
+                    borderRadius: 999,
+                    border: '1px solid rgba(13,33,55,0.18)',
+                    background: STATUS_COLOR[appliedJob.status] + '15',
+                    color: STATUS_COLOR[appliedJob.status],
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '3px 8px',
+                    textTransform: 'uppercase',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {t(`ats.status_${appliedJob.status}`, appliedJob.status)}
+                  </span>
+                </div>
+
+                {/* Description Row */}
+                {appliedJob.description && (
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, margin: '0 0 10px 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {appliedJob.description}
+                  </p>
+                )}
+
+                {/* First Row: Location and Work Arrangement */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 8 }}>
+                  {/* Location with Flag */}
+                  {(appliedJob.jobCountry || appliedJob.country) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                      <span style={{ fontSize: 14 }}>📍</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('common.location', 'Location')}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          {(appliedJob.jobCountry || appliedJob.country) && (
+                            <ReactCountryFlag 
+                              countryCode={appliedJob.jobCountry || appliedJob.country || ''} 
+                              svg 
+                              style={{ width: '0.95em', height: '0.95em' }} 
+                            />
+                          )}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {[appliedJob.jobCity || appliedJob.city, appliedJob.jobState || appliedJob.state].filter(Boolean).join(', ') || (appliedJob.jobCountry || appliedJob.country)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remote Type */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                    <Globe2 size={14} color="var(--text-muted)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {t('ats.workArrangement', 'Work Arrangement')}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Second Row: Department, Hours, Job Type */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
+                  {appliedJob.department && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                      <span style={{ fontSize: 14 }}>🏢</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('ats.department', 'Department')}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {appliedJob.department}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {appliedJob.weeklyHours && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                      <Clock3 size={14} color="var(--text-muted)" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('ats.weeklyHours', 'Weekly Hours')}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {appliedJob.weeklyHours}h/week
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Job Type */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                    <BriefcaseBusiness size={14} color="var(--text-muted)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {t('ats.jobType', 'Job Type')}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {t(`ats.jobType_${JOB_TYPE_LABEL[appliedJob.jobType]}`, appliedJob.jobType)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Salary Range */}
+                {(appliedJob.salaryMin || appliedJob.salaryMax) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)', borderRadius: 6, border: '1px solid #BBF7D0' }}>
+                    <span style={{ fontSize: 16 }}>💰</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+                        {t('ats.salaryRange', 'Salary Range')}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#15803D' }}>
+                        {appliedJob.salaryMin && appliedJob.salaryMax 
+                          ? `€${appliedJob.salaryMin.toLocaleString()} - €${appliedJob.salaryMax.toLocaleString()}`
+                          : appliedJob.salaryMin 
+                          ? `€${appliedJob.salaryMin.toLocaleString()}+`
+                          : `€${appliedJob.salaryMax?.toLocaleString()}`}
+                        {appliedJob.salaryPeriod && (
+                          <span style={{ fontSize: 10, fontWeight: 500, color: '#16A34A', marginLeft: 4 }}>
+                            / {appliedJob.salaryPeriod}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Job Post Creator Section - Enhanced */}
+              <div style={{
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                background: '#fff',
+                padding: '16px 18px',
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+                  👨‍💼 {t('ats.jobPostCreator', 'Job Post Creator')}
+                </div>
+                
+                {/* Creator Info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+                  {appliedJob.createdByAvatarFilename && getAvatarUrl(appliedJob.createdByAvatarFilename) ? (
+                    <img 
+                      src={getAvatarUrl(appliedJob.createdByAvatarFilename) || ''} 
+                      alt={appliedJob.createdByName || 'User'}
+                      style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 44, height: 44, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 700, fontSize: 16, border: '2px solid var(--border)',
+                    }}>
+                      {appliedJob.createdByName ? appliedJob.createdByName[0].toUpperCase() : '?'}
+                    </div>
+                  )}
+                  
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {appliedJob.createdByName} {appliedJob.createdBySurname}
+                      {appliedJob.createdByRole && (
+                        <span style={{ 
+                          marginLeft: 8, 
+                          fontSize: 11, 
+                          fontWeight: 500, 
+                          color: 'var(--text-muted)',
+                          textTransform: 'capitalize'
+                        }}>
+                          · {appliedJob.createdByRole.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      <strong>{t('ats.created', 'Created')}:</strong> {formatDate(appliedJob.createdAt)}
+                      {appliedJob.publishedAt && (
+                        <span style={{ marginLeft: 8 }}>
+                          · <strong>{t('ats.published', 'Published')}:</strong> {formatDate(appliedJob.publishedAt, 'short')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Company Info */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                    {t('common.company', 'Company')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
+                    {appliedJob.companyLogoFilename && getCompanyLogoUrl(appliedJob.companyLogoFilename) ? (
+                      <img 
+                        src={getCompanyLogoUrl(appliedJob.companyLogoFilename) || ''} 
+                        alt={appliedJob.companyName || 'Company'}
+                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 8,
+                        background: 'var(--primary)', color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 14,
+                      }}>
+                        {appliedJob.companyName ? appliedJob.companyName[0].toUpperCase() : 'C'}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {appliedJob.companyName || 'N/A'}
+                        </span>
+                        {appliedJob.companyCountry && (
+                          <ReactCountryFlag 
+                            countryCode={appliedJob.companyCountry} 
+                            svg 
+                            style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }} 
+                          />
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {appliedJob.companyGroupName && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: 'var(--accent)',
+                            background: 'var(--accent-light)',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                          }}>
+                            {appliedJob.companyGroupName}
+                          </span>
+                        )}
+                        {(appliedJob.companyOwnerName || appliedJob.companyOwnerSurname) && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            {appliedJob.companyOwnerAvatarFilename && getAvatarUrl(appliedJob.companyOwnerAvatarFilename) ? (
+                              <img 
+                                src={getAvatarUrl(appliedJob.companyOwnerAvatarFilename) || ''} 
+                                alt={`${appliedJob.companyOwnerName} ${appliedJob.companyOwnerSurname}`}
+                                style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: 14, height: 14, borderRadius: '50%',
+                                background: 'var(--primary)', color: '#fff',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 7, fontWeight: 700,
+                              }}>
+                                {appliedJob.companyOwnerName ? appliedJob.companyOwnerName[0].toUpperCase() : 'O'}
+                              </div>
+                            )}
+                            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                              {appliedJob.companyOwnerName} {appliedJob.companyOwnerSurname}
+                            </span>
+                          </div>
+                        )}
+                        {appliedJob.companyStoreCount != null && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            · {appliedJob.companyStoreCount} {t('employees.storesLabel', 'Stores')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Store Info */}
+                {appliedJob.storeName && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                      {t('common.store', 'Store')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
+                      {appliedJob.storeLogoFilename && getStoreLogoUrl(appliedJob.storeLogoFilename) ? (
+                        <img 
+                          src={getStoreLogoUrl(appliedJob.storeLogoFilename) || ''} 
+                          alt={appliedJob.storeName}
+                          style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 8,
+                          background: 'var(--accent)', color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 700, fontSize: 14,
+                        }}>
+                          {appliedJob.storeName[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {appliedJob.storeName}
+                          </span>
+                          {appliedJob.storeCountry && (
+                            <ReactCountryFlag 
+                              countryCode={appliedJob.storeCountry} 
+                              svg 
+                              style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }} 
+                            />
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          {(appliedJob.storeHrName || appliedJob.storeHrSurname) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>HR:</span>
+                              {appliedJob.storeHrAvatarFilename && getAvatarUrl(appliedJob.storeHrAvatarFilename) ? (
+                                <img 
+                                  src={getAvatarUrl(appliedJob.storeHrAvatarFilename) || ''} 
+                                  alt={`${appliedJob.storeHrName} ${appliedJob.storeHrSurname}`}
+                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%',
+                                  background: 'var(--primary)', color: '#fff',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 8, fontWeight: 700,
+                                }}>
+                                  {appliedJob.storeHrName ? appliedJob.storeHrName[0].toUpperCase() : 'H'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                {appliedJob.storeHrName} {appliedJob.storeHrSurname}
+                              </span>
+                            </div>
+                          )}
+                          {(appliedJob.storeAreaManagerName || appliedJob.storeAreaManagerSurname) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Area Manager:</span>
+                              {appliedJob.storeAreaManagerAvatarFilename && getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) ? (
+                                <img 
+                                  src={getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) || ''} 
+                                  alt={`${appliedJob.storeAreaManagerName} ${appliedJob.storeAreaManagerSurname}`}
+                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%',
+                                  background: '#059669', color: '#fff',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 8, fontWeight: 700,
+                                }}>
+                                  {appliedJob.storeAreaManagerName ? appliedJob.storeAreaManagerName[0].toUpperCase() : 'A'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                {appliedJob.storeAreaManagerName} {appliedJob.storeAreaManagerSurname}
+                              </span>
+                            </div>
+                          )}
+                          {(appliedJob.storeManagerName || appliedJob.storeManagerSurname) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{t('common.manager', 'Manager')}:</span>
+                              {appliedJob.storeManagerAvatarFilename && getAvatarUrl(appliedJob.storeManagerAvatarFilename) ? (
+                                <img 
+                                  src={getAvatarUrl(appliedJob.storeManagerAvatarFilename) || ''} 
+                                  alt={`${appliedJob.storeManagerName} ${appliedJob.storeManagerSurname}`}
+                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%',
+                                  background: 'var(--accent)', color: '#fff',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 8, fontWeight: 700,
+                                }}>
+                                  {appliedJob.storeManagerName ? appliedJob.storeManagerName[0].toUpperCase() : 'M'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                {appliedJob.storeManagerName} {appliedJob.storeManagerSurname}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {/* Tags */}
@@ -2186,90 +2748,25 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 )}
               </div>
 
-              {interviews.length === 0 && !showInterviewForm && (
-                <div style={{
-                  background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
-                  fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic',
-                }}>
-                  {t('ats.noInterviews')}
-                </div>
-              )}
-
-              {interviews.map((iv) => (
-                <div key={iv.id} style={{
-                  background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
-                  marginBottom: 8, borderLeft: `3px solid ${STAGE_COLOR.interview}`,
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 2 }}>
-                    🕐 {fmtDateTime(iv.scheduledAt)}
-                  </div>
-                  {iv.location && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>📍 {iv.location}</div>
-                  )}
-                  {iv.notes && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{iv.notes}</div>
-                  )}
-                  {iv.feedback && (
-                    <div style={{
-                      fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
-                      fontStyle: 'italic', padding: '6px 10px',
-                      background: 'var(--surface)', borderRadius: 6, borderLeft: '2px solid var(--accent)',
-                    }}>
-                      "{iv.feedback}"
-                    </div>
-                  )}
-                  {canFeedback && (
-                    <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <textarea
-                        value={feedbackDrafts[iv.id] ?? ''}
-                        onChange={(e) => setFeedbackDrafts((prev) => ({ ...prev, [iv.id]: e.target.value }))}
-                        rows={2}
-                        placeholder={t('ats.feedbackPlaceholder')}
-                        style={{
-                          flex: 1,
-                          fontFamily: 'inherit',
-                          fontSize: 12,
-                          borderRadius: 8,
-                          border: '1px solid var(--border)',
-                          padding: '7px 9px',
-                          resize: 'vertical',
-                          background: 'var(--surface)',
-                        }}
-                      />
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleSaveFeedback(iv.id)}
-                        loading={savingFeedbackId === iv.id}
-                      >
-                        {t('common.save')}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-
+              {/* Create interview form - displayed at top when active */}
               {canEdit && showInterviewForm && (
                 <form onSubmit={handleCreateInterview} style={{
                   background: 'var(--background)', borderRadius: 12, padding: '16px',
                   display: 'flex', flexDirection: 'column', gap: 12,
                   border: '1px solid var(--border)',
+                  marginBottom: 12,
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        {t('ats.interviewDate')} *
-                      </label>
-                      <input type="date" className="field-input" value={intDate} onChange={(e) => setIntDate(e.target.value)} required
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        {t('ats.interviewTime')}
-                      </label>
-                      <input type="time" className="field-input" value={intTime} onChange={(e) => setIntTime(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                    </div>
+                    <DatePicker
+                      label={`${t('ats.interviewDate')} *`}
+                      value={intDate}
+                      onChange={setIntDate}
+                    />
+                    <TimePicker
+                      label={t('ats.interviewTime')}
+                      value={intTime}
+                      onChange={setIntTime}
+                    />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
@@ -2287,15 +2784,161 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       style={{ width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <Button variant="secondary" size="sm" type="button" onClick={() => setShowInterviewForm(false)}>
+                    <Button variant="secondary" size="sm" type="button" onClick={() => {
+                      setShowInterviewForm(false);
+                      setEditingInterviewId(null);
+                      setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
+                    }}>
                       {t('common.cancel')}
                     </Button>
                     <Button variant="primary" size="sm" type="submit" loading={savingInt}>
-                      {t('ats.scheduleInterview')}
+                      {editingInterviewId ? t('common.update', 'Update') : t('ats.scheduleInterview')}
                     </Button>
                   </div>
                 </form>
               )}
+
+              {interviews.length === 0 && !showInterviewForm && (
+                <div style={{
+                  background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
+                  fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic',
+                }}>
+                  {t('ats.noInterviews')}
+                </div>
+              )}
+
+              {interviews.map((iv) => {
+                const interviewDate = new Date(iv.scheduledAt);
+                const now = new Date();
+                const isPast = interviewDate < now;
+                const statusLabel = isPast ? t('ats.interviewPast', 'Past') : t('ats.interviewUpcoming', 'Upcoming');
+                const statusColor = isPast ? '#6b7280' : '#059669';
+                const statusBg = isPast ? 'rgba(107, 114, 128, 0.1)' : 'rgba(5, 150, 105, 0.1)';
+                
+                return (
+                  <div key={iv.id} style={{
+                    background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
+                    marginBottom: 8, borderLeft: `3px solid ${STAGE_COLOR.interview}`,
+                    position: 'relative',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+                            🕐 {fmtDateTime(iv.scheduledAt)}
+                          </div>
+                          <span style={{
+                            background: statusBg,
+                            color: statusColor,
+                            borderRadius: 99,
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.03em',
+                          }}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        {iv.location && (
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>📍 {iv.location}</div>
+                        )}
+                        {iv.notes && (
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{iv.notes}</div>
+                        )}
+                        {iv.feedback && (
+                          <div style={{
+                            fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
+                            fontStyle: 'italic', padding: '6px 10px',
+                            background: 'var(--surface)', borderRadius: 6, borderLeft: '2px solid var(--accent)',
+                          }}>
+                            "{iv.feedback}"
+                          </div>
+                        )}
+                      </div>
+                      {canEdit && (
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            onClick={() => {
+                              // Populate form with existing interview data
+                              const ivDate = new Date(iv.scheduledAt);
+                              setIntDate(ivDate.toISOString().split('T')[0]);
+                              setIntTime(ivDate.toTimeString().slice(0, 5));
+                              setIntLocation(iv.location || '');
+                              setIntNotes(iv.notes || '');
+                              setEditingInterviewId(iv.id);
+                              setShowInterviewForm(true);
+                            }}
+                            style={{
+                              background: 'rgba(13,33,55,0.08)',
+                              border: '1px solid rgba(13,33,55,0.2)',
+                              borderRadius: 6,
+                              width: 24,
+                              height: 24,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                            title={t('common.edit', 'Edit')}
+                          >
+                            <Pencil size={12} color="var(--primary)" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInterview(iv.id)}
+                            disabled={deletingInterviewId === iv.id}
+                            style={{
+                              background: 'rgba(220,38,38,0.08)',
+                              border: '1px solid rgba(185,28,28,0.24)',
+                              borderRadius: 6,
+                              width: 24,
+                              height: 24,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: deletingInterviewId === iv.id ? 'not-allowed' : 'pointer',
+                              opacity: deletingInterviewId === iv.id ? 0.5 : 1,
+                              transition: 'all 0.15s',
+                            }}
+                            title={t('common.delete', 'Delete')}
+                          >
+                            <Trash2 size={12} color="#991b1b" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {canFeedback && (
+                      <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <textarea
+                          value={feedbackDrafts[iv.id] ?? ''}
+                          onChange={(e) => setFeedbackDrafts((prev) => ({ ...prev, [iv.id]: e.target.value }))}
+                          rows={2}
+                          placeholder={t('ats.feedbackPlaceholder')}
+                          style={{
+                            flex: 1,
+                            fontFamily: 'inherit',
+                            fontSize: 12,
+                            borderRadius: 8,
+                            border: '1px solid var(--border)',
+                            padding: '7px 9px',
+                            resize: 'vertical',
+                            background: 'var(--surface)',
+                          }}
+                        />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleSaveFeedback(iv.id)}
+                          loading={savingFeedbackId === iv.id}
+                        >
+                          {t('common.save')}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -2364,6 +3007,14 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             </Button>
           </div>
         </ModalBackdrop>
+      )}
+
+      {previewDoc && (
+        <DocumentPreviewModal
+          url={previewDoc.url}
+          filename={previewDoc.filename}
+          onClose={() => setPreviewDoc(null)}
+        />
       )}
     </>
   );
@@ -3218,6 +3869,11 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
       });
       setCandidates((prev) => {
         if (effectiveCompanyId && c.companyId !== effectiveCompanyId) {
+          return prev;
+        }
+        // Check if candidate already exists to prevent duplicates
+        const exists = prev.some(existing => existing.id === c.id);
+        if (exists) {
           return prev;
         }
         return [c, ...prev];
