@@ -754,7 +754,10 @@ function normalizeFieldTranslationKey(fieldName: string): string {
 
 function isLocalHostname(hostname: string): boolean {
   const host = (hostname ?? '').trim().toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '::1' || host === '0.0.0.0') return true;
+  if (/^127(\.|$)/.test(host)) return true;
+  return false;
 }
 
 function formatMonthKey(monthKey: string, isItalian: boolean): string {
