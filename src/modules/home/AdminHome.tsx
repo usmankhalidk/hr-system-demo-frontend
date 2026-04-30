@@ -340,7 +340,11 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRan
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', alignItems: 'start' }}>
 
         {/* Role distribution donut chart */}
-        <Panel title={t('home.admin.roleDistribution')} subtitle={t('home.admin.roleDistributionDesc')}>
+        <Panel 
+          title={t('home.admin.roleDistribution')} 
+          subtitle={t('home.admin.roleDistributionDesc')}
+          style={{ gridColumn: barData.length > 0 ? 'span 1' : 'span 2' }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             <div style={{ width: 160, height: 160, flexShrink: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -380,7 +384,7 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRan
         </Panel>
 
         {/* Employees per store bar chart */}
-        {barData.length > 0 ? (
+        {barData.length > 0 && (
           <Panel title={t('home.admin.employeesPerStore')} subtitle={t('home.admin.employeesPerStoreDesc')}>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={barData} layout="vertical" margin={{ top: 0, right: 16, bottom: 0, left: 0 }}>
@@ -397,48 +401,10 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRan
               </BarChart>
             </ResponsiveContainer>
           </Panel>
-        ) : (
-          /* Quick links fallback if no store data */
-          <div style={{
-            background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '18px 20px',
-          }}>
-            <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-                {t('home.admin.quickAccess')}
-              </h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{t('home.admin.quickAccessDesc')}</p>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <QuickLink to="/dipendenti" label={t('home.admin.manageEmployees')} description={t('home.admin.manageEmployeesDesc')} icon={<IconUsers />} color="#C9973A" isMobile={isMobile} />
-              <QuickLink to="/negozi" label={t('home.admin.manageStores')} description={t('home.admin.manageStoresDesc')} icon={<IconStore />} color="#0284C7" isMobile={isMobile} />
-              <QuickLink to="/aziende" label={t('home.admin.manageCompanies')} description={t('home.admin.manageCompaniesDesc')} icon={<IconBuilding />} color="#15803D" isMobile={isMobile} />
-            </div>
-          </div>
         )}
       </div>
 
-      {/* Quick links row (always shown when store chart is also visible) */}
-      {barData.length > 0 && (
-        <div style={{
-          background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '18px 20px',
-        }}>
-          <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-              {t('home.admin.quickAccess')}
-            </h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{t('home.admin.quickAccessDesc')}</p>
-          </div>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <QuickLink to="/dipendenti" label={t('home.admin.manageEmployees')} description={t('home.admin.manageEmployeesDesc')} icon={<IconUsers />} color="#C9973A" isMobile={isMobile} />
-            <QuickLink to="/negozi" label={t('home.admin.manageStores')} description={t('home.admin.manageStoresDesc')} icon={<IconStore />} color="#0284C7" isMobile={isMobile} />
-            <QuickLink to="/aziende" label={t('home.admin.manageCompanies')} description={t('home.admin.manageCompaniesDesc')} icon={<IconBuilding />} color="#15803D" isMobile={isMobile} />
-          </div>
-        </div>
-      )}
-
-      {/* Static KPI Cards Row (Moved to bottom) */}
+      {/* Static KPI Cards Row (Moved up) */}
       {data.staticStats && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
           <StatCard 
@@ -465,6 +431,23 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRan
         </div>
       )}
 
+      {/* Quick Access section (Moved to bottom) */}
+      <div style={{
+        background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '18px 20px',
+      }}>
+        <div style={{ marginBottom: '16px' }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+            {t('home.admin.quickAccess')}
+          </h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{t('home.admin.quickAccessDesc')}</p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <QuickLink to="/dipendenti" label={t('home.admin.manageEmployees')} description={t('home.admin.manageEmployeesDesc')} icon={<IconUsers />} color="#C9973A" isMobile={isMobile} />
+          <QuickLink to="/negozi" label={t('home.admin.manageStores')} description={t('home.admin.manageStoresDesc')} icon={<IconStore />} color="#0284C7" isMobile={isMobile} />
+          <QuickLink to="/aziende" label={t('home.admin.manageCompanies')} description={t('home.admin.manageCompaniesDesc')} icon={<IconBuilding />} color="#15803D" isMobile={isMobile} />
+        </div>
+      </div>
     </div>
   );
 };
