@@ -1753,18 +1753,16 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                     {/* Template header row */}
                     <div style={{
                       display: 'flex',
-                      flexDirection: isMobile ? 'column' : 'row',
-                      alignItems: isMobile ? 'stretch' : 'center',
+                      flexDirection: 'column',
                       padding: '11px 14px',
                       background: 'var(--surface-warm)',
-                      gap: isMobile ? 8 : 10,
+                      gap: 8,
                     }}>
                       {/* Template name row */}
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 10,
-                        flex: isMobile ? 'none' : 1,
                         minWidth: 0,
                       }}>
                         <button
@@ -1783,61 +1781,68 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                         </div>
                       </div>
 
-                      {/* Store name tag row */}
+                      {/* Store name tag and action buttons row */}
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'space-between',
                         gap: 8,
+                        paddingLeft: 26,
                         flexWrap: 'wrap',
-                        paddingLeft: isMobile ? 26 : 0,
                       }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          fontSize: 11, color: 'var(--text-muted)',
-                          background: 'var(--border)', borderRadius: 999, padding: '2px 7px',
+                        {/* Store tag and pattern count */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          flexWrap: 'wrap',
                         }}>
-                          <StoreIcon size={11} />
-                          {storeName}
-                        </span>
-                        {patterns.length > 0 && (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {patterns.length} {t('shifts.patterns', 'pattern')}
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 11, color: 'var(--text-muted)',
+                            background: 'var(--border)', borderRadius: 999, padding: '2px 7px',
+                          }}>
+                            <StoreIcon size={11} />
+                            {storeName}
                           </span>
-                        )}
-                      </div>
+                          {patterns.length > 0 && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {patterns.length} {t('shifts.patterns', 'pattern')}
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Action buttons row */}
-                      <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        justifyContent: isMobile ? 'flex-end' : 'flex-start',
-                        paddingLeft: isMobile ? 26 : 0,
-                      }}>
-                        <button
-                          type="button"
-                          onClick={() => openApply(tmpl)}
-                          style={templateApplyBtnStyle}
-                        >
-                          <PlayCircle size={13} />
-                          {t('shifts.applyBtn', 'Apply')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditWizard(tmpl)}
-                          style={templateIconBtnStyle}
-                          title={t('common.edit', 'Edit')}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteId(tmpl.id)}
-                          style={templateDangerIconBtnStyle}
-                          title={t('common.delete', 'Delete')}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {/* Action buttons */}
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => openApply(tmpl)}
+                            style={templateApplyBtnStyle}
+                          >
+                            <PlayCircle size={13} />
+                            {t('shifts.applyBtn', 'Apply')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditWizard(tmpl)}
+                            style={templateIconBtnStyle}
+                            title={t('common.edit', 'Edit')}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(tmpl.id)}
+                            style={templateDangerIconBtnStyle}
+                            title={t('common.delete', 'Delete')}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     </div>
 

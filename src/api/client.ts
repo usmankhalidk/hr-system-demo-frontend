@@ -134,4 +134,13 @@ export function getPublicStoreLogoUrl(filename: string | null | undefined): stri
   return `${base}/uploads/public-store-logos/${filename}`;
 }
 
+export function getResumeUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+  const base = apiBase;
+  // Remove leading slash if present
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  return `${base}/${cleanPath}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+}
+
 export default client;
