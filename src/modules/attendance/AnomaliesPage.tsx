@@ -66,7 +66,7 @@ export default function AnomaliesPage() {
   }, [loadFilterEmployees]);
 
   const heroPad    = isMobile ? '20px 16px 0' : isTablet ? '24px 20px 0' : '28px 32px 0';
-  const filterPad  = isMobile ? '10px 16px' : '12px 32px';
+  const filterPad  = isMobile ? '10px 16px'   : isTablet ? '12px 20px' : '12px 32px';
 
   return (
     <div style={{ padding: 0, minHeight: '100%' }}>
@@ -111,6 +111,7 @@ export default function AnomaliesPage() {
                 { label: t('attendance.anomaly_no_show', 'No Show'),            color: '#ef4444' },
                 { label: t('attendance.anomaly_long_break', 'Long Break'),      color: '#a78bfa' },
                 { label: t('attendance.anomaly_early_exit', 'Early Exit'),      color: '#60a5fa' },
+                { label: t('attendance.anomaly_overtime', 'Overtime'),          color: '#c2410c' },
               ].map(({ label, color }) => (
                 <span key={label} style={{
                   display: 'flex', alignItems: 'center', gap: 5,

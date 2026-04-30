@@ -114,7 +114,7 @@ function getAvatarColor(name: string): string {
 export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search }: Props) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
-  const { isMobile } = useBreakpoint();
+  const { isMobile, isTablet } = useBreakpoint();
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +166,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
 
   useEffect(() => { fetchAnomalies(); }, [fetchAnomalies]);
 
-  const pad = isMobile ? '16px' : '24px';
+  const pad = isMobile ? '16px' : isTablet ? '20px' : '32px';
 
   if (rangeExceeds14Days) {
     return (
@@ -235,17 +235,18 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
   }, {});
 
   return (
-    <div style={{ padding: isMobile ? '16px 16px 20px' : '20px 24px 24px' }}>
+    <div style={{ padding: isMobile ? '16px 0 20px' : '20px 0 24px' }}>
 
       {/* ── Summary tiles ──────────────────────────────────────────────────── */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: isMobile
           ? 'repeat(2, 1fr)'
-          : 'repeat(auto-fit, minmax(140px, 1fr))',
-        gap: isMobile ? 8 : 10,
+          : `${pad} repeat(5, 1fr) ${pad}`,
+        gap: isMobile ? 8 : 12,
         marginBottom: isMobile ? 16 : 24,
       }}>
+        {isMobile ? null : <div />}
         {Object.entries(ANOMALY_META).map(([type, meta]) => {
           const count = countByType[type] ?? 0;
           const { Icon } = meta;
@@ -285,6 +286,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
             </div>
           );
         })}
+        {isMobile ? null : <div />}
       </div>
 
       {/* ── Mobile: card list ──────────────────────────────────────────────── */}
@@ -389,15 +391,15 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
         /* ── Desktop / tablet: table ──────────────────────────────────────── */
         <div style={{
           background: 'var(--surface)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-sm)',
+          borderTop: '1px solid var(--border)',
+          borderBottom: '1px solid var(--border)',
           overflow: 'hidden',
         }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
               <thead>
                 <tr style={{ background: 'var(--surface-warm)' }}>
+                  <th style={{ width: pad }}></th>
                   {[
                     { label: t('shifts.employee'),        icon: <IconUser /> },
                     { label: t('common.store'),            icon: <IconStore /> },
@@ -419,6 +421,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                       </div>
                     </th>
                   ))}
+                  <th style={{ width: pad }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -435,6 +438,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                     >
+                      <td></td>
                       <td style={{ padding: '11px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                           <div style={{
@@ -514,6 +518,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                       <td style={{ padding: '11px 16px', fontSize: 12, color: 'var(--text-muted)', maxWidth: 260, lineHeight: 1.5 }}>
                         {a.detailsKey ? t(a.detailsKey, a.detailsParams) : a.details}
                       </td>
+                      <td></td>
                     </tr>
                   );
                 })}
