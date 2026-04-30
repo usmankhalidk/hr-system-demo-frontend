@@ -28,11 +28,86 @@ export interface StoreManagerHomeData {
   todayAttendance?: Record<string, number>;
   upcomingWeekShiftsPlanned?: boolean;
   upcomingWeekNumber?: number;
+  stats?: {
+    activeEmployees: number;
+    presentEmployees: number;
+    weeklyHours: number;
+    overtime: number;
+  };
 }
 
 interface StoreManagerHomeProps {
   data: StoreManagerHomeData;
 }
+
+// ── Icons ──────────────────────────────────────────────────────────────────────
+const IconUsers = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+  </svg>
+);
+const IconActivity = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+  </svg>
+);
+const IconClock = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"></circle>
+    <polyline points="12 6 12 12 16 14"></polyline>
+  </svg>
+);
+const IconTrendingUp = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+    <polyline points="17 6 23 6 23 12"></polyline>
+  </svg>
+);
+
+// ── Stat card ─────────────────────────────────────────────────────────────────
+interface StatCardProps {
+  label: string;
+  value: number | string;
+  icon: React.ReactNode;
+  accent: string;
+  description?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, icon, accent, description }) => (
+  <div className="card-lift" style={{
+    background: 'var(--surface)',
+    borderRadius: 'var(--radius-lg)',
+    border: '1px solid var(--border)',
+    borderTop: `3px solid ${accent}`,
+    padding: '22px 24px',
+    boxShadow: 'var(--shadow-sm)',
+    display: 'flex', flexDirection: 'column', gap: '14px',
+  }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 10,
+        background: `${accent}14`, border: `1px solid ${accent}25`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: accent, flexShrink: 0,
+      }}>{icon}</div>
+      <span style={{
+        fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: '0.06em', paddingTop: '2px',
+      }}>{label}</span>
+    </div>
+    <div>
+      <div className="stat-num" style={{
+        fontSize: '38px', fontWeight: 700, fontFamily: 'var(--font-display)',
+        color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em',
+      }}>{value}</div>
+      {description && (
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{description}</div>
+      )}
+    </div>
+  </div>
+);
 
 // ── Circular capacity ring ─────────────────────────────────────────────────────
 function CapacityRing({ current, max, capacityLabel }: { current: number; max: number | null; capacityLabel: string }) {
@@ -95,7 +170,6 @@ const MetricRow: React.FC<{ label: string; value: string | number; accent?: stri
 );
 
 // Keys must match camelCase-converted response object keys from the API interceptor.
-// DB values: checkin, checkout, break_start, break_end → after camelizeKeys: checkin, checkout, breakStart, breakEnd
 function getEventMeta(t: (key: string) => string): Record<string, { label: string; color: string; bg: string; icon: string }> {
   return {
     checkin:    { label: t('attendance.checkin'),    color: '#15803d', bg: 'rgba(21,128,61,0.10)',  icon: '→' },
@@ -106,13 +180,13 @@ function getEventMeta(t: (key: string) => string): Record<string, { label: strin
 }
 
 export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
-  const { store, employeeCount, todayAnomalies = [], todayAttendance = {} } = data;
+  const { store, employeeCount, todayAnomalies = [], todayAttendance = {}, stats } = data;
   const { t, i18n } = useTranslation();
-  const { isMobile } = useBreakpoint();
-  const { permissions } = useAuth();
+  const { isMobile, isTablet } = useBreakpoint();
+  const { permissions, user } = useAuth();
   const EVENT_META = getEventMeta(t);
-  const showAttendance = permissions['presenze'] !== false;
-  const showAnomalies = permissions['anomalie'] !== false;
+  const showAttendance = user?.isSuperAdmin || permissions['presenze'] === true;
+  const showAnomalies = user?.isSuperAdmin || permissions['anomalie'] === true;
 
   const available = store.maxStaff ? Math.max(0, store.maxStaff - employeeCount) : null;
   const currentDay = new Date().getDay();
@@ -174,7 +248,44 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+      {/* Metric Cards Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+        gap: '24px',
+        width: '100%',
+      }}>
+        <StatCard
+          label={t('home.storeManager.activeEmployees')}
+          value={stats?.activeEmployees ?? employeeCount}
+          icon={<IconUsers />}
+          accent="#0284C7"
+          description={t('home.storeManager.activeEmployeesDesc')}
+        />
+        <StatCard
+          label={t('home.storeManager.presentEmployees')}
+          value={`${stats?.presentEmployees ?? 0} / ${stats?.activeEmployees ?? employeeCount}`}
+          icon={<IconActivity />}
+          accent="#C9973A"
+          description={t('home.storeManager.presentEmployeesDesc')}
+        />
+        <StatCard
+          label={t('home.storeManager.totalWeeklyHours')}
+          value={stats?.weeklyHours ?? 0}
+          icon={<IconClock />}
+          accent="#15803D"
+          description={t('home.storeManager.totalWeeklyHoursDesc')}
+        />
+        <StatCard
+          label={t('home.storeManager.overtime')}
+          value={stats?.overtime ?? 0}
+          icon={<IconTrendingUp />}
+          accent="#7C3AED"
+          description={t('home.storeManager.overtimeDesc')}
+        />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', alignItems: 'stretch' }}>
 
         {/* Capacity ring card */}
         <div style={{

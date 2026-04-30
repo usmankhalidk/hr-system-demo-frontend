@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { useAuth } from '../../context/AuthContext';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
@@ -60,6 +61,8 @@ export interface HRHomeData {
   expiringContracts: ExpiringContract[];
   newHires: NewHire[];
   totalEmployees: number;
+  totalStores: number;
+  expiringContractsCount: number;
   monthlyHires?: MonthlyHire[];
   statusBreakdown?: StatusItem[];
   expiringTrainings?: Array<{
@@ -104,12 +107,91 @@ function buildMonthSeries(raw: MonthlyHire[], lang: string): { label: string; va
 }
 
 const IconUsers = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
     <circle cx="9" cy="7" r="4"/>
     <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
   </svg>
 );
+
+const IconStore = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 7l1-4h18l1 4"/>
+    <path d="M2 7h20v13a2 2 0 01-2 2H4a2 2 0 01-2-2V7z"/>
+    <path d="M10 21V12h4v9"/>
+  </svg>
+);
+
+const IconCalendar = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+    <line x1="16" y1="2" x2="16" y2="6"></line>
+    <line x1="8" y1="2" x2="8" y2="6"></line>
+    <line x1="3" y1="10" x2="21" y2="10"></line>
+  </svg>
+);
+
+const IconClipboard = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+  </svg>
+);
+
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  accent: string;
+  description?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, icon, accent, description }) => {
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  return (
+    <div 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        background: 'var(--surface)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border)',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        boxShadow: isHovered ? '0 8px 30px rgba(0,0,0,0.08)' : 'var(--shadow-sm)',
+        transition: 'all 0.25s ease',
+        cursor: 'default',
+        transform: isHovered ? 'translateY(-2px)' : 'none',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ 
+          width: '38px', height: '38px', borderRadius: '10px', 
+          background: `${accent}15`, color: accent,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          {icon}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', lineHeight: 1 }}>
+          {value}
+        </div>
+        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-secondary)', marginTop: '4px' }}>
+          {label}
+        </div>
+        {description && (
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+            {description}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (!active || !payload?.length) return null;
@@ -156,11 +238,13 @@ const SectionCard: React.FC<{ title: string; subtitle: string; badge?: { label: 
 
 export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
   const {
-    expiringContracts, newHires, totalEmployees, monthlyHires = [], statusBreakdown = [],
+    expiringContracts, newHires, totalEmployees, totalStores = 0, expiringContractsCount = 0,
+    monthlyHires = [], statusBreakdown = [],
     pendingShiftPreview = [], pendingShiftCount = 0, pendingLeavePreview = [], pendingLeaveCount = 0,
   } = data;
   const { t, i18n } = useTranslation();
   const { isMobile, isTablet } = useBreakpoint();
+  const { permissions, user } = useAuth();
   const navigate = useNavigate();
   const tRole = (role: string) => (t as (k: string) => string)(`roles.${role}`);
 
@@ -192,86 +276,84 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
   return (
     <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-      {/* Welcome + stat */}
+      {/* Header Banner */}
       <div className="banner-inner" style={{
         background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
-        borderRadius: 'var(--radius-lg)', padding: '22px 28px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
-        boxShadow: '0 4px 20px rgba(2,132,199,0.20)',
+        borderRadius: 'var(--radius-lg)', padding: '24px 32px',
+        boxShadow: '0 4px 20px rgba(2,132,199,0.15)',
       }}>
-        <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700, color: '#FFFFFF', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-            {t('home.hr.title')}
-          </h2>
-          <p style={{ color: 'rgba(255,255,255,0.60)', fontSize: '13px', margin: 0 }}>
-            {t('home.hr.subtitle')} · {new Date().toLocaleDateString(i18n.language.startsWith('it') ? 'it-IT' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 10,
-            background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.20)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-          }}><IconUsers /></div>
-          <div>
-            <div className="stat-num" style={{ fontSize: '32px', fontWeight: 700, fontFamily: 'var(--font-display)', color: '#FFFFFF', lineHeight: 1, letterSpacing: '-0.03em' }}>
-              {totalEmployees}
-            </div>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', marginTop: '2px', fontWeight: 500 }}>
-              {t('home.hr.totalEmployees')}
-            </div>
-          </div>
-        </div>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, color: '#FFFFFF', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+          {t('home.hr.title')}
+        </h2>
+        <p style={{ color: 'rgba(255,255,255,0.70)', fontSize: '14px', margin: 0, fontWeight: 500 }}>
+          {t('home.hr.subtitle')} · {new Date().toLocaleDateString(i18n.language.startsWith('it') ? 'it-IT' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
       </div>
 
-      {/* Approvals: shifts + leave */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
-        <div
-          onClick={() => navigate('/turni')}
-          className="card-lift"
-          style={{
-            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
-            padding: '18px 20px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
-            borderTop: '3px solid #1E4A7A',
-          }}
-        >
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            {t('home.hr.pendingShiftsTitle')}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('home.hr.pendingShiftsSubtitle')}</div>
-          <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--primary)', lineHeight: 1 }}>{pendingShiftCount}</div>
-          {pendingShiftPreview.slice(0, 3).map((row) => (
-            <div key={row.id} style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
-              {row.userSurname} {row.userName} · {formatDate(row.date, i18n.language)} · {String(row.startTime).slice(0, 5)}
-            </div>
-          ))}
-          <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{t('home.hr.viewShifts')} →</div>
-        </div>
-        <div
-          onClick={() => navigate('/permessi')}
-          className="card-lift"
-          style={{
-            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
-            padding: '18px 20px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
-            borderTop: '3px solid #0284C7',
-          }}
-        >
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            {t('home.hr.pendingLeaveTitle')}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('home.hr.pendingLeaveSubtitle')}</div>
-          <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#0284C7', lineHeight: 1 }}>{pendingLeaveCount}</div>
-          {pendingLeavePreview.slice(0, 3).map((row) => (
-            <div key={row.id} style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
-              {row.userSurname} {row.userName} · {formatDate(row.startDate, i18n.language)} — {formatDate(row.endDate, i18n.language)}
-            </div>
-          ))}
-          <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{t('home.hr.viewLeave')} →</div>
-        </div>
+      {/* Metric boxes row */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: isMobile ? '1fr 1fr' : isTablet ? '1fr 1fr' : `repeat(${(user?.isSuperAdmin || permissions.permessi) ? 4 : 3}, 1fr)`, 
+        gap: '16px' 
+      }}>
+        <StatCard 
+          label={t('home.hr.totalEmployees')}
+          value={totalEmployees}
+          icon={<IconUsers />}
+          accent="#0284C7"
+        />
+        <StatCard 
+          label={t('home.hr.expiringContracts')}
+          value={expiringContractsCount}
+          icon={<IconCalendar />}
+          accent="#B45309"
+          description={t('home.hr.expiringContractsDesc')}
+        />
+        <StatCard 
+          label={t('home.admin.activeStores')}
+          value={totalStores}
+          icon={<IconStore />}
+          accent="#15803D"
+        />
+        {(user?.isSuperAdmin || permissions.permessi) && (
+          <StatCard 
+            label={t('home.hr.pendingLeaveTitle')}
+            value={pendingLeaveCount}
+            icon={<IconClipboard />}
+            accent="#7C3AED"
+          />
+        )}
       </div>
+
+      {/* Approvals (Shifts only now, or keep both? I'll keep shifts as a main card since it has preview) */}
+      {(user?.isSuperAdmin || permissions.turni) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+          <div
+            onClick={() => navigate('/turni')}
+            className="card-lift"
+            style={{
+              background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
+              padding: '18px 20px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
+              borderTop: '3px solid #1E4A7A',
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+              {t('home.hr.pendingShiftsTitle')}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('home.hr.pendingShiftsSubtitle')}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--primary)', lineHeight: 1 }}>{pendingShiftCount}</div>
+            {pendingShiftPreview.slice(0, 3).map((row) => (
+              <div key={row.id} style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
+                {row.userSurname} {row.userName} · {formatDate(row.date, i18n.language)} · {String(row.startTime).slice(0, 5)}
+              </div>
+            ))}
+            <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{t('home.hr.viewShifts')} →</div>
+          </div>
+        </div>
+      )}
 
       {/* Charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '16px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '16px', alignItems: 'stretch' }}>
 
         {/* Monthly hires bar chart */}
         <div style={{
@@ -340,14 +422,14 @@ export const HRHome: React.FC<HRHomeProps> = ({ data }) => {
           subtitle={t('home.hr.expiringContractsDesc')}
           badge={expiringContracts.length > 0 ? { label: t('home.hr.expiringBadge', { count: expiringContracts.length }), color: '#B45309' } : undefined}
         >
-          <Table<ExpiringContract> flush columns={contractColumns} data={expiringContracts} emptyText={t('home.hr.noExpiringContracts')} />
+          <Table<ExpiringContract> flush minWidth="0" columns={contractColumns} data={expiringContracts} emptyText={t('home.hr.noExpiringContracts')} />
         </SectionCard>
         <SectionCard
           title={t('home.hr.newHires')}
           subtitle={t('home.hr.newHiresDesc')}
           badge={newHires.length > 0 ? { label: t('home.hr.newHiresBadge', { count: newHires.length }), color: '#15803D' } : undefined}
         >
-          <Table<NewHire> flush columns={hireColumns} data={newHires} emptyText={t('home.hr.noNewHires')} />
+          <Table<NewHire> flush minWidth="0" columns={hireColumns} data={newHires} emptyText={t('home.hr.noNewHires')} />
         </SectionCard>
       </div>
 

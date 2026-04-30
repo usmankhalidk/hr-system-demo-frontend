@@ -20,6 +20,8 @@ interface TableProps<T> {
   onRowClick?: (row: T) => void;
   /** When true, removes the outer border/radius so the table can be embedded flush inside a card */
   flush?: boolean;
+  /** Custom minimum width for the table. Defaults to '560px' */
+  minWidth?: string;
 }
 
 export function Table<T extends object>({
@@ -31,6 +33,7 @@ export function Table<T extends object>({
   onSort,
   onRowClick,
   flush = false,
+  minWidth = '560px',
 }: TableProps<T>): React.ReactElement {
   const SortIcon = () => (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4, opacity: 0.4 }}>
@@ -61,7 +64,7 @@ export function Table<T extends object>({
         borderCollapse: 'collapse',
         fontSize: '13.5px',
         fontFamily: 'var(--font-body)',
-        minWidth: '560px',
+        minWidth: minWidth,
       }}>
         <thead>
           <tr style={{ background: 'var(--background)' }}>
