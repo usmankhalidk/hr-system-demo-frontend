@@ -469,3 +469,13 @@ input, select, textarea {
     gap: 12px !important;
   }
 }
+/* ── Store Integration Modal Wider Layout ── */
+.modal-inner {
+  max-width: 800px !important;
+}
+
+@media (min-width: 1024px) {
+  .modal-inner {
+    max-width: 900px !important;
+  }
+}
