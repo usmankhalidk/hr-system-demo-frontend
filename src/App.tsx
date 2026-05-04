@@ -43,6 +43,7 @@ const OnboardingPage = lazy(() => import('./modules/onboarding/OnboardingPage'))
 const DocumentsPage = lazy(() => import('./modules/documents/DocumentsPage'));
 const TransfersPage = lazy(() => import('./modules/transfers/TransfersPage'));
 const NotificationsPage = lazy(() => import('./modules/notifications/NotificationsPage'));
+const AutomationsPage = lazy(() => import('./modules/automations/AutomationsPage'));
 const DeviceRegistrationPage = lazy(() => import('./modules/device/DeviceRegistrationPage'));
 const HrDeviceResetPage = lazy(() => import('./modules/device/HrDeviceResetPage'));
 const EmailSettingsPage = lazy(() => import('./modules/email/EmailSettingsPage'));
@@ -262,6 +263,12 @@ function AppRoutes() {
       <Route path="/notifiche" element={
         <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="notifiche">
           <Layout title={t('nav.notifications', 'Notifications')}><NotificationsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/automazioni" element={
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']} permissionKey="automazioni">
+          <Layout title={t('nav.automazioni', 'Automations')}><AutomationsPage /></Layout>
         </ProtectedRoute>
       } />
 

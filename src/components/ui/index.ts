@@ -8,4 +8,5 @@ export { Pagination } from './Pagination';
 export { Select } from './Select';
 export { Spinner } from './Spinner';
 export { Table } from './Table';
+export { Toggle } from './Toggle';
 export type { Column } from './Table';
