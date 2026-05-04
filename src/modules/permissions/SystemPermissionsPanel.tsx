@@ -17,6 +17,7 @@ import {
   ArrowLeftRight,
   Monitor,
   Clipboard,
+  Bell,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -44,6 +45,7 @@ const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'presenze',    implemented: true, icon: <CalendarCheck size={15} /> },
   { key: 'anomalie',    implemented: true, icon: <AlertTriangle size={15} /> },
   { key: 'permessi',    implemented: true, icon: <CalendarOff size={15} /> },
+  { key: 'notifiche',   implemented: true, icon: <Bell size={15} /> },
   { key: 'saldi',       implemented: true, icon: <Wallet size={15} /> },
   { key: 'messaggi',    implemented: true, icon: <MessageSquare size={15} /> },
   { key: 'gestione_accessi', implemented: true, icon: <Shield size={15} /> },
