@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Upload } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftRight } from 'lucide-react';
@@ -18,6 +19,7 @@ import { Select } from '../../components/ui/Select';
 import { Alert } from '../../components/ui/Alert';
 import { Pagination } from '../../components/ui/Pagination';
 import { EmployeeForm } from './EmployeeForm';
+import { BulkImportModal } from './BulkImportModal';
 
 interface CompanyOption {
   id: number;
@@ -64,6 +66,7 @@ export function EmployeeList() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [showNewForm, setShowNewForm] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [newFormInstance, setNewFormInstance] = useState(0);
   const [listReloadTick, setListReloadTick] = useState(0);
 
@@ -418,20 +421,35 @@ export function EmployeeList() {
         </div>
 
         {isAdminOrHr && (
-          <button
-            onClick={() => setShowNewForm(true)}
-            className="btn btn-primary"
-            style={{
-              background: 'var(--primary)', color: '#fff', border: 'none',
-              borderRadius: 'var(--radius)', padding: '9px 18px',
-              fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
-              gap: '7px', flexShrink: 0, boxShadow: '0 2px 8px rgba(13,33,55,0.18)',
-            }}
-          >
-            <span style={{ fontSize: '17px', lineHeight: 1, marginTop: '-1px', fontWeight: 300 }}>+</span>
-            {t('employees.newEmployee')}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }}>
+            <button
+              onClick={() => setShowBulkImport(true)}
+              style={{
+                background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', padding: '9px 18px',
+                fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                gap: '7px', flexShrink: 0, transition: 'border-color 0.15s, box-shadow 0.15s',
+              }}
+            >
+              <Upload size={15} />
+              {t('employees.bulkImportBtn', 'Import Employees')}
+            </button>
+            <button
+              onClick={() => setShowNewForm(true)}
+              className="btn btn-primary"
+              style={{
+                background: 'var(--primary)', color: '#fff', border: 'none',
+                borderRadius: 'var(--radius)', padding: '9px 18px',
+                fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                gap: '7px', flexShrink: 0, boxShadow: '0 2px 8px rgba(13,33,55,0.18)',
+              }}
+            >
+              <span style={{ fontSize: '17px', lineHeight: 1, marginTop: '-1px', fontWeight: 300 }}>+</span>
+              {t('employees.newEmployee')}
+            </button>
+          </div>
         )}
       </div>
 
@@ -544,6 +562,14 @@ export function EmployeeList() {
             updateParam('page', '1');
           }}
           onCancel={() => setShowNewForm(false)}
+        />
+      )}
+
+      {isAdminOrHr && (
+        <BulkImportModal
+          open={showBulkImport}
+          onClose={() => setShowBulkImport(false)}
+          onComplete={() => setListReloadTick((prev) => prev + 1)}
         />
       )}
     </div>
