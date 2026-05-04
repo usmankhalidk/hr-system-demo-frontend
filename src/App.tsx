@@ -260,7 +260,7 @@ function AppRoutes() {
       } />
 
       <Route path="/notifiche" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="notifiche">
           <Layout title={t('nav.notifications', 'Notifications')}><NotificationsPage /></Layout>
         </ProtectedRoute>
       } />
