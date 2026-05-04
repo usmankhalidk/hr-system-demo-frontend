@@ -20,7 +20,6 @@ export const ROLE_HIERARCHY: Record<ManagedRoleKey, number> = {
 
 export function canManageRole(currentUserRole: string, isSuperAdmin: boolean, targetRole: ManagedRoleKey): boolean {
   if (isSuperAdmin) return true;
-  if (currentUserRole === 'admin') return true;
   
   const currentLevel = ROLE_HIERARCHY[currentUserRole as ManagedRoleKey] ?? -1;
   const targetLevel = ROLE_HIERARCHY[targetRole] ?? -1;
@@ -42,6 +41,7 @@ export const MODULE_KEYS = [
   'permessi',
   'saldi',
   'messaggi',
+  'notifiche',
   'gestione_accessi',
   'impostazioni',
   'report',
@@ -72,6 +72,7 @@ export const SYSTEM_MODULE_KEYS = [
   'permessi',
   'saldi',
   'messaggi',
+  'notifiche',
   'gestione_accessi',
   'impostazioni',
 ] as const;
@@ -95,6 +96,7 @@ export const MODULE_ROLE_ELIGIBILITY: Record<ModuleKey, readonly ManagedRoleKey[
   report: [],
   gestione_accessi: ['admin', 'hr', 'area_manager'],
   terminali: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
+  notifiche: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
 };
 
 export function isRoleEligibleForModule(role: ManagedRoleKey, moduleKey: ModuleKey): boolean {
