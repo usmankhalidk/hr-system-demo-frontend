@@ -45,6 +45,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>('');
+  const [previewDocMimeType, setPreviewDocMimeType] = useState<string>('');
   const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const { isMobile } = useBreakpoint();
@@ -72,10 +73,24 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const handlePreview = async (doc: any) => {
     setPreviewLoadingId(doc.id);
     try {
-      const mimeType = doc.mimeType || doc.mime_type || 'application/pdf';
-      const url = await getDocumentPreviewUrlGeneric(doc.id, mimeType, doc.sourceTable);
+      const fileName = doc.fileName || doc.title || '';
+      const extension = fileName.split('.').pop()?.toLowerCase() || '';
+      let mimeType = doc.mimeType || doc.mime_type;
+
+      // Fallback detection if mimeType is missing or generic
+      if (!mimeType || mimeType === 'application/octet-stream') {
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension)) {
+          mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+        } else if (extension === 'pdf') {
+          mimeType = 'application/pdf';
+        }
+      }
+
+      const finalMimeType = mimeType || 'application/pdf';
+      const url = await getDocumentPreviewUrlGeneric(doc.id, finalMimeType, doc.sourceTable);
       setPreviewDocUrl(url);
-      setPreviewDocName(doc.fileName || doc.title || 'Preview');
+      setPreviewDocName(fileName || 'Preview');
+      setPreviewDocMimeType(finalMimeType);
     } catch {
       showToast(t('documents.errorLoad', 'Error loading document'), 'error');
     } finally {
@@ -428,12 +443,20 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
     {previewDocUrl && (
       <ModalBackdrop onClose={closePreview} width={800}>
         <ModalHeader title={previewDocName} onClose={closePreview} />
-        <div style={{ width: '100%', height: '75vh', background: 'var(--background)', borderRadius: 12, overflow: 'hidden' }}>
-          <iframe 
-            src={previewDocUrl} 
-            style={{ width: '100%', height: '100%', border: 'none' }} 
-            title={previewDocName}
-          />
+        <div style={{ width: '100%', height: '75vh', background: 'var(--background)', borderRadius: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {previewDocMimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].some(ext => previewDocName.toLowerCase().endsWith(`.${ext}`)) ? (
+            <img 
+              src={previewDocUrl} 
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+              alt={previewDocName} 
+            />
+          ) : (
+            <iframe 
+              src={previewDocUrl} 
+              style={{ width: '100%', height: '100%', border: 'none' }} 
+              title={previewDocName}
+            />
+          )}
         </div>
       </ModalBackdrop>
     )}

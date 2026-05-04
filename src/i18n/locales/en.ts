@@ -111,6 +111,7 @@ const en = {
     email: 'Email',
     deviceReset: 'Reset device',
     terminals: 'Terminal',
+    automazioni: 'Automations',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -778,6 +779,7 @@ const en = {
       impostazioni: 'Settings',
       negozi: 'Stores',
       terminali: 'Terminal',
+      automazioni: 'Automations',
       gestione_accessi: 'Permissions Management',
     },
   },
@@ -2533,6 +2535,82 @@ const en = {
       festivo: 'Holiday',
       straordinario: 'Exceptional closure',
     },
+  },
+  automations: {
+    page_title: 'Automations',
+    control_panel: 'Full Admin Control',
+    stats: {
+      active: 'Active',
+      disabled: 'Disabled',
+      triggered_today: 'Triggered today',
+      total: 'Total',
+    },
+    search_placeholder: 'Search automations...',
+    categories: {
+      employees: 'Employees',
+      shifts: 'Shifts',
+      leave: 'Leaves & Holidays',
+    },
+    items: {
+      benvenuto_email: {
+        label: 'Welcome email',
+        desc: 'Automatically send a welcome email to new employees with access credentials.',
+        trigger: 'Employee creation',
+      },
+      onboarding_reminder: {
+        label: 'Onboarding reminder',
+        desc: 'Send reminders to employees with pending or expiring onboarding tasks within 48h.',
+        trigger: 'Every day at 09:00',
+      },
+      compleanno_banner: {
+        label: 'Happy birthday banner',
+        desc: 'Display a "Happy Birthday from Fusaro" banner on the employee home page on their birthday.',
+        trigger: 'Birthday',
+      },
+      compleanno_email: {
+        label: 'Happy birthday email',
+        desc: 'Automatically send a birthday greeting email to the employee on their birthday.',
+        trigger: 'Birthday',
+      },
+      anomalia_ritardo: {
+        label: 'Late arrival alert',
+        desc: 'Notify Store Manager and Area Manager when an employee arrives more than 10 minutes late.',
+        trigger: 'Late check-in',
+      },
+      anomalia_noshow: {
+        label: 'No-show alert',
+        desc: 'Urgent notification when an employee does not check in within 30 minutes of shift start.',
+        trigger: '30 min after shift start',
+      },
+      turno_scoperto: {
+        label: 'Uncovered shift alert',
+        desc: 'Notify HR and Area Manager when a shift is planned but has no employee assigned.',
+        trigger: '24h before shift start',
+      },
+      approvazione_turni: {
+        label: 'Shift approval reminder',
+        desc: 'Remind HR to approve shifts in "Planned" status for more than 48h.',
+        trigger: 'Every 48h if pending shifts',
+      },
+      ferie_approvazione: {
+        label: 'Leave request notification',
+        desc: 'Send notification to the manager when an employee submits a leave or holiday request.',
+        trigger: 'New leave request',
+      },
+      ferie_esito: {
+        label: 'Leave result notification',
+        desc: 'Inform the employee via in-app and email when the request is approved or rejected.',
+        trigger: 'Request status change',
+      },
+    },
+    last_run: 'Last run',
+    trigger_label: 'Trigger',
+    time: {
+      hours_ago: '{{count}} hours ago',
+      today: 'Today',
+      yesterday: 'Yesterday',
+      days_ago: '{{count}} days ago',
+    }
   },
 } as const;
 

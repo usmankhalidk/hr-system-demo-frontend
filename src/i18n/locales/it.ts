@@ -110,6 +110,7 @@ const it = {
     email: 'Email',
     deviceReset: 'Reset dispositivo',
     terminals: 'Terminale',
+    automazioni: 'Automazioni',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -772,6 +773,7 @@ const it = {
       impostazioni: 'Impostazioni',
       negozi: 'Negozi',
       terminali: 'Terminale',
+      automazioni: 'Automazioni',
       gestione_accessi: 'Gestione Accessi',
     },
   },
@@ -2534,6 +2536,82 @@ const it = {
       festivo: 'Festivo',
       straordinario: 'Chiusura straordinaria',
     },
+  },
+  automations: {
+    page_title: 'Automazioni',
+    control_panel: 'Controllo completo Admin',
+    stats: {
+      active: 'Attive',
+      disabled: 'Disattivate',
+      triggered_today: 'Trigger oggi',
+      total: 'Totale',
+    },
+    search_placeholder: 'Cerca automazioni...',
+    categories: {
+      employees: 'Dipendenti',
+      shifts: 'Turni',
+      leave: 'Ferie & Permessi',
+    },
+    items: {
+      benvenuto_email: {
+        label: 'Email di benvenuto',
+        desc: 'Invio automatico email di benvenuto al nuovo dipendente con le credenziali di accesso.',
+        trigger: 'Creazione dipendente',
+      },
+      onboarding_reminder: {
+        label: 'Promemoria onboarding',
+        desc: 'Invia promemoria ai dipendenti con attività onboarding scadute o in scadenza entro 48h.',
+        trigger: 'Ogni giorno alle 09:00',
+      },
+      compleanno_banner: {
+        label: 'Banner buon compleanno',
+        desc: 'Visualizza il banner "Buon Compleanno da Fusaro" sulla home del dipendente il giorno del compleanno.',
+        trigger: 'Giorno compleanno',
+      },
+      compleanno_email: {
+        label: 'Email buon compleanno',
+        desc: 'Invia email automatica di auguri al dipendente il giorno del compleanno.',
+        trigger: 'Giorno compleanno',
+      },
+      anomalia_ritardo: {
+        label: 'Alert ritardo',
+        desc: 'Notifica il Store Manager e l\'Area Manager quando un dipendente arriva con più di 10 minuti di ritardo.',
+        trigger: 'Check-in tardivo',
+      },
+      anomalia_noshow: {
+        label: 'Alert assenza non giustificata',
+        desc: 'Notifica urgente quando un dipendente non effettua il check-in entro 30 min dall\'inizio turno.',
+        trigger: '30 min dopo inizio turno',
+      },
+      turno_scoperto: {
+        label: 'Alert turno scoperto',
+        desc: 'Notifica HR e Area Manager quando un turno è pianificato ma non ha un dipendente assegnato.',
+        trigger: '24h prima inizio turno',
+      },
+      approvazione_turni: {
+        label: 'Promemoria approvazione turni',
+        desc: 'Ricorda all\'HR di approvare i turni in stato "Pianificato" da più di 48h.',
+        trigger: 'Ogni 48h se ci sono turni in attesa',
+      },
+      ferie_approvazione: {
+        label: 'Notifica richiesta ferie',
+        desc: 'Invia notifica al responsabile quando un dipendente presenta una richiesta di ferie o permesso.',
+        trigger: 'Nuova richiesta ferie',
+      },
+      ferie_esito: {
+        label: 'Notifica esito ferie al dipendente',
+        desc: 'Informa il dipendente via in-app e email quando la richiesta è approvata o rifiutata.',
+        trigger: 'Cambio stato richiesta',
+      },
+    },
+    last_run: 'Ultima esecuzione',
+    trigger_label: 'Trigger',
+    time: {
+      hours_ago: '{{count}} ore fa',
+      today: 'Oggi',
+      yesterday: 'Ieri',
+      days_ago: '{{count}} giorni fa',
+    }
   },
 } as const;
 

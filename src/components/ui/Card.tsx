@@ -4,7 +4,7 @@ interface CardProps {
   title?: string;
   subtitle?: string;
   actions?: React.ReactNode;
-  padding?: 'sm' | 'md' | 'lg';
+  padding?: 'none' | 'sm' | 'md' | 'lg';
   accent?: string; // left border accent color
   className?: string;
   children?: React.ReactNode;
@@ -13,6 +13,7 @@ interface CardProps {
 }
 
 const paddingMap: Record<NonNullable<CardProps['padding']>, string> = {
+  none: '0px',
   sm: '14px',
   md: '20px',
   lg: '28px',

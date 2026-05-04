@@ -21,6 +21,7 @@ export interface CompanyGrid {
   ats?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   onboarding?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
   notifiche?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
+  automazioni?: { admin: boolean; hr: boolean; areaManager: boolean; storeManager: boolean; employee: boolean; storeTerminal: boolean };
 }
 
 export interface CompanyPermissions {
@@ -52,7 +53,8 @@ export interface SystemPermissionUpdate {
     | 'documenti'
     | 'ats'
     | 'onboarding'
-    | 'notifiche';
+    | 'notifiche'
+    | 'automazioni';
   enabled: boolean;
 }
 

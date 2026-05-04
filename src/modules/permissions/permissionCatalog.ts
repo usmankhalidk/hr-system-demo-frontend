@@ -44,6 +44,7 @@ export const MODULE_KEYS = [
   'notifiche',
   'gestione_accessi',
   'impostazioni',
+  'automazioni',
   'report',
 ] as const;
 
@@ -75,6 +76,7 @@ export const SYSTEM_MODULE_KEYS = [
   'notifiche',
   'gestione_accessi',
   'impostazioni',
+  'automazioni',
 ] as const;
 
 export type SystemModuleKey = typeof SYSTEM_MODULE_KEYS[number];
@@ -97,6 +99,7 @@ export const MODULE_ROLE_ELIGIBILITY: Record<ModuleKey, readonly ManagedRoleKey[
   gestione_accessi: ['admin', 'hr', 'area_manager'],
   terminali: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
   notifiche: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
+  automazioni: ['admin', 'hr', 'area_manager'],
 };
 
 export function isRoleEligibleForModule(role: ManagedRoleKey, moduleKey: ModuleKey): boolean {

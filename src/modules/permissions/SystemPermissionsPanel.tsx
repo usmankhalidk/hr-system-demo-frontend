@@ -18,6 +18,7 @@ import {
   Monitor,
   Clipboard,
   Bell,
+  Zap,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -50,6 +51,7 @@ const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'messaggi',    implemented: true, icon: <MessageSquare size={15} /> },
   { key: 'gestione_accessi', implemented: true, icon: <Shield size={15} /> },
   { key: 'impostazioni',implemented: true, icon: <Settings size={15} /> },
+  { key: 'automazioni', implemented: true, icon: <Zap size={15} /> },
   { key: 'report',      implemented: false, icon: <BarChart2 size={15} /> },
 ];
 
