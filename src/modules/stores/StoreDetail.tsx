@@ -29,6 +29,7 @@ import {
   Phone,
   Database,
   CheckCircle,
+  RefreshCw,
   Search,
   Link as LinkIcon,
   Unlink,
@@ -45,9 +46,10 @@ import {
   getStoreOperatingHours,
   updateStoreOperatingHours,
 } from '../../api/stores';
+import { getCompanyById } from '../../api/companies';
 import { getEmployees } from '../../api/employees';
 import { getAvatarUrl, getStoreLogoUrl, getCompanyLogoUrl } from '../../api/client';
-import { Employee, Store, StoreOperatingHour, UserRole } from '../../types';
+import { Company, Employee, Store, StoreOperatingHour, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
@@ -71,6 +73,7 @@ import {
   deleteExternalMapping,
   ExternalDepositoRow,
   ExternalDbOverview,
+  ExternalStoreMapping,
 } from '../../api/externalAffluence';
 
 interface StoreFormData {
@@ -178,6 +181,16 @@ function formatDate(value: string | null | undefined, locale: string): string {
   return parsed.toLocaleDateString(locale);
 }
 
+function formatDateRange(start: string | null | undefined, end: string | null | undefined, locale: string): string {
+  const startLabel = formatDate(start, locale);
+  const endLabel = formatDate(end, locale);
+  if (startLabel === '—' && endLabel === '—') return '—';
+  if (startLabel === endLabel) return startLabel;
+  if (startLabel === '—') return endLabel;
+  if (endLabel === '—') return startLabel;
+  return `${startLabel} – ${endLabel}`;
+}
+
 function monthsBetween(startDate: string | null | undefined, endDate?: string | null): number | null {
   if (!startDate) return null;
   const start = new Date(startDate);
@@ -242,6 +255,7 @@ export default function StoreDetail() {
   const canManageStatus = user?.role === 'admin';
 
   const [store, setStore] = useState<Store | null>(null);
+  const [companyProfile, setCompanyProfile] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [hours, setHours] = useState<StoreOperatingHour[]>(defaultOperatingHours());
   const [loading, setLoading] = useState(true);
@@ -261,9 +275,22 @@ export default function StoreDetail() {
   const [externalSearchQuery, setExternalSearchQuery] = useState('');
   const [externalStoreCode, setExternalStoreCode] = useState('');
   const [externalStoreName, setExternalStoreName] = useState('');
+
+  // Filtered stores for real-time search
+  const filteredExternalStores = useMemo(() => {
+    if (!externalSearchQuery.trim()) return externalStores;
+    const query = externalSearchQuery.toLowerCase().trim();
+    return externalStores.filter(store => 
+      (store.storeName?.toLowerCase().includes(query)) ||
+      (store.companyName?.toLowerCase().includes(query)) ||
+      (store.externalStoreCode?.toLowerCase().includes(query))
+    );
+  }, [externalStores, externalSearchQuery]);
   const [integrationLoading, setIntegrationLoading] = useState(false);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
-  const [currentMapping, setCurrentMapping] = useState<{ externalStoreCode: string; externalStoreName: string | null } | null>(null);
+  const [currentMapping, setCurrentMapping] = useState<ExternalStoreMapping | null>(null);
+  const [refreshingInternalDb, setRefreshingInternalDb] = useState(false);
+  const [refreshingExternalDb, setRefreshingExternalDb] = useState(false);
 
   const [logoHover, setLogoHover] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -343,9 +370,63 @@ export default function StoreDetail() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!store?.companyId) {
+      setCompanyProfile(null);
+      return;
+    }
+
+    let cancelled = false;
+    getCompanyById(store.companyId)
+      .then((company) => {
+        if (!cancelled) setCompanyProfile(company);
+      })
+      .catch(() => {
+        if (!cancelled) setCompanyProfile(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [store?.companyId]);
+
   const logoUrl = getStoreLogoUrl(store?.logoFilename);
   const storeCountryName = store?.country ? getCountryDisplayName(store.country) : null;
   const storeTimezone = store?.timezone ?? (store?.country ? getPreferredTimezoneForCountry(store.country, browserTimezone) : browserTimezone);
+
+  const companyName = companyProfile?.name ?? store?.companyName ?? null;
+  const companyLogoFilename = companyProfile?.logoFilename ?? store?.companyLogoFilename ?? null;
+  const companyGroupName = companyProfile?.groupName ?? store?.groupName ?? null;
+  const companyCountry = companyProfile?.country ?? store?.country ?? null;
+  const companyOwnerName = companyProfile?.ownerName ?? null;
+  const companyOwnerSurname = companyProfile?.ownerSurname ?? null;
+  const companyOwnerAvatarFilename = companyProfile?.ownerAvatarFilename ?? null;
+  const companyStoreCount = companyProfile?.storeCount ?? null;
+
+  const hrContact = useMemo(() => employees.find((employee) => employee.role === 'hr') ?? null, [employees]);
+  const managerContact = useMemo(() => employees.find((employee) => employee.role === 'store_manager') ?? null, [employees]);
+
+  const mappedExternalRow = useMemo(() => {
+    if (!currentMapping) return null;
+    return externalStores.find((row) => row.externalStoreCode === currentMapping.externalStoreCode) ?? null;
+  }, [currentMapping, externalStores]);
+
+  const externalCompanyLabel = currentMapping?.externalCompanyName || mappedExternalRow?.companyName || null;
+  const integratedByName = useMemo(() => {
+    if (!currentMapping) return null;
+    const name = `${currentMapping.updatedByName ?? currentMapping.createdByName ?? ''} ${currentMapping.updatedBySurname ?? currentMapping.createdBySurname ?? ''}`.trim();
+    return name || null;
+  }, [currentMapping]);
+  const integratedByAvatar = currentMapping?.updatedByAvatarFilename ?? currentMapping?.createdByAvatarFilename ?? null;
+
+  const externalCompanyCount = useMemo(() => {
+    const names = new Set(
+      externalStores
+        .map((row) => (row.companyName ?? '').trim())
+        .filter((name) => name.length > 0),
+    );
+    return names.size;
+  }, [externalStores]);
 
   const openEdit = async () => {
     if (!store) return;
@@ -379,10 +460,7 @@ export default function StoreDetail() {
       const mappings = await listExternalMappings(targetCompanyId);
       const existingMapping = mappings.find(m => m.localStoreId === store.id && m.isActive);
       if (existingMapping) {
-        setCurrentMapping({
-          externalStoreCode: existingMapping.externalStoreCode,
-          externalStoreName: existingMapping.externalStoreName,
-        });
+        setCurrentMapping(existingMapping);
       }
     } catch (err) {
       // Silently fail - user can still integrate manually
@@ -412,19 +490,15 @@ export default function StoreDetail() {
     }
   };
 
-  // Search external stores
+  // Search external stores (now just loads all stores, filtering is done client-side)
   const handleExternalSearch = async () => {
     if (!store) return;
-    if (!externalSearchQuery.trim()) {
-      loadExternalDbData();
-      return;
-    }
+    // Always load all stores for client-side filtering
     setExternalStoresLoading(true);
     setExternalStoresError(null);
     try {
       const targetCompanyId = store.companyId;
       const depositiRows = await listExternalDepositi({
-        search: externalSearchQuery.trim(),
         targetCompanyId: targetCompanyId ?? undefined,
         limit: 300,
       });
@@ -444,18 +518,28 @@ export default function StoreDetail() {
       return;
     }
 
+    // Validate store name if provided
+    if (externalStoreName.trim()) {
+      const matchingStore = externalStores.find(s => s.externalStoreCode === externalStoreCode.trim());
+      if (matchingStore && matchingStore.storeName && matchingStore.storeName !== externalStoreName.trim()) {
+        setIntegrationError(t('externalAffluence.storeNameMismatch', `Store name "${externalStoreName.trim()}" does not match the name "${matchingStore.storeName}" for store code "${externalStoreCode.trim()}".`));
+        return;
+      }
+      if (!matchingStore) {
+        setIntegrationError(t('externalAffluence.storeCodeNotFound', `Store code "${externalStoreCode.trim()}" not found in available external stores.`));
+        return;
+      }
+    }
+
     setIntegrationLoading(true);
     setIntegrationError(null);
     try {
       const targetCompanyId = store.companyId;
-      await upsertExternalMapping(store.id, {
+      const mapping = await upsertExternalMapping(store.id, {
         externalStoreCode: externalStoreCode.trim(),
         targetCompanyId: targetCompanyId ?? undefined,
       });
-      setCurrentMapping({
-        externalStoreCode: externalStoreCode.trim(),
-        externalStoreName: externalStoreName.trim() || null,
-      });
+      setCurrentMapping(mapping);
       setExternalStoreCode('');
       setExternalStoreName('');
       showToast(t('externalAffluence.integrationSuccess'), 'success');
@@ -481,6 +565,23 @@ export default function StoreDetail() {
       setIntegrationError(translateApiError(err, t, t('externalAffluence.errorRemoveIntegration')));
     } finally {
       setIntegrationLoading(false);
+    }
+  };
+
+  // Refresh database connections
+  const handleRefreshDatabases = async () => {
+    if (!store) return;
+    setRefreshingInternalDb(true);
+    setRefreshingExternalDb(true);
+    try {
+      const targetCompanyId = store.companyId;
+      const overview = await getExternalOverview(targetCompanyId ?? undefined);
+      setExternalDbOverview(overview);
+    } catch (err) {
+      setExternalStoresError(translateApiError(err, t, t('externalAffluence.errorLoadStores')));
+    } finally {
+      setRefreshingInternalDb(false);
+      setRefreshingExternalDb(false);
     }
   };
 
@@ -1044,32 +1145,34 @@ export default function StoreDetail() {
             <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
               {formStep === 1 ? t('stores.editStore') : t('stores.storeIntegration')}
             </div>
-            {/* Step Indicators - Edit mode: 2 steps */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Step Indicators - Full width centered */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', maxWidth: '400px', margin: '0 auto' }}>
               {[1, 2].map((s) => (
                 <React.Fragment key={s}>
                   <div style={{
-                    width: '28px',
-                    height: '28px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '12px',
+                    fontSize: '13px',
                     fontWeight: 700,
                     background: formStep === s ? 'var(--accent)' : formStep > s ? '#10B981' : 'var(--border)',
                     color: formStep >= s ? '#fff' : 'var(--text-muted)',
                     transition: 'all 0.25s ease',
-                    boxShadow: formStep === s ? '0 0 0 3px rgba(13,33,55,0.12)' : 'none',
+                    boxShadow: formStep === s ? '0 0 0 4px rgba(13,33,55,0.12)' : 'none',
+                    flexShrink: 0,
                   }}>
                     {formStep > s ? '✓' : s}
                   </div>
                   {s < 2 && (
                     <div style={{
                       flex: 1,
-                      height: '2px',
+                      height: '3px',
                       background: formStep > s ? '#10B981' : 'var(--border)',
                       transition: 'background 0.25s ease',
+                      borderRadius: '2px',
                     }} />
                   )}
                 </React.Fragment>
@@ -1114,71 +1217,144 @@ export default function StoreDetail() {
           {formStep === 2 ? (
             /* ========== STEP 2: External Database Integration ========== */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Database Connection Status */}
+              {/* Database Connection Status - Enhanced */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
                 gap: '12px',
-                padding: '16px',
-                background: 'var(--surface-50)',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
               }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Database size={16} color="var(--text-muted)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                      {t('externalAffluence.internalDatabase')}
-                    </span>
+                {/* Internal Database */}
+                <div style={{
+                  padding: '14px',
+                  background: 'var(--surface-50)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Database size={16} color="var(--text-muted)" />
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {t('externalAffluence.internalDatabase')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleRefreshDatabases}
+                      disabled={refreshingInternalDb}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: refreshingInternalDb ? 'not-allowed' : 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--text-muted)',
+                        opacity: refreshingInternalDb ? 0.5 : 1,
+                      }}
+                    >
+                      <RefreshCw size={14} style={{ animation: refreshingInternalDb ? 'spin 1s linear infinite' : 'none' }} />
+                    </button>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {externalDbOverview?.connections.internal.ok ? (
-                      <CheckCircle size={14} color="#10B981" />
+                      <CheckCircle size={16} color="#10B981" />
                     ) : (
-                      <XCircle size={14} color="#EF4444" />
+                      <XCircle size={16} color="#EF4444" />
                     )}
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: externalDbOverview?.connections.internal.ok ? '#10B981' : '#EF4444' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: externalDbOverview?.connections.internal.ok ? '#10B981' : '#EF4444' }}>
                       {externalDbOverview?.connections.internal.ok ? t('common.connected') : t('common.disconnected')}
                     </span>
                   </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>
                     {externalDbOverview?.databases.internal.databaseName ?? '—'}
-                  </span>
+                  </div>
+                  {externalDbOverview?.counts && (
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{externalDbOverview.counts.stores}</span> {t('common.stores', 'Stores')}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{externalDbOverview.counts.companies}</span> {t('common.companies', 'Companies')}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Database size={16} color="var(--text-muted)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                      {t('externalAffluence.externalDatabase')}
-                    </span>
+
+                {/* External Database */}
+                <div style={{
+                  padding: '14px',
+                  background: 'var(--surface-50)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Database size={16} color="var(--text-muted)" />
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {t('externalAffluence.externalDatabase')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleRefreshDatabases}
+                      disabled={refreshingExternalDb}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: refreshingExternalDb ? 'not-allowed' : 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--text-muted)',
+                        opacity: refreshingExternalDb ? 0.5 : 1,
+                      }}
+                    >
+                      <RefreshCw size={14} style={{ animation: refreshingExternalDb ? 'spin 1s linear infinite' : 'none' }} />
+                    </button>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {externalDbOverview?.connections.external.ok ? (
-                      <CheckCircle size={14} color="#10B981" />
+                      <CheckCircle size={16} color="#10B981" />
                     ) : (
-                      <XCircle size={14} color="#EF4444" />
+                      <XCircle size={16} color="#EF4444" />
                     )}
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: externalDbOverview?.connections.external.ok ? '#10B981' : '#EF4444' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: externalDbOverview?.connections.external.ok ? '#10B981' : '#EF4444' }}>
                       {externalDbOverview?.connections.external.ok ? t('common.connected') : t('common.disconnected')}
                     </span>
                   </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>
                     {externalDbOverview?.databases.external.databaseName ?? '—'}
-                  </span>
+                  </div>
+                  {externalStores.length > 0 && (
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{externalStores.length}</span> {t('common.stores', 'Stores')}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{externalCompanyCount}</span> {t('common.companies', 'Companies')}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Company Info - ATS Style */}
-              {store?.companyName && (
+              {companyName && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
                     🏢 {t('common.company', 'Company')}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                    {store.companyLogoFilename && getCompanyLogoUrl(store.companyLogoFilename) ? (
+                    {companyLogoFilename && getCompanyLogoUrl(companyLogoFilename) ? (
                       <img 
-                        src={getCompanyLogoUrl(store.companyLogoFilename) || ''} 
-                        alt={store.companyName}
+                        src={getCompanyLogoUrl(companyLogoFilename) || ''} 
+                        alt={companyName}
                         style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
                       />
                     ) : (
@@ -1188,24 +1364,24 @@ export default function StoreDetail() {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontWeight: 700, fontSize: 14,
                       }}>
-                        {store.companyName?.[0]?.toUpperCase() || 'C'}
+                        {companyName?.[0]?.toUpperCase() || 'C'}
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {store.companyName}
+                          {companyName}
                         </span>
-                        {store.country && (
+                        {companyCountry && (
                           <ReactCountryFlag 
-                            countryCode={store.country} 
+                            countryCode={companyCountry} 
                             svg 
                             style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }} 
                           />
                         )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        {store.groupName && (
+                        {companyGroupName && (
                           <span style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -1217,7 +1393,35 @@ export default function StoreDetail() {
                             padding: '2px 6px',
                             borderRadius: 4,
                           }}>
-                            {store.groupName}
+                            {companyGroupName}
+                          </span>
+                        )}
+                        {(companyOwnerName || companyOwnerSurname) && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            {companyOwnerAvatarFilename && getAvatarUrl(companyOwnerAvatarFilename) ? (
+                              <img 
+                                src={getAvatarUrl(companyOwnerAvatarFilename) || ''} 
+                                alt={`${companyOwnerName ?? ''} ${companyOwnerSurname ?? ''}`.trim()}
+                                style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: 14, height: 14, borderRadius: '50%',
+                                background: 'var(--primary)', color: '#fff',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 7, fontWeight: 700,
+                              }}>
+                                {(companyOwnerName?.[0] || companyOwnerSurname?.[0] || 'O').toUpperCase()}
+                              </div>
+                            )}
+                            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                              {companyOwnerName} {companyOwnerSurname}
+                            </span>
+                          </div>
+                        )}
+                        {companyStoreCount != null && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            · {companyStoreCount} {t('employees.storesLabel', 'Stores')}
                           </span>
                         )}
                       </div>
@@ -1271,11 +1475,67 @@ export default function StoreDetail() {
                         />
                       )}
                     </div>
-                    {formData.city && (
-                      <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                        {formData.city}{formData.state ? `, ${formData.state}` : ''}{formData.country ? ` · ${formData.country}` : ''}
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                      {formData.city && (
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                          📍 {formData.city}{formData.state ? `, ${formData.state}` : ''}{formData.country ? ` · ${formData.country}` : ''}
+                        </div>
+                      )}
+                      {store?.employeeCount != null && store.employeeCount > 0 && (
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                          · 👥 {store.employeeCount} {t('common.employees', 'Employees')}
+                        </div>
+                      )}
+                    </div>
+                    {/* HR and Manager Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 6 }}>
+                      {hrContact && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {hrContact.avatarFilename && getAvatarUrl(hrContact.avatarFilename) ? (
+                            <img 
+                              src={getAvatarUrl(hrContact.avatarFilename) || ''} 
+                              alt={`${hrContact.name} ${hrContact.surname}`}
+                              style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: 16, height: 16, borderRadius: '50%',
+                              background: '#0284C7', color: '#fff',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 8, fontWeight: 700,
+                            }}>
+                              {hrContact.name?.[0]?.toUpperCase() || 'H'}
+                            </div>
+                          )}
+                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                            HR: {hrContact.name} {hrContact.surname}
+                          </span>
+                        </div>
+                      )}
+                      {managerContact && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {managerContact.avatarFilename && getAvatarUrl(managerContact.avatarFilename) ? (
+                            <img 
+                              src={getAvatarUrl(managerContact.avatarFilename) || ''} 
+                              alt={`${managerContact.name} ${managerContact.surname}`}
+                              style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: 16, height: 16, borderRadius: '50%',
+                              background: '#B45309', color: '#fff',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 8, fontWeight: 700,
+                            }}>
+                              {managerContact.name?.[0]?.toUpperCase() || 'M'}
+                            </div>
+                          )}
+                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                            Manager: {managerContact.name} {managerContact.surname}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1288,50 +1548,250 @@ export default function StoreDetail() {
               )}
 
               {currentMapping ? (
-                /* Show current integration */
+                /* Show comprehensive integration details */
                 <div style={{
-                  padding: '16px',
-                  background: '#F0FDF4',
-                  borderRadius: '8px',
-                  border: '1px solid #86EFAC',
+                  background: 'var(--surface)',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid var(--border)',
+                  boxShadow: 'var(--shadow-sm)',
+                  overflow: 'hidden',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  {/* Header */}
+                  <div style={{ 
+                    background: 'var(--primary)', 
+                    padding: '14px 18px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between' 
+                  }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <CheckCircle size={18} color="#10B981" />
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#10B981' }}>
-                        {t('externalAffluence.integrationActive')}
-                      </span>
+                      <CheckCircle size={18} color="#fff" />
+                      <div>
+                        <div style={{ fontSize: '9px', letterSpacing: '2px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: '2px' }}>
+                          {t('externalAffluence.integration', 'Integration')}
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '14px', color: '#fff' }}>
+                          {t('externalAffluence.integrationActive')}
+                        </div>
+                      </div>
                     </div>
                     <Button
                       variant="danger"
                       size="sm"
                       onClick={handleRemoveIntegration}
                       loading={integrationLoading}
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        background: 'rgba(239,68,68,0.9)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        fontSize: '11px'
+                      }}
                     >
-                      <Unlink size={14} />
+                      <Unlink size={12} />
                       {t('common.remove')}
                     </Button>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        {t('externalAffluence.externalStoreCode')}
-                      </span>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#047857', marginTop: '2px' }}>
-                        {currentMapping.externalStoreCode}
+
+                  {/* Integration Details Grid */}
+                  <div style={{ padding: '18px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '16px' }}>
+                      {/* External Store Info */}
+                      <div style={{ 
+                        padding: '14px',
+                        background: 'var(--background)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                      }}>
+                        <div style={{ 
+                          fontSize: '10px', 
+                          fontWeight: 700, 
+                          color: 'var(--accent)', 
+                          textTransform: 'uppercase', 
+                          letterSpacing: '1.5px', 
+                          marginBottom: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          🌐 {t('externalAffluence.externalStore', 'External Store')}
+                        </div>
+                        {externalCompanyLabel && (
+                          <div style={{ marginBottom: '10px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {t('externalAffluence.externalCompanyName', 'Company')}
+                            </span>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                              {externalCompanyLabel}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ marginBottom: '10px' }}>
+                          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.storeCode', 'Store Code')}
+                          </span>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary)', marginTop: '2px', fontFamily: 'monospace' }}>
+                            {currentMapping.externalStoreCode}
+                          </div>
+                        </div>
+                        {currentMapping.externalStoreName && (
+                          <div>
+                            <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {t('externalAffluence.storeName', 'Store Name')}
+                            </span>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                              {currentMapping.externalStoreName}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    {currentMapping.externalStoreName && (
-                      <div>
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {t('externalAffluence.externalStoreName')}
-                        </span>
-                        <div style={{ fontSize: '13px', color: '#047857', marginTop: '2px' }}>
-                          {currentMapping.externalStoreName}
+
+                      {/* Internal Store Info */}
+                      <div style={{ 
+                        padding: '14px',
+                        background: 'var(--surface-warm)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                      }}>
+                        <div style={{ 
+                          fontSize: '10px', 
+                          fontWeight: 700, 
+                          color: 'var(--primary)', 
+                          textTransform: 'uppercase', 
+                          letterSpacing: '1.5px', 
+                          marginBottom: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          🏪 {t('externalAffluence.internalStore', 'Internal Store')}
+                        </div>
+                        <div style={{ marginBottom: '10px' }}>
+                          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.storeCode', 'Store Code')}
+                          </span>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary)', marginTop: '2px', fontFamily: 'monospace' }}>
+                            {currentMapping.localStoreCode}
+                          </div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.storeName', 'Store Name')}
+                          </span>
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            {currentMapping.localStoreName}
+                          </div>
                         </div>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Integration Metadata */}
+                    <div style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '12px', 
+                      paddingTop: '16px', 
+                      borderTop: '1px solid var(--border)',
+                      background: 'var(--background)',
+                      padding: '16px',
+                      borderRadius: '8px',
+                      marginTop: '4px'
+                    }}>
+                      {/* Integrated By */}
+                      {integratedByName && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ 
+                            fontSize: '9px', 
+                            fontWeight: 700, 
+                            color: 'var(--text-muted)', 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '1px', 
+                            minWidth: '90px' 
+                          }}>
+                            {t('externalAffluence.integratedBy', 'Integrated By')}:
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {integratedByAvatar && getAvatarUrl(integratedByAvatar) ? (
+                              <img 
+                                src={getAvatarUrl(integratedByAvatar) || ''} 
+                                alt={integratedByName}
+                                style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: 20, height: 20, borderRadius: '50%',
+                                background: 'var(--accent)', color: '#fff',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 10, fontWeight: 700,
+                              }}>
+                                {integratedByName?.[0]?.toUpperCase() || 'U'}
+                              </div>
+                            )}
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {integratedByName}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Data Available */}
+                      {mappedExternalRow && mappedExternalRow.availableDays > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ 
+                            fontSize: '9px', 
+                            fontWeight: 700, 
+                            color: 'var(--text-muted)', 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '1px', 
+                            minWidth: '90px' 
+                          }}>
+                            {t('externalAffluence.dataAvailable', 'Data Available')}:
+                          </span>
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            borderRadius: '20px',
+                            background: 'rgba(22,163,74,0.12)',
+                            border: '1px solid rgba(34,197,94,0.3)'
+                          }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#16a34a' }}>
+                              {mappedExternalRow.availableDays} {t('common.days', 'days')}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Date Range */}
+                      {mappedExternalRow && mappedExternalRow.availableFromDate && mappedExternalRow.availableToDate && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ 
+                            fontSize: '9px', 
+                            fontWeight: 700, 
+                            color: 'var(--text-muted)', 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '1px', 
+                            minWidth: '90px' 
+                          }}>
+                            {t('externalAffluence.dataRange', 'Date Range')}:
+                          </span>
+                          <span style={{ 
+                            fontSize: '12px', 
+                            color: 'var(--text-secondary)', 
+                            fontFamily: 'monospace',
+                            background: 'var(--surface)',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid var(--border-light)'
+                          }}>
+                            {formatDateRange(mappedExternalRow.availableFromDate, mappedExternalRow.availableToDate, locale)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1363,108 +1823,250 @@ export default function StoreDetail() {
                 </>
               )}
 
-              {/* External Stores Table */}
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                  {t('externalAffluence.availableExternalStores')}
-                </div>
-                
-                {/* Search Bar */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                  <Input
-                    value={externalSearchQuery}
-                    onChange={(e) => setExternalSearchQuery(e.target.value)}
-                    placeholder={t('externalAffluence.searchStores')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleExternalSearch();
-                    }}
-                  />
-                  <Button onClick={handleExternalSearch} loading={externalStoresLoading}>
-                    <Search size={16} />
-                  </Button>
-                </div>
-
-                {externalStoresError && (
-                  <Alert variant="danger" onClose={() => setExternalStoresError(null)}>
-                    {externalStoresError}
-                  </Alert>
-                )}
-
-                {externalStoresLoading ? (
-                  <div style={{ padding: '40px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      {t('common.loading')}...
-                    </div>
-                  </div>
-                ) : externalStores.length === 0 ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-                    {t('externalAffluence.noExternalStores')}
-                  </div>
-                ) : (
+              {/* External Stores Table - Hide when integration exists */}
+              {!currentMapping && (
                   <div style={{
-                    maxHeight: '300px',
-                    overflowY: 'auto',
+                    background: 'var(--surface)',
+                    borderRadius: 'var(--radius-lg)',
                     border: '1px solid var(--border)',
-                    borderRadius: '8px',
+                    boxShadow: 'var(--shadow-sm)',
+                    overflow: 'hidden',
                   }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ position: 'sticky', top: 0, background: 'var(--surface-50)', zIndex: 1 }}>
-                        <tr>
-                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            {t('externalAffluence.storeCode')}
-                          </th>
-                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            {t('externalAffluence.storeName')}
-                          </th>
-                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            {t('externalAffluence.companyName')}
-                          </th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            {t('externalAffluence.dataAvailable')}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {externalStores.map((externalStore, idx) => (
-                          <tr
-                            key={idx}
-                            style={{
-                              cursor: 'pointer',
-                              background: '#fff',
-                              transition: 'background 0.15s ease',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-50)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
-                            onClick={() => {
-                              setExternalStoreCode(externalStore.externalStoreCode);
-                              setExternalStoreName(externalStore.storeName ?? '');
-                            }}
-                          >
-                            <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-light)' }}>
-                              {externalStore.externalStoreCode}
-                            </td>
-                            <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-light)' }}>
-                              {externalStore.storeName ?? '—'}
-                            </td>
-                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-light)' }}>
-                              {externalStore.companyName ?? '—'}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '12px', borderBottom: '1px solid var(--border-light)' }}>
-                              {externalStore.availableDays > 0 ? (
-                                <span style={{ color: '#10B981', fontWeight: 600 }}>
-                                  {externalStore.availableDays} {t('common.days')}
-                                </span>
-                              ) : (
-                                <span style={{ color: 'var(--text-muted)' }}>—</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {/* Header */}
+                    <div style={{ 
+                      background: 'var(--primary)', 
+                      padding: '12px 16px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between' 
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '9px', letterSpacing: '2px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: '2px' }}>
+                          {t('externalAffluence.availableStores', 'Available Stores')}
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '13px', color: '#fff' }}>
+                          {t('externalAffluence.availableExternalStores')}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {externalStoresLoading && (
+                          <div style={{
+                            width: 14, height: 14, borderRadius: '50%',
+                            border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff',
+                            animation: 'spin 0.7s linear infinite',
+                          }} />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--background)' }}>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <Input
+                          value={externalSearchQuery}
+                          onChange={(e) => setExternalSearchQuery(e.target.value)}
+                          placeholder={t('externalAffluence.searchStores', 'Search by store name, company, or code...')}
+                          style={{ flex: 1 }}
+                        />
+                        <Button onClick={handleExternalSearch} loading={externalStoresLoading} size="sm">
+                          <Search size={14} />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {externalStoresError && (
+                      <div style={{ padding: '12px 16px' }}>
+                        <Alert variant="danger" onClose={() => setExternalStoresError(null)}>
+                          {externalStoresError}
+                        </Alert>
+                      </div>
+                    )}
+
+                    {externalStoresLoading ? (
+                      <div style={{ padding: '40px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                          {t('common.loading')}...
+                        </div>
+                      </div>
+                    ) : filteredExternalStores.length === 0 ? (
+                      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                        <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.3 }}>🏪</div>
+                        {externalSearchQuery.trim() ? 
+                          t('externalAffluence.noSearchResults', 'No stores found matching your search.') :
+                          t('externalAffluence.noExternalStores')
+                        }
+                      </div>
+                    ) : (
+                      <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead style={{ position: 'sticky', top: 0, background: 'var(--accent)', zIndex: 1 }}>
+                            <tr>
+                              <th style={{ 
+                                padding: '8px 10px', 
+                                textAlign: 'left', 
+                                fontSize: '8px', 
+                                fontWeight: 700, 
+                                color: '#fff', 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '1.2px',
+                                borderRight: '1px solid rgba(255,255,255,0.1)',
+                                width: '15%'
+                              }}>
+                                {t('externalAffluence.storeCode')}
+                              </th>
+                              <th style={{ 
+                                padding: '8px 10px', 
+                                textAlign: 'left', 
+                                fontSize: '8px', 
+                                fontWeight: 700, 
+                                color: '#fff', 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '1.2px',
+                                borderRight: '1px solid rgba(255,255,255,0.1)',
+                                width: '25%'
+                              }}>
+                                {t('externalAffluence.storeName')}
+                              </th>
+                              <th style={{ 
+                                padding: '8px 10px', 
+                                textAlign: 'left', 
+                                fontSize: '8px', 
+                                fontWeight: 700, 
+                                color: '#fff', 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '1.2px',
+                                borderRight: '1px solid rgba(255,255,255,0.1)',
+                                width: '20%'
+                              }}>
+                                {t('externalAffluence.companyName')}
+                              </th>
+                              <th style={{ 
+                                padding: '8px 10px', 
+                                textAlign: 'center', 
+                                fontSize: '8px', 
+                                fontWeight: 700, 
+                                color: '#fff', 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '1.2px',
+                                borderRight: '1px solid rgba(255,255,255,0.1)',
+                                width: '15%'
+                              }}>
+                                {t('externalAffluence.dataAvailable')}
+                              </th>
+                              <th style={{ 
+                                padding: '8px 10px', 
+                                textAlign: 'left', 
+                                fontSize: '8px', 
+                                fontWeight: 700, 
+                                color: '#fff', 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '1.2px',
+                                width: '25%'
+                              }}>
+                                {t('externalAffluence.dataRange')}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredExternalStores.map((externalStore, idx) => (
+                              <tr
+                                key={idx}
+                                style={{
+                                  cursor: 'pointer',
+                                  background: idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-warm)',
+                                  transition: 'background 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => { 
+                                  e.currentTarget.style.background = 'var(--accent-light)'; 
+                                }}
+                                onMouseLeave={(e) => { 
+                                  e.currentTarget.style.background = idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-warm)'; 
+                                }}
+                                onClick={() => {
+                                  setExternalStoreCode(externalStore.externalStoreCode);
+                                  setExternalStoreName(externalStore.storeName ?? '');
+                                }}
+                              >
+                                <td style={{ 
+                                  padding: '10px', 
+                                  fontSize: '11px', 
+                                  fontWeight: 700, 
+                                  color: 'var(--primary)', 
+                                  borderBottom: '1px solid var(--border-light)',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  {externalStore.externalStoreCode}
+                                </td>
+                                <td style={{ 
+                                  padding: '10px', 
+                                  fontSize: '11px', 
+                                  color: 'var(--text-primary)', 
+                                  borderBottom: '1px solid var(--border-light)',
+                                  fontWeight: 500
+                                }}>
+                                  {externalStore.storeName ?? '—'}
+                                </td>
+                                <td style={{ 
+                                  padding: '10px', 
+                                  fontSize: '10px', 
+                                  color: 'var(--text-secondary)', 
+                                  borderBottom: '1px solid var(--border-light)' 
+                                }}>
+                                  {externalStore.companyName ?? '—'}
+                                </td>
+                                <td style={{ 
+                                  padding: '10px', 
+                                  textAlign: 'center', 
+                                  fontSize: '10px', 
+                                  borderBottom: '1px solid var(--border-light)' 
+                                }}>
+                                  {externalStore.availableDays > 0 ? (
+                                    <div style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px',
+                                      padding: '2px 6px',
+                                      borderRadius: '10px',
+                                      background: 'rgba(22,163,74,0.12)',
+                                      border: '1px solid rgba(34,197,94,0.3)'
+                                    }}>
+                                      <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#22c55e' }} />
+                                      <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '9px' }}>
+                                        {externalStore.availableDays} {t('common.days')}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: 'var(--text-muted)' }}>—</span>
+                                  )}
+                                </td>
+                                <td style={{ 
+                                  padding: '10px', 
+                                  fontSize: '9px', 
+                                  color: 'var(--text-secondary)', 
+                                  borderBottom: '1px solid var(--border-light)',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  {externalStore.availableFromDate && externalStore.availableToDate ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                      <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                                        {new Date(externalStore.availableFromDate).toLocaleDateString()}
+                                      </span>
+                                      <span style={{ color: 'var(--text-muted)', fontSize: '8px' }}>
+                                        → {new Date(externalStore.availableToDate).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+              )}
             </div>
           ) : (
             /* ========== STEP 1: Store Details ========== */
