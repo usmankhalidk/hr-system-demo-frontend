@@ -152,6 +152,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                   const isEligible = isRoleEligibleForModule(roleKey, mod.key as any);
                   const isTerminaliRestricted = mod.key === 'terminali' && (roleKey === 'store_manager' || roleKey === 'employee');
                   const isGestioneAccessiAdmin = mod.key === 'gestione_accessi' && roleKey === 'admin';
+                  const isUnmanageable = !canManageRole(user?.role || '', user?.isSuperAdmin || false, roleKey);
                   return (
                     <td key={roleKey} style={{
                       padding: '14px 10px',
@@ -167,7 +168,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                           <Toggle 
                             checked={isGestioneAccessiAdmin ? true : enabled} 
                             onChange={() => onToggle(mod.key, roleKey)} 
-                            disabled={isSaving || !isEligible || isTerminaliRestricted || isGestioneAccessiAdmin} 
+                            disabled={isSaving || !isEligible || isTerminaliRestricted || isGestioneAccessiAdmin || isUnmanageable} 
                           />
                         )}
                       </div>
