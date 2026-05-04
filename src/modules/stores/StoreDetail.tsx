@@ -27,6 +27,11 @@ import {
   PlusCircle,
   XCircle,
   Phone,
+  Database,
+  CheckCircle,
+  Search,
+  Link as LinkIcon,
+  Unlink,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -41,7 +46,7 @@ import {
   updateStoreOperatingHours,
 } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
-import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
+import { getAvatarUrl, getStoreLogoUrl, getCompanyLogoUrl } from '../../api/client';
 import { Employee, Store, StoreOperatingHour, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -58,6 +63,15 @@ import {
   getPreferredTimezoneForCountry,
   getTimezoneOptionValues,
 } from '../../utils/timezone';
+import {
+  getExternalOverview,
+  listExternalDepositi,
+  listExternalMappings,
+  upsertExternalMapping,
+  deleteExternalMapping,
+  ExternalDepositoRow,
+  ExternalDbOverview,
+} from '../../api/externalAffluence';
 
 interface StoreFormData {
   name: string;
@@ -237,6 +251,19 @@ export default function StoreDetail() {
   const [formData, setFormData] = useState<StoreFormData>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSaving, setFormSaving] = useState(false);
+  const [formStep, setFormStep] = useState<1 | 2>(1);
+
+  // External database integration state (Step 2)
+  const [externalDbOverview, setExternalDbOverview] = useState<ExternalDbOverview | null>(null);
+  const [externalStores, setExternalStores] = useState<ExternalDepositoRow[]>([]);
+  const [externalStoresLoading, setExternalStoresLoading] = useState(false);
+  const [externalStoresError, setExternalStoresError] = useState<string | null>(null);
+  const [externalSearchQuery, setExternalSearchQuery] = useState('');
+  const [externalStoreCode, setExternalStoreCode] = useState('');
+  const [externalStoreName, setExternalStoreName] = useState('');
+  const [integrationLoading, setIntegrationLoading] = useState(false);
+  const [integrationError, setIntegrationError] = useState<string | null>(null);
+  const [currentMapping, setCurrentMapping] = useState<{ externalStoreCode: string; externalStoreName: string | null } | null>(null);
 
   const [logoHover, setLogoHover] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -320,7 +347,7 @@ export default function StoreDetail() {
   const storeCountryName = store?.country ? getCountryDisplayName(store.country) : null;
   const storeTimezone = store?.timezone ?? (store?.country ? getPreferredTimezoneForCountry(store.country, browserTimezone) : browserTimezone);
 
-  const openEdit = () => {
+  const openEdit = async () => {
     if (!store) return;
     setFormData({
       name: store.name,
@@ -335,7 +362,126 @@ export default function StoreDetail() {
       maxStaff: store.maxStaff != null ? String(store.maxStaff) : '',
     });
     setFormError(null);
+    setFormStep(1);
+    // Reset external integration state
+    setExternalDbOverview(null);
+    setExternalStores([]);
+    setExternalStoresError(null);
+    setExternalSearchQuery('');
+    setExternalStoreCode('');
+    setExternalStoreName('');
+    setIntegrationError(null);
+    setCurrentMapping(null);
+    
+    // Load existing mapping if any
+    try {
+      const targetCompanyId = store.companyId;
+      const mappings = await listExternalMappings(targetCompanyId);
+      const existingMapping = mappings.find(m => m.localStoreId === store.id && m.isActive);
+      if (existingMapping) {
+        setCurrentMapping({
+          externalStoreCode: existingMapping.externalStoreCode,
+          externalStoreName: existingMapping.externalStoreName,
+        });
+      }
+    } catch (err) {
+      // Silently fail - user can still integrate manually
+      console.error('Failed to load existing mapping:', err);
+    }
+    
     setEditOpen(true);
+  };
+
+  // Load external database overview and stores for Step 2
+  const loadExternalDbData = async () => {
+    if (!store) return;
+    setExternalStoresLoading(true);
+    setExternalStoresError(null);
+    try {
+      const targetCompanyId = store.companyId;
+      const [overview, depositiRows] = await Promise.all([
+        getExternalOverview(targetCompanyId ?? undefined),
+        listExternalDepositi({ targetCompanyId: targetCompanyId ?? undefined, limit: 300 }),
+      ]);
+      setExternalDbOverview(overview);
+      setExternalStores(depositiRows);
+    } catch (err) {
+      setExternalStoresError(translateApiError(err, t, t('externalAffluence.errorLoadStores')));
+    } finally {
+      setExternalStoresLoading(false);
+    }
+  };
+
+  // Search external stores
+  const handleExternalSearch = async () => {
+    if (!store) return;
+    if (!externalSearchQuery.trim()) {
+      loadExternalDbData();
+      return;
+    }
+    setExternalStoresLoading(true);
+    setExternalStoresError(null);
+    try {
+      const targetCompanyId = store.companyId;
+      const depositiRows = await listExternalDepositi({
+        search: externalSearchQuery.trim(),
+        targetCompanyId: targetCompanyId ?? undefined,
+        limit: 300,
+      });
+      setExternalStores(depositiRows);
+    } catch (err) {
+      setExternalStoresError(translateApiError(err, t, t('externalAffluence.errorLoadStores')));
+    } finally {
+      setExternalStoresLoading(false);
+    }
+  };
+
+  // Integrate store with external database
+  const handleIntegrateStore = async () => {
+    if (!store) return;
+    if (!externalStoreCode.trim()) {
+      setIntegrationError(t('externalAffluence.externalStoreCodeRequired'));
+      return;
+    }
+
+    setIntegrationLoading(true);
+    setIntegrationError(null);
+    try {
+      const targetCompanyId = store.companyId;
+      await upsertExternalMapping(store.id, {
+        externalStoreCode: externalStoreCode.trim(),
+        targetCompanyId: targetCompanyId ?? undefined,
+      });
+      setCurrentMapping({
+        externalStoreCode: externalStoreCode.trim(),
+        externalStoreName: externalStoreName.trim() || null,
+      });
+      setExternalStoreCode('');
+      setExternalStoreName('');
+      showToast(t('externalAffluence.integrationSuccess'), 'success');
+    } catch (err) {
+      setIntegrationError(translateApiError(err, t, t('externalAffluence.errorIntegration')));
+    } finally {
+      setIntegrationLoading(false);
+    }
+  };
+
+  // Remove integration
+  const handleRemoveIntegration = async () => {
+    if (!store) return;
+
+    setIntegrationLoading(true);
+    setIntegrationError(null);
+    try {
+      const targetCompanyId = store.companyId;
+      await deleteExternalMapping(store.id, targetCompanyId ?? undefined);
+      setCurrentMapping(null);
+      showToast(t('externalAffluence.integrationRemoved'), 'success');
+    } catch (err) {
+      setIntegrationError(translateApiError(err, t, t('externalAffluence.errorRemoveIntegration')));
+    } finally {
+      setIntegrationLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -892,98 +1038,520 @@ export default function StoreDetail() {
 
       <Modal
         open={editOpen}
-        onClose={() => setEditOpen(false)}
-        title={t('stores.editStore')}
+        onClose={() => { setEditOpen(false); setFormStep(1); }}
+        title={
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {formStep === 1 ? t('stores.editStore') : t('stores.storeIntegration')}
+            </div>
+            {/* Step Indicators - Edit mode: 2 steps */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {[1, 2].map((s) => (
+                <React.Fragment key={s}>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    background: formStep === s ? 'var(--accent)' : formStep > s ? '#10B981' : 'var(--border)',
+                    color: formStep >= s ? '#fff' : 'var(--text-muted)',
+                    transition: 'all 0.25s ease',
+                    boxShadow: formStep === s ? '0 0 0 3px rgba(13,33,55,0.12)' : 'none',
+                  }}>
+                    {formStep > s ? '✓' : s}
+                  </div>
+                  {s < 2 && (
+                    <div style={{
+                      flex: 1,
+                      height: '2px',
+                      background: formStep > s ? '#10B981' : 'var(--border)',
+                      transition: 'background 0.25s ease',
+                    }} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        }
         footer={
           <>
-            <Button variant="secondary" onClick={() => setEditOpen(false)} disabled={formSaving}>{t('common.cancel')}</Button>
-            <Button onClick={handleSave} loading={formSaving}>{t('common.save')}</Button>
+            {formStep === 2 ? (
+              <>
+                <Button variant="secondary" onClick={() => setFormStep(1)}>
+                  ← {t('common.back')}
+                </Button>
+                <Button variant="secondary" onClick={() => { setEditOpen(false); setFormStep(1); }}>
+                  {t('common.close')}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => { setEditOpen(false); setFormStep(1); }} disabled={formSaving}>
+                  {t('common.cancel')}
+                </Button>
+                <Button onClick={handleSave} loading={formSaving}>
+                  {t('common.save')}
+                </Button>
+                <Button variant="secondary" onClick={async () => { setFormStep(2); await loadExternalDbData(); }}>
+                  {t('stores.goToIntegration')} →
+                </Button>
+              </>
+            )}
           </>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {formError ? <Alert variant="danger" onClose={() => setFormError(null)}>{formError}</Alert> : null}
-          <Input
-            label={t('stores.fieldName')}
-            value={formData.name}
-            onChange={(event) => setFormData((p) => ({ ...p, name: event.target.value }))}
-            placeholder={t('stores.placeholderName')}
-            disabled={formSaving}
-          />
-          <Input
-            label={t('stores.fieldCode')}
-            value={formData.code}
-            onChange={(event) => setFormData((p) => ({ ...p, code: event.target.value.toUpperCase() }))}
-            placeholder={t('stores.placeholderCode')}
-            disabled={formSaving}
-          />
-          <LocationFieldGroup
-            value={{
-              country: formData.country,
-              state: formData.state,
-              city: formData.city,
-              address: formData.address,
-              postalCode: formData.cap,
-              phone: formData.phone,
-            }}
-            onChange={(location) => {
-              setFormData((prev) => {
-                const nextTimezone = prev.country !== location.country
-                  ? getPreferredTimezoneForCountry(location.country, prev.timezone || browserTimezone)
-                  : prev.timezone;
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {formError && (
+            <Alert variant="danger" onClose={() => setFormError(null)}>
+              {formError}
+            </Alert>
+          )}
 
-                return {
-                  ...prev,
-                  country: location.country,
-                  state: location.state,
-                  city: location.city,
-                  address: location.address,
-                  cap: location.postalCode,
-                  phone: location.phone,
-                  timezone: nextTimezone,
-                };
-              });
-            }}
-            includeAddress
-            includePostalCode
-            includePhone
-            disabled={formSaving}
-            labels={{
-              country: t('companies.country', 'Country'),
-              state: t('companies.state', 'State'),
-              city: t('companies.city', 'City'),
-              address: t('stores.fieldAddress'),
-              postalCode: t('stores.fieldCap'),
-              phone: t('companies.companyPhoneNumbers', 'Phone'),
-            }}
-          />
-          <div style={{ display: 'grid', gap: 4 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
-              {t('stores.fieldTimezone', 'Timezone')}
-            </label>
-            <CustomSelect
-              value={formData.timezone || browserTimezone}
-              onChange={(value) => {
-                if (!value) return;
-                setFormData((prev) => ({ ...prev, timezone: value }));
-              }}
-              options={timezoneOptions}
-              placeholder={t('stores.placeholderTimezone', 'Select timezone')}
-              searchPlaceholder={t('settings.timezoneSearchPlaceholder', 'Search timezone...')}
-              noOptionsMessage={t('settings.timezoneNoResults', 'No timezone found')}
-              disabled={formSaving}
-              isClearable={false}
-            />
-          </div>
-          <Input
-            label={t('stores.fieldMaxStaff')}
-            type="number"
-            min="0"
-            value={formData.maxStaff}
-            onChange={(event) => setFormData((p) => ({ ...p, maxStaff: event.target.value }))}
-            placeholder={t('stores.placeholderMaxStaff')}
-            disabled={formSaving}
-          />
+          {formStep === 2 ? (
+            /* ========== STEP 2: External Database Integration ========== */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Database Connection Status */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+                padding: '16px',
+                background: 'var(--surface-50)',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Database size={16} color="var(--text-muted)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      {t('externalAffluence.internalDatabase')}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {externalDbOverview?.connections.internal.ok ? (
+                      <CheckCircle size={14} color="#10B981" />
+                    ) : (
+                      <XCircle size={14} color="#EF4444" />
+                    )}
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: externalDbOverview?.connections.internal.ok ? '#10B981' : '#EF4444' }}>
+                      {externalDbOverview?.connections.internal.ok ? t('common.connected') : t('common.disconnected')}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {externalDbOverview?.databases.internal.databaseName ?? '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Database size={16} color="var(--text-muted)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      {t('externalAffluence.externalDatabase')}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {externalDbOverview?.connections.external.ok ? (
+                      <CheckCircle size={14} color="#10B981" />
+                    ) : (
+                      <XCircle size={14} color="#EF4444" />
+                    )}
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: externalDbOverview?.connections.external.ok ? '#10B981' : '#EF4444' }}>
+                      {externalDbOverview?.connections.external.ok ? t('common.connected') : t('common.disconnected')}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {externalDbOverview?.databases.external.databaseName ?? '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Company Info - ATS Style */}
+              {store?.companyName && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                    🏢 {t('common.company', 'Company')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    {store.companyLogoFilename && getCompanyLogoUrl(store.companyLogoFilename) ? (
+                      <img 
+                        src={getCompanyLogoUrl(store.companyLogoFilename) || ''} 
+                        alt={store.companyName}
+                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 8,
+                        background: 'var(--primary)', color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 14,
+                      }}>
+                        {store.companyName?.[0]?.toUpperCase() || 'C'}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {store.companyName}
+                        </span>
+                        {store.country && (
+                          <ReactCountryFlag 
+                            countryCode={store.country} 
+                            svg 
+                            style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }} 
+                          />
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {store.groupName && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: 'var(--accent)',
+                            background: 'var(--accent-light)',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                          }}>
+                            {store.groupName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Store Info - ATS Style */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                  🏪 {t('stores.colName', 'Store')}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  {store?.logoFilename && getStoreLogoUrl(store.logoFilename) ? (
+                    <img 
+                      src={getStoreLogoUrl(store.logoFilename) || ''} 
+                      alt={formData.name}
+                      style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 8,
+                      background: 'var(--accent)', color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 700, fontSize: 14,
+                    }}>
+                      {formData.name?.[0]?.toUpperCase() || 'S'}
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {formData.name}
+                      </span>
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: 'var(--text-muted)',
+                        background: 'var(--surface-50)',
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                      }}>
+                        {formData.code}
+                      </span>
+                      {formData.country && (
+                        <ReactCountryFlag 
+                          countryCode={formData.country} 
+                          svg 
+                          style={{ width: '0.9em', height: '0.9em' }} 
+                        />
+                      )}
+                    </div>
+                    {formData.city && (
+                      <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                        {formData.city}{formData.state ? `, ${formData.state}` : ''}{formData.country ? ` · ${formData.country}` : ''}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Integration Section */}
+              {integrationError && (
+                <Alert variant="danger" onClose={() => setIntegrationError(null)}>
+                  {integrationError}
+                </Alert>
+              )}
+
+              {currentMapping ? (
+                /* Show current integration */
+                <div style={{
+                  padding: '16px',
+                  background: '#F0FDF4',
+                  borderRadius: '8px',
+                  border: '1px solid #86EFAC',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <CheckCircle size={18} color="#10B981" />
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#10B981' }}>
+                        {t('externalAffluence.integrationActive')}
+                      </span>
+                    </div>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={handleRemoveIntegration}
+                      loading={integrationLoading}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Unlink size={14} />
+                      {t('common.remove')}
+                    </Button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {t('externalAffluence.externalStoreCode')}
+                      </span>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#047857', marginTop: '2px' }}>
+                        {currentMapping.externalStoreCode}
+                      </div>
+                    </div>
+                    {currentMapping.externalStoreName && (
+                      <div>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('externalAffluence.externalStoreName')}
+                        </span>
+                        <div style={{ fontSize: '13px', color: '#047857', marginTop: '2px' }}>
+                          {currentMapping.externalStoreName}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Show integration form */
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <Input
+                      label={t('externalAffluence.externalStoreCode') + ' *'}
+                      value={externalStoreCode}
+                      onChange={(e) => setExternalStoreCode(e.target.value.trim())}
+                      placeholder={t('externalAffluence.placeholderStoreCode')}
+                    />
+                    <Input
+                      label={t('externalAffluence.externalStoreName')}
+                      value={externalStoreName}
+                      onChange={(e) => setExternalStoreName(e.target.value)}
+                      placeholder={t('externalAffluence.placeholderStoreName')}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleIntegrateStore}
+                    loading={integrationLoading}
+                    disabled={!externalStoreCode.trim()}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}
+                  >
+                    <LinkIcon size={16} />
+                    {t('externalAffluence.integrateStore')}
+                  </Button>
+                </>
+              )}
+
+              {/* External Stores Table */}
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                  {t('externalAffluence.availableExternalStores')}
+                </div>
+                
+                {/* Search Bar */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                  <Input
+                    value={externalSearchQuery}
+                    onChange={(e) => setExternalSearchQuery(e.target.value)}
+                    placeholder={t('externalAffluence.searchStores')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleExternalSearch();
+                    }}
+                  />
+                  <Button onClick={handleExternalSearch} loading={externalStoresLoading}>
+                    <Search size={16} />
+                  </Button>
+                </div>
+
+                {externalStoresError && (
+                  <Alert variant="danger" onClose={() => setExternalStoresError(null)}>
+                    {externalStoresError}
+                  </Alert>
+                )}
+
+                {externalStoresLoading ? (
+                  <div style={{ padding: '40px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                      {t('common.loading')}...
+                    </div>
+                  </div>
+                ) : externalStores.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                    {t('externalAffluence.noExternalStores')}
+                  </div>
+                ) : (
+                  <div style={{
+                    maxHeight: '300px',
+                    overflowY: 'auto',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                  }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, background: 'var(--surface-50)', zIndex: 1 }}>
+                        <tr>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.storeCode')}
+                          </th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.storeName')}
+                          </th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.companyName')}
+                          </th>
+                          <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.dataAvailable')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {externalStores.map((externalStore, idx) => (
+                          <tr
+                            key={idx}
+                            style={{
+                              cursor: 'pointer',
+                              background: '#fff',
+                              transition: 'background 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-50)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                            onClick={() => {
+                              setExternalStoreCode(externalStore.externalStoreCode);
+                              setExternalStoreName(externalStore.storeName ?? '');
+                            }}
+                          >
+                            <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-light)' }}>
+                              {externalStore.externalStoreCode}
+                            </td>
+                            <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-light)' }}>
+                              {externalStore.storeName ?? '—'}
+                            </td>
+                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-light)' }}>
+                              {externalStore.companyName ?? '—'}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '12px', borderBottom: '1px solid var(--border-light)' }}>
+                              {externalStore.availableDays > 0 ? (
+                                <span style={{ color: '#10B981', fontWeight: 600 }}>
+                                  {externalStore.availableDays} {t('common.days')}
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ========== STEP 1: Store Details ========== */
+            <>
+              <Input
+                label={t('stores.fieldName')}
+                value={formData.name}
+                onChange={(event) => setFormData((p) => ({ ...p, name: event.target.value }))}
+                placeholder={t('stores.placeholderName')}
+                disabled={formSaving}
+              />
+              <Input
+                label={t('stores.fieldCode')}
+                value={formData.code}
+                onChange={(event) => setFormData((p) => ({ ...p, code: event.target.value.toUpperCase() }))}
+                placeholder={t('stores.placeholderCode')}
+                disabled={formSaving}
+              />
+              <LocationFieldGroup
+                value={{
+                  country: formData.country,
+                  state: formData.state,
+                  city: formData.city,
+                  address: formData.address,
+                  postalCode: formData.cap,
+                  phone: formData.phone,
+                }}
+                onChange={(location) => {
+                  setFormData((prev) => {
+                    const nextTimezone = prev.country !== location.country
+                      ? getPreferredTimezoneForCountry(location.country, prev.timezone || browserTimezone)
+                      : prev.timezone;
+
+                    return {
+                      ...prev,
+                      country: location.country,
+                      state: location.state,
+                      city: location.city,
+                      address: location.address,
+                      cap: location.postalCode,
+                      phone: location.phone,
+                      timezone: nextTimezone,
+                    };
+                  });
+                }}
+                includeAddress
+                includePostalCode
+                includePhone
+                disabled={formSaving}
+                labels={{
+                  country: t('companies.country', 'Country'),
+                  state: t('companies.state', 'State'),
+                  city: t('companies.city', 'City'),
+                  address: t('stores.fieldAddress'),
+                  postalCode: t('stores.fieldCap'),
+                  phone: t('companies.companyPhoneNumbers', 'Phone'),
+                }}
+              />
+              <div style={{ display: 'grid', gap: 4 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                  {t('stores.fieldTimezone', 'Timezone')}
+                </label>
+                <CustomSelect
+                  value={formData.timezone || browserTimezone}
+                  onChange={(value) => {
+                    if (!value) return;
+                    setFormData((prev) => ({ ...prev, timezone: value }));
+                  }}
+                  options={timezoneOptions}
+                  placeholder={t('stores.placeholderTimezone', 'Select timezone')}
+                  searchPlaceholder={t('settings.timezoneSearchPlaceholder', 'Search timezone...')}
+                  noOptionsMessage={t('settings.timezoneNoResults', 'No timezone found')}
+                  disabled={formSaving}
+                  isClearable={false}
+                />
+              </div>
+              <Input
+                label={t('stores.fieldMaxStaff')}
+                type="number"
+                min="0"
+                value={formData.maxStaff}
+                onChange={(event) => setFormData((p) => ({ ...p, maxStaff: event.target.value }))}
+                placeholder={t('stores.placeholderMaxStaff')}
+                disabled={formSaving}
+              />
+            </>
+          )}
         </div>
       </Modal>
 
