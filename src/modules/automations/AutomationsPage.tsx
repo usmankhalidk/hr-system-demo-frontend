@@ -13,8 +13,10 @@ import {
   Search,
   Zap
 } from 'lucide-react';
-import { Card, Toggle, Button, Input } from '../../components/ui';
+import { Card, Toggle, Button, Input, Spinner } from '../../components/ui';
 import { automationsApi } from '../../api/automations';
+import { useToast } from '../../context/ToastContext';
+import { snakeKeys } from '../../api/client';
 
 interface AutomationItem {
   id: string;
@@ -50,9 +52,6 @@ const INITIAL_DATA: AutomationCategory[] = [
     accent: '#0284C7',
     items: [
       { id: 'benvenuto_email', icon: <Mail size={18} />, labelKey: 'automations.items.benvenuto_email.label', descKey: 'automations.items.benvenuto_email.desc', roles: ['employee'], triggerKey: 'automations.items.benvenuto_email.trigger', lastRunKey: 'automations.time.hours_ago', lastRunValue: { count: 2 }, enabled: true },
-      { id: 'onboarding_reminder', icon: <Clipboard size={18} />, labelKey: 'automations.items.onboarding_reminder.label', descKey: 'automations.items.onboarding_reminder.desc', roles: ['employee', 'store_manager'], triggerKey: 'automations.items.onboarding_reminder.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 09:00', enabled: true },
-      { id: 'compleanno_banner', icon: <Star size={18} />, labelKey: 'automations.items.compleanno_banner.label', descKey: 'automations.items.compleanno_banner.desc', roles: ['employee'], triggerKey: 'automations.items.compleanno_banner.trigger', lastRunKey: 'automations.time.days_ago', lastRunValue: { count: 3 }, enabled: true },
-      { id: 'compleanno_email', icon: <Mail size={18} />, labelKey: 'automations.items.compleanno_email.label', descKey: 'automations.items.compleanno_email.desc', roles: ['employee'], triggerKey: 'automations.items.compleanno_email.trigger', lastRunKey: 'automations.time.days_ago', lastRunValue: { count: 3 }, enabled: false },
     ],
   },
   {
@@ -62,6 +61,7 @@ const INITIAL_DATA: AutomationCategory[] = [
     items: [
       { id: 'anomalia_ritardo', icon: <Clock size={18} />, labelKey: 'automations.items.anomalia_ritardo.label', descKey: 'automations.items.anomalia_ritardo.desc', roles: ['store_manager', 'area_manager'], triggerKey: 'automations.items.anomalia_ritardo.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 09:28', enabled: true },
       { id: 'anomalia_noshow', icon: <AlertTriangle size={18} />, labelKey: 'automations.items.anomalia_noshow.label', descKey: 'automations.items.anomalia_noshow.desc', roles: ['store_manager', 'area_manager', 'hr'], triggerKey: 'automations.items.anomalia_noshow.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 09:30', enabled: true },
+      { id: 'notifica_turni', icon: <Mail size={18} />, labelKey: 'automations.items.notifica_turni.label', descKey: 'automations.items.notifica_turni.desc', roles: ['employee'], triggerKey: 'automations.items.notifica_turni.trigger', lastRunKey: 'automations.time.hours_ago', lastRunValue: { count: 1 }, enabled: false },
       { id: 'turno_scoperto', icon: <Calendar size={18} />, labelKey: 'automations.items.turno_scoperto.label', descKey: 'automations.items.turno_scoperto.desc', roles: ['hr', 'area_manager'], triggerKey: 'automations.items.turno_scoperto.trigger', lastRunKey: 'automations.time.yesterday', lastRunValue: ' 18:00', enabled: true },
       { id: 'approvazione_turni', icon: <CheckCircle size={18} />, labelKey: 'automations.items.approvazione_turni.label', descKey: 'automations.items.approvazione_turni.desc', roles: ['hr'], triggerKey: 'automations.items.approvazione_turni.trigger', lastRunKey: 'automations.time.yesterday', lastRunValue: ' 10:00', enabled: false },
     ],
@@ -82,16 +82,20 @@ export default function AutomationsPage() {
   const [categories, setCategories] = useState(INITIAL_DATA);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
+  const { showToast } = useToast();
 
   React.useEffect(() => {
     const fetchAutomations = async () => {
       try {
         const data = await automationsApi.getAutomations();
+        const normalizedData = snakeKeys(data);
         setCategories(prev => prev.map(cat => ({
           ...cat,
           items: cat.items.map(item => ({
             ...item,
-            enabled: data[item.id] ?? item.enabled
+            enabled: normalizedData[item.id] ?? item.enabled
           }))
         })));
       } catch (err) {
@@ -103,27 +107,44 @@ export default function AutomationsPage() {
     fetchAutomations();
   }, []);
 
-  const toggleAutomation = async (catId: string, itemId: string, currentEnabled: boolean) => {
+  const toggleAutomation = (catId: string, itemId: string, currentEnabled: boolean) => {
+    const nextEnabled = !currentEnabled;
+    
+    // Update local UI state
     setCategories(prev => prev.map(cat => 
       cat.id !== catId ? cat : {
         ...cat,
         items: cat.items.map(item => 
-          item.id !== itemId ? item : { ...item, enabled: !currentEnabled }
+          item.id !== itemId ? item : { ...item, enabled: nextEnabled }
         )
       }
     ));
+
+    // Track pending change
+    setPendingChanges(prev => ({
+      ...prev,
+      [itemId]: nextEnabled
+    }));
+  };
+
+  const handleSave = async () => {
+    const changedIds = Object.keys(pendingChanges);
+    if (changedIds.length === 0) return;
+
+    setSaving(true);
     try {
-      await automationsApi.updateAutomation(itemId, !currentEnabled);
+      // Save all pending changes
+      await Promise.all(
+        changedIds.map(id => automationsApi.updateAutomation(id, pendingChanges[id]))
+      );
+      
+      setPendingChanges({});
+      showToast(t('common.success'), 'success');
     } catch (err) {
-      console.error('Failed to update automation', err);
-      setCategories(prev => prev.map(cat => 
-        cat.id !== catId ? cat : {
-          ...cat,
-          items: cat.items.map(item => 
-            item.id !== itemId ? item : { ...item, enabled: currentEnabled }
-          )
-        }
-      ));
+      console.error('Failed to save automations', err);
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -159,8 +180,13 @@ export default function AutomationsPage() {
               style={{ paddingLeft: 32, height: 36, width: 220, fontSize: 13 }}
             />
           </div>
-          <Button variant="primary" style={{ height: 36, padding: '0 16px' }}>
-            {t('common.save')}
+          <Button 
+            variant="primary" 
+            style={{ height: 36, padding: '0 16px', minWidth: 100 }}
+            onClick={handleSave}
+            disabled={saving || Object.keys(pendingChanges).length === 0}
+          >
+            {saving ? <Spinner size="sm" color="#fff" /> : t('common.save')}
           </Button>
         </div>
       </div>

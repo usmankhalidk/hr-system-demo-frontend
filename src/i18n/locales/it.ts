@@ -2583,6 +2583,11 @@ const it = {
         desc: 'Notifica urgente quando un dipendente non effettua il check-in entro 30 min dall\'inizio turno.',
         trigger: '30 min dopo inizio turno',
       },
+      notifica_turni: {
+        label: 'Turni dipendenti',
+        desc: 'Invia automaticamente un\'email con il programma di lavoro ai dipendenti quando viene assegnato loro un nuovo turno.',
+        trigger: 'Assegnazione turno',
+      },
       turno_scoperto: {
         label: 'Alert turno scoperto',
         desc: 'Notifica HR e Area Manager quando un turno è pianificato ma non ha un dipendente assegnato.',

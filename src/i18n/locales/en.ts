@@ -2582,6 +2582,11 @@ const en = {
         desc: 'Urgent notification when an employee does not check in within 30 minutes of shift start.',
         trigger: '30 min after shift start',
       },
+      notifica_turni: {
+        label: 'Employee shifts',
+        desc: 'Automatically send a work schedule email to employees when a new shift is assigned to them.',
+        trigger: 'Shift assignment',
+      },
       turno_scoperto: {
         label: 'Uncovered shift alert',
         desc: 'Notify HR and Area Manager when a shift is planned but has no employee assigned.',
