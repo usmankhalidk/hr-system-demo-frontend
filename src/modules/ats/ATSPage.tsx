@@ -1912,10 +1912,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [intInterviewerId, setIntInterviewerId] = useState<string | null>(null);
   const [intSendIcs, setIntSendIcs] = useState(false);
   const [savingInt, setSavingInt] = useState(false);
-  const [candidateComments, setCandidateComments] = useState<CandidateComment[]>([]);
-  const [commentDraft, setCommentDraft] = useState('');
-  const [savingComment, setSavingComment] = useState(false);
-  const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
   const [interviewFeedback, setInterviewFeedback] = useState<Record<number, InterviewFeedbackComment[]>>({});
   const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
@@ -1966,6 +1962,17 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; filename: string } | null>(null);
+  
+  // Tags editing
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagsDraft, setTagsDraft] = useState<string[]>(candidate.tags);
+  const [tagInput, setTagInput] = useState('');
+  const [savingTags, setSavingTags] = useState(false);
+  
+  // Rejection reason
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [savingRejection, setSavingRejection] = useState(false);
 
   const appliedJob = candidate.jobPostingId
     ? jobs.find((j) => j.id === candidate.jobPostingId) ?? null
@@ -2110,54 +2117,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     };
   }, [candidate.id]);
 
-  useEffect(() => {
-    let active = true;
-    getCandidateComments(candidate.id)
-      .then((items) => {
-        if (active) setCandidateComments(items);
-      })
-      .catch(() => { if (active) setCandidateComments([]); });
-
-    return () => {
-      active = false;
-    };
-  }, [candidate.id]);
-
-  const handleAddCandidateComment = async () => {
-    if (!canEdit) return;
-    const value = commentDraft.trim();
-    if (!value) {
-      showToast(t('ats.commentRequired', 'Comment is required'), 'error');
-      return;
-    }
-
-    setSavingComment(true);
-    try {
-      const comment = await addCandidateComment(candidate.id, value);
-      setCandidateComments((prev) => [...prev, comment]);
-      setCommentDraft('');
-      showToast(t('ats.commentAdded', 'Comment added'), 'success');
-    } catch {
-      showToast(t('ats.commentError', 'Unable to add comment'), 'error');
-    } finally {
-      setSavingComment(false);
-    }
-  };
-
-  const handleDeleteCandidateComment = async (commentId: number) => {
-    if (!canEdit) return;
-    setDeletingCommentId(commentId);
-    try {
-      await deleteCandidateComment(commentId);
-      setCandidateComments((prev) => prev.filter((c) => c.id !== commentId));
-      showToast(t('ats.commentDeleted', 'Comment deleted'), 'success');
-    } catch {
-      showToast(t('ats.commentDeleteError', 'Unable to delete comment'), 'error');
-    } finally {
-      setDeletingCommentId(null);
-    }
-  };
-
   const handleAddInterviewFeedback = async (interviewId: number) => {
     const value = (feedbackDrafts[interviewId] ?? '').trim();
     if (!value) {
@@ -2208,6 +2167,62 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       showToast(t('ats.interviewDeleteError', 'Failed to delete interview'), 'error');
     } finally {
       setDeletingInterviewId(null);
+    }
+  };
+
+  // Tags handlers
+  const handleAddTag = () => {
+    const normalized = tagInput.trim();
+    if (!normalized) return;
+    if (tagsDraft.some((tag) => tag.toLowerCase() === normalized.toLowerCase())) {
+      showToast(t('ats.tagAlreadyExists', 'Tag already exists'), 'warning');
+      return;
+    }
+    setTagsDraft((prev) => [...prev, normalized]);
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setTagsDraft((prev) => prev.filter((t) => t !== tag));
+  };
+
+  const handleSaveTags = async () => {
+    setSavingTags(true);
+    try {
+      await updateCandidateTags(candidate.id, tagsDraft);
+      candidate.tags = tagsDraft; // Update local state
+      setEditingTags(false);
+      showToast(t('ats.tagsSaved', 'Tags updated'), 'success');
+    } catch {
+      showToast(t('ats.tagsError', 'Failed to update tags'), 'error');
+    } finally {
+      setSavingTags(false);
+    }
+  };
+
+  const handleCancelTagsEdit = () => {
+    setTagsDraft(candidate.tags);
+    setTagInput('');
+    setEditingTags(false);
+  };
+
+  // Rejection handler
+  const handleRejectWithReason = async () => {
+    if (!rejectionReason.trim()) {
+      showToast(t('ats.rejectionReasonRequired', 'Please provide a rejection reason'), 'error');
+      return;
+    }
+    setSavingRejection(true);
+    try {
+      await updateCandidateStage(candidate.id, 'rejected', rejectionReason.trim());
+      setShowRejectionModal(false);
+      setRejectionReason('');
+      onReject(); // Call parent handler to refresh
+      showToast(t('ats.candidateRejected', 'Candidate rejected'), 'success');
+    } catch {
+      showToast(t('ats.rejectionError', 'Failed to reject candidate'), 'error');
+    } finally {
+      setSavingRejection(false);
     }
   };
 
@@ -2646,6 +2661,30 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     </div>
                   </div>
                 )}
+                
+                {/* Job Tags */}
+                {appliedJob.tags && appliedJob.tags.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                      {t('ats.jobTags', 'Job Tags')}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {appliedJob.tags.map((tag) => (
+                        <span key={tag} style={{
+                          background: 'rgba(59,130,246,0.08)',
+                          color: '#2563EB',
+                          border: '1px solid rgba(59,130,246,0.2)',
+                          borderRadius: 99,
+                          padding: '3px 10px',
+                          fontSize: 11,
+                          fontWeight: 500,
+                        }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Job Post Creator Section - Enhanced */}
@@ -2906,129 +2945,158 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             </>
           )}
 
-          {/* Tags */}
-          {candidate.tags.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {candidate.tags.map((tag) => (
-                <span key={tag} style={{
-                  background: 'var(--accent-light, rgba(201,151,58,0.10))',
-                  color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
-                  borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
-                }}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Candidate comments */}
-          {(candidateComments.length > 0 || canEdit) && (
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-                💬 {t('ats.comments', 'Comments')}
+          {/* Candidate Tags */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                🏷️ {t('ats.candidateTags', 'Candidate Tags')}
               </div>
-              {candidateComments.length === 0 ? (
-                <div style={{
-                  background: 'var(--background)', borderRadius: 10, padding: '10px 12px',
-                  fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic',
-                }}>
-                  {t('ats.noComments', 'No comments yet')}
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {candidateComments.map((comment) => {
-                    const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
-                    const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
-                    return (
-                      <div key={comment.id} style={{
-                        background: 'var(--background)', borderRadius: 10, padding: '10px 12px',
-                        border: '1px solid var(--border)',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                            <div style={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: '50%',
-                              overflow: 'hidden',
-                              background: authorAvatar ? 'transparent' : 'var(--primary)',
-                              color: '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 10,
-                              fontWeight: 700,
-                              flexShrink: 0,
-                            }}>
-                              {authorAvatar ? (
-                                <img src={authorAvatar ?? ''} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : initials(authorName)}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {authorName}
-                              </div>
-                              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                                {fmtDateTime(comment.createdAt)}
-                              </div>
-                            </div>
-                          </div>
-                          {canEdit && (
-                            <button
-                              onClick={() => handleDeleteCandidateComment(comment.id)}
-                              disabled={deletingCommentId === comment.id}
-                              style={{
-                                background: 'rgba(220,38,38,0.08)',
-                                border: '1px solid rgba(185,28,28,0.24)',
-                                borderRadius: 6,
-                                width: 24,
-                                height: 24,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: deletingCommentId === comment.id ? 'not-allowed' : 'pointer',
-                                opacity: deletingCommentId === comment.id ? 0.5 : 1,
-                              }}
-                              title={t('common.delete', 'Delete')}
-                            >
-                              <Trash2 size={12} color="#991b1b" />
-                            </button>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, whiteSpace: 'pre-wrap' }}>
-                          {comment.body}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              {canEdit && !editingTags && (
+                <button
+                  type="button"
+                  onClick={() => setEditingTags(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--primary)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                  }}
+                >
+                  ✏️ {t('common.edit', 'Edit')}
+                </button>
               )}
-
-              {canEdit && (
-                <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <textarea
-                    value={commentDraft}
-                    onChange={(e) => setCommentDraft(e.target.value)}
-                    rows={2}
-                    placeholder={t('ats.commentPlaceholder', 'Add a comment...')}
+            </div>
+            
+            {editingTags ? (
+              <div style={{ background: 'var(--background)', borderRadius: 10, padding: '12px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                  {tagsDraft.map((tag) => (
+                    <span key={tag} style={{
+                      background: 'var(--accent-light, rgba(201,151,58,0.10))',
+                      color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
+                      borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--accent)',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: 14,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
+                    placeholder={t('ats.addTagPlaceholder', 'Type and press Enter')}
                     style={{
                       flex: 1,
-                      fontFamily: 'inherit',
+                      padding: '6px 10px',
                       fontSize: 12,
-                      borderRadius: 8,
+                      borderRadius: 'var(--radius)',
                       border: '1px solid var(--border)',
-                      padding: '7px 9px',
-                      resize: 'vertical',
-                      background: 'var(--surface)',
+                      outline: 'none',
                     }}
                   />
-                  <Button variant="secondary" size="sm" onClick={handleAddCandidateComment} loading={savingComment}>
-                    {t('ats.addComment', 'Add')}
-                  </Button>
+                  <button
+                    type="button"
+                    onClick={handleAddTag}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: 'var(--primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 'var(--radius)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    +
+                  </button>
                 </div>
-              )}
-            </div>
-          )}
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={handleCancelTagsEdit}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: 'var(--surface)',
+                      color: 'var(--text)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t('common.cancel', 'Cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveTags}
+                    disabled={savingTags}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: 'var(--primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 'var(--radius)',
+                      cursor: savingTags ? 'not-allowed' : 'pointer',
+                      opacity: savingTags ? 0.6 : 1,
+                    }}
+                  >
+                    {savingTags ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {tagsDraft.length === 0 ? (
+                  <div style={{
+                    background: 'var(--background)', borderRadius: 10, padding: '8px 12px',
+                    fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic',
+                  }}>
+                    {t('ats.noTags', 'No tags')}
+                  </div>
+                ) : (
+                  tagsDraft.map((tag) => (
+                    <span key={tag} style={{
+                      background: 'var(--accent-light, rgba(201,151,58,0.10))',
+                      color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
+                      borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
+                    }}>
+                      {tag}
+                    </span>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Stage pipeline visual */}
           <div>
@@ -3451,6 +3519,102 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         </div>
                       )}
                     </div>
+                    
+                    {/* Feedback Comments List */}
+                    {interviewFeedback[iv.id] && interviewFeedback[iv.id].length > 0 && (
+                      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          💬 {t('ats.feedback', 'Feedback')} ({interviewFeedback[iv.id].length})
+                        </div>
+                        {interviewFeedback[iv.id].map((comment) => {
+                          const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
+                          const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
+                          const canDelete = canEdit || comment.authorId === user?.userId;
+                          
+                          return (
+                            <div key={comment.id} style={{
+                              background: 'var(--background)',
+                              borderRadius: 8,
+                              padding: '8px 10px',
+                              border: '1px solid var(--border)',
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                  <div style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    background: authorAvatar ? 'transparent' : 'var(--primary)',
+                                    color: '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    flexShrink: 0,
+                                  }}>
+                                    {authorAvatar ? (
+                                      <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : initials(authorName)}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                        {authorName}
+                                      </span>
+                                      {comment.authorRole && (
+                                        <span style={{
+                                          fontSize: 9,
+                                          fontWeight: 600,
+                                          color: 'var(--text-muted)',
+                                          background: 'var(--surface)',
+                                          padding: '1px 5px',
+                                          borderRadius: 4,
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.03em',
+                                        }}>
+                                          {t(`roles.${comment.authorRole}`, comment.authorRole)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                                      {fmtDateTime(comment.createdAt)}
+                                    </div>
+                                  </div>
+                                </div>
+                                {canDelete && (
+                                  <button
+                                    onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id)}
+                                    disabled={deletingFeedbackId === comment.id}
+                                    style={{
+                                      background: 'rgba(220,38,38,0.08)',
+                                      border: '1px solid rgba(185,28,28,0.24)',
+                                      borderRadius: 6,
+                                      width: 22,
+                                      height: 22,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                      opacity: deletingFeedbackId === comment.id ? 0.5 : 1,
+                                      flexShrink: 0,
+                                    }}
+                                    title={t('common.delete', 'Delete')}
+                                  >
+                                    <Trash2 size={11} color="#991b1b" />
+                                  </button>
+                                )}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, marginLeft: 32, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                                {comment.body}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    
                     {canFeedback && (
                       <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
                         <textarea
@@ -3498,7 +3662,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               )}
               <Button
                 variant="danger"
-                onClick={onReject}
+                onClick={() => setShowRejectionModal(true)}
                 loading={saving}
                 style={{ flex: 1, minWidth: 100 }}
               >
@@ -3548,6 +3712,70 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             >
               {t('common.delete', 'Delete')}
             </Button>
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {showRejectionModal && (
+        <ModalBackdrop onClose={() => setShowRejectionModal(false)} width={420}>
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '20px 24px',
+          }}>
+            <h3 style={{
+              fontSize: 18,
+              fontWeight: 700,
+              marginBottom: 16,
+              color: 'var(--text)',
+            }}>
+              {t('ats.rejectCandidate', 'Reject Candidate')}
+            </h3>
+            <p style={{
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              marginBottom: 16,
+            }}>
+              {t('ats.rejectionReasonPrompt', 'Please provide a reason for rejecting this candidate:')}
+            </p>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder={t('ats.rejectionReasonPlaceholder', 'e.g., Not enough experience, Skills mismatch, etc.')}
+              rows={4}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '10px 12px',
+                fontSize: 13,
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border)',
+                outline: 'none',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+                marginBottom: 16,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowRejectionModal(false);
+                  setRejectionReason('');
+                }}
+                disabled={savingRejection}
+              >
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleRejectWithReason}
+                loading={savingRejection}
+                disabled={!rejectionReason.trim()}
+              >
+                {t('ats.confirmReject', 'Confirm Rejection')}
+              </Button>
+            </div>
           </div>
         </ModalBackdrop>
       )}

@@ -77,13 +77,15 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
         <div style={{ flex: 1, overflow: 'auto', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {isPDF ? (
             <iframe
-              src={url}
+              src={`${url}#view=FitH`}
               style={{
                 width: '100%',
                 height: '100%',
                 border: 'none',
+                background: '#fff',
               }}
               title={filename}
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
             />
           ) : isImage ? (
             <img
@@ -121,6 +123,61 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
             </div>
           )}
         </div>
+        
+        {/* Footer with actions */}
+        {(isPDF || isImage) && (
+          <div
+            style={{
+              padding: '12px 20px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 10,
+              background: 'var(--surface)',
+            }}
+          >
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '8px 16px',
+                background: 'var(--background)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                textDecoration: 'none',
+                fontWeight: 600,
+                fontSize: 13,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              🔗 Open in New Tab
+            </a>
+            <a
+              href={url}
+              download={filename}
+              style={{
+                padding: '8px 16px',
+                background: 'var(--primary)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                textDecoration: 'none',
+                fontWeight: 600,
+                fontSize: 13,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              ⬇️ Download
+            </a>
+          </div>
+        )}
       </div>
     </div>,
     document.body
