@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Lock } from 'lucide-react';
 import { Spinner } from '../../components/ui/Spinner';
 import { Toggle } from '../../components/ui/Toggle';
-import { 
-  MANAGED_ROLE_KEYS, 
-  ROLE_COLORS, 
-  ManagedRoleKey, 
+import {
+  MANAGED_ROLE_KEYS,
+  ROLE_COLORS,
+  ManagedRoleKey,
   isRoleEligibleForModule,
   canManageRole
 } from './permissionCatalog';
@@ -43,7 +43,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
   const tModule = (moduleKey: string) => (t as (k: string) => string)(`permissions.modules.${moduleKey}`);
 
-  const visibleRoleKeys = GRID_ROLE_KEYS.filter(roleKey => 
+  const visibleRoleKeys = GRID_ROLE_KEYS.filter(roleKey =>
     canManageRole(user?.role || '', user?.isSuperAdmin || false, roleKey)
   );
 
@@ -165,10 +165,10 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                         ) : isSaved ? (
                           <CheckCircle2 size={18} color="var(--success)" style={{ animation: 'popIn 0.22s cubic-bezier(0.34,1.56,0.64,1)' }} />
                         ) : (
-                          <Toggle 
-                            checked={isGestioneAccessiAdmin ? true : enabled} 
-                            onChange={() => onToggle(mod.key, roleKey)} 
-                            disabled={isSaving || !isEligible || isTerminaliRestricted || isGestioneAccessiAdmin || isUnmanageable} 
+                          <Toggle
+                            checked={isGestioneAccessiAdmin ? true : enabled}
+                            onChange={() => onToggle(mod.key, roleKey)}
+                            disabled={isSaving || !isEligible || isTerminaliRestricted || isGestioneAccessiAdmin || isUnmanageable}
                           />
                         )}
                       </div>
@@ -253,7 +253,7 @@ const PermissionGridTable: React.FC<PermissionGridTableProps> = ({
                     textAlign: 'center',
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                   }}>
-                    <Toggle checked={false} onChange={() => {}} disabled />
+                    <Toggle checked={false} onChange={() => { }} disabled />
                   </td>
                 ))}
               </tr>
