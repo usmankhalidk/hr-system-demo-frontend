@@ -135,6 +135,19 @@ export interface CandidateComment {
   updatedAt: string;
 }
 
+export interface InterviewFeedbackComment {
+  id: number;
+  interviewId: number;
+  authorId: number;
+  authorName: string | null;
+  authorSurname: string | null;
+  authorAvatarFilename: string | null;
+  authorRole: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InterviewNotificationLog {
   id: number;
   interviewId: number;
@@ -341,6 +354,14 @@ export async function updateCandidateStage(
   return data.data.candidate as Candidate;
 }
 
+export async function updateCandidateTags(
+  id: number,
+  tags: string[],
+): Promise<Candidate> {
+  const { data } = await apiClient.patch(`/ats/candidates/${id}/tags`, { tags });
+  return data.data.candidate as Candidate;
+}
+
 export async function deleteCandidate(id: number): Promise<void> {
   await apiClient.delete(`/ats/candidates/${id}`);
 }
@@ -429,6 +450,27 @@ export async function updateInterview(
 
 export async function deleteInterview(id: number): Promise<void> {
   await apiClient.delete(`/ats/interviews/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Interview Feedback Comments
+// ---------------------------------------------------------------------------
+
+export async function getInterviewFeedbackComments(interviewId: number): Promise<InterviewFeedbackComment[]> {
+  const { data } = await apiClient.get(`/ats/interviews/${interviewId}/feedback`);
+  return (data.data.comments ?? []) as InterviewFeedbackComment[];
+}
+
+export async function addInterviewFeedbackComment(
+  interviewId: number,
+  body: string,
+): Promise<InterviewFeedbackComment> {
+  const { data } = await apiClient.post(`/ats/interviews/${interviewId}/feedback`, { body });
+  return data.data.comment as InterviewFeedbackComment;
+}
+
+export async function deleteInterviewFeedbackComment(id: number): Promise<void> {
+  await apiClient.delete(`/ats/interviews/feedback/${id}`);
 }
 
 // ---------------------------------------------------------------------------

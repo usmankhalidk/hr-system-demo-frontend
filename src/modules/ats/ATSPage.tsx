@@ -18,6 +18,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RotateCcw,
   Sparkles,
   Store as StoreIcon,
   Trash2,
@@ -35,6 +36,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { translateApiError } from '../../utils/apiErrors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import Badge from '../../components/ui/Badge';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
@@ -43,17 +45,20 @@ import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl, getRes
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
 import { getEmployees } from '../../api/employees';
+import { getNotificationSettings, type NotificationSetting } from '../../api/documents';
+import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
   getCandidates, createCandidate, updateCandidateStage, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
   getCandidateComments, addCandidateComment, deleteCandidateComment,
+  getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
   getInterviewNotifications, retryInterviewNotification,
   getAlerts, getRisks,
   previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
-  CandidateComment, InterviewNotificationLog,
+  CandidateComment, InterviewFeedbackComment, InterviewNotificationLog,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
 import DocumentPreviewModal from './DocumentPreviewModal';
@@ -85,6 +90,12 @@ const STAGE_BG: Record<CandidateStatus, string> = {
   interview: 'rgba(201,151,58,0.10)',
   hired: 'rgba(21,128,61,0.08)',
   rejected: 'rgba(220,38,38,0.07)',
+};
+
+const ROLE_BADGE_VARIANT: Record<string, 'accent' | 'info' | 'warning' | 'neutral'> = {
+  hr: 'accent',
+  area_manager: 'info',
+  store_manager: 'warning',
 };
 
 const STATUS_COLOR: Record<JobStatus, string> = {
@@ -1873,6 +1884,8 @@ interface CandidateModalProps {
   employees: Employee[];
   canEdit: boolean;
   canFeedback: boolean;
+  interviewInviteEnabled: boolean | null;
+  smtpConfigured: boolean | null;
   onClose: () => void;
   onAdvance: (status: CandidateStatus) => Promise<void>;
   onReject: () => Promise<void>;
@@ -1881,23 +1894,32 @@ interface CandidateModalProps {
 }
 
 const CandidateModal: React.FC<CandidateModalProps> = ({
-  candidate, jobs, employees, canEdit, canFeedback, onClose, onAdvance, onReject, onDelete, saving,
+  candidate, jobs, employees, canEdit, canFeedback, interviewInviteEnabled, smtpConfigured,
+  onClose, onAdvance, onReject, onDelete, saving,
 }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [showInterviewForm, setShowInterviewForm] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<number | null>(null);
   const [intDate, setIntDate] = useState('');
   const [intTime, setIntTime] = useState('09:00');
   const [intLocation, setIntLocation] = useState('');
-  const [intNotes, setIntNotes] = useState('');
   const [intType, setIntType] = useState<'phone' | 'in_person'>('in_person');
   const [intDescription, setIntDescription] = useState('');
   const [intDuration, setIntDuration] = useState<number | ''>('');
-  const [intInterviewerId, setIntInterviewerId] = useState<number | ''>('');
+  const [intInterviewerId, setIntInterviewerId] = useState<string | null>(null);
+  const [intSendIcs, setIntSendIcs] = useState(false);
   const [savingInt, setSavingInt] = useState(false);
+  const [candidateComments, setCandidateComments] = useState<CandidateComment[]>([]);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
+  const [interviewFeedback, setInterviewFeedback] = useState<Record<number, InterviewFeedbackComment[]>>({});
+  const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
+  const [deletingFeedbackId, setDeletingFeedbackId] = useState<number | null>(null);
   const [interviewNotifications, setInterviewNotifications] = useState<Record<number, InterviewNotificationLog[]>>({});
 
   // Load notification logs for interviews
@@ -1941,7 +1963,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       showToast(t('ats.notificationRetryError'), 'error');
     }
   };
-  const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
   const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; filename: string } | null>(null);
@@ -1967,6 +1988,68 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const stageColor = STAGE_COLOR[candidate.status];
   const stageBg = STAGE_BG[candidate.status];
   const next = NEXT_STAGE[candidate.status];
+
+  const interviewerOptions = useMemo<SelectOption[]>(() => {
+    return employees
+      .filter((emp) => ['hr', 'area_manager', 'store_manager'].includes(emp.role))
+      .map((emp) => {
+        const fullName = `${emp.name} ${emp.surname}`.trim();
+        const avatarUrl = getAvatarUrl(emp.avatarFilename);
+        const roleLabel = t(`roles.${emp.role}`, emp.role);
+        return {
+          value: String(emp.id),
+          label: `${fullName} ${roleLabel}`.trim(),
+          render: (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <div style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  background: avatarUrl ? 'transparent' : 'var(--primary)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : initials(fullName)}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {fullName}
+                  </div>
+                  <div style={{
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {emp.email}
+                  </div>
+                </div>
+              </div>
+              <Badge size="sm" variant={ROLE_BADGE_VARIANT[emp.role] ?? 'neutral'}>
+                {roleLabel}
+              </Badge>
+            </div>
+          ),
+        };
+      });
+  }, [employees, t]);
 
   // Extract only the relative path from cvs/ or public-cv/ onwards
   const displayResumePath = candidate.resumePath 
@@ -2001,15 +2084,81 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   };
 
   useEffect(() => {
+    let active = true;
     getInterviews(candidate.id)
-      .then((items) => {
+      .then(async (items) => {
+        if (!active) return;
         setInterviews(items);
-        setFeedbackDrafts(Object.fromEntries(items.map((iv) => [iv.id, iv.feedback ?? ''])));
+        setFeedbackDrafts(Object.fromEntries(items.map((iv) => [iv.id, ''])));
+
+        const results = await Promise.allSettled(
+          items.map((iv) => getInterviewFeedbackComments(iv.id))
+        );
+        if (!active) return;
+        const feedbackMap: Record<number, InterviewFeedbackComment[]> = {};
+        results.forEach((result, idx) => {
+          if (result.status === 'fulfilled') {
+            feedbackMap[items[idx].id] = result.value;
+          }
+        });
+        setInterviewFeedback(feedbackMap);
       })
       .catch(() => { });
+
+    return () => {
+      active = false;
+    };
   }, [candidate.id]);
 
-  const handleSaveFeedback = async (interviewId: number) => {
+  useEffect(() => {
+    let active = true;
+    getCandidateComments(candidate.id)
+      .then((items) => {
+        if (active) setCandidateComments(items);
+      })
+      .catch(() => { if (active) setCandidateComments([]); });
+
+    return () => {
+      active = false;
+    };
+  }, [candidate.id]);
+
+  const handleAddCandidateComment = async () => {
+    if (!canEdit) return;
+    const value = commentDraft.trim();
+    if (!value) {
+      showToast(t('ats.commentRequired', 'Comment is required'), 'error');
+      return;
+    }
+
+    setSavingComment(true);
+    try {
+      const comment = await addCandidateComment(candidate.id, value);
+      setCandidateComments((prev) => [...prev, comment]);
+      setCommentDraft('');
+      showToast(t('ats.commentAdded', 'Comment added'), 'success');
+    } catch {
+      showToast(t('ats.commentError', 'Unable to add comment'), 'error');
+    } finally {
+      setSavingComment(false);
+    }
+  };
+
+  const handleDeleteCandidateComment = async (commentId: number) => {
+    if (!canEdit) return;
+    setDeletingCommentId(commentId);
+    try {
+      await deleteCandidateComment(commentId);
+      setCandidateComments((prev) => prev.filter((c) => c.id !== commentId));
+      showToast(t('ats.commentDeleted', 'Comment deleted'), 'success');
+    } catch {
+      showToast(t('ats.commentDeleteError', 'Unable to delete comment'), 'error');
+    } finally {
+      setDeletingCommentId(null);
+    }
+  };
+
+  const handleAddInterviewFeedback = async (interviewId: number) => {
     const value = (feedbackDrafts[interviewId] ?? '').trim();
     if (!value) {
       showToast(t('ats.feedbackRequired'), 'error');
@@ -2018,13 +2167,34 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
 
     setSavingFeedbackId(interviewId);
     try {
-      const updated = await updateInterview(interviewId, { feedback: value });
-      setInterviews((prev) => prev.map((iv) => (iv.id === interviewId ? updated : iv)));
+      const comment = await addInterviewFeedbackComment(interviewId, value);
+      setInterviewFeedback((prev) => ({
+        ...prev,
+        [interviewId]: [...(prev[interviewId] ?? []), comment],
+      }));
+      setFeedbackDrafts((prev) => ({ ...prev, [interviewId]: '' }));
       showToast(t('ats.feedbackSaved'), 'success');
     } catch {
       showToast(t('ats.feedbackError'), 'error');
     } finally {
       setSavingFeedbackId(null);
+    }
+  };
+
+  const handleDeleteInterviewFeedback = async (interviewId: number, commentId: number) => {
+    if (!canEdit && commentId !== user?.id) return;
+    setDeletingFeedbackId(commentId);
+    try {
+      await deleteInterviewFeedbackComment(commentId);
+      setInterviewFeedback((prev) => ({
+        ...prev,
+        [interviewId]: (prev[interviewId] ?? []).filter((c) => c.id !== commentId),
+      }));
+      showToast(t('ats.feedbackDeleted', 'Feedback deleted'), 'success');
+    } catch {
+      showToast(t('ats.feedbackDeleteError', 'Unable to delete feedback'), 'error');
+    } finally {
+      setDeletingFeedbackId(null);
     }
   };
 
@@ -2050,6 +2220,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       const timeValue = intTime || '09:00';
       const scheduledAt = new Date(`${intDate}T${timeValue}:00`).toISOString();
       
+      const parsedInterviewerId = intInterviewerId ? Number(intInterviewerId) : undefined;
+
       if (editingInterviewId) {
         // Update existing interview
         const updated = await updateInterview(editingInterviewId, {
@@ -2057,9 +2229,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           interviewType: intType,
           location: intLocation || undefined,
           description: intDescription || undefined,
-          notes: intNotes || undefined,
           durationMinutes: typeof intDuration === 'number' ? intDuration : undefined,
-          interviewerId: typeof intInterviewerId === 'number' ? intInterviewerId : undefined,
+          interviewerId: parsedInterviewerId,
         });
         setInterviews((prev) => prev.map((iv) => (iv.id === editingInterviewId ? updated : iv)));
         showToast(t('ats.interviewUpdated', 'Interview updated'), 'success');
@@ -2070,9 +2241,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           interviewType: intType,
           location: intLocation || undefined,
           description: intDescription || undefined,
-          notes: intNotes || undefined,
           durationMinutes: typeof intDuration === 'number' ? intDuration : undefined,
-          interviewerId: typeof intInterviewerId === 'number' ? intInterviewerId : undefined,
+          interviewerId: parsedInterviewerId,
+          sendIcs: intSendIcs,
         });
         setInterviews((prev) => [...prev, iv]);
         showToast(t('ats.interviewCreated'), 'success');
@@ -2088,8 +2259,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       
       setShowInterviewForm(false);
       setEditingInterviewId(null);
-      setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
-      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId('');
+      setIntDate(''); setIntTime('09:00'); setIntLocation('');
+      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
     } catch (err) {
       showToast(t('ats.interviewError'), 'error');
     } finally {
@@ -2750,17 +2921,125 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             </div>
           )}
 
+          {/* Candidate comments */}
+          {(candidateComments.length > 0 || canEdit) && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+                💬 {t('ats.comments', 'Comments')}
+              </div>
+              {candidateComments.length === 0 ? (
+                <div style={{
+                  background: 'var(--background)', borderRadius: 10, padding: '10px 12px',
+                  fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic',
+                }}>
+                  {t('ats.noComments', 'No comments yet')}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {candidateComments.map((comment) => {
+                    const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
+                    const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
+                    return (
+                      <div key={comment.id} style={{
+                        background: 'var(--background)', borderRadius: 10, padding: '10px 12px',
+                        border: '1px solid var(--border)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                            <div style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              overflow: 'hidden',
+                              background: authorAvatar ? 'transparent' : 'var(--primary)',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}>
+                              {authorAvatar ? (
+                                <img src={authorAvatar ?? ''} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : initials(authorName)}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {authorName}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                {fmtDateTime(comment.createdAt)}
+                              </div>
+                            </div>
+                          </div>
+                          {canEdit && (
+                            <button
+                              onClick={() => handleDeleteCandidateComment(comment.id)}
+                              disabled={deletingCommentId === comment.id}
+                              style={{
+                                background: 'rgba(220,38,38,0.08)',
+                                border: '1px solid rgba(185,28,28,0.24)',
+                                borderRadius: 6,
+                                width: 24,
+                                height: 24,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: deletingCommentId === comment.id ? 'not-allowed' : 'pointer',
+                                opacity: deletingCommentId === comment.id ? 0.5 : 1,
+                              }}
+                              title={t('common.delete', 'Delete')}
+                            >
+                              <Trash2 size={12} color="#991b1b" />
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, whiteSpace: 'pre-wrap' }}>
+                          {comment.body}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {canEdit && (
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <textarea
+                    value={commentDraft}
+                    onChange={(e) => setCommentDraft(e.target.value)}
+                    rows={2}
+                    placeholder={t('ats.commentPlaceholder', 'Add a comment...')}
+                    style={{
+                      flex: 1,
+                      fontFamily: 'inherit',
+                      fontSize: 12,
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      padding: '7px 9px',
+                      resize: 'vertical',
+                      background: 'var(--surface)',
+                    }}
+                  />
+                  <Button variant="secondary" size="sm" onClick={handleAddCandidateComment} loading={savingComment}>
+                    {t('ats.addComment', 'Add')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Stage pipeline visual */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
               Pipeline
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-              {(['received', 'review', 'interview', 'hired'] as CandidateStatus[]).map((s, idx) => {
-                const stageIdx = ['received', 'review', 'interview', 'hired', 'rejected'].indexOf(candidate.status);
-                const thisIdx = idx;
-                const isDone = candidate.status !== 'rejected' && stageIdx >= thisIdx;
-                const isCurrent = candidate.status !== 'rejected' && stageIdx === thisIdx;
+              {(['received', 'review', 'phone_interview', 'interview', 'hired'] as CandidateStatus[]).map((s, idx, stages) => {
+                const stageIdx = [...stages, 'rejected'].indexOf(candidate.status);
+                const isDone = candidate.status !== 'rejected' && stageIdx >= idx;
+                const isCurrent = candidate.status !== 'rejected' && stageIdx === idx;
                 const sc = STAGE_COLOR[s];
                 return (
                   <React.Fragment key={s}>
@@ -2779,7 +3058,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         {t(`ats.stage_${s}`)}
                       </div>
                     </div>
-                    {idx < 3 && (
+                    {idx < stages.length - 1 && (
                       <div style={{
                         height: 2, flex: 1, marginBottom: 18,
                         background: candidate.status !== 'rejected' && stageIdx > idx ? sc : 'var(--border)',
@@ -2802,7 +3081,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           </div>
 
           {/* Interviews section */}
-          {(candidate.status === 'interview' || interviews.length > 0) && (
+          {(candidate.status === 'interview' || candidate.status === 'phone_interview' || interviews.length > 0) && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2870,30 +3149,17 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
                         {t('ats.interviewer')}
                       </label>
-                      <select 
-                        value={intInterviewerId} 
-                        onChange={(e) => setIntInterviewerId(e.target.value ? Number(e.target.value) : '')}
-                        style={{ 
-                          width: '100%', 
-                          boxSizing: 'border-box', 
-                          padding: '7px 10px', 
-                          fontSize: 13, 
-                          borderRadius: 'var(--radius)', 
-                          border: '1px solid var(--border)', 
-                          outline: 'none', 
-                          background: 'var(--background)' 
-                        }}
-                      >
-                        <option value="">{t('ats.selectInterviewer')}</option>
-                        {employees
-                          .filter((emp: Employee) => ['hr', 'area_manager', 'store_manager'].includes(emp.role))
-                          .map((emp: Employee) => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.name} {emp.surname} ({emp.role})
-                            </option>
-                          ))
-                        }
-                      </select>
+                      <CustomSelect
+                        value={intInterviewerId}
+                        onChange={setIntInterviewerId}
+                        options={interviewerOptions}
+                        placeholder={t('ats.selectInterviewer')}
+                        searchable
+                        isClearable
+                        highlightSelected
+                        controlMinHeight={36}
+                        noOptionsMessage={t('ats.noInterviewerResults', 'No interviewers found')}
+                      />
                     </div>
                   </div>
                   
@@ -2955,19 +3221,24 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       }} 
                     />
                   </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                      {t('common.notes')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      id="ats-send-ics"
+                      type="checkbox"
+                      checked={intSendIcs}
+                      onChange={(e) => setIntSendIcs(e.target.checked)}
+                      style={{ width: 14, height: 14 }}
+                    />
+                    <label htmlFor="ats-send-ics" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {t('ats.calendarSync', 'Add to calendar (ICS)')}
                     </label>
-                    <textarea className="field-input" value={intNotes} onChange={(e) => setIntNotes(e.target.value)} rows={2}
-                      style={{ width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <Button variant="secondary" size="sm" type="button" onClick={() => {
                       setShowInterviewForm(false);
                       setEditingInterviewId(null);
-                      setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
-                      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId('');
+                      setIntDate(''); setIntTime('09:00'); setIntLocation('');
+                      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
                     }}>
                       {t('common.cancel')}
                     </Button>
@@ -3133,11 +3404,11 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                               setIntDate(ivDate.toISOString().split('T')[0]);
                               setIntTime(ivDate.toTimeString().slice(0, 5));
                               setIntLocation(iv.location || '');
-                              setIntNotes(iv.notes || '');
                               setIntType(iv.interviewType || 'in_person');
-                              setIntDescription(iv.description || '');
+                              setIntDescription(iv.description || iv.notes || '');
                               setIntDuration(iv.durationMinutes || '');
-                              setIntInterviewerId(iv.interviewerId || '');
+                              setIntInterviewerId(iv.interviewerId ? String(iv.interviewerId) : null);
+                              setIntSendIcs(false);
                               setEditingInterviewId(iv.id);
                               setShowInterviewForm(true);
                             }}
@@ -3201,7 +3472,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleSaveFeedback(iv.id)}
+                          onClick={() => handleAddInterviewFeedback(iv.id)}
                           loading={savingFeedbackId === iv.id}
                         >
                           {t('common.save')}
@@ -3998,6 +4269,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [addSaving, setAddSaving] = useState(false);
   const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
   const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
+  const [interviewInviteEnabled, setInterviewInviteEnabled] = useState<boolean | null>(null);
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
   const hasMultiCompanyScope = (allowedCompanyIds?.length ?? 0) > 1;
   const effectiveCompanyId = hasMultiCompanyScope
@@ -4014,6 +4287,22 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         effectiveCompanyId ? getEmployees({ targetCompanyId: effectiveCompanyId, status: 'active', includeStoreTerminals: false, limit: 500 }) : Promise.resolve({ employees: [] }),
       ]);
       setCandidates(cands); setJobs(js); setEmployees(emps.employees || []);
+      
+      // Load notification settings and SMTP config
+      if (effectiveCompanyId) {
+        try {
+          const [notifSettings, emailConfig] = await Promise.all([
+            getNotificationSettings(effectiveCompanyId),
+            getEmailConfig(),
+          ]);
+          const interviewInviteSetting = notifSettings.find((s: NotificationSetting) => s.eventKey === 'ats.interview_invite');
+          setInterviewInviteEnabled(interviewInviteSetting?.enabled ?? null);
+          setSmtpConfigured(emailConfig?.config?.smtpHost ? true : false);
+        } catch {
+          setInterviewInviteEnabled(null);
+          setSmtpConfigured(null);
+        }
+      }
     } catch { showToast(t('ats.errorLoad'), 'error'); }
     finally { setLoading(false); }
   }, [filterJob, effectiveCompanyId, scopedCompanyId, showToast, t]);
@@ -4925,6 +5214,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
           employees={employees}
           canEdit={canEdit}
           canFeedback={canFeedback}
+          interviewInviteEnabled={interviewInviteEnabled}
+          smtpConfigured={smtpConfigured}
           onClose={() => setSelected(null)}
           onAdvance={handleAdvance}
           onReject={handleReject}
