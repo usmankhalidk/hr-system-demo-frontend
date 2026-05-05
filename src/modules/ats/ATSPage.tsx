@@ -18,6 +18,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RotateCcw,
   Sparkles,
   Store as StoreIcon,
   Trash2,
@@ -35,6 +36,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { translateApiError } from '../../utils/apiErrors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import Badge from '../../components/ui/Badge';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
@@ -43,31 +45,38 @@ import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl, getRes
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
 import { getEmployees } from '../../api/employees';
+import { getNotificationSettings, type NotificationSetting } from '../../api/documents';
+import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
-  getCandidates, createCandidate, updateCandidateStage, deleteCandidate,
+  getCandidates, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
+  getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
+  getInterviewNotifications, retryInterviewNotification,
   getAlerts, getRisks,
   previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
+  InterviewFeedbackComment, InterviewNotificationLog,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
 import DocumentPreviewModal from './DocumentPreviewModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const STAGES: CandidateStatus[] = ['received', 'review', 'interview', 'hired', 'rejected'];
+const STAGES: CandidateStatus[] = ['received', 'review', 'phone_interview', 'interview', 'hired', 'rejected'];
 
 const NEXT_STAGE: Partial<Record<CandidateStatus, CandidateStatus>> = {
   received: 'review',
-  review: 'interview',
+  review: 'phone_interview',
+  phone_interview: 'interview',
   interview: 'hired',
 };
 
 const STAGE_COLOR: Record<CandidateStatus, string> = {
   received: '#0284C7',
   review: '#7C3AED',
+  phone_interview: '#EA580C', // Orange
   interview: '#C9973A',
   hired: '#15803D',
   rejected: '#DC2626',
@@ -76,9 +85,16 @@ const STAGE_COLOR: Record<CandidateStatus, string> = {
 const STAGE_BG: Record<CandidateStatus, string> = {
   received: 'rgba(2,132,199,0.08)',
   review: 'rgba(124,58,237,0.08)',
+  phone_interview: 'rgba(234,88,12,0.08)',
   interview: 'rgba(201,151,58,0.10)',
   hired: 'rgba(21,128,61,0.08)',
   rejected: 'rgba(220,38,38,0.07)',
+};
+
+const ROLE_BADGE_VARIANT: Record<string, 'accent' | 'info' | 'warning' | 'neutral'> = {
+  hr: 'accent',
+  area_manager: 'info',
+  store_manager: 'warning',
 };
 
 const STATUS_COLOR: Record<JobStatus, string> = {
@@ -236,6 +252,29 @@ function fmtRelativeTime(iso: string) {
   }
 
   return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(value, unit);
+}
+
+const SYSTEM_CANDIDATE_TAGS = new Set(['public-careers', 'external', 'indeed']);
+const SYSTEM_CANDIDATE_TAG_PREFIXES = ['locale:'];
+
+function isSystemCandidateTag(tag: string): boolean {
+  const normalized = tag.trim().toLowerCase();
+  if (!normalized) return false;
+  if (SYSTEM_CANDIDATE_TAGS.has(normalized)) return true;
+  return SYSTEM_CANDIDATE_TAG_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function splitCandidateTags(tags: string[]): { systemTags: string[]; userTags: string[] } {
+  const systemTags: string[] = [];
+  const userTags: string[] = [];
+  tags.forEach((tag) => {
+    if (isSystemCandidateTag(tag)) {
+      systemTags.push(tag);
+    } else {
+      userTags.push(tag);
+    }
+  });
+  return { systemTags, userTags };
 }
 
 function languageFlagCodes(language: JobLanguage): string[] {
@@ -1864,8 +1903,11 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 interface CandidateModalProps {
   candidate: Candidate;
   jobs: JobPosting[];
+  employees: Employee[];
   canEdit: boolean;
   canFeedback: boolean;
+  interviewInviteEnabled: boolean | null;
+  smtpConfigured: boolean | null;
   onClose: () => void;
   onAdvance: (status: CandidateStatus) => Promise<void>;
   onReject: () => Promise<void>;
@@ -1874,23 +1916,86 @@ interface CandidateModalProps {
 }
 
 const CandidateModal: React.FC<CandidateModalProps> = ({
-  candidate, jobs, canEdit, canFeedback, onClose, onAdvance, onReject, onDelete, saving,
+  candidate, jobs, employees, canEdit, canFeedback, interviewInviteEnabled, smtpConfigured,
+  onClose, onAdvance, onReject, onDelete, saving,
 }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [showInterviewForm, setShowInterviewForm] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<number | null>(null);
   const [intDate, setIntDate] = useState('');
   const [intTime, setIntTime] = useState('09:00');
   const [intLocation, setIntLocation] = useState('');
-  const [intNotes, setIntNotes] = useState('');
+  const [intType, setIntType] = useState<'phone' | 'in_person'>('in_person');
+  const [intDescription, setIntDescription] = useState('');
+  const [intDuration, setIntDuration] = useState<number | ''>('');
+  const [intInterviewerId, setIntInterviewerId] = useState<string | null>(null);
+  const [intSendIcs, setIntSendIcs] = useState(false);
   const [savingInt, setSavingInt] = useState(false);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
+  const [interviewFeedback, setInterviewFeedback] = useState<Record<number, InterviewFeedbackComment[]>>({});
   const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
+  const [deletingFeedbackId, setDeletingFeedbackId] = useState<number | null>(null);
+  const [interviewNotifications, setInterviewNotifications] = useState<Record<number, InterviewNotificationLog[]>>({});
+
+  // Load notification logs for interviews
+  const loadInterviewNotifications = useCallback(async (interviewIds: number[]) => {
+    const promises = interviewIds.map(async (id) => {
+      try {
+        const logs = await getInterviewNotifications(id);
+        return { id, logs };
+      } catch {
+        return { id, logs: [] };
+      }
+    });
+    
+    const results = await Promise.allSettled(promises);
+    const newNotifications: Record<number, InterviewNotificationLog[]> = {};
+    
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        newNotifications[result.value.id] = result.value.logs;
+      }
+    });
+    
+    setInterviewNotifications(prev => ({ ...prev, ...newNotifications }));
+  }, []);
+
+  // Load notification logs when interviews change
+  useEffect(() => {
+    if (interviews.length > 0) {
+      loadInterviewNotifications(interviews.map(iv => iv.id));
+    }
+  }, [interviews, loadInterviewNotifications]);
+
+  // Retry failed notification
+  const handleRetryNotification = async (interviewId: number, logId: number) => {
+    try {
+      await retryInterviewNotification(interviewId, logId);
+      // Reload notification logs for this interview
+      await loadInterviewNotifications([interviewId]);
+      showToast(t('ats.notificationRetried'), 'success');
+    } catch (err) {
+      showToast(t('ats.notificationRetryError'), 'error');
+    }
+  };
   const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; filename: string } | null>(null);
+  
+  // Tags editing
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagsDraft, setTagsDraft] = useState<string[]>(() => splitCandidateTags(candidate.tags).userTags);
+  const [tagInput, setTagInput] = useState('');
+  const [savingTags, setSavingTags] = useState(false);
+  const { systemTags } = useMemo(() => splitCandidateTags(candidate.tags), [candidate.tags]);
+  
+  // Rejection reason
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [savingRejection, setSavingRejection] = useState(false);
 
   const appliedJob = candidate.jobPostingId
     ? jobs.find((j) => j.id === candidate.jobPostingId) ?? null
@@ -1914,13 +2019,77 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const stageBg = STAGE_BG[candidate.status];
   const next = NEXT_STAGE[candidate.status];
 
+  const interviewerOptions = useMemo<SelectOption[]>(() => {
+    return employees
+      .filter((emp) => ['hr', 'area_manager', 'store_manager'].includes(emp.role))
+      .map((emp) => {
+        const fullName = `${emp.name} ${emp.surname}`.trim();
+        const avatarUrl = getAvatarUrl(emp.avatarFilename);
+        const roleLabel = t(`roles.${emp.role}`, emp.role);
+        return {
+          value: String(emp.id),
+          label: `${fullName} ${roleLabel}`.trim(),
+          render: (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <div style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  background: avatarUrl ? 'transparent' : 'var(--primary)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : initials(fullName)}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {fullName}
+                  </div>
+                  <div style={{
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {emp.email}
+                  </div>
+                </div>
+              </div>
+              <Badge size="sm" variant={ROLE_BADGE_VARIANT[emp.role] ?? 'neutral'}>
+                {roleLabel}
+              </Badge>
+            </div>
+          ),
+        };
+      });
+  }, [employees, t]);
+
+  const resumePath = candidate.resumePath || candidate.cvPath;
+
   // Extract only the relative path from cvs/ or public-cv/ onwards
-  const displayResumePath = candidate.resumePath 
-    ? candidate.resumePath.includes('cvs/') 
-      ? candidate.resumePath.substring(candidate.resumePath.indexOf('cvs/'))
-      : candidate.resumePath.includes('public-cv/')
-      ? candidate.resumePath.substring(candidate.resumePath.indexOf('public-cv/'))
-      : candidate.resumePath
+  const displayResumePath = resumePath 
+    ? resumePath.includes('cvs/') 
+      ? resumePath.substring(resumePath.indexOf('cvs/'))
+      : resumePath.includes('public-cv/')
+      ? resumePath.substring(resumePath.indexOf('public-cv/'))
+      : resumePath
     : null;
 
   // Country flag helper
@@ -1947,15 +2116,37 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   };
 
   useEffect(() => {
+    let active = true;
     getInterviews(candidate.id)
-      .then((items) => {
+      .then(async (items) => {
+        if (!active) return;
         setInterviews(items);
-        setFeedbackDrafts(Object.fromEntries(items.map((iv) => [iv.id, iv.feedback ?? ''])));
+        setFeedbackDrafts(Object.fromEntries(items.map((iv) => [iv.id, ''])));
+
+        const results = await Promise.allSettled(
+          items.map((iv) => getInterviewFeedbackComments(iv.id))
+        );
+        if (!active) return;
+        const feedbackMap: Record<number, InterviewFeedbackComment[]> = {};
+        results.forEach((result, idx) => {
+          if (result.status === 'fulfilled') {
+            feedbackMap[items[idx].id] = result.value;
+          }
+        });
+        setInterviewFeedback(feedbackMap);
       })
       .catch(() => { });
+
+    return () => {
+      active = false;
+    };
   }, [candidate.id]);
 
-  const handleSaveFeedback = async (interviewId: number) => {
+  useEffect(() => {
+    setTagsDraft(splitCandidateTags(candidate.tags).userTags);
+  }, [candidate.id, candidate.tags]);
+
+  const handleAddInterviewFeedback = async (interviewId: number) => {
     const value = (feedbackDrafts[interviewId] ?? '').trim();
     if (!value) {
       showToast(t('ats.feedbackRequired'), 'error');
@@ -1964,13 +2155,34 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
 
     setSavingFeedbackId(interviewId);
     try {
-      const updated = await updateInterview(interviewId, { feedback: value });
-      setInterviews((prev) => prev.map((iv) => (iv.id === interviewId ? updated : iv)));
+      const comment = await addInterviewFeedbackComment(interviewId, value);
+      setInterviewFeedback((prev) => ({
+        ...prev,
+        [interviewId]: [...(prev[interviewId] ?? []), comment],
+      }));
+      setFeedbackDrafts((prev) => ({ ...prev, [interviewId]: '' }));
       showToast(t('ats.feedbackSaved'), 'success');
     } catch {
       showToast(t('ats.feedbackError'), 'error');
     } finally {
       setSavingFeedbackId(null);
+    }
+  };
+
+  const handleDeleteInterviewFeedback = async (interviewId: number, commentId: number, authorId: number | null) => {
+    if (!canEdit && authorId !== user?.id) return;
+    setDeletingFeedbackId(commentId);
+    try {
+      await deleteInterviewFeedbackComment(commentId);
+      setInterviewFeedback((prev) => ({
+        ...prev,
+        [interviewId]: (prev[interviewId] ?? []).filter((c) => c.id !== commentId),
+      }));
+      showToast(t('ats.feedbackDeleted', 'Feedback deleted'), 'success');
+    } catch {
+      showToast(t('ats.feedbackDeleteError', 'Unable to delete feedback'), 'error');
+    } finally {
+      setDeletingFeedbackId(null);
     }
   };
 
@@ -1987,6 +2199,66 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
   };
 
+  // Tags handlers
+  const handleAddTag = () => {
+    const normalized = tagInput.trim();
+    if (!normalized) return;
+    if (tagsDraft.some((tag) => tag.toLowerCase() === normalized.toLowerCase())) {
+      showToast(t('ats.tagAlreadyExists', 'Tag already exists'), 'warning');
+      return;
+    }
+    setTagsDraft((prev) => [...prev, normalized]);
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setTagsDraft((prev) => prev.filter((t) => t !== tag));
+  };
+
+  const handleSaveTags = async () => {
+    setSavingTags(true);
+    try {
+      const nextTags = [...systemTags, ...tagsDraft].filter((tag, idx, arr) => (
+        arr.findIndex((item) => item.toLowerCase() === tag.toLowerCase()) === idx
+      ));
+      await updateCandidateTags(candidate.id, nextTags);
+      candidate.tags = nextTags; // Update local state
+      setTagsDraft(splitCandidateTags(nextTags).userTags);
+      setEditingTags(false);
+      showToast(t('ats.tagsSaved', 'Tags updated'), 'success');
+    } catch {
+      showToast(t('ats.tagsError', 'Failed to update tags'), 'error');
+    } finally {
+      setSavingTags(false);
+    }
+  };
+
+  const handleCancelTagsEdit = () => {
+    setTagsDraft(splitCandidateTags(candidate.tags).userTags);
+    setTagInput('');
+    setEditingTags(false);
+  };
+
+  // Rejection handler
+  const handleRejectWithReason = async () => {
+    if (!rejectionReason.trim()) {
+      showToast(t('ats.rejectionReasonRequired', 'Please provide a rejection reason'), 'error');
+      return;
+    }
+    setSavingRejection(true);
+    try {
+      await updateCandidateStage(candidate.id, 'rejected', rejectionReason.trim());
+      setShowRejectionModal(false);
+      setRejectionReason('');
+      onReject(); // Call parent handler to refresh
+      showToast(t('ats.candidateRejected', 'Candidate rejected'), 'success');
+    } catch {
+      showToast(t('ats.rejectionError', 'Failed to reject candidate'), 'error');
+    } finally {
+      setSavingRejection(false);
+    }
+  };
+
   const handleCreateInterview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!intDate) return;
@@ -1996,11 +2268,17 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       const timeValue = intTime || '09:00';
       const scheduledAt = new Date(`${intDate}T${timeValue}:00`).toISOString();
       
+      const parsedInterviewerId = intInterviewerId ? Number(intInterviewerId) : undefined;
+
       if (editingInterviewId) {
         // Update existing interview
         const updated = await updateInterview(editingInterviewId, {
           scheduledAt,
-          notes: intNotes || undefined,
+          interviewType: intType,
+          location: intLocation || undefined,
+          description: intDescription || undefined,
+          durationMinutes: typeof intDuration === 'number' ? intDuration : undefined,
+          interviewerId: parsedInterviewerId,
         });
         setInterviews((prev) => prev.map((iv) => (iv.id === editingInterviewId ? updated : iv)));
         showToast(t('ats.interviewUpdated', 'Interview updated'), 'success');
@@ -2008,16 +2286,29 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         // Create new interview
         const iv = await createInterview(candidate.id, {
           scheduledAt,
+          interviewType: intType,
           location: intLocation || undefined,
-          notes: intNotes || undefined,
+          description: intDescription || undefined,
+          durationMinutes: typeof intDuration === 'number' ? intDuration : undefined,
+          interviewerId: parsedInterviewerId,
+          sendIcs: intSendIcs,
         });
         setInterviews((prev) => [...prev, iv]);
         showToast(t('ats.interviewCreated'), 'success');
+        
+        // Load notification logs for the new interview
+        try {
+          const logs = await getInterviewNotifications(iv.id);
+          setInterviewNotifications(prev => ({ ...prev, [iv.id]: logs }));
+        } catch {
+          // Ignore notification log loading errors
+        }
       }
       
       setShowInterviewForm(false);
       setEditingInterviewId(null);
-      setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
+      setIntDate(''); setIntTime('09:00'); setIntLocation('');
+      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
     } catch (err) {
       showToast(t('ats.interviewError'), 'error');
     } finally {
@@ -2196,7 +2487,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                   <button
                     onClick={() => {
-                      const url = getResumeUrl(candidate.resumePath);
+                      const url = getResumeUrl(resumePath);
                       if (url) {
                         setPreviewDoc({ url, filename: displayResumePath.split('/').pop() || 'resume.pdf' });
                       }
@@ -2400,6 +2691,30 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                           </span>
                         )}
                       </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Job Tags */}
+                {appliedJob.tags && appliedJob.tags.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                      {t('ats.jobTags', 'Job Tags')}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {appliedJob.tags.map((tag) => (
+                        <span key={tag} style={{
+                          background: 'rgba(59,130,246,0.08)',
+                          color: '#2563EB',
+                          border: '1px solid rgba(59,130,246,0.2)',
+                          borderRadius: 99,
+                          padding: '3px 10px',
+                          fontSize: 11,
+                          fontWeight: 500,
+                        }}>
+                          {tag}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -2663,20 +2978,158 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             </>
           )}
 
-          {/* Tags */}
-          {candidate.tags.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {candidate.tags.map((tag) => (
-                <span key={tag} style={{
-                  background: 'var(--accent-light, rgba(201,151,58,0.10))',
-                  color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
-                  borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
-                }}>
-                  {tag}
-                </span>
-              ))}
+          {/* Candidate Tags */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                🏷️ {t('ats.candidateTags', 'Candidate Tags')}
+              </div>
+              {canEdit && !editingTags && (
+                <button
+                  type="button"
+                  onClick={() => setEditingTags(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--primary)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                  }}
+                >
+                  ✏️ {t('common.edit', 'Edit')}
+                </button>
+              )}
             </div>
-          )}
+            
+            {editingTags ? (
+              <div style={{ background: 'var(--background)', borderRadius: 10, padding: '12px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                  {tagsDraft.map((tag) => (
+                    <span key={tag} style={{
+                      background: 'var(--accent-light, rgba(201,151,58,0.10))',
+                      color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
+                      borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--accent)',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: 14,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
+                    placeholder={t('ats.addTagPlaceholder', 'Type and press Enter')}
+                    style={{
+                      flex: 1,
+                      padding: '6px 10px',
+                      fontSize: 12,
+                      borderRadius: 'var(--radius)',
+                      border: '1px solid var(--border)',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddTag}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: 'var(--primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 'var(--radius)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={handleCancelTagsEdit}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: 'var(--surface)',
+                      color: 'var(--text)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t('common.cancel', 'Cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveTags}
+                    disabled={savingTags}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: 'var(--primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 'var(--radius)',
+                      cursor: savingTags ? 'not-allowed' : 'pointer',
+                      opacity: savingTags ? 0.6 : 1,
+                    }}
+                  >
+                    {savingTags ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {tagsDraft.length === 0 ? (
+                  <div style={{
+                    background: 'var(--background)', borderRadius: 10, padding: '8px 12px',
+                    fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic',
+                  }}>
+                    {t('ats.noTags', 'No tags')}
+                  </div>
+                ) : (
+                  tagsDraft.map((tag) => (
+                    <span key={tag} style={{
+                      background: 'var(--accent-light, rgba(201,151,58,0.10))',
+                      color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
+                      borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500,
+                    }}>
+                      {tag}
+                    </span>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Stage pipeline visual */}
           <div>
@@ -2684,11 +3137,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               Pipeline
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-              {(['received', 'review', 'interview', 'hired'] as CandidateStatus[]).map((s, idx) => {
-                const stageIdx = ['received', 'review', 'interview', 'hired', 'rejected'].indexOf(candidate.status);
-                const thisIdx = idx;
-                const isDone = candidate.status !== 'rejected' && stageIdx >= thisIdx;
-                const isCurrent = candidate.status !== 'rejected' && stageIdx === thisIdx;
+              {(['received', 'review', 'phone_interview', 'interview', 'hired'] as CandidateStatus[]).map((s, idx, stages) => {
+                const stageIdx = [...stages, 'rejected'].indexOf(candidate.status);
+                const isDone = candidate.status !== 'rejected' && stageIdx >= idx;
+                const isCurrent = candidate.status !== 'rejected' && stageIdx === idx;
                 const sc = STAGE_COLOR[s];
                 return (
                   <React.Fragment key={s}>
@@ -2707,7 +3159,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         {t(`ats.stage_${s}`)}
                       </div>
                     </div>
-                    {idx < 3 && (
+                    {idx < stages.length - 1 && (
                       <div style={{
                         height: 2, flex: 1, marginBottom: 18,
                         background: candidate.status !== 'rejected' && stageIdx > idx ? sc : 'var(--border)',
@@ -2730,7 +3182,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           </div>
 
           {/* Interviews section */}
-          {(candidate.status === 'interview' || interviews.length > 0) && (
+          {(candidate.status === 'interview' || candidate.status === 'phone_interview' || interviews.length > 0) && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2768,26 +3220,126 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       onChange={setIntTime}
                     />
                   </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                      {t('ats.interviewLocation')}
-                    </label>
-                    <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
-                      placeholder={t('ats.interviewLocationPlaceholder')}
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                  
+                  {/* Interview Type and Interviewer */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewType')}
+                      </label>
+                      <select 
+                        value={intType} 
+                        onChange={(e) => setIntType(e.target.value as 'phone' | 'in_person')}
+                        style={{ 
+                          width: '100%', 
+                          boxSizing: 'border-box', 
+                          padding: '7px 10px', 
+                          fontSize: 13, 
+                          borderRadius: 'var(--radius)', 
+                          border: '1px solid var(--border)', 
+                          outline: 'none', 
+                          background: 'var(--background)' 
+                        }}
+                      >
+                        <option value="in_person">🤝 {t('ats.inPersonInterview')}</option>
+                        <option value="phone">📞 {t('ats.phoneInterview')}</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewer')}
+                      </label>
+                      <CustomSelect
+                        value={intInterviewerId}
+                        onChange={setIntInterviewerId}
+                        options={interviewerOptions}
+                        placeholder={t('ats.selectInterviewer')}
+                        searchable
+                        isClearable
+                        highlightSelected
+                        controlMinHeight={36}
+                        noOptionsMessage={t('ats.noInterviewerResults', 'No interviewers found')}
+                      />
+                    </div>
                   </div>
+                  
+                  {/* Duration and Location */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.duration')} (min)
+                      </label>
+                      <input 
+                        type="number" 
+                        value={intDuration} 
+                        onChange={(e) => setIntDuration(e.target.value ? Number(e.target.value) : '')}
+                        placeholder="60"
+                        min="1"
+                        max="480"
+                        style={{ 
+                          width: '100%', 
+                          boxSizing: 'border-box', 
+                          padding: '7px 10px', 
+                          fontSize: 13, 
+                          borderRadius: 'var(--radius)', 
+                          border: '1px solid var(--border)', 
+                          outline: 'none' 
+                        }} 
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewLocation')}
+                      </label>
+                      <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
+                        placeholder={t('ats.interviewLocationPlaceholder')}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                    </div>
+                  </div>
+                  
+                  {/* Description */}
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                      {t('common.notes')}
+                      {t('ats.interviewDescription')}
                     </label>
-                    <textarea className="field-input" value={intNotes} onChange={(e) => setIntNotes(e.target.value)} rows={2}
-                      style={{ width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                    <textarea 
+                      value={intDescription} 
+                      onChange={(e) => setIntDescription(e.target.value)} 
+                      rows={2}
+                      placeholder={t('ats.interviewDescriptionPlaceholder')}
+                      style={{ 
+                        width: '100%', 
+                        boxSizing: 'border-box', 
+                        resize: 'none', 
+                        fontFamily: 'inherit', 
+                        padding: '7px 10px', 
+                        fontSize: 13, 
+                        borderRadius: 'var(--radius)', 
+                        border: '1px solid var(--border)', 
+                        outline: 'none', 
+                        display: 'block' 
+                      }} 
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      id="ats-send-ics"
+                      type="checkbox"
+                      checked={intSendIcs}
+                      onChange={(e) => setIntSendIcs(e.target.checked)}
+                      style={{ width: 14, height: 14 }}
+                    />
+                    <label htmlFor="ats-send-ics" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {t('ats.calendarSync', 'Add to calendar (ICS)')}
+                    </label>
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <Button variant="secondary" size="sm" type="button" onClick={() => {
                       setShowInterviewForm(false);
                       setEditingInterviewId(null);
-                      setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
+                      setIntDate(''); setIntTime('09:00'); setIntLocation('');
+                      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
                     }}>
                       {t('common.cancel')}
                     </Button>
@@ -2843,16 +3395,92 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         {iv.location && (
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>📍 {iv.location}</div>
                         )}
-                        {iv.notes && (
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{iv.notes}</div>
-                        )}
-                        {iv.feedback && (
-                          <div style={{
-                            fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
-                            fontStyle: 'italic', padding: '6px 10px',
-                            background: 'var(--surface)', borderRadius: 6, borderLeft: '2px solid var(--accent)',
+                        
+                        {/* Interview Type and Duration */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                          <span style={{ 
+                            fontSize: 11, 
+                            color: 'var(--text-muted)', 
+                            background: 'var(--surface)', 
+                            padding: '2px 6px', 
+                            borderRadius: 4 
                           }}>
-                            "{iv.feedback}"
+                            {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
+                          </span>
+                          {iv.durationMinutes && (
+                            <span style={{ 
+                              fontSize: 11, 
+                              color: 'var(--text-muted)', 
+                              background: 'var(--surface)', 
+                              padding: '2px 6px', 
+                              borderRadius: 4 
+                            }}>
+                              ⏱ {iv.durationMinutes}min
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Description */}
+                        {iv.description && (
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
+                            {iv.description}
+                          </div>
+                        )}
+                        
+                        {/* Notification Status */}
+                        {interviewNotifications[iv.id] && interviewNotifications[iv.id].length > 0 && (
+                          <div style={{ marginTop: 8, padding: '8px', background: 'var(--surface)', borderRadius: 6 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                              📧 Notifications
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              {interviewNotifications[iv.id].map((log) => {
+                                const statusIcon = {
+                                  pending: '⏳',
+                                  sending: '🔄',
+                                  done: '✅',
+                                  error: '❌'
+                                }[log.status];
+                                
+                                const statusColor = {
+                                  pending: '#6b7280',
+                                  sending: '#f59e0b',
+                                  done: '#10b981',
+                                  error: '#ef4444'
+                                }[log.status];
+                                
+                                return (
+                                  <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                                    <span style={{ color: statusColor }}>{statusIcon}</span>
+                                    <span style={{ color: 'var(--text-muted)' }}>
+                                      {log.recipientType === 'candidate' ? 'Candidate' : 'Interviewer'} ({log.channel})
+                                    </span>
+                                    {log.status === 'error' && (
+                                      <>
+                                        <button
+                                          onClick={() => handleRetryNotification(iv.id, log.id)}
+                                          style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#3b82f6',
+                                            fontSize: 11,
+                                            cursor: 'pointer',
+                                            textDecoration: 'underline'
+                                          }}
+                                        >
+                                          Retry
+                                        </button>
+                                        {log.errorMessage && (
+                                          <span style={{ color: '#ef4444', fontSize: 10 }}>
+                                            {log.errorMessage}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2865,7 +3493,11 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                               setIntDate(ivDate.toISOString().split('T')[0]);
                               setIntTime(ivDate.toTimeString().slice(0, 5));
                               setIntLocation(iv.location || '');
-                              setIntNotes(iv.notes || '');
+                              setIntType(iv.interviewType || 'in_person');
+                              setIntDescription(iv.description || iv.notes || '');
+                              setIntDuration(iv.durationMinutes || '');
+                              setIntInterviewerId(iv.interviewerId ? String(iv.interviewerId) : null);
+                              setIntSendIcs(false);
                               setEditingInterviewId(iv.id);
                               setShowInterviewForm(true);
                             }}
@@ -2908,6 +3540,101 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         </div>
                       )}
                     </div>
+                    
+                    {/* Feedback Comments List */}
+                    {interviewFeedback[iv.id] && interviewFeedback[iv.id].length > 0 && (
+                      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          💬 {t('ats.feedback', 'Feedback')} ({interviewFeedback[iv.id].length})
+                        </div>
+                        {interviewFeedback[iv.id].map((comment) => {
+                          const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
+                          const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
+                          const canDelete = canEdit || comment.authorId === user?.id;
+                          
+                          return (
+                            <div key={comment.id} style={{
+                              background: 'var(--background)',
+                              borderRadius: 8,
+                              padding: '8px 10px',
+                              border: '1px solid var(--border)',
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                                    {comment.body}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'grid', justifyItems: 'end', gap: 4, flexShrink: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                      {authorName}
+                                    </span>
+                                    <div style={{
+                                      width: 22,
+                                      height: 22,
+                                      borderRadius: '50%',
+                                      overflow: 'hidden',
+                                      background: authorAvatar ? 'transparent' : 'var(--primary)',
+                                      color: '#fff',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      flexShrink: 0,
+                                    }}>
+                                      {authorAvatar ? (
+                                        <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : initials(authorName)}
+                                    </div>
+                                    {canDelete && (
+                                      <button
+                                        onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id, comment.authorId)}
+                                        disabled={deletingFeedbackId === comment.id}
+                                        style={{
+                                          background: 'rgba(220,38,38,0.08)',
+                                          border: '1px solid rgba(185,28,28,0.24)',
+                                          borderRadius: 6,
+                                          width: 20,
+                                          height: 20,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                          opacity: deletingFeedbackId === comment.id ? 0.5 : 1,
+                                        }}
+                                        title={t('common.delete', 'Delete')}
+                                      >
+                                        <Trash2 size={10} color="#991b1b" />
+                                      </button>
+                                    )}
+                                  </div>
+                                  {comment.authorRole && (
+                                    <span style={{
+                                      fontSize: 9,
+                                      fontWeight: 600,
+                                      color: 'var(--text-muted)',
+                                      background: 'var(--surface)',
+                                      padding: '1px 5px',
+                                      borderRadius: 4,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.03em',
+                                    }}>
+                                      {t(`roles.${comment.authorRole}`, comment.authorRole)}
+                                    </span>
+                                  )}
+                                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                                    {fmtDateTime(comment.createdAt)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    
                     {canFeedback && (
                       <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
                         <textarea
@@ -2929,7 +3656,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleSaveFeedback(iv.id)}
+                          onClick={() => handleAddInterviewFeedback(iv.id)}
                           loading={savingFeedbackId === iv.id}
                         >
                           {t('common.save')}
@@ -2955,7 +3682,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               )}
               <Button
                 variant="danger"
-                onClick={onReject}
+                onClick={() => setShowRejectionModal(true)}
                 loading={saving}
                 style={{ flex: 1, minWidth: 100 }}
               >
@@ -3005,6 +3732,70 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             >
               {t('common.delete', 'Delete')}
             </Button>
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {showRejectionModal && (
+        <ModalBackdrop onClose={() => setShowRejectionModal(false)} width={420}>
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '20px 24px',
+          }}>
+            <h3 style={{
+              fontSize: 18,
+              fontWeight: 700,
+              marginBottom: 16,
+              color: 'var(--text)',
+            }}>
+              {t('ats.rejectCandidate', 'Reject Candidate')}
+            </h3>
+            <p style={{
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              marginBottom: 16,
+            }}>
+              {t('ats.rejectionReasonPrompt', 'Please provide a reason for rejecting this candidate:')}
+            </p>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder={t('ats.rejectionReasonPlaceholder', 'e.g., Not enough experience, Skills mismatch, etc.')}
+              rows={4}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '10px 12px',
+                fontSize: 13,
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border)',
+                outline: 'none',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+                marginBottom: 16,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowRejectionModal(false);
+                  setRejectionReason('');
+                }}
+                disabled={savingRejection}
+              >
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleRejectWithReason}
+                loading={savingRejection}
+                disabled={!rejectionReason.trim()}
+              >
+                {t('ats.confirmReject', 'Confirm Rejection')}
+              </Button>
+            </div>
           </div>
         </ModalBackdrop>
       )}
@@ -3707,6 +4498,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const { socket } = useSocket();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
@@ -3725,6 +4517,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [addSaving, setAddSaving] = useState(false);
   const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
   const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
+  const [interviewInviteEnabled, setInterviewInviteEnabled] = useState<boolean | null>(null);
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
   const hasMultiCompanyScope = (allowedCompanyIds?.length ?? 0) > 1;
   const effectiveCompanyId = hasMultiCompanyScope
@@ -3735,11 +4529,28 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const [cands, js] = await Promise.all([
+      const [cands, js, emps] = await Promise.all([
         getCandidates(filterJob ? { jobId: parseInt(filterJob, 10), companyId: effectiveCompanyId } : { companyId: effectiveCompanyId }),
         getJobs(scopedCompanyId ? { companyId: scopedCompanyId } : undefined),
+        effectiveCompanyId ? getEmployees({ targetCompanyId: effectiveCompanyId, status: 'active', includeStoreTerminals: false, limit: 500 }) : Promise.resolve({ employees: [] }),
       ]);
-      setCandidates(cands); setJobs(js);
+      setCandidates(cands); setJobs(js); setEmployees(emps.employees || []);
+      
+      // Load notification settings and SMTP config
+      if (effectiveCompanyId) {
+        try {
+          const [notifSettings, emailConfig] = await Promise.all([
+            getNotificationSettings(effectiveCompanyId),
+            getEmailConfig(),
+          ]);
+          const interviewInviteSetting = notifSettings.find((s: NotificationSetting) => s.eventKey === 'ats.interview_invite');
+          setInterviewInviteEnabled(interviewInviteSetting?.enabled ?? null);
+          setSmtpConfigured(emailConfig?.config?.smtpHost ? true : false);
+        } catch {
+          setInterviewInviteEnabled(null);
+          setSmtpConfigured(null);
+        }
+      }
     } catch { showToast(t('ats.errorLoad'), 'error'); }
     finally { setLoading(false); }
   }, [filterJob, effectiveCompanyId, scopedCompanyId, showToast, t]);
@@ -3889,6 +4700,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const STAGE_LABELS: Record<CandidateStatus, string> = {
     received: t('ats.stage_received'),
     review: t('ats.stage_review'),
+    phone_interview: t('ats.stage_phone_interview'),
     interview: t('ats.stage_interview'),
     hired: t('ats.stage_hired'),
     rejected: t('ats.stage_rejected'),
@@ -3897,7 +4709,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const STAGE_ICON: Record<CandidateStatus, string> = {
     received: '📥',
     review: '🔍',
-    interview: '🎤',
+    phone_interview: '📞',
+    interview: '🤝',
     hired: '✅',
     rejected: '✕',
   };
@@ -4646,8 +5459,11 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         <CandidateModal
           candidate={selected}
           jobs={jobs}
+          employees={employees}
           canEdit={canEdit}
           canFeedback={canFeedback}
+          interviewInviteEnabled={interviewInviteEnabled}
+          smtpConfigured={smtpConfigured}
           onClose={() => setSelected(null)}
           onAdvance={handleAdvance}
           onReject={handleReject}

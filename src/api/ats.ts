@@ -8,9 +8,11 @@ export type JobStatus = 'draft' | 'published' | 'closed';
 export type JobLanguage = 'it' | 'en' | 'both';
 export type JobType = 'fulltime' | 'parttime' | 'contract' | 'internship';
 export type RemoteType = 'onsite' | 'hybrid' | 'remote';
-export type CandidateStatus = 'received' | 'review' | 'interview' | 'hired' | 'rejected';
+export type CandidateStatus = 'received' | 'review' | 'phone_interview' | 'interview' | 'hired' | 'rejected';
+export type InterviewType = 'phone' | 'in_person';
 export type RiskLevel = 'ok' | 'medium' | 'high';
 export type AlertType = 'new_candidates' | 'interview_today' | 'candidates_pending' | 'job_at_risk';
+export type NotificationStatus = 'pending' | 'sending' | 'done' | 'error';
 
 export interface JobPosting {
   id: number;
@@ -88,6 +90,7 @@ export interface Candidate {
   cvPath: string | null;
   tags: string[];
   status: CandidateStatus;
+  rejectionReason: string | null;
   source: string;
   sourceRef: string | null;
   resumePath: string | null;
@@ -107,10 +110,55 @@ export interface Interview {
   id: number;
   candidateId: number;
   interviewerId: number | null;
+  interviewType: InterviewType;
   scheduledAt: string;
   location: string | null;
+  description: string | null;
   notes: string | null;
   feedback: string | null;
+  durationMinutes: number | null;
+  icsUid: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CandidateComment {
+  id: number;
+  candidateId: number;
+  authorId: number;
+  authorName: string | null;
+  authorSurname: string | null;
+  authorAvatarFilename: string | null;
+  authorRole: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InterviewFeedbackComment {
+  id: number;
+  interviewId: number;
+  authorId: number;
+  authorName: string | null;
+  authorSurname: string | null;
+  authorAvatarFilename: string | null;
+  authorRole: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InterviewNotificationLog {
+  id: number;
+  interviewId: number;
+  recipientType: string;
+  recipientEmail: string | null;
+  recipientUserId: number | null;
+  channel: string;
+  status: NotificationStatus;
+  attempts: number;
+  errorMessage: string | null;
+  sentAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -297,13 +345,46 @@ export async function createCandidate(payload: {
 export async function updateCandidateStage(
   id: number,
   status: CandidateStatus,
+  rejectionReason?: string,
 ): Promise<Candidate> {
-  const { data } = await apiClient.patch(`/ats/candidates/${id}`, { status });
+  const { data } = await apiClient.patch(`/ats/candidates/${id}`, {
+    status,
+    ...(rejectionReason !== undefined ? { rejection_reason: rejectionReason } : {}),
+  });
+  return data.data.candidate as Candidate;
+}
+
+export async function updateCandidateTags(
+  id: number,
+  tags: string[],
+): Promise<Candidate> {
+  const { data } = await apiClient.patch(`/ats/candidates/${id}/tags`, { tags });
   return data.data.candidate as Candidate;
 }
 
 export async function deleteCandidate(id: number): Promise<void> {
   await apiClient.delete(`/ats/candidates/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Candidate Comments
+// ---------------------------------------------------------------------------
+
+export async function getCandidateComments(candidateId: number): Promise<CandidateComment[]> {
+  const { data } = await apiClient.get(`/ats/candidates/${candidateId}/comments`);
+  return (data.data.comments ?? []) as CandidateComment[];
+}
+
+export async function addCandidateComment(
+  candidateId: number,
+  body: string,
+): Promise<CandidateComment> {
+  const { data } = await apiClient.post(`/ats/candidates/${candidateId}/comments`, { body });
+  return data.data.comment as CandidateComment;
+}
+
+export async function deleteCandidateComment(id: number): Promise<void> {
+  await apiClient.delete(`/ats/comments/${id}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,26 +398,95 @@ export async function getInterviews(candidateId: number): Promise<Interview[]> {
 
 export async function createInterview(
   candidateId: number,
-  payload: { scheduledAt: string; location?: string; notes?: string },
+  payload: {
+    scheduledAt: string;
+    interviewType?: InterviewType;
+    location?: string;
+    description?: string;
+    notes?: string;
+    durationMinutes?: number;
+    interviewerId?: number;
+    sendIcs?: boolean;
+  },
 ): Promise<Interview> {
   const { data } = await apiClient.post(`/ats/candidates/${candidateId}/interviews`, {
     scheduled_at: payload.scheduledAt,
+    interview_type: payload.interviewType,
     location: payload.location,
+    description: payload.description,
     notes: payload.notes,
+    duration_minutes: payload.durationMinutes,
+    interviewer_id: payload.interviewerId,
+    send_ics: payload.sendIcs,
   });
   return data.data.interview as Interview;
 }
 
 export async function updateInterview(
   id: number,
-  payload: { feedback?: string; notes?: string; scheduledAt?: string },
+  payload: {
+    feedback?: string;
+    notes?: string;
+    scheduledAt?: string;
+    interviewType?: InterviewType;
+    location?: string;
+    description?: string;
+    durationMinutes?: number;
+    interviewerId?: number | null;
+  },
 ): Promise<Interview> {
-  const { data } = await apiClient.patch(`/ats/interviews/${id}`, payload);
+  const { data } = await apiClient.patch(`/ats/interviews/${id}`, {
+    ...(payload.scheduledAt !== undefined ? { scheduled_at: payload.scheduledAt } : {}),
+    ...(payload.interviewType !== undefined ? { interview_type: payload.interviewType } : {}),
+    ...(payload.location !== undefined ? { location: payload.location } : {}),
+    ...(payload.description !== undefined ? { description: payload.description } : {}),
+    ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
+    ...(payload.durationMinutes !== undefined ? { duration_minutes: payload.durationMinutes } : {}),
+    ...(payload.feedback !== undefined ? { feedback: payload.feedback } : {}),
+    ...(payload.interviewerId !== undefined ? { interviewer_id: payload.interviewerId } : {}),
+  });
   return data.data.interview as Interview;
 }
 
 export async function deleteInterview(id: number): Promise<void> {
   await apiClient.delete(`/ats/interviews/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Interview Feedback Comments
+// ---------------------------------------------------------------------------
+
+export async function getInterviewFeedbackComments(interviewId: number): Promise<InterviewFeedbackComment[]> {
+  const { data } = await apiClient.get(`/ats/interviews/${interviewId}/feedback`);
+  return (data.data.comments ?? []) as InterviewFeedbackComment[];
+}
+
+export async function addInterviewFeedbackComment(
+  interviewId: number,
+  body: string,
+): Promise<InterviewFeedbackComment> {
+  const { data } = await apiClient.post(`/ats/interviews/${interviewId}/feedback`, { body });
+  return data.data.comment as InterviewFeedbackComment;
+}
+
+export async function deleteInterviewFeedbackComment(id: number): Promise<void> {
+  await apiClient.delete(`/ats/interviews/feedback/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Interview Notification Logs
+// ---------------------------------------------------------------------------
+
+export async function getInterviewNotifications(interviewId: number): Promise<InterviewNotificationLog[]> {
+  const { data } = await apiClient.get(`/ats/interviews/${interviewId}/notifications`);
+  return (data.data.logs ?? []) as InterviewNotificationLog[];
+}
+
+export async function retryInterviewNotification(
+  interviewId: number,
+  logId: number,
+): Promise<void> {
+  await apiClient.post(`/ats/interviews/${interviewId}/notifications/retry`, { logId });
 }
 
 // ---------------------------------------------------------------------------
@@ -364,3 +514,4 @@ export async function previewJobTranslation(payload: {
   const { data } = await apiClient.post('/ats/translate-preview', payload);
   return data.data as { translatedText: string; targetLanguage: 'en'; provider: string };
 }
+

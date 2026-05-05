@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare,
-  FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield, ArrowLeftRight, Monitor, Bell, Clipboard,
+  FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield, ArrowLeftRight, Monitor, Bell, Clipboard, Zap,
 } from 'lucide-react';
 import { getPermissions, updatePermissions } from '../../api/permissions';
 import { getCompanies } from '../../api/companies';
@@ -32,6 +32,7 @@ const MODULE_KEYS: GridModuleDef[] = [
   { key: 'messaggi',     implemented: true,  icon: <MessageSquare size={15} /> },
   { key: 'gestione_accessi', implemented: true, icon: <Shield size={15} /> },
   { key: 'impostazioni', implemented: true,  icon: <Settings size={15} /> },
+  { key: 'automazioni',  implemented: true,  icon: <Zap size={15} /> },
   { key: 'report',       implemented: false, icon: <BarChart2 size={15} /> },
 ];
 

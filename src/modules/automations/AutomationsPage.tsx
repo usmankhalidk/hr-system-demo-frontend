@@ -13,8 +13,13 @@ import {
   Search,
   Zap
 } from 'lucide-react';
-import { Card, Toggle, Button, Input } from '../../components/ui';
+import { Card, Toggle, Button, Input, Spinner, Select } from '../../components/ui';
 import { automationsApi } from '../../api/automations';
+import { getCompanies } from '../../api/companies';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { snakeKeys } from '../../api/client';
+import { Company } from '../../types';
 
 interface AutomationItem {
   id: string;
@@ -23,8 +28,6 @@ interface AutomationItem {
   descKey: string;
   roles: string[];
   triggerKey: string;
-  lastRunKey?: string; // key for time translation if dynamic, or hardcoded for now
-  lastRunValue?: any;
   enabled: boolean;
 }
 
@@ -49,10 +52,7 @@ const INITIAL_DATA: AutomationCategory[] = [
     labelKey: 'automations.categories.employees',
     accent: '#0284C7',
     items: [
-      { id: 'benvenuto_email', icon: <Mail size={18} />, labelKey: 'automations.items.benvenuto_email.label', descKey: 'automations.items.benvenuto_email.desc', roles: ['employee'], triggerKey: 'automations.items.benvenuto_email.trigger', lastRunKey: 'automations.time.hours_ago', lastRunValue: { count: 2 }, enabled: true },
-      { id: 'onboarding_reminder', icon: <Clipboard size={18} />, labelKey: 'automations.items.onboarding_reminder.label', descKey: 'automations.items.onboarding_reminder.desc', roles: ['employee', 'store_manager'], triggerKey: 'automations.items.onboarding_reminder.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 09:00', enabled: true },
-      { id: 'compleanno_banner', icon: <Star size={18} />, labelKey: 'automations.items.compleanno_banner.label', descKey: 'automations.items.compleanno_banner.desc', roles: ['employee'], triggerKey: 'automations.items.compleanno_banner.trigger', lastRunKey: 'automations.time.days_ago', lastRunValue: { count: 3 }, enabled: true },
-      { id: 'compleanno_email', icon: <Mail size={18} />, labelKey: 'automations.items.compleanno_email.label', descKey: 'automations.items.compleanno_email.desc', roles: ['employee'], triggerKey: 'automations.items.compleanno_email.trigger', lastRunKey: 'automations.time.days_ago', lastRunValue: { count: 3 }, enabled: false },
+      { id: 'benvenuto_email', icon: <Mail size={18} />, labelKey: 'automations.items.benvenuto_email.label', descKey: 'automations.items.benvenuto_email.desc', roles: ['employee'], triggerKey: 'automations.items.benvenuto_email.trigger', enabled: true },
     ],
   },
   {
@@ -60,10 +60,11 @@ const INITIAL_DATA: AutomationCategory[] = [
     labelKey: 'automations.categories.shifts',
     accent: '#DC2626',
     items: [
-      { id: 'anomalia_ritardo', icon: <Clock size={18} />, labelKey: 'automations.items.anomalia_ritardo.label', descKey: 'automations.items.anomalia_ritardo.desc', roles: ['store_manager', 'area_manager'], triggerKey: 'automations.items.anomalia_ritardo.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 09:28', enabled: true },
-      { id: 'anomalia_noshow', icon: <AlertTriangle size={18} />, labelKey: 'automations.items.anomalia_noshow.label', descKey: 'automations.items.anomalia_noshow.desc', roles: ['store_manager', 'area_manager', 'hr'], triggerKey: 'automations.items.anomalia_noshow.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 09:30', enabled: true },
-      { id: 'turno_scoperto', icon: <Calendar size={18} />, labelKey: 'automations.items.turno_scoperto.label', descKey: 'automations.items.turno_scoperto.desc', roles: ['hr', 'area_manager'], triggerKey: 'automations.items.turno_scoperto.trigger', lastRunKey: 'automations.time.yesterday', lastRunValue: ' 18:00', enabled: true },
-      { id: 'approvazione_turni', icon: <CheckCircle size={18} />, labelKey: 'automations.items.approvazione_turni.label', descKey: 'automations.items.approvazione_turni.desc', roles: ['hr'], triggerKey: 'automations.items.approvazione_turni.trigger', lastRunKey: 'automations.time.yesterday', lastRunValue: ' 10:00', enabled: false },
+      { id: 'anomalia_ritardo', icon: <Clock size={18} />, labelKey: 'automations.items.anomalia_ritardo.label', descKey: 'automations.items.anomalia_ritardo.desc', roles: ['store_manager', 'area_manager'], triggerKey: 'automations.items.anomalia_ritardo.trigger', enabled: true },
+      { id: 'anomalia_noshow', icon: <AlertTriangle size={18} />, labelKey: 'automations.items.anomalia_noshow.label', descKey: 'automations.items.anomalia_noshow.desc', roles: ['store_manager', 'area_manager', 'hr'], triggerKey: 'automations.items.anomalia_noshow.trigger', enabled: true },
+      { id: 'notifica_turni', icon: <Mail size={18} />, labelKey: 'automations.items.notifica_turni.label', descKey: 'automations.items.notifica_turni.desc', roles: ['employee'], triggerKey: 'automations.items.notifica_turni.trigger', enabled: false },
+      { id: 'turno_scoperto', icon: <Calendar size={18} />, labelKey: 'automations.items.turno_scoperto.label', descKey: 'automations.items.turno_scoperto.desc', roles: ['hr', 'area_manager'], triggerKey: 'automations.items.turno_scoperto.trigger', enabled: true },
+      { id: 'approvazione_turni', icon: <CheckCircle size={18} />, labelKey: 'automations.items.approvazione_turni.label', descKey: 'automations.items.approvazione_turni.desc', roles: ['hr'], triggerKey: 'automations.items.approvazione_turni.trigger', enabled: false },
     ],
   },
   {
@@ -71,71 +72,105 @@ const INITIAL_DATA: AutomationCategory[] = [
     labelKey: 'automations.categories.leave',
     accent: '#7C3AED',
     items: [
-      { id: 'ferie_approvazione', icon: <CalendarOff size={18} />, labelKey: 'automations.items.ferie_approvazione.label', descKey: 'automations.items.ferie_approvazione.desc', roles: ['store_manager', 'area_manager', 'hr'], triggerKey: 'automations.items.ferie_approvazione.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 11:00', enabled: true },
-      { id: 'ferie_esito', icon: <CalendarOff size={18} />, labelKey: 'automations.items.ferie_esito.label', descKey: 'automations.items.ferie_esito.desc', roles: ['employee'], triggerKey: 'automations.items.ferie_esito.trigger', lastRunKey: 'automations.time.today', lastRunValue: ' 11:15', enabled: true },
+      { id: 'ferie_approvazione', icon: <CalendarOff size={18} />, labelKey: 'automations.items.ferie_approvazione.label', descKey: 'automations.items.ferie_approvazione.desc', roles: ['store_manager', 'area_manager', 'hr'], triggerKey: 'automations.items.ferie_approvazione.trigger', enabled: true },
+      { id: 'ferie_esito', icon: <CalendarOff size={18} />, labelKey: 'automations.items.ferie_esito.label', descKey: 'automations.items.ferie_esito.desc', roles: ['employee'], triggerKey: 'automations.items.ferie_esito.trigger', enabled: true },
     ],
   },
 ];
 
 export default function AutomationsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [categories, setCategories] = useState(INITIAL_DATA);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const { showToast } = useToast();
+
+  const isSuperAdmin = user?.isSuperAdmin;
+
+  // Load companies if super admin
+  React.useEffect(() => {
+    if (isSuperAdmin) {
+      getCompanies().then(setCompanies).catch(console.error);
+    }
+  }, [isSuperAdmin]);
+
+  const fetchAutomations = async (companyId?: number) => {
+    setLoading(true);
+    try {
+      const data = await automationsApi.getAutomations(companyId);
+      const normalizedData = snakeKeys(data);
+      setCategories(prev => prev.map(cat => ({
+        ...cat,
+        items: cat.items.map(item => ({
+          ...item,
+          enabled: normalizedData[item.id] ?? item.enabled
+        }))
+      })));
+      setPendingChanges({}); // Clear pending changes when switching company
+    } catch (err) {
+      console.error('Failed to fetch automations', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   React.useEffect(() => {
-    const fetchAutomations = async () => {
-      try {
-        const data = await automationsApi.getAutomations();
-        setCategories(prev => prev.map(cat => ({
-          ...cat,
-          items: cat.items.map(item => ({
-            ...item,
-            enabled: data[item.id] ?? item.enabled
-          }))
-        })));
-      } catch (err) {
-        console.error('Failed to fetch automations', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAutomations();
-  }, []);
+    // If super admin and no company selected, wait for company selection
+    if (isSuperAdmin && !selectedCompanyId) {
+      setLoading(false); // Stop initial spinner but don't load data
+      return;
+    }
+    fetchAutomations(selectedCompanyId || undefined);
+  }, [selectedCompanyId, isSuperAdmin]);
 
-  const toggleAutomation = async (catId: string, itemId: string, currentEnabled: boolean) => {
+  const toggleAutomation = (catId: string, itemId: string, currentEnabled: boolean) => {
+    const nextEnabled = !currentEnabled;
+    
+    // Update local UI state
     setCategories(prev => prev.map(cat => 
       cat.id !== catId ? cat : {
         ...cat,
         items: cat.items.map(item => 
-          item.id !== itemId ? item : { ...item, enabled: !currentEnabled }
+          item.id !== itemId ? item : { ...item, enabled: nextEnabled }
         )
       }
     ));
+
+    // Track pending change
+    setPendingChanges(prev => ({
+      ...prev,
+      [itemId]: nextEnabled
+    }));
+  };
+
+  const handleSave = async () => {
+    const changedIds = Object.keys(pendingChanges);
+    if (changedIds.length === 0) return;
+
+    setSaving(true);
     try {
-      await automationsApi.updateAutomation(itemId, !currentEnabled);
+      // Save all pending changes
+      await Promise.all(
+        changedIds.map(id => automationsApi.updateAutomation(id, pendingChanges[id], selectedCompanyId || undefined))
+      );
+      
+      setPendingChanges({});
+      showToast(t('common.success'), 'success');
     } catch (err) {
-      console.error('Failed to update automation', err);
-      setCategories(prev => prev.map(cat => 
-        cat.id !== catId ? cat : {
-          ...cat,
-          items: cat.items.map(item => 
-            item.id !== itemId ? item : { ...item, enabled: currentEnabled }
-          )
-        }
-      ));
+      console.error('Failed to save automations', err);
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
   const totalEnabled = categories.flatMap(c => c.items).filter(i => i.enabled).length;
   const totalItems = categories.flatMap(c => c.items).length;
-
-  const renderLastRun = (item: AutomationItem) => {
-    if (!item.lastRunKey) return null;
-    let text = t(item.lastRunKey, item.lastRunValue) as string;
-    if (typeof item.lastRunValue === 'string') text += item.lastRunValue;
-    return text;
-  };
 
   return (
     <div className="page-enter" style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 20px' }}>
@@ -149,25 +184,70 @@ export default function AutomationsPage() {
             {totalEnabled}/{totalItems} {t('common.active', 'active')} · {t('automations.control_panel')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {isSuperAdmin && (
+            <div style={{ width: 240 }}>
+              <Select
+                value={selectedCompanyId || ''}
+                onChange={e => setSelectedCompanyId(Number((e.target as HTMLSelectElement).value))}
+                style={{ height: 38, fontSize: 13, borderRadius: 10, background: 'var(--background)' }}
+              >
+                <option value="" disabled>{t('common.select_company', 'Select a Company...')}</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-disabled)' }} />
             <Input 
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={t('automations.search_placeholder')}
-              style={{ paddingLeft: 32, height: 36, width: 220, fontSize: 13 }}
+              style={{ paddingLeft: 32, height: 38, width: 220, fontSize: 13, borderRadius: 10 }}
             />
           </div>
-          <Button variant="primary" style={{ height: 36, padding: '0 16px' }}>
-            {t('common.save')}
+          <Button 
+            variant="primary" 
+            style={{ height: 38, padding: '0 20px', minWidth: 100, borderRadius: 10, fontWeight: 700 }}
+            onClick={handleSave}
+            disabled={saving || Object.keys(pendingChanges).length === 0}
+          >
+            {saving ? <Spinner size="sm" color="#fff" /> : t('common.save')}
           </Button>
         </div>
       </div>
 
 
       {/* Content Sections */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {loading ? (
+        <div style={{ padding: '60px 0', textAlign: 'center' }}>
+          <Spinner size="lg" />
+          <p style={{ marginTop: 12, color: 'var(--text-muted)', fontSize: 14 }}>{t('common.loading')}</p>
+        </div>
+      ) : isSuperAdmin && !selectedCompanyId ? (
+        <div style={{ 
+          padding: '120px 40px', textAlign: 'center', background: 'var(--background-alt)', 
+          borderRadius: 24, border: '2px dashed var(--border)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{ 
+            width: 80, height: 80, borderRadius: '50%', background: 'var(--background)', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px',
+            color: 'var(--accent)', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)'
+          }}>
+            <Users size={40} />
+          </div>
+          <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 12px', fontFamily: 'var(--font-display)' }}>
+            {t('automations.select_company_title', 'Select a Company')}
+          </h3>
+          <p style={{ fontSize: 15, color: 'var(--text-muted)', maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>
+            {t('automations.select_company_desc', 'To manage email automations, please select a company from the dropdown menu above. You can customize settings individually for each business.')}
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
         {categories.map(cat => {
           const filteredItems = cat.items.filter(item => 
             t(item.labelKey).toLowerCase().includes(search.toLowerCase()) || 
@@ -237,11 +317,6 @@ export default function AutomationsPage() {
                           <Zap size={11} />
                           {t('automations.trigger_label')}: <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t(item.triggerKey)}</span>
                         </div>
-                        {item.lastRunKey && (
-                          <div style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
-                            {t('automations.last_run')}: <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{renderLastRun(item)}</span>
-                          </div>
-                        )}
                         <div style={{ display: 'flex', gap: 4 }}>
                           {item.roles.map(role => (
                             <span key={role} style={{
@@ -271,6 +346,7 @@ export default function AutomationsPage() {
           </div>
         )}
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }

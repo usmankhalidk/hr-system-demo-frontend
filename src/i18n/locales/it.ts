@@ -1869,11 +1869,13 @@ const it = {
     // Stages
     stage_received: 'Ricevuto',
     stage_review: 'In Revisione',
-    stage_interview: 'Colloquio',
+    stage_phone_interview: 'Colloquio Telefonico',
+    stage_interview: 'Colloquio di Persona',
     stage_hired: 'Assunto',
     stage_rejected: 'Rifiutato',
     // Stage advance
     advanceTo_review: '→ Porta in Revisione',
+    advanceTo_phone_interview: '→ Colloquio Telefonico',
     advanceTo_interview: '→ Pianifica Colloquio',
     advanceTo_hired: '✓ Segna come Assunto',
     // Interviews
@@ -1883,6 +1885,16 @@ const it = {
     interviewDate: 'Data',
     interviewTime: 'Ora',
     interviewLocation: 'Luogo',
+    interviewType: 'Tipo di Colloquio',
+    phoneInterview: 'Colloquio Telefonico',
+    inPersonInterview: 'Colloquio di Persona',
+    interviewer: 'Intervistatore',
+    selectInterviewer: 'Seleziona intervistatore',
+    duration: 'Durata',
+    interviewDescription: 'Descrizione',
+    interviewDescriptionPlaceholder: 'Dettagli del colloquio...',
+    notificationRetried: 'Notifica reinviata',
+    notificationRetryError: 'Errore nel reinvio della notifica',
     interviewLocationPlaceholder: 'es. Sede centrale, Roma',
     scheduleInterview: 'Pianifica',
     interviewCreated: 'Colloquio pianificato',
@@ -2597,6 +2609,11 @@ const it = {
         label: 'Alert assenza non giustificata',
         desc: 'Notifica urgente quando un dipendente non effettua il check-in entro 30 min dall\'inizio turno.',
         trigger: '30 min dopo inizio turno',
+      },
+      notifica_turni: {
+        label: 'Turni dipendenti',
+        desc: 'Invia automaticamente un\'email con il programma di lavoro ai dipendenti quando viene assegnato loro un nuovo turno.',
+        trigger: 'Assegnazione turno',
       },
       turno_scoperto: {
         label: 'Alert turno scoperto',

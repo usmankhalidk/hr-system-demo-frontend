@@ -208,6 +208,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
     icon: React.ReactNode;
     permissionKey?: string;
     superAdminOnly?: boolean;
+    hideForSuperAdmin?: boolean;
     badgeKey?: string;
   };
 
@@ -229,7 +230,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell />, permissionKey: 'notifiche' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
+      { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, hideForSuperAdmin: true },
       { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, permissionKey: 'turni' },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.automazioni', path: '/automazioni', icon: <IconZap />, permissionKey: 'automazioni' },
@@ -253,7 +254,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.permessi', path: '/permessi', icon: <IconUmbrella />, permissionKey: 'permessi' },
       { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell />, permissionKey: 'notifiche' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
-      { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, badgeKey: 'common.comingSoon' },
+      { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, hideForSuperAdmin: true },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.automazioni', path: '/automazioni', icon: <IconZap />, permissionKey: 'automazioni' },
       { labelKey: 'nav.reports', path: '/reports', icon: <IconReports />, permissionKey: 'report' },
@@ -315,6 +316,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
 
   const navItems = NAV_ITEMS[user.role].filter((item) => {
     if (item.superAdminOnly && user.isSuperAdmin !== true) return false;
+    if (item.hideForSuperAdmin && user.isSuperAdmin === true) return false;
     if (!item.permissionKey) return true;
     if (user.isSuperAdmin === true) return true;
     return permissions[item.permissionKey] === true;
