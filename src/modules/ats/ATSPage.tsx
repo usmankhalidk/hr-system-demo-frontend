@@ -50,15 +50,14 @@ import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
-  getCandidates, createCandidate, updateCandidateStage, deleteCandidate,
+  getCandidates, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
-  getCandidateComments, addCandidateComment, deleteCandidateComment,
   getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
   getInterviewNotifications, retryInterviewNotification,
   getAlerts, getRisks,
   previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
-  CandidateComment, InterviewFeedbackComment, InterviewNotificationLog,
+  InterviewFeedbackComment, InterviewNotificationLog,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
 import DocumentPreviewModal from './DocumentPreviewModal';
@@ -253,6 +252,29 @@ function fmtRelativeTime(iso: string) {
   }
 
   return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(value, unit);
+}
+
+const SYSTEM_CANDIDATE_TAGS = new Set(['public-careers', 'external', 'indeed']);
+const SYSTEM_CANDIDATE_TAG_PREFIXES = ['locale:'];
+
+function isSystemCandidateTag(tag: string): boolean {
+  const normalized = tag.trim().toLowerCase();
+  if (!normalized) return false;
+  if (SYSTEM_CANDIDATE_TAGS.has(normalized)) return true;
+  return SYSTEM_CANDIDATE_TAG_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function splitCandidateTags(tags: string[]): { systemTags: string[]; userTags: string[] } {
+  const systemTags: string[] = [];
+  const userTags: string[] = [];
+  tags.forEach((tag) => {
+    if (isSystemCandidateTag(tag)) {
+      systemTags.push(tag);
+    } else {
+      userTags.push(tag);
+    }
+  });
+  return { systemTags, userTags };
 }
 
 function languageFlagCodes(language: JobLanguage): string[] {
@@ -1965,9 +1987,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   
   // Tags editing
   const [editingTags, setEditingTags] = useState(false);
-  const [tagsDraft, setTagsDraft] = useState<string[]>(candidate.tags);
+  const [tagsDraft, setTagsDraft] = useState<string[]>(() => splitCandidateTags(candidate.tags).userTags);
   const [tagInput, setTagInput] = useState('');
   const [savingTags, setSavingTags] = useState(false);
+  const { systemTags } = useMemo(() => splitCandidateTags(candidate.tags), [candidate.tags]);
   
   // Rejection reason
   const [showRejectionModal, setShowRejectionModal] = useState(false);
@@ -2058,13 +2081,15 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       });
   }, [employees, t]);
 
+  const resumePath = candidate.resumePath || candidate.cvPath;
+
   // Extract only the relative path from cvs/ or public-cv/ onwards
-  const displayResumePath = candidate.resumePath 
-    ? candidate.resumePath.includes('cvs/') 
-      ? candidate.resumePath.substring(candidate.resumePath.indexOf('cvs/'))
-      : candidate.resumePath.includes('public-cv/')
-      ? candidate.resumePath.substring(candidate.resumePath.indexOf('public-cv/'))
-      : candidate.resumePath
+  const displayResumePath = resumePath 
+    ? resumePath.includes('cvs/') 
+      ? resumePath.substring(resumePath.indexOf('cvs/'))
+      : resumePath.includes('public-cv/')
+      ? resumePath.substring(resumePath.indexOf('public-cv/'))
+      : resumePath
     : null;
 
   // Country flag helper
@@ -2117,6 +2142,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     };
   }, [candidate.id]);
 
+  useEffect(() => {
+    setTagsDraft(splitCandidateTags(candidate.tags).userTags);
+  }, [candidate.id, candidate.tags]);
+
   const handleAddInterviewFeedback = async (interviewId: number) => {
     const value = (feedbackDrafts[interviewId] ?? '').trim();
     if (!value) {
@@ -2140,8 +2169,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
   };
 
-  const handleDeleteInterviewFeedback = async (interviewId: number, commentId: number) => {
-    if (!canEdit && commentId !== user?.id) return;
+  const handleDeleteInterviewFeedback = async (interviewId: number, commentId: number, authorId: number | null) => {
+    if (!canEdit && authorId !== user?.id) return;
     setDeletingFeedbackId(commentId);
     try {
       await deleteInterviewFeedbackComment(commentId);
@@ -2189,8 +2218,12 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const handleSaveTags = async () => {
     setSavingTags(true);
     try {
-      await updateCandidateTags(candidate.id, tagsDraft);
-      candidate.tags = tagsDraft; // Update local state
+      const nextTags = [...systemTags, ...tagsDraft].filter((tag, idx, arr) => (
+        arr.findIndex((item) => item.toLowerCase() === tag.toLowerCase()) === idx
+      ));
+      await updateCandidateTags(candidate.id, nextTags);
+      candidate.tags = nextTags; // Update local state
+      setTagsDraft(splitCandidateTags(nextTags).userTags);
       setEditingTags(false);
       showToast(t('ats.tagsSaved', 'Tags updated'), 'success');
     } catch {
@@ -2201,7 +2234,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   };
 
   const handleCancelTagsEdit = () => {
-    setTagsDraft(candidate.tags);
+    setTagsDraft(splitCandidateTags(candidate.tags).userTags);
     setTagInput('');
     setEditingTags(false);
   };
@@ -2454,7 +2487,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                   <button
                     onClick={() => {
-                      const url = getResumeUrl(candidate.resumePath);
+                      const url = getResumeUrl(resumePath);
                       if (url) {
                         setPreviewDoc({ url, filename: displayResumePath.split('/').pop() || 'resume.pdf' });
                       }
@@ -3362,18 +3395,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         {iv.location && (
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>📍 {iv.location}</div>
                         )}
-                        {iv.notes && (
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{iv.notes}</div>
-                        )}
-                        {iv.feedback && (
-                          <div style={{
-                            fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
-                            fontStyle: 'italic', padding: '6px 10px',
-                            background: 'var(--surface)', borderRadius: 6, borderLeft: '2px solid var(--accent)',
-                          }}>
-                            "{iv.feedback}"
-                          </div>
-                        )}
                         
                         {/* Interview Type and Duration */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
@@ -3529,7 +3550,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         {interviewFeedback[iv.id].map((comment) => {
                           const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
                           const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
-                          const canDelete = canEdit || comment.authorId === user?.userId;
+                          const canDelete = canEdit || comment.authorId === user?.id;
                           
                           return (
                             <div key={comment.id} style={{
@@ -3538,76 +3559,75 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                               padding: '8px 10px',
                               border: '1px solid var(--border)',
                             }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                  <div style={{
-                                    width: 24,
-                                    height: 24,
-                                    borderRadius: '50%',
-                                    overflow: 'hidden',
-                                    background: authorAvatar ? 'transparent' : 'var(--primary)',
-                                    color: '#fff',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    flexShrink: 0,
-                                  }}>
-                                    {authorAvatar ? (
-                                      <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    ) : initials(authorName)}
-                                  </div>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                        {authorName}
-                                      </span>
-                                      {comment.authorRole && (
-                                        <span style={{
-                                          fontSize: 9,
-                                          fontWeight: 600,
-                                          color: 'var(--text-muted)',
-                                          background: 'var(--surface)',
-                                          padding: '1px 5px',
-                                          borderRadius: 4,
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.03em',
-                                        }}>
-                                          {t(`roles.${comment.authorRole}`, comment.authorRole)}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-                                      {fmtDateTime(comment.createdAt)}
-                                    </div>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                                    {comment.body}
                                   </div>
                                 </div>
-                                {canDelete && (
-                                  <button
-                                    onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id)}
-                                    disabled={deletingFeedbackId === comment.id}
-                                    style={{
-                                      background: 'rgba(220,38,38,0.08)',
-                                      border: '1px solid rgba(185,28,28,0.24)',
-                                      borderRadius: 6,
+                                <div style={{ display: 'grid', justifyItems: 'end', gap: 4, flexShrink: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                      {authorName}
+                                    </span>
+                                    <div style={{
                                       width: 22,
                                       height: 22,
+                                      borderRadius: '50%',
+                                      overflow: 'hidden',
+                                      background: authorAvatar ? 'transparent' : 'var(--primary)',
+                                      color: '#fff',
                                       display: 'flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
-                                      opacity: deletingFeedbackId === comment.id ? 0.5 : 1,
+                                      fontSize: 9,
+                                      fontWeight: 700,
                                       flexShrink: 0,
-                                    }}
-                                    title={t('common.delete', 'Delete')}
-                                  >
-                                    <Trash2 size={11} color="#991b1b" />
-                                  </button>
-                                )}
-                              </div>
-                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, marginLeft: 32, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                                {comment.body}
+                                    }}>
+                                      {authorAvatar ? (
+                                        <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : initials(authorName)}
+                                    </div>
+                                    {canDelete && (
+                                      <button
+                                        onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id, comment.authorId)}
+                                        disabled={deletingFeedbackId === comment.id}
+                                        style={{
+                                          background: 'rgba(220,38,38,0.08)',
+                                          border: '1px solid rgba(185,28,28,0.24)',
+                                          borderRadius: 6,
+                                          width: 20,
+                                          height: 20,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                          opacity: deletingFeedbackId === comment.id ? 0.5 : 1,
+                                        }}
+                                        title={t('common.delete', 'Delete')}
+                                      >
+                                        <Trash2 size={10} color="#991b1b" />
+                                      </button>
+                                    )}
+                                  </div>
+                                  {comment.authorRole && (
+                                    <span style={{
+                                      fontSize: 9,
+                                      fontWeight: 600,
+                                      color: 'var(--text-muted)',
+                                      background: 'var(--surface)',
+                                      padding: '1px 5px',
+                                      borderRadius: 4,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.03em',
+                                    }}>
+                                      {t(`roles.${comment.authorRole}`, comment.authorRole)}
+                                    </span>
+                                  )}
+                                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                                    {fmtDateTime(comment.createdAt)}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           );

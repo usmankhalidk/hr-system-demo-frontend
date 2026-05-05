@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -12,6 +12,65 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
   const fileExtension = filename.split('.').pop()?.toLowerCase();
   const isPDF = fileExtension === 'pdf';
   const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExtension || '');
+  const shouldInlinePreview = isPDF || isImage;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(shouldInlinePreview);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const resolvedUrl = useMemo(() => {
+    if (/^https?:\/\//i.test(url)) return url;
+    const envBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || '';
+    if (envBase) {
+      return `${envBase}${url.startsWith('/') ? url : `/${url}`}`;
+    }
+    const fallbackBase = window.location.origin.replace(/:\d+$/, ':3001');
+    return `${fallbackBase}${url.startsWith('/') ? url : `/${url}`}`;
+  }, [url]);
+
+  useEffect(() => {
+    if (!shouldInlinePreview) {
+      setLoading(false);
+      setPreviewUrl(null);
+      setLoadError(null);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+    setLoading(true);
+    setLoadError(null);
+
+    const token = localStorage.getItem('hr_token') || sessionStorage.getItem('hr_token') || '';
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+
+    fetch(resolvedUrl, { headers })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP_${res.status}`);
+        }
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) {
+          throw new Error('HTML_RESPONSE');
+        }
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) {
+          setPreviewUrl(null);
+          setLoadError('preview_failed');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [resolvedUrl, shouldInlinePreview]);
 
   return createPortal(
     <div
@@ -75,21 +134,56 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
 
         {/* Content */}
         <div style={{ flex: 1, overflow: 'auto', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {isPDF ? (
-            <iframe
-              src={`${url}#view=FitH`}
+          {loading && (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+              Loading preview...
+            </div>
+          )}
+          {!loading && loadError && (
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <div style={{ fontSize: 46, marginBottom: 12 }}>⚠️</div>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                Unable to display this file in the preview.
+              </div>
+              <a
+                href={resolvedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 20px',
+                  background: 'var(--primary)',
+                  color: '#fff',
+                  borderRadius: 8,
+                  textDecoration: 'none',
+                  fontWeight: 600,
+                }}
+              >
+                Open in New Tab
+              </a>
+            </div>
+          )}
+          {!loading && !loadError && shouldInlinePreview && previewUrl && isPDF && (
+            <object
+              data={previewUrl}
+              type="application/pdf"
               style={{
                 width: '100%',
                 height: '100%',
                 border: 'none',
                 background: '#fff',
               }}
-              title={filename}
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-            />
-          ) : isImage ? (
+            >
+              <iframe
+                src={previewUrl}
+                title={filename}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </object>
+          )}
+          {!loading && !loadError && shouldInlinePreview && previewUrl && isImage && (
             <img
-              src={url}
+              src={previewUrl}
               alt={filename}
               style={{
                 maxWidth: '100%',
@@ -97,14 +191,15 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
                 objectFit: 'contain',
               }}
             />
-          ) : (
+          )}
+          {!loading && !loadError && !shouldInlinePreview && (
             <div style={{ padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
               <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
                 Preview not available for this file type
               </div>
               <a
-                href={url}
+                href={resolvedUrl}
                 download={filename}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -138,7 +233,7 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
             }}
           >
             <a
-              href={url}
+              href={resolvedUrl}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -158,7 +253,7 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
               🔗 Open in New Tab
             </a>
             <a
-              href={url}
+              href={resolvedUrl}
               download={filename}
               style={{
                 padding: '8px 16px',
