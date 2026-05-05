@@ -48,26 +48,31 @@ import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
   getCandidates, createCandidate, updateCandidateStage, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
+  getCandidateComments, addCandidateComment, deleteCandidateComment,
+  getInterviewNotifications, retryInterviewNotification,
   getAlerts, getRisks,
   previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
+  CandidateComment, InterviewNotificationLog,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
 import DocumentPreviewModal from './DocumentPreviewModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const STAGES: CandidateStatus[] = ['received', 'review', 'interview', 'hired', 'rejected'];
+const STAGES: CandidateStatus[] = ['received', 'review', 'phone_interview', 'interview', 'hired', 'rejected'];
 
 const NEXT_STAGE: Partial<Record<CandidateStatus, CandidateStatus>> = {
   received: 'review',
-  review: 'interview',
+  review: 'phone_interview',
+  phone_interview: 'interview',
   interview: 'hired',
 };
 
 const STAGE_COLOR: Record<CandidateStatus, string> = {
   received: '#0284C7',
   review: '#7C3AED',
+  phone_interview: '#EA580C', // Orange
   interview: '#C9973A',
   hired: '#15803D',
   rejected: '#DC2626',
@@ -76,6 +81,7 @@ const STAGE_COLOR: Record<CandidateStatus, string> = {
 const STAGE_BG: Record<CandidateStatus, string> = {
   received: 'rgba(2,132,199,0.08)',
   review: 'rgba(124,58,237,0.08)',
+  phone_interview: 'rgba(234,88,12,0.08)',
   interview: 'rgba(201,151,58,0.10)',
   hired: 'rgba(21,128,61,0.08)',
   rejected: 'rgba(220,38,38,0.07)',
@@ -1864,6 +1870,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 interface CandidateModalProps {
   candidate: Candidate;
   jobs: JobPosting[];
+  employees: Employee[];
   canEdit: boolean;
   canFeedback: boolean;
   onClose: () => void;
@@ -1874,7 +1881,7 @@ interface CandidateModalProps {
 }
 
 const CandidateModal: React.FC<CandidateModalProps> = ({
-  candidate, jobs, canEdit, canFeedback, onClose, onAdvance, onReject, onDelete, saving,
+  candidate, jobs, employees, canEdit, canFeedback, onClose, onAdvance, onReject, onDelete, saving,
 }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
@@ -1885,8 +1892,55 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [intTime, setIntTime] = useState('09:00');
   const [intLocation, setIntLocation] = useState('');
   const [intNotes, setIntNotes] = useState('');
+  const [intType, setIntType] = useState<'phone' | 'in_person'>('in_person');
+  const [intDescription, setIntDescription] = useState('');
+  const [intDuration, setIntDuration] = useState<number | ''>('');
+  const [intInterviewerId, setIntInterviewerId] = useState<number | ''>('');
   const [savingInt, setSavingInt] = useState(false);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
+  const [interviewNotifications, setInterviewNotifications] = useState<Record<number, InterviewNotificationLog[]>>({});
+
+  // Load notification logs for interviews
+  const loadInterviewNotifications = useCallback(async (interviewIds: number[]) => {
+    const promises = interviewIds.map(async (id) => {
+      try {
+        const logs = await getInterviewNotifications(id);
+        return { id, logs };
+      } catch {
+        return { id, logs: [] };
+      }
+    });
+    
+    const results = await Promise.allSettled(promises);
+    const newNotifications: Record<number, InterviewNotificationLog[]> = {};
+    
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        newNotifications[result.value.id] = result.value.logs;
+      }
+    });
+    
+    setInterviewNotifications(prev => ({ ...prev, ...newNotifications }));
+  }, []);
+
+  // Load notification logs when interviews change
+  useEffect(() => {
+    if (interviews.length > 0) {
+      loadInterviewNotifications(interviews.map(iv => iv.id));
+    }
+  }, [interviews, loadInterviewNotifications]);
+
+  // Retry failed notification
+  const handleRetryNotification = async (interviewId: number, logId: number) => {
+    try {
+      await retryInterviewNotification(interviewId, logId);
+      // Reload notification logs for this interview
+      await loadInterviewNotifications([interviewId]);
+      showToast(t('ats.notificationRetried'), 'success');
+    } catch (err) {
+      showToast(t('ats.notificationRetryError'), 'error');
+    }
+  };
   const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
   const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -2000,7 +2054,12 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         // Update existing interview
         const updated = await updateInterview(editingInterviewId, {
           scheduledAt,
+          interviewType: intType,
+          location: intLocation || undefined,
+          description: intDescription || undefined,
           notes: intNotes || undefined,
+          durationMinutes: typeof intDuration === 'number' ? intDuration : undefined,
+          interviewerId: typeof intInterviewerId === 'number' ? intInterviewerId : undefined,
         });
         setInterviews((prev) => prev.map((iv) => (iv.id === editingInterviewId ? updated : iv)));
         showToast(t('ats.interviewUpdated', 'Interview updated'), 'success');
@@ -2008,16 +2067,29 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         // Create new interview
         const iv = await createInterview(candidate.id, {
           scheduledAt,
+          interviewType: intType,
           location: intLocation || undefined,
+          description: intDescription || undefined,
           notes: intNotes || undefined,
+          durationMinutes: typeof intDuration === 'number' ? intDuration : undefined,
+          interviewerId: typeof intInterviewerId === 'number' ? intInterviewerId : undefined,
         });
         setInterviews((prev) => [...prev, iv]);
         showToast(t('ats.interviewCreated'), 'success');
+        
+        // Load notification logs for the new interview
+        try {
+          const logs = await getInterviewNotifications(iv.id);
+          setInterviewNotifications(prev => ({ ...prev, [iv.id]: logs }));
+        } catch {
+          // Ignore notification log loading errors
+        }
       }
       
       setShowInterviewForm(false);
       setEditingInterviewId(null);
       setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
+      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId('');
     } catch (err) {
       showToast(t('ats.interviewError'), 'error');
     } finally {
@@ -2768,13 +2840,120 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       onChange={setIntTime}
                     />
                   </div>
+                  
+                  {/* Interview Type and Interviewer */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewType')}
+                      </label>
+                      <select 
+                        value={intType} 
+                        onChange={(e) => setIntType(e.target.value as 'phone' | 'in_person')}
+                        style={{ 
+                          width: '100%', 
+                          boxSizing: 'border-box', 
+                          padding: '7px 10px', 
+                          fontSize: 13, 
+                          borderRadius: 'var(--radius)', 
+                          border: '1px solid var(--border)', 
+                          outline: 'none', 
+                          background: 'var(--background)' 
+                        }}
+                      >
+                        <option value="in_person">🤝 {t('ats.inPersonInterview')}</option>
+                        <option value="phone">📞 {t('ats.phoneInterview')}</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewer')}
+                      </label>
+                      <select 
+                        value={intInterviewerId} 
+                        onChange={(e) => setIntInterviewerId(e.target.value ? Number(e.target.value) : '')}
+                        style={{ 
+                          width: '100%', 
+                          boxSizing: 'border-box', 
+                          padding: '7px 10px', 
+                          fontSize: 13, 
+                          borderRadius: 'var(--radius)', 
+                          border: '1px solid var(--border)', 
+                          outline: 'none', 
+                          background: 'var(--background)' 
+                        }}
+                      >
+                        <option value="">{t('ats.selectInterviewer')}</option>
+                        {employees
+                          .filter((emp: Employee) => ['hr', 'area_manager', 'store_manager'].includes(emp.role))
+                          .map((emp: Employee) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} {emp.surname} ({emp.role})
+                            </option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                  </div>
+                  
+                  {/* Duration and Location */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.duration')} (min)
+                      </label>
+                      <input 
+                        type="number" 
+                        value={intDuration} 
+                        onChange={(e) => setIntDuration(e.target.value ? Number(e.target.value) : '')}
+                        placeholder="60"
+                        min="1"
+                        max="480"
+                        style={{ 
+                          width: '100%', 
+                          boxSizing: 'border-box', 
+                          padding: '7px 10px', 
+                          fontSize: 13, 
+                          borderRadius: 'var(--radius)', 
+                          border: '1px solid var(--border)', 
+                          outline: 'none' 
+                        }} 
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        {t('ats.interviewLocation')}
+                      </label>
+                      <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
+                        placeholder={t('ats.interviewLocationPlaceholder')}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                    </div>
+                  </div>
+                  
+                  {/* Description */}
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                      {t('ats.interviewLocation')}
+                      {t('ats.interviewDescription')}
                     </label>
-                    <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
-                      placeholder={t('ats.interviewLocationPlaceholder')}
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                    <textarea 
+                      value={intDescription} 
+                      onChange={(e) => setIntDescription(e.target.value)} 
+                      rows={2}
+                      placeholder={t('ats.interviewDescriptionPlaceholder')}
+                      style={{ 
+                        width: '100%', 
+                        boxSizing: 'border-box', 
+                        resize: 'none', 
+                        fontFamily: 'inherit', 
+                        padding: '7px 10px', 
+                        fontSize: 13, 
+                        borderRadius: 'var(--radius)', 
+                        border: '1px solid var(--border)', 
+                        outline: 'none', 
+                        display: 'block' 
+                      }} 
+                    />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
@@ -2788,6 +2967,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       setShowInterviewForm(false);
                       setEditingInterviewId(null);
                       setIntDate(''); setIntTime('09:00'); setIntLocation(''); setIntNotes('');
+                      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId('');
                     }}>
                       {t('common.cancel')}
                     </Button>
@@ -2855,6 +3035,94 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             "{iv.feedback}"
                           </div>
                         )}
+                        
+                        {/* Interview Type and Duration */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                          <span style={{ 
+                            fontSize: 11, 
+                            color: 'var(--text-muted)', 
+                            background: 'var(--surface)', 
+                            padding: '2px 6px', 
+                            borderRadius: 4 
+                          }}>
+                            {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
+                          </span>
+                          {iv.durationMinutes && (
+                            <span style={{ 
+                              fontSize: 11, 
+                              color: 'var(--text-muted)', 
+                              background: 'var(--surface)', 
+                              padding: '2px 6px', 
+                              borderRadius: 4 
+                            }}>
+                              ⏱ {iv.durationMinutes}min
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Description */}
+                        {iv.description && (
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
+                            {iv.description}
+                          </div>
+                        )}
+                        
+                        {/* Notification Status */}
+                        {interviewNotifications[iv.id] && interviewNotifications[iv.id].length > 0 && (
+                          <div style={{ marginTop: 8, padding: '8px', background: 'var(--surface)', borderRadius: 6 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                              📧 Notifications
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              {interviewNotifications[iv.id].map((log) => {
+                                const statusIcon = {
+                                  pending: '⏳',
+                                  sending: '🔄',
+                                  done: '✅',
+                                  error: '❌'
+                                }[log.status];
+                                
+                                const statusColor = {
+                                  pending: '#6b7280',
+                                  sending: '#f59e0b',
+                                  done: '#10b981',
+                                  error: '#ef4444'
+                                }[log.status];
+                                
+                                return (
+                                  <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                                    <span style={{ color: statusColor }}>{statusIcon}</span>
+                                    <span style={{ color: 'var(--text-muted)' }}>
+                                      {log.recipientType === 'candidate' ? 'Candidate' : 'Interviewer'} ({log.channel})
+                                    </span>
+                                    {log.status === 'error' && (
+                                      <>
+                                        <button
+                                          onClick={() => handleRetryNotification(iv.id, log.id)}
+                                          style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#3b82f6',
+                                            fontSize: 11,
+                                            cursor: 'pointer',
+                                            textDecoration: 'underline'
+                                          }}
+                                        >
+                                          Retry
+                                        </button>
+                                        {log.errorMessage && (
+                                          <span style={{ color: '#ef4444', fontSize: 10 }}>
+                                            {log.errorMessage}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       {canEdit && (
                         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -2866,6 +3134,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                               setIntTime(ivDate.toTimeString().slice(0, 5));
                               setIntLocation(iv.location || '');
                               setIntNotes(iv.notes || '');
+                              setIntType(iv.interviewType || 'in_person');
+                              setIntDescription(iv.description || '');
+                              setIntDuration(iv.durationMinutes || '');
+                              setIntInterviewerId(iv.interviewerId || '');
                               setEditingInterviewId(iv.id);
                               setShowInterviewForm(true);
                             }}
@@ -3707,6 +3979,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const { socket } = useSocket();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
@@ -3735,11 +4008,12 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const [cands, js] = await Promise.all([
+      const [cands, js, emps] = await Promise.all([
         getCandidates(filterJob ? { jobId: parseInt(filterJob, 10), companyId: effectiveCompanyId } : { companyId: effectiveCompanyId }),
         getJobs(scopedCompanyId ? { companyId: scopedCompanyId } : undefined),
+        effectiveCompanyId ? getEmployees({ targetCompanyId: effectiveCompanyId, status: 'active', includeStoreTerminals: false, limit: 500 }) : Promise.resolve({ employees: [] }),
       ]);
-      setCandidates(cands); setJobs(js);
+      setCandidates(cands); setJobs(js); setEmployees(emps.employees || []);
     } catch { showToast(t('ats.errorLoad'), 'error'); }
     finally { setLoading(false); }
   }, [filterJob, effectiveCompanyId, scopedCompanyId, showToast, t]);
@@ -3889,6 +4163,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const STAGE_LABELS: Record<CandidateStatus, string> = {
     received: t('ats.stage_received'),
     review: t('ats.stage_review'),
+    phone_interview: t('ats.stage_phone_interview'),
     interview: t('ats.stage_interview'),
     hired: t('ats.stage_hired'),
     rejected: t('ats.stage_rejected'),
@@ -3897,7 +4172,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const STAGE_ICON: Record<CandidateStatus, string> = {
     received: '📥',
     review: '🔍',
-    interview: '🎤',
+    phone_interview: '📞',
+    interview: '🤝',
     hired: '✅',
     rejected: '✕',
   };
@@ -4646,6 +4922,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         <CandidateModal
           candidate={selected}
           jobs={jobs}
+          employees={employees}
           canEdit={canEdit}
           canFeedback={canFeedback}
           onClose={() => setSelected(null)}
