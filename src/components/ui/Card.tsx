@@ -10,6 +10,7 @@ interface CardProps {
   children?: React.ReactNode;
   style?: React.CSSProperties;
   interactive?: boolean;
+  onClick?: () => void;
 }
 
 const paddingMap: Record<NonNullable<CardProps['padding']>, string> = {
@@ -29,6 +30,7 @@ export const Card: React.FC<CardProps> = ({
   children,
   style,
   interactive = false,
+  onClick,
 }) => {
   const cardStyle: React.CSSProperties = {
     background: 'var(--surface)',
@@ -52,6 +54,7 @@ export const Card: React.FC<CardProps> = ({
     <div
       style={cardStyle}
       className={`${interactive ? 'card-lift' : ''} ${className ?? ''}`}
+      onClick={onClick}
     >
       {(title || subtitle || actions) && (
         <div style={headerStyle}>

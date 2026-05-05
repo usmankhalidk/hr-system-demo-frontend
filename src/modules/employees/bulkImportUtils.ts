@@ -158,7 +158,7 @@ export function parseExcelFile(file: File): Promise<ParsedRow[]> {
 export interface ImportResult {
   rowIndex: number;
   success: boolean;
-  error?: string;
+  error?: string | { key: string; params?: Record<string, any>; fallback?: string };
   employee?: Employee;
 }
 
@@ -176,25 +176,87 @@ export async function processRow(
     if (key) mapped[key] = String(value ?? '').trim();
   }
 
-  // 2. Required fields
-  if (!mapped.name) return { rowIndex, success: false, error: 'Missing required field: Name' };
-  if (!mapped.surname) return { rowIndex, success: false, error: 'Missing required field: Surname' };
-  if (!mapped.email) return { rowIndex, success: false, error: 'Missing required field: Email' };
+  // 2. Required fields validation
+  if (!mapped.name) {
+    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'name');
+    return { 
+      rowIndex, 
+      success: false, 
+      error: hasHeader 
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'name' } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'name' } }
+    };
+  }
+  if (!mapped.surname) {
+    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'surname');
+    return { 
+      rowIndex, 
+      success: false, 
+      error: hasHeader 
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'surname' } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'surname' } }
+    };
+  }
+  if (!mapped.email) {
+    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'email');
+    return { 
+      rowIndex, 
+      success: false, 
+      error: hasHeader 
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'email' } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'email' } }
+    };
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mapped.email)) {
-    return { rowIndex, success: false, error: 'Invalid email format' };
+    return { 
+      rowIndex, 
+      success: false, 
+      error: { key: 'employees.bulkImportErrorInvalidEmail', params: { email: mapped.email } } 
+    };
+  }
+
+  // Required personal email
+  if (!mapped.personalEmail) {
+    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'personal email');
+    return { 
+      rowIndex, 
+      success: false, 
+      error: hasHeader 
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'personal email' } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'personal email' } }
+    };
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mapped.personalEmail)) {
+    return { 
+      rowIndex, 
+      success: false, 
+      error: { key: 'employees.bulkImportErrorInvalidEmail', params: { email: mapped.personalEmail } } 
+    };
   }
 
   // 3. Role
   const roleLower = (mapped.role || '').toLowerCase().replace(/\s+/g, '_');
   const role = ROLE_VALUES.find(r => r === roleLower);
-  if (!role) return { rowIndex, success: false, error: `Missing or invalid role: "${mapped.role || ''}"` };
+  if (!role) {
+    return { 
+      rowIndex, 
+      success: false, 
+      error: { key: 'employees.bulkImportErrorInvalidRole', params: { role: mapped.role || '' } } 
+    };
+  }
 
   // 4. Company lookup by name
   let companyId: number | undefined;
   if (mapped.companyName) {
     const company = companies.find(c => c.name.toLowerCase() === mapped.companyName.toLowerCase());
     if (company) companyId = company.id;
-    else return { rowIndex, success: false, error: `Company not found: "${mapped.companyName}"` };
+    else {
+      return { 
+        rowIndex, 
+        success: false, 
+        error: { key: 'employees.bulkImportErrorCompanyNotFound', params: { company: mapped.companyName } } 
+      };
+    }
   }
 
   // 5. Store lookup by name
@@ -264,8 +326,16 @@ export async function processRow(
     const emp = await createEmployee(payload as Parameters<typeof createEmployee>[0]);
     return { rowIndex, success: true, employee: emp };
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      || (err instanceof Error ? err.message : 'Unknown error');
+    const data = (err as any)?.response?.data;
+    // Capture the exact reason from backend (might be under 'error' or 'message')
+    if (data?.code) {
+      return { 
+        rowIndex, 
+        success: false, 
+        error: { key: `errors.${data.code}`, fallback: data.error || data.message } 
+      };
+    }
+    const msg = data?.error || data?.message || (err instanceof Error ? err.message : 'Unknown error');
     return { rowIndex, success: false, error: msg };
   }
 }
