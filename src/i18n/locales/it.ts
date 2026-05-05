@@ -66,6 +66,9 @@ const it = {
     days: 'giorni',
     company: 'Azienda',
     refresh: 'Aggiorna',
+    column: 'Colonna',
+    format: 'Formato',
+    example: 'Esempio',
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────
@@ -111,6 +114,7 @@ const it = {
     deviceReset: 'Reset dispositivo',
     terminals: 'Terminale',
     automazioni: 'Automazioni',
+    reports: 'Reportistica',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -472,6 +476,17 @@ const it = {
     bulkImportNoData: 'Nessuna riga di dati valida trovata nel file.',
     bulkImportDone: 'Fatto',
     bulkImportNewImport: 'Nuova Importazione',
+    bulkImportGuideTitle: 'Guida al formato colonne',
+    bulkImportGuideToggle: 'Mostra guida formato',
+    bulkImportGuideHide: 'Nascondi guida',
+    bulkImportTemplateHint: 'Campi obbligatori: Nome, Cognome, Email, Ruolo. Le date devono essere nel formato YYYY-MM-DD.',
+    bulkImportErrorFieldEmpty: 'Il campo "{{field}}" è vuoto',
+    bulkImportErrorColumnMissing: 'La colonna "{{field}}" manca nell\'Excel',
+    bulkImportErrorInvalidEmail: 'Formato email non valido: "{{email}}"',
+    bulkImportErrorInvalidRole: 'Ruolo mancante o non valido: "{{role}}"',
+    bulkImportErrorCompanyNotFound: 'Azienda non trovata: "{{company}}"',
+    bulkImportEditData: 'Modifica dati',
+    bulkImportEditAction: 'Modifica',
   },
 
   // ─── Terminals ────────────────────────────────────────────────────────────
@@ -769,7 +784,7 @@ const it = {
       documenti: 'Documenti',
       ats: 'Selezione Personale',
       onboarding: 'Onboarding',
-      report: 'Report',
+      report: 'Reportistica',
       impostazioni: 'Impostazioni',
       negozi: 'Negozi',
       terminali: 'Terminale',
@@ -2611,6 +2626,130 @@ const it = {
       today: 'Oggi',
       yesterday: 'Ieri',
       days_ago: '{{count}} giorni fa',
+    }
+  },
+  reports: {
+    title: 'Report Automatici',
+    subtitle: '{{active}}/{{total}} report attivi · {{runs}} esecuzioni totali',
+    newReport: 'Nuovo report',
+    stats: {
+      active: 'Report attivi',
+      totalRuns: 'Esecuzioni totali',
+      nextRun: 'Prossima esecuzione',
+      archive: 'Archivio report',
+      executionsSuffix: 'totali',
+      pdfSuffix: 'PDF',
+      runs: 'esecuzioni'
+    },
+    calendar: {
+      title: 'Calendario esecuzioni',
+      days: {
+        Mon: 'Lun',
+        Tue: 'Mar',
+        Wed: 'Mer',
+        Thu: 'Gio',
+        Fri: 'Ven',
+        Sat: 'Sab',
+        Sun: 'Dom'
+      }
+    },
+    card: {
+      frequency: 'Frequenza',
+      nextRun: 'Prossima esecuzione',
+      lastGenerated: 'Ultima generazione',
+      totalReports: 'Report generati',
+      recipients: 'Destinatari',
+      runNow: 'Esegui ora',
+      configure: 'Configura',
+      downloadLast: 'Scarica ultimo'
+    },
+    modal: {
+      title: 'Configura report',
+      frequencyLabel: 'FREQUENZA',
+      recipientsLabel: 'DESTINATARI EMAIL',
+      addRecipient: 'Aggiungi',
+      emailPlaceholder: 'aggiungi@email.it',
+      sectionsLabel: 'SEZIONI INCLUSE',
+      statusLabel: 'STATO',
+      cancel: 'Annulla',
+      save: 'Salva modifiche'
+    },
+    archive: {
+      title: 'Archivio report recenti',
+      subtitle: 'Ultimi 10 report generati · scaricabili in PDF',
+      viewFull: 'Vedi archivio completo',
+      generatedOn: 'Generato il',
+      downloadPdf: 'Scarica PDF'
+    },
+    toast: {
+      running: 'Generazione in corso...',
+      hint: '{{name}} · Riceverai email a destinatari configurati'
+    },
+    status: {
+      active: 'Attivo',
+      suspended: 'Sospeso',
+      error: 'Errore'
+    },
+    data: {
+      hr_weekly: {
+        name: 'Report HR Settimanale',
+        desc: 'Riepilogo settimanale completo: presenze, anomalie, turni, ferie, onboarding. Inviato ogni lunedì ai destinatari HR.',
+        schedule: 'Ogni lunedì alle 07:00'
+      },
+      admin_monthly: {
+        name: 'Report Admin Mensile',
+        desc: 'Report mensile direzionale con KPI completi: organico, costi, performance negozi, funnel ATS, scadenze critiche.',
+        schedule: '1° del mese alle 07:00'
+      },
+      hr_monthly: {
+        name: 'Report HR Mensile',
+        desc: 'Report mensile HR con focus su personale: assunzioni, dimissioni, turnover, ferie, formazioni e visite mediche in scadenza.',
+        schedule: '1° del mese alle 08:00'
+      },
+      anomaly_daily: {
+        name: 'Alert Giornaliero HR (ATS)',
+        desc: 'Riepilogo operativo giornaliero per HR: candidati non letti, colloqui mancanti, feedback assenti, pipeline bloccata.',
+        schedule: 'Ogni giorno (lun–ven) alle 08:00'
+      }
+    },
+    sections: {
+      'Riepilogo presenze': 'Riepilogo presenze',
+      'Anomalie rilevate': 'Anomalie rilevate',
+      'Turni confermati': 'Turni confermati',
+      'Richieste ferie': 'Richieste ferie',
+      'Onboarding in corso': 'Onboarding in corso',
+      'Organico e variazioni': 'Organico e variazioni',
+      'KPI presenze': 'KPI presenze',
+      'Copertura turni': 'Copertura turni',
+      'ATS funnel': 'ATS funnel',
+      'Scadenze contratti': 'Scadenze contratti',
+      'Scadenze formazioni': 'Scadenze formazioni',
+      'Budget e costi': 'Budget e costi',
+      'Store comparison': 'Store comparison',
+      'Variazioni organico': 'Variazioni organico',
+      'Ferie & permessi': 'Ferie & permessi',
+      'Scadenze visite mediche': 'Scadenze visite mediche',
+      'Contratti in scadenza': 'Contratti in scadenza',
+      'Turnover mensile': 'Turnover mensile',
+      'Candidati non letti': 'Candidati non letti',
+      'Colloqui non pianificati': 'Colloqui non pianificati',
+      'Feedback mancanti': 'Feedback mancanti',
+      'Pipeline bloccata': 'Pipeline bloccata'
+    },
+    days: {
+      1: 'Lunedì',
+      2: 'Martedì',
+      3: 'Mercoledì',
+      4: 'Giovedì',
+      5: 'Venerdì'
+    },
+    mock: {
+      nextRunDate: 'Lun 28/04',
+      hrWeeklyDate: '21/04/2026',
+      anomalyDailyDate1: '25/04/2026',
+      anomalyDailyDate2: '24/04/2026',
+      hrMonthlyDate: '01/04/2026',
+      adminMonthlyDate: '01/04/2026'
     }
   },
 } as const;
