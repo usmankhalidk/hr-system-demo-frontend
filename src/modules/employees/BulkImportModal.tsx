@@ -29,6 +29,8 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [isEditingData, setIsEditingData] = useState(false);
 
   // Reference data for name→id lookups
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -37,7 +39,7 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    setPhase('upload'); setFile(null); setRows([]); setResults([]); setProgress(0); setError(null);
+    setPhase('upload'); setFile(null); setRows([]); setResults([]); setProgress(0); setError(null); setGuideOpen(false);
     // Load reference data
     getCompanies().then(setCompanies).catch(() => {});
     getStores().then(setStores).catch(() => {});
@@ -145,6 +147,92 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
             </div>
           )}
 
+          {/* ── Format guide (collapsible) ── */}
+          {phase === 'upload' && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setGuideOpen(!guideOpen); }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '7px 14px', borderRadius: 7,
+                    border: '1.5px solid var(--border)', background: 'transparent',
+                    color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-warm)'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+                >
+                  <AlertTriangle size={14} style={{ color: guideOpen ? 'var(--primary)' : 'var(--text-muted)' }} />
+                  {guideOpen ? t('employees.bulkImportGuideHide') : t('employees.bulkImportGuideToggle')}
+                </button>
+              </div>
+
+              {guideOpen && (
+                <div style={{
+                  borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden',
+                  fontSize: 12, boxShadow: 'var(--shadow-sm)', background: 'var(--surface)',
+                }}>
+                  <div style={{
+                    background: 'var(--primary)', color: '#fff',
+                    padding: '8px 14px', fontWeight: 700, fontSize: 11,
+                    letterSpacing: '1px', textTransform: 'uppercase',
+                  }}>
+                    {t('employees.bulkImportGuideTitle')}
+                  </div>
+                  <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ background: 'var(--surface-warm)' }}>
+                          {[t('common.column'), t('common.required'), t('common.format'), t('common.example')].map((h, i) => (
+                            <th key={h} style={{
+                              padding: '8px 12px', textAlign: i === 1 ? 'center' : 'left',
+                              fontWeight: 700, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)',
+                              textTransform: 'uppercase', fontSize: 9, letterSpacing: '0.05em'
+                            }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { col: 'name', req: true, fmt: 'Text', ex: 'John' },
+                          { col: 'surname', req: true, fmt: 'Text', ex: 'Doe' },
+                          { col: 'email', req: true, fmt: 'Email', ex: 'john.doe@example.com' },
+                          { col: 'role', req: true, fmt: 'admin / hr / area_manager / store_manager / employee', ex: 'employee' },
+                          { col: 'company', req: false, fmt: 'Company name', ex: 'Acme Corp' },
+                          { col: 'store', req: false, fmt: 'Store name', ex: 'Paris Store' },
+                          { col: 'supervisor', req: false, fmt: 'Full name or Email', ex: 'Jane Smith' },
+                          { col: 'department', req: false, fmt: 'Text', ex: 'Sales' },
+                          { col: 'hire date', req: false, fmt: 'YYYY-MM-DD', ex: '2026-05-01' },
+                          { col: 'work schedule', req: false, fmt: 'Full Time / Part Time', ex: 'Full Time' },
+                          { col: 'weekly hours', req: false, fmt: 'Number', ex: '40' },
+                          { col: 'personal email', req: true, fmt: 'Email', ex: 'john.personal@gmail.com' },
+                          { col: 'date of birth', req: false, fmt: 'YYYY-MM-DD', ex: '1990-01-01' },
+                          { col: 'gender', req: false, fmt: 'M / F / Other', ex: 'M' },
+                          { col: 'postal code', req: false, fmt: '5 digits', ex: '00100' },
+                          { col: 'first aid', req: false, fmt: 'YES / NO', ex: 'NO' },
+                        ].map((row, i) => (
+                          <tr key={row.col} style={{ background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface-warm)', borderBottom: '1px solid var(--border-light)' }}>
+                            <td style={{ padding: '6px 12px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>{row.col}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'center' }}>
+                              {row.req ? <span style={{ color: '#dc2626', fontWeight: 700 }}>{t('common.yes')}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '6px 12px', color: 'var(--text-secondary)' }}>{row.fmt}</td>
+                            <td style={{ padding: '6px 12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{row.ex}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ padding: '8px 14px', background: 'rgba(139,105,20,0.05)', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--accent)', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <span style={{ fontSize: 14 }}>💡</span>
+                    <span>{t('employees.bulkImportTemplateHint', 'Required fields: Name, Surname, Email, Role, Personal email. Dates should be YYYY-MM-DD.')}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── PREVIEW phase ── */}
           {phase === 'preview' && (
             <div>
@@ -242,7 +330,11 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
                       <AlertTriangle size={13} color="var(--danger)" style={{ flexShrink: 0, marginTop: 1 }} />
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>Row {r.rowIndex}: </span>
-                        <span style={{ fontSize: 11, color: 'var(--danger)' }}>{r.error}</span>
+                        <span style={{ fontSize: 11, color: 'var(--danger)', fontWeight: 500 }}>
+                          {typeof r.error === 'string' 
+                            ? r.error 
+                            : r.error && t(r.error.key, { ...r.error.params, defaultValue: r.error.fallback })}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -279,6 +371,14 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
           )}
           {phase === 'done' && (
             <>
+              {failCount > 0 && (
+                <button 
+                  onClick={() => setIsEditingData(true)} 
+                  style={{ ...S.btn, background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' }}
+                >
+                  {t('employees.bulkImportEditData', 'Edit data')}
+                </button>
+              )}
               <button onClick={() => { setPhase('upload'); setFile(null); setRows([]); setResults([]); }} style={{ ...S.btn, background: 'none', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
                 {t('employees.bulkImportNewImport', 'New Import')}
               </button>
@@ -287,6 +387,118 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
               </button>
             </>
           )}
+        </div>
+
+        <EditDataModal 
+          open={isEditingData} 
+          rows={rows} 
+          onClose={() => setIsEditingData(false)} 
+          onSave={(newRows) => {
+            setRows(newRows);
+            setIsEditingData(false);
+            setPhase('preview');
+            setResults([]);
+          }}
+        />
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ── Edit Data Modal ─────────────────────────────────────────────────── */
+
+function EditDataModal({ 
+  open, 
+  rows, 
+  onClose, 
+  onSave 
+}: { 
+  open: boolean; 
+  rows: ParsedRow[]; 
+  onClose: () => void; 
+  onSave: (newRows: ParsedRow[]) => void; 
+}) {
+  const { t } = useTranslation();
+  const [localRows, setLocalRows] = useState<ParsedRow[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      setLocalRows(JSON.parse(JSON.stringify(rows)));
+    }
+  }, [open, rows]);
+
+  if (!open) return null;
+
+  const headers = localRows.length > 0 ? Object.keys(localRows[0].data) : [];
+
+  const handleCellChange = (rowIndex: number, header: string, val: string) => {
+    setLocalRows(prev => prev.map(r => r.rowIndex === rowIndex 
+      ? { ...r, data: { ...r.data, [header]: val } } 
+      : r
+    ));
+  };
+
+  const S = {
+    backdrop: { position: 'fixed' as const, inset: 0, zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' },
+    card: { background: 'var(--surface)', borderRadius: '16px', width: 'min(1000px, 95vw)', height: '85vh', display: 'flex', flexDirection: 'column' as const, boxShadow: '0 24px 60px rgba(0,0,0,0.3)', overflow: 'hidden' },
+    header: { padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    body: { flex: 1, overflow: 'auto' as const, padding: '0' },
+    footer: { padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-warm)', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexShrink: 0 },
+    btn: { padding: '8px 18px', borderRadius: 'var(--radius-sm)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none' },
+    input: { width: '100%', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: '11.5px', color: 'var(--text-primary)', fontFamily: 'inherit', minWidth: '120px' },
+  };
+
+  return createPortal(
+    <div style={S.backdrop} onClick={onClose}>
+      <div style={S.card} onClick={e => e.stopPropagation()}>
+        <div style={S.header}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FileSpreadsheet size={18} color="var(--primary)" />
+            <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>{t('employees.bulkImportEditData', 'Edit data')}</h3>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px' }}>×</button>
+        </div>
+        
+        <div style={S.body}>
+          <table style={{ minWidth: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--surface-warm)' }}>
+              <tr>
+                <th style={{ width: 50, padding: '12px 10px', fontSize: 10, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textAlign: 'left', background: 'var(--surface-warm)', position: 'sticky', left: 0, zIndex: 11 }}>#</th>
+                {headers.map(h => (
+                  <th key={h} style={{ minWidth: 150, padding: '12px 10px', fontSize: 10, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {localRows.map((row) => (
+                <tr key={row.rowIndex} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', position: 'sticky', left: 0, zIndex: 1 }}>{row.rowIndex}</td>
+                  {headers.map(h => (
+                    <td key={h} style={{ padding: 0, borderLeft: '1px solid var(--border-light)' }}>
+                      <input 
+                        style={S.input}
+                        value={String(row.data[h] ?? '')}
+                        onChange={e => handleCellChange(row.rowIndex, h, e.target.value)}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={S.footer}>
+          <button onClick={onClose} style={{ ...S.btn, background: 'none', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+            {t('common.cancel')}
+          </button>
+          <button 
+            onClick={() => onSave(localRows)} 
+            style={{ ...S.btn, background: 'var(--primary)', color: '#fff' }}
+          >
+            {t('employees.bulkImportEditAction', 'Edit')}
+          </button>
         </div>
       </div>
     </div>,

@@ -67,6 +67,9 @@ const en = {
     days: 'days',
     company: 'Company',
     refresh: 'Refresh',
+    column: 'Column',
+    format: 'Format',
+    example: 'Example',
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────
@@ -112,6 +115,7 @@ const en = {
     deviceReset: 'Reset device',
     terminals: 'Terminal',
     automazioni: 'Automations',
+    reports: 'Reports',
   },
 
   // ─── Language ─────────────────────────────────────────────────────────────
@@ -478,6 +482,17 @@ const en = {
     bulkImportNoData: 'No valid data rows found in the file.',
     bulkImportDone: 'Done',
     bulkImportNewImport: 'New Import',
+    bulkImportGuideTitle: 'Column Format Guide',
+    bulkImportGuideToggle: 'Show format guide',
+    bulkImportGuideHide: 'Hide format guide',
+    bulkImportTemplateHint: 'Required fields: Name, Surname, Email, Role. Dates should be YYYY-MM-DD.',
+    bulkImportErrorFieldEmpty: 'Field "{{field}}" is empty',
+    bulkImportErrorColumnMissing: 'Column "{{field}}" is missing from Excel',
+    bulkImportErrorInvalidEmail: 'Invalid email format: "{{email}}"',
+    bulkImportErrorInvalidRole: 'Missing or invalid role: "{{role}}"',
+    bulkImportErrorCompanyNotFound: 'Company not found: "{{company}}"',
+    bulkImportEditData: 'Edit data',
+    bulkImportEditAction: 'Edit',
   },
 
   // ─── Terminals ────────────────────────────────────────────────────────────
@@ -2627,6 +2642,130 @@ const en = {
       today: 'Today',
       yesterday: 'Yesterday',
       days_ago: '{{count}} days ago',
+    }
+  },
+  reports: {
+    title: 'Automated Reports',
+    subtitle: '{{active}}/{{total}} active reports · {{runs}} total executions',
+    newReport: 'New report',
+    stats: {
+      active: 'Active reports',
+      totalRuns: 'Total executions',
+      nextRun: 'Next execution',
+      archive: 'Report archive',
+      executionsSuffix: 'total',
+      pdfSuffix: 'PDF',
+      runs: 'executions'
+    },
+    calendar: {
+      title: 'Execution calendar',
+      days: {
+        Mon: 'Mon',
+        Tue: 'Tue',
+        Wed: 'Wed',
+        Thu: 'Thu',
+        Fri: 'Fri',
+        Sat: 'Sat',
+        Sun: 'Sun'
+      }
+    },
+    card: {
+      frequency: 'Frequency',
+      nextRun: 'Next execution',
+      lastGenerated: 'Last generated',
+      totalReports: 'Generated reports',
+      recipients: 'Recipients',
+      runNow: 'Run now',
+      configure: 'Configure',
+      downloadLast: 'Download last'
+    },
+    modal: {
+      title: 'Configure report',
+      frequencyLabel: 'FREQUENCY',
+      recipientsLabel: 'EMAIL RECIPIENTS',
+      addRecipient: 'Add',
+      emailPlaceholder: 'add@email.it',
+      sectionsLabel: 'INCLUDED SECTIONS',
+      statusLabel: 'STATUS',
+      cancel: 'Cancel',
+      save: 'Save changes'
+    },
+    archive: {
+      title: 'Recent report archive',
+      subtitle: 'Last 10 generated reports · downloadable in PDF',
+      viewFull: 'View full archive',
+      generatedOn: 'Generated on',
+      downloadPdf: 'Download PDF'
+    },
+    toast: {
+      running: 'Generation in progress...',
+      hint: '{{name}} · You will receive an email to configured recipients'
+    },
+    status: {
+      active: 'Active',
+      suspended: 'Suspended',
+      error: 'Error'
+    },
+    data: {
+      hr_weekly: {
+        name: 'Weekly HR Report',
+        desc: 'Complete weekly summary: attendance, anomalies, shifts, leave, onboarding. Sent every Monday to HR recipients.',
+        schedule: 'Every Monday at 07:00'
+      },
+      admin_monthly: {
+        name: 'Monthly Admin Report',
+        desc: 'Monthly executive report with full KPIs: staff, costs, store performance, ATS funnel, critical deadlines.',
+        schedule: '1st of the month at 07:00'
+      },
+      hr_monthly: {
+        name: 'Monthly HR Report',
+        desc: 'Monthly HR report focusing on personnel: hires, resignations, turnover, leave, training and medical exams expiring.',
+        schedule: '1st of the month at 08:00'
+      },
+      anomaly_daily: {
+        name: 'Daily HR Alert (ATS)',
+        desc: 'Daily operational summary for HR: unread candidates, missing interviews, absent feedback, blocked pipeline.',
+        schedule: 'Every day (Mon–Fri) at 08:00'
+      }
+    },
+    sections: {
+      'Riepilogo presenze': 'Attendance summary',
+      'Anomalie rilevate': 'Anomalies detected',
+      'Turni confermati': 'Confirmed shifts',
+      'Richieste ferie': 'Leave requests',
+      'Onboarding in corso': 'Onboarding in progress',
+      'Organico e variazioni': 'Staff and variations',
+      'KPI presenze': 'Attendance KPIs',
+      'Copertura turni': 'Shift coverage',
+      'ATS funnel': 'ATS funnel',
+      'Scadenze contratti': 'Contract deadlines',
+      'Scadenze formazioni': 'Training deadlines',
+      'Budget e costi': 'Budget and costs',
+      'Store comparison': 'Store comparison',
+      'Variazioni organico': 'Staff variations',
+      'Ferie & permessi': 'Leave & permissions',
+      'Scadenze visite mediche': 'Medical exam deadlines',
+      'Contratti in scadenza': 'Expiring contracts',
+      'Turnover mensile': 'Monthly turnover',
+      'Candidati non letti': 'Unread candidates',
+      'Colloqui non pianificati': 'Unplanned interviews',
+      'Feedback mancanti': 'Missing feedback',
+      'Pipeline bloccata': 'Blocked pipeline'
+    },
+    days: {
+      1: 'Monday',
+      2: 'Tuesday',
+      3: 'Wednesday',
+      4: 'Thursday',
+      5: 'Friday'
+    },
+    mock: {
+      nextRunDate: 'Mon 04/28',
+      hrWeeklyDate: '04/21/2026',
+      anomalyDailyDate1: '04/25/2026',
+      anomalyDailyDate2: '04/24/2026',
+      hrMonthlyDate: '04/01/2026',
+      adminMonthlyDate: '04/01/2026'
     }
   },
 } as const;

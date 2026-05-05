@@ -445,8 +445,11 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
       const months = parseInt(formData.probationMonths, 10);
       if (isNaN(months) || months < 0 || months > 60) return t('employees.probationInvalid');
     }
-    // Personal email format
-    if (formData.personalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.personalEmail)) {
+    // Personal email required and format
+    if (!formData.personalEmail.trim()) {
+      return t('employees.fieldRequired');
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.personalEmail)) {
       return t('employees.emailInvalid');
     }
     // Italian CAP: exactly 5 digits
@@ -1696,7 +1699,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                   <SectionDivider label={t('employees.contractualDetails')} />
                   <div style={row2}>
                     <Input
-                      label={t('employees.personalEmailField')}
+                      label={`${t('employees.personalEmailField')} *`}
                       type="email"
                       value={formData.personalEmail}
                       onChange={(e) => set('personalEmail', e.target.value)}
