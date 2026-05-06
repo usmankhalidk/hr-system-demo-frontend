@@ -325,6 +325,8 @@ export default function StoreDetail() {
       render: <TimezoneOptionContent timezone={timezone} />,
     }));
   }, [browserTimezone, formData.timezone]);
+  const activeEmployeeCount = employees.length;
+  const maxCapacityLabel = store?.maxStaff != null ? String(store.maxStaff) : '—';
 
   const dayLabels = useMemo(
     () => [
@@ -2126,6 +2128,24 @@ export default function StoreDetail() {
                 }}
               />
               <div style={{ display: 'grid', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    {t('stores.fieldMaxStaff')}
+                  </label>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {activeEmployeeCount} / {maxCapacityLabel}
+                  </span>
+                </div>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.maxStaff}
+                  onChange={(event) => setFormData((p) => ({ ...p, maxStaff: event.target.value }))}
+                  placeholder={t('stores.placeholderMaxStaff')}
+                  disabled={formSaving}
+                />
+              </div>
+              <div style={{ display: 'grid', gap: 4 }}>
                 <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
                   {t('stores.fieldTimezone', 'Timezone')}
                 </label>
@@ -2143,15 +2163,6 @@ export default function StoreDetail() {
                   isClearable={false}
                 />
               </div>
-              <Input
-                label={t('stores.fieldMaxStaff')}
-                type="number"
-                min="0"
-                value={formData.maxStaff}
-                onChange={(event) => setFormData((p) => ({ ...p, maxStaff: event.target.value }))}
-                placeholder={t('stores.placeholderMaxStaff')}
-                disabled={formSaving}
-              />
             </>
           )}
         </div>

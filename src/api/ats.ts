@@ -482,11 +482,18 @@ export async function getInterviewNotifications(interviewId: number): Promise<In
   return (data.data.logs ?? []) as InterviewNotificationLog[];
 }
 
-export async function retryInterviewNotification(
+export async function sendInterviewEmail(
   interviewId: number,
-  logId: number,
-): Promise<void> {
-  await apiClient.post(`/ats/interviews/${interviewId}/notifications/retry`, { logId });
+  logId?: number,
+  channel?: 'email' | 'in_app',
+  recipientType?: 'interviewer' | 'candidate',
+): Promise<{ success: boolean; recipientName?: string; recipientEmail?: string }> {
+  const { data } = await apiClient.post(`/ats/interviews/${interviewId}/notifications/send`, {
+    logId,
+    channel,
+    recipientType,
+  });
+  return data.data || { success: true };
 }
 
 // ---------------------------------------------------------------------------

@@ -226,6 +226,8 @@ export function StoreList() {
       render: <TimezoneOptionContent timezone={timezone} />,
     }));
   }, [browserTimezone, formData.timezone]);
+  const activeEmployeeCount = editingStore?.employeeCount ?? 0;
+  const maxCapacityLabel = editingStore?.maxStaff != null ? String(editingStore.maxStaff) : '—';
 
   const loadStores = async () => {
     setLoading(true);
@@ -1825,6 +1827,23 @@ export function StoreList() {
             }}
           />
           <div style={{ display: 'grid', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                {t('stores.fieldMaxStaff')}
+              </label>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                {activeEmployeeCount} / {maxCapacityLabel}
+              </span>
+            </div>
+            <Input
+              type="number"
+              min="0"
+              value={formData.maxStaff}
+              onChange={(e) => setFormData((prev) => ({ ...prev, maxStaff: e.target.value }))}
+              placeholder={t('stores.placeholderMaxStaff')}
+            />
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
             <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
               {t('stores.fieldTimezone', 'Timezone')}
             </label>
@@ -1842,14 +1861,6 @@ export function StoreList() {
               isClearable={false}
             />
           </div>
-          <Input
-            label={t('stores.fieldMaxStaff')}
-            type="number"
-            min="0"
-            value={formData.maxStaff}
-            onChange={(e) => setFormData((prev) => ({ ...prev, maxStaff: e.target.value }))}
-            placeholder={t('stores.placeholderMaxStaff')}
-          />
             </>
           )}
         </div>

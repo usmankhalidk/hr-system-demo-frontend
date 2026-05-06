@@ -25,6 +25,7 @@ import {
   User2,
   Users,
   Wallet,
+  ChevronDown,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { Country } from 'country-state-city';
@@ -44,7 +45,7 @@ import { CitySelect, CountrySelect, StateSelect } from '../../components/locatio
 import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl, getResumeUrl } from '../../api/client';
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
-import { getEmployees } from '../../api/employees';
+import { getEmployees, createEmployee } from '../../api/employees';
 import { getNotificationSettings, type NotificationSetting } from '../../api/documents';
 import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
@@ -53,7 +54,7 @@ import {
   getCandidates, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
   getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
-  getInterviewNotifications, retryInterviewNotification,
+  getInterviewNotifications, sendInterviewEmail,
   getAlerts, getRisks,
   previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
@@ -210,6 +211,18 @@ function fmtDate(iso: string) {
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function fmtRelativeTime(iso: string) {
@@ -853,26 +866,6 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
           <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
             <span style={{ fontWeight: 700 }}>{t('ats.jobType_parttime')}</span>
             <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.parttimeHint', 'Flexible reduced hours')}</span>
-          </div>
-        ),
-      },
-      {
-        value: 'contract',
-        label: t('ats.jobType_contract'),
-        render: (
-          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
-            <span style={{ fontWeight: 700 }}>{t('ats.jobType_contract')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.contractHint', 'Fixed term or project scope')}</span>
-          </div>
-        ),
-      },
-      {
-        value: 'internship',
-        label: t('ats.jobType_internship'),
-        render: (
-          <div style={{ display: 'grid', gap: 1, textAlign: 'left' }}>
-            <span style={{ fontWeight: 700 }}>{t('ats.jobType_internship')}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{t('ats.internshipHint', 'Training and mentorship track')}</span>
           </div>
         ),
       },
@@ -1910,7 +1903,7 @@ interface CandidateModalProps {
   smtpConfigured: boolean | null;
   onClose: () => void;
   onAdvance: (status: CandidateStatus) => Promise<void>;
-  onReject: () => Promise<void>;
+  onReject: (reason?: string) => Promise<void>;
   onDelete: () => Promise<void>;
   saving: boolean;
 }
@@ -1928,17 +1921,21 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [intDate, setIntDate] = useState('');
   const [intTime, setIntTime] = useState('09:00');
   const [intLocation, setIntLocation] = useState('');
-  const [intType, setIntType] = useState<'phone' | 'in_person'>('in_person');
+  const [intType, setIntType] = useState<'phone' | 'in_person'>(candidate.status === 'phone_interview' ? 'phone' : 'in_person');
   const [intDescription, setIntDescription] = useState('');
   const [intDuration, setIntDuration] = useState<number | ''>('');
   const [intInterviewerId, setIntInterviewerId] = useState<string | null>(null);
   const [intSendIcs, setIntSendIcs] = useState(false);
   const [savingInt, setSavingInt] = useState(false);
+  const [interviewerUsers, setInterviewerUsers] = useState<Employee[]>([]);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
   const [interviewFeedback, setInterviewFeedback] = useState<Record<number, InterviewFeedbackComment[]>>({});
   const [savingFeedbackId, setSavingFeedbackId] = useState<number | null>(null);
   const [deletingFeedbackId, setDeletingFeedbackId] = useState<number | null>(null);
   const [interviewNotifications, setInterviewNotifications] = useState<Record<number, InterviewNotificationLog[]>>({});
+  const [resumeFileSizeLabel, setResumeFileSizeLabel] = useState<string | null>(null);
+  const [hoveredFeedbackId, setHoveredFeedbackId] = useState<number | null>(null);
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false);
 
   // Load notification logs for interviews
   const loadInterviewNotifications = useCallback(async (interviewIds: number[]) => {
@@ -1970,15 +1967,29 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
   }, [interviews, loadInterviewNotifications]);
 
-  // Retry failed notification
-  const handleRetryNotification = async (interviewId: number, logId: number) => {
+  // Send/Resend notification or email
+  const handleRetryNotification = async (
+    interviewId: number,
+    logId?: number,
+    channel?: 'email' | 'in_app',
+    recipientType?: 'interviewer' | 'candidate',
+  ) => {
     try {
-      await retryInterviewNotification(interviewId, logId);
+      const result = await sendInterviewEmail(interviewId, logId, channel, recipientType);
       // Reload notification logs for this interview
       await loadInterviewNotifications([interviewId]);
-      showToast(t('ats.notificationRetried'), 'success');
+      
+      // Show success message with recipient info
+      const channelLabel = channel === 'email' ? t('ats.email', 'Email') : t('ats.notification', 'Notification');
+      const actionLabel = logId ? t('common.resent', 'resent') : t('common.sent', 'sent');
+      const recipientInfo = result.recipientName 
+        ? ` to ${result.recipientName}${result.recipientEmail ? ` (${result.recipientEmail})` : ''}`
+        : '';
+      
+      showToast(`${channelLabel} ${actionLabel}${recipientInfo}`, 'success');
     } catch (err) {
-      showToast(t('ats.notificationRetryError'), 'error');
+      const channelLabel = channel === 'email' ? t('ats.email', 'Email') : t('ats.notification', 'Notification');
+      showToast(`${t('common.error', 'Error')} sending ${channelLabel.toLowerCase()}`, 'error');
     }
   };
   const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
@@ -2020,7 +2031,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const next = NEXT_STAGE[candidate.status];
 
   const interviewerOptions = useMemo<SelectOption[]>(() => {
-    return employees
+    return interviewerUsers
       .filter((emp) => ['hr', 'area_manager', 'store_manager'].includes(emp.role))
       .map((emp) => {
         const fullName = `${emp.name} ${emp.surname}`.trim();
@@ -2079,9 +2090,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           ),
         };
       });
-  }, [employees, t]);
+  }, [interviewerUsers, t]);
 
   const resumePath = candidate.resumePath || candidate.cvPath;
+  const defaultInterviewType = candidate.status === 'phone_interview' ? 'phone' : 'in_person';
 
   // Extract only the relative path from cvs/ or public-cv/ onwards
   const displayResumePath = resumePath 
@@ -2114,6 +2126,29 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       day: 'numeric',
     });
   };
+  useEffect(() => {
+    let cancelled = false;
+    setResumeFileSizeLabel(null);
+
+    const url = getResumeUrl(resumePath);
+    if (!url) return () => { cancelled = true; };
+
+    void fetch(url, { method: 'HEAD' })
+      .then((response) => {
+        if (cancelled || !response.ok) return;
+        const sizeHeader = response.headers.get('content-length');
+        const sizeValue = sizeHeader ? Number(sizeHeader) : Number.NaN;
+        if (!Number.isFinite(sizeValue) || sizeValue <= 0) return;
+        setResumeFileSizeLabel(formatFileSize(sizeValue));
+      })
+      .catch(() => {
+        if (!cancelled) setResumeFileSizeLabel(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resumePath]);
 
   useEffect(() => {
     let active = true;
@@ -2141,6 +2176,36 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       active = false;
     };
   }, [candidate.id]);
+
+  useEffect(() => {
+    let active = true;
+    const localEligible = employees.filter((emp) => (
+      ['hr', 'area_manager', 'store_manager'].includes(emp.role)
+      && emp.companyId === candidate.companyId
+      && emp.status === 'active'
+    ));
+
+    if (localEligible.length > 0) {
+      setInterviewerUsers(localEligible);
+      return () => {
+        active = false;
+      };
+    }
+
+    getEmployees({ targetCompanyId: candidate.companyId, status: 'active', includeStoreTerminals: false, limit: 500 })
+      .then((res) => {
+        if (!active) return;
+        setInterviewerUsers(res.employees ?? []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setInterviewerUsers([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [candidate.companyId, employees]);
 
   useEffect(() => {
     setTagsDraft(splitCandidateTags(candidate.tags).userTags);
@@ -2247,10 +2312,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
     setSavingRejection(true);
     try {
-      await updateCandidateStage(candidate.id, 'rejected', rejectionReason.trim());
+      await onReject(rejectionReason.trim());
       setShowRejectionModal(false);
       setRejectionReason('');
-      onReject(); // Call parent handler to refresh
       showToast(t('ats.candidateRejected', 'Candidate rejected'), 'success');
     } catch {
       showToast(t('ats.rejectionError', 'Failed to reject candidate'), 'error');
@@ -2308,7 +2372,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       setShowInterviewForm(false);
       setEditingInterviewId(null);
       setIntDate(''); setIntTime('09:00'); setIntLocation('');
-      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
+      setIntType(defaultInterviewType); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
     } catch (err) {
       showToast(t('ats.interviewError'), 'error');
     } finally {
@@ -2316,15 +2380,83 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
   };
 
+  const prepareNewInterviewForm = () => {
+    setEditingInterviewId(null);
+    setIntDate('');
+    setIntTime('09:00');
+    setIntLocation('');
+    setIntType(defaultInterviewType);
+    setIntDescription('');
+    setIntDuration('');
+    setIntInterviewerId(null);
+    setIntSendIcs(false);
+    setShowInterviewForm(true);
+  };
+
+  const resetInterviewForm = () => {
+    setShowInterviewForm(false);
+    setEditingInterviewId(null);
+    setIntDate('');
+    setIntTime('09:00');
+    setIntLocation('');
+    setIntType(defaultInterviewType);
+    setIntDescription('');
+    setIntDuration('');
+    setIntInterviewerId(null);
+    setIntSendIcs(false);
+  };
+
+  const renderInterviewStatusChip = (
+    interviewId: number,
+    label: string,
+    log: InterviewNotificationLog | null,
+  ) => {
+    const statusMap: Record<InterviewNotificationLog['status'], { label: string; color: string; bg: string }> = {
+      pending: { label: 'pending', color: '#6b7280', bg: 'rgba(107,114,128,0.10)' },
+      sending: { label: 'sending', color: '#b45309', bg: 'rgba(180,83,9,0.10)' },
+      done: { label: 'sent', color: '#15803d', bg: 'rgba(21,128,61,0.10)' },
+      error: { label: 'error', color: '#dc2626', bg: 'rgba(220,38,38,0.10)' },
+    };
+
+    const current = log ? statusMap[log.status] : { label: 'not sent', color: '#6b7280', bg: 'rgba(107,114,128,0.08)' };
+
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 999, background: current.bg, color: current.color, fontSize: 10.5, fontWeight: 700 }}>
+        {label}: {current.label}
+        <button
+          type="button"
+          onClick={() => { if (log) void handleRetryNotification(interviewId, log.id); }}
+          disabled={!log}
+          title={t('common.resend', 'Resend')}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            marginLeft: 2,
+            cursor: log ? 'pointer' : 'not-allowed',
+            color: current.color,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <RotateCcw size={10} />
+        </button>
+      </span>
+    );
+  };
+
   return (
     <>
-      <ModalBackdrop onClose={onClose} width={580}>
+      <ModalBackdrop onClose={onClose} width={680}>
         {/* Gradient header */}
         <div style={{
           background: `linear-gradient(135deg, ${stageColor}18 0%, ${stageColor}08 100%)`,
           borderBottom: `3px solid ${stageColor}`,
           padding: '16px 24px 16px',
-          position: 'relative',
+          position: 'sticky',
+          top: 0,
+          zIndex: 2,
         }}>
           <button onClick={onClose} style={{
             position: 'absolute', top: 16, right: 16,
@@ -2415,7 +2547,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             </div>
 
             {/* Contact Grid with Icons */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
               {candidate.email && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 14 }}>📧</span>
@@ -2436,7 +2568,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
                       {t('ats.phone', 'Phone')}
                     </div>
-                    <a href={`tel:${candidate.phone}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>
+                    <a href={`tel:${candidate.phone}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
                       {candidate.phone}
                     </a>
                   </div>
@@ -2454,12 +2586,34 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 </div>
               </div>
             </div>
-            
+
+            {candidate.coverLetter && (
+              <div style={{ marginBottom: 12, border: '1px solid var(--border)', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
+                <div
+                  onClick={() => setCoverLetterOpen(!coverLetterOpen)}
+                  style={{ cursor: 'pointer', listStyle: 'none', padding: '12px 14px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <span>✉️ {t('ats.coverLetter', 'Cover Letter')}</span>
+                  <ChevronDown size={16} style={{ transform: coverLetterOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease', color: 'var(--text-muted)' }} />
+                </div>
+                {coverLetterOpen && (
+                  <div style={{ padding: '0 14px 14px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap', borderTop: '1px solid var(--border)' }}>
+                    {candidate.coverLetter}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Resume/CV - Smaller Icon */}
             {displayResumePath && (
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
-                  📄 {t('ats.resume', 'Resume / CV')}
+              <div style={{ marginTop: 4, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                  <span>📄 {t('ats.resume', 'Resume / CV')}</span>
+                  {resumeFileSizeLabel && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>
+                      {resumeFileSizeLabel}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}>
                   {/* Smaller Document Icon */}
@@ -2510,23 +2664,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* Cover Letter (if exists) */}
-          {candidate.coverLetter && (
-            <div style={{
-              border: '1px solid var(--border)',
-              borderRadius: 12,
-              background: '#fff',
-              padding: '14px 16px',
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-                ✉️ {t('ats.coverLetter', 'Cover Letter')}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                {candidate.coverLetter}
-              </div>
-            </div>
-          )}
 
           {/* Job Post Details - Enhanced */}
           {appliedJob && (
@@ -3181,6 +3318,22 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             )}
           </div>
 
+          {candidate.status === 'rejected' && candidate.rejectionReason && (
+            <div style={{
+              border: '1px solid #FCA5A5',
+              background: '#FEF2F2',
+              borderRadius: 10,
+              padding: '10px 12px',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#991B1B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                {t('ats.rejectionReason', 'Rejection reason')}
+              </div>
+              <div style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                {candidate.rejectionReason}
+              </div>
+            </div>
+          )}
+
           {/* Interviews section */}
           {(candidate.status === 'interview' || candidate.status === 'phone_interview' || interviews.length > 0) && (
             <div>
@@ -3194,7 +3347,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   )}
                 </div>
                 {canEdit && !showInterviewForm && (
-                  <Button variant="secondary" size="sm" onClick={() => setShowInterviewForm(true)}>
+                  <Button variant="secondary" size="sm" onClick={prepareNewInterviewForm}>
                     + {t('ats.addInterview')}
                   </Button>
                 )}
@@ -3221,8 +3374,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     />
                   </div>
                   
-                  {/* Interview Type and Interviewer */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {/* Interview Type and Duration */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
                         {t('ats.interviewType')}
@@ -3241,31 +3394,11 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                           background: 'var(--background)' 
                         }}
                       >
-                        <option value="in_person">🤝 {t('ats.inPersonInterview')}</option>
                         <option value="phone">📞 {t('ats.phoneInterview')}</option>
+                        <option value="in_person">🤝 {t('ats.inPersonInterview')}</option>
                       </select>
                     </div>
                     
-                    <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        {t('ats.interviewer')}
-                      </label>
-                      <CustomSelect
-                        value={intInterviewerId}
-                        onChange={setIntInterviewerId}
-                        options={interviewerOptions}
-                        placeholder={t('ats.selectInterviewer')}
-                        searchable
-                        isClearable
-                        highlightSelected
-                        controlMinHeight={36}
-                        noOptionsMessage={t('ats.noInterviewerResults', 'No interviewers found')}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Duration and Location */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
                         {t('ats.duration')} (min)
@@ -3288,16 +3421,31 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         }} 
                       />
                     </div>
-                    <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        {t('ats.interviewLocation')}
-                      </label>
-                      <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
-                        placeholder={t('ats.interviewLocationPlaceholder')}
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                    </div>
                   </div>
-                  
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                      {t('ats.interviewer')}
+                    </label>
+                    <CustomSelect
+                      value={intInterviewerId}
+                      onChange={setIntInterviewerId}
+                      options={interviewerOptions}
+                      placeholder={t('ats.selectInterviewer')}
+                      searchable
+                      isClearable
+                      highlightSelected
+                      controlMinHeight={36}
+                      noOptionsMessage={t('ats.noInterviewerResults', 'No interviewers found')}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                      {t('ats.interviewLocation')}
+                    </label>
+                    <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
+                      placeholder={t('ats.interviewLocationPlaceholder')}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
+                  </div>
                   {/* Description */}
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
@@ -3336,10 +3484,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <Button variant="secondary" size="sm" type="button" onClick={() => {
-                      setShowInterviewForm(false);
-                      setEditingInterviewId(null);
-                      setIntDate(''); setIntTime('09:00'); setIntLocation('');
-                      setIntType('in_person'); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
+                      resetInterviewForm();
                     }}>
                       {t('common.cancel')}
                     </Button>
@@ -3366,6 +3511,13 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 const statusLabel = isPast ? t('ats.interviewPast', 'Past') : t('ats.interviewUpcoming', 'Upcoming');
                 const statusColor = isPast ? '#6b7280' : '#059669';
                 const statusBg = isPast ? 'rgba(107, 114, 128, 0.1)' : 'rgba(5, 150, 105, 0.1)';
+                const interviewer = iv.interviewerId ? interviewerUsers.find((emp) => emp.id === iv.interviewerId) ?? null : null;
+                const interviewerName = interviewer ? `${interviewer.name} ${interviewer.surname}`.trim() : t('ats.interviewer', 'Interviewer');
+                const interviewerAvatar = interviewer ? getAvatarUrl(interviewer.avatarFilename) : null;
+                const interviewerRole = interviewer ? t(`roles.${interviewer.role}`, interviewer.role) : null;
+                const emailLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'interviewer' && log.channel === 'email') ?? null;
+                const notificationLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'interviewer' && log.channel !== 'email') ?? null;
+                const candidateEmailLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'candidate' && log.channel === 'email') ?? null;
                 
                 return (
                   <div key={iv.id} style={{
@@ -3392,97 +3544,254 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             {statusLabel}
                           </span>
                         </div>
-                        {iv.location && (
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>📍 {iv.location}</div>
-                        )}
-                        
-                        {/* Interview Type and Duration */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                          <span style={{ 
-                            fontSize: 11, 
-                            color: 'var(--text-muted)', 
-                            background: 'var(--surface)', 
-                            padding: '2px 6px', 
-                            borderRadius: 4 
-                          }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+                          {iv.location && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                              📍 {iv.location}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
                             {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
                           </span>
                           {iv.durationMinutes && (
-                            <span style={{ 
-                              fontSize: 11, 
-                              color: 'var(--text-muted)', 
-                              background: 'var(--surface)', 
-                              padding: '2px 6px', 
-                              borderRadius: 4 
-                            }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
                               ⏱ {iv.durationMinutes}min
                             </span>
                           )}
                         </div>
-                        
-                        {/* Description */}
-                        {iv.description && (
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
-                            {iv.description}
-                          </div>
-                        )}
-                        
-                        {/* Notification Status */}
-                        {interviewNotifications[iv.id] && interviewNotifications[iv.id].length > 0 && (
-                          <div style={{ marginTop: 8, padding: '8px', background: 'var(--surface)', borderRadius: 6 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                              📧 Notifications
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              {interviewNotifications[iv.id].map((log) => {
-                                const statusIcon = {
-                                  pending: '⏳',
-                                  sending: '🔄',
-                                  done: '✅',
-                                  error: '❌'
-                                }[log.status];
-                                
-                                const statusColor = {
-                                  pending: '#6b7280',
-                                  sending: '#f59e0b',
-                                  done: '#10b981',
-                                  error: '#ef4444'
-                                }[log.status];
-                                
-                                return (
-                                  <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                                    <span style={{ color: statusColor }}>{statusIcon}</span>
-                                    <span style={{ color: 'var(--text-muted)' }}>
-                                      {log.recipientType === 'candidate' ? 'Candidate' : 'Interviewer'} ({log.channel})
-                                    </span>
-                                    {log.status === 'error' && (
-                                      <>
-                                        <button
-                                          onClick={() => handleRetryNotification(iv.id, log.id)}
-                                          style={{
-                                            background: 'none',
-                                            border: 'none',
-                                            color: '#3b82f6',
-                                            fontSize: 11,
-                                            cursor: 'pointer',
-                                            textDecoration: 'underline'
-                                          }}
-                                        >
-                                          Retry
-                                        </button>
-                                        {log.errorMessage && (
-                                          <span style={{ color: '#ef4444', fontSize: 10 }}>
-                                            {log.errorMessage}
-                                          </span>
-                                        )}
-                                      </>
-                                    )}
+
+                        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                          {interviewer && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', background: interviewerAvatar ? 'transparent' : 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                                  {interviewerAvatar ? (
+                                    <img src={interviewerAvatar} alt={interviewerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : initials(interviewerName)}
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{interviewerName}</div>
+                                  {interviewerRole && (
+                                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{interviewerRole}</div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Candidate, Email and Notification status columns side-by-side */}
+                              <div style={{ display: 'flex', gap: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                {/* Candidate Email Status */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                      <User2 size={11} /> {t('ats.candidateEmail', 'Candidate')}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                                      <span 
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                          background: smtpConfigured === false
+                                            ? 'rgba(107,114,128,0.08)'
+                                            : !candidateEmailLog
+                                              ? 'rgba(107,114,128,0.08)'
+                                              : candidateEmailLog.status === 'done'
+                                                ? 'rgba(21,128,61,0.1)'
+                                                : candidateEmailLog.status === 'error'
+                                                  ? 'rgba(220,38,38,0.1)'
+                                                  : 'rgba(107,114,128,0.1)',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !candidateEmailLog
+                                              ? '#6b7280'
+                                              : candidateEmailLog.status === 'done'
+                                                ? '#15803d'
+                                                : candidateEmailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          fontWeight: 600,
+                                          cursor: smtpConfigured === false ? 'help' : 'default',
+                                        }}
+                                        title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : candidateEmailLog?.errorMessage || ''}
+                                      >
+                                        {smtpConfigured === false
+                                          ? '⊗ Disabled'
+                                          : !candidateEmailLog
+                                            ? '• Not sent'
+                                            : candidateEmailLog.status === 'done'
+                                              ? '✓ Sent'
+                                              : candidateEmailLog.status === 'error'
+                                                ? '✗ Error'
+                                                : candidateEmailLog.status === 'sending'
+                                                  ? '⟳ Sending'
+                                                  : '⏳ Pending'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRetryNotification(iv.id, candidateEmailLog?.id, 'email', 'candidate')}
+                                        disabled={smtpConfigured === false}
+                                        title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : candidateEmailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                        style={{
+                                          background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !candidateEmailLog
+                                              ? '#6b7280'
+                                              : candidateEmailLog.status === 'done'
+                                                ? '#15803d'
+                                                : candidateEmailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
+                                        }}
+                                      >
+                                        <RotateCcw size={10} />
+                                      </button>
+                                    </div>
                                   </div>
-                                );
-                              })}
+
+                                {/* Interviewer Email Status */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                      📧 {t('ats.interviewerEmail', 'Interviewer')}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                                      <span 
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                          background: smtpConfigured === false
+                                            ? 'rgba(107,114,128,0.08)'
+                                            : !emailLog
+                                              ? 'rgba(107,114,128,0.08)'
+                                              : emailLog.status === 'done'
+                                                ? 'rgba(21,128,61,0.1)'
+                                                : emailLog.status === 'error'
+                                                  ? 'rgba(220,38,38,0.1)'
+                                                  : 'rgba(107,114,128,0.1)',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !emailLog
+                                              ? '#6b7280'
+                                              : emailLog.status === 'done'
+                                                ? '#15803d'
+                                                : emailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          fontWeight: 600,
+                                          cursor: smtpConfigured === false ? 'help' : 'default',
+                                        }}
+                                        title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : emailLog?.errorMessage || ''}
+                                      >
+                                        {smtpConfigured === false
+                                          ? '⊗ Disabled'
+                                          : !emailLog
+                                            ? '• Not sent'
+                                            : emailLog.status === 'done'
+                                              ? '✓ Sent'
+                                              : emailLog.status === 'error'
+                                                ? '✗ Error'
+                                                : emailLog.status === 'sending'
+                                                  ? '⟳ Sending'
+                                                  : '⏳ Pending'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRetryNotification(iv.id, emailLog?.id, 'email', 'interviewer')}
+                                        disabled={smtpConfigured === false}
+                                        title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : emailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                        style={{
+                                          background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !emailLog
+                                              ? '#6b7280'
+                                              : emailLog.status === 'done'
+                                                ? '#15803d'
+                                                : emailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
+                                        }}
+                                      >
+                                        <RotateCcw size={10} />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                {/* Notification Status */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                      🔔 {t('ats.notification', 'Notification')}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                                      <span 
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                          background: interviewInviteEnabled === false
+                                            ? 'rgba(107,114,128,0.08)'
+                                            : !notificationLog
+                                              ? 'rgba(107,114,128,0.08)'
+                                              : notificationLog.status === 'done'
+                                                ? 'rgba(21,128,61,0.1)'
+                                                : notificationLog.status === 'error'
+                                                  ? 'rgba(220,38,38,0.1)'
+                                                  : 'rgba(107,114,128,0.1)',
+                                          color: interviewInviteEnabled === false
+                                            ? '#9ca3af'
+                                            : !notificationLog
+                                              ? '#6b7280'
+                                              : notificationLog.status === 'done'
+                                                ? '#15803d'
+                                                : notificationLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          fontWeight: 600,
+                                          cursor: interviewInviteEnabled === false ? 'help' : 'default',
+                                        }}
+                                        title={interviewInviteEnabled === false ? 'Notification functionality is disabled. Please enable "Interview Invite" notification in Company Settings → Notifications to send in-app notifications.' : notificationLog?.errorMessage || ''}
+                                      >
+                                        {interviewInviteEnabled === false
+                                          ? '⊗ Disabled'
+                                          : !notificationLog
+                                            ? '• Not sent'
+                                            : notificationLog.status === 'done'
+                                              ? '✓ Sent'
+                                              : notificationLog.status === 'error'
+                                                ? '✗ Error'
+                                                : notificationLog.status === 'sending'
+                                                  ? '⟳ Sending'
+                                                  : '⏳ Pending'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRetryNotification(iv.id, notificationLog?.id, 'in_app', 'interviewer')}
+                                        disabled={interviewInviteEnabled === false}
+                                        title={interviewInviteEnabled === false ? 'Notifications are disabled. Enable in Settings to send.' : notificationLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                        style={{
+                                          background: 'none', border: 'none', padding: '2px 4px', cursor: interviewInviteEnabled === false ? 'not-allowed' : 'pointer',
+                                          color: interviewInviteEnabled === false
+                                            ? '#9ca3af'
+                                            : !notificationLog
+                                              ? '#6b7280'
+                                              : notificationLog.status === 'done'
+                                                ? '#15803d'
+                                                : notificationLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: interviewInviteEnabled === false ? 0.4 : 0.7, fontSize: 10,
+                                        }}
+                                      >
+                                        <RotateCcw size={10} />
+                                      </button>
+                                    </div>
+                                  </div>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+
+                          {iv.description && (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                              {iv.description}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       {canEdit && (
                         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -3556,9 +3865,13 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             <div key={comment.id} style={{
                               background: 'var(--background)',
                               borderRadius: 8,
-                              padding: '8px 10px',
+                              padding: '8px 10px 28px',
                               border: '1px solid var(--border)',
-                            }}>
+                              position: 'relative',
+                            }}
+                              onMouseEnter={() => setHoveredFeedbackId(comment.id)}
+                              onMouseLeave={() => setHoveredFeedbackId(null)}
+                            >
                               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
@@ -3588,47 +3901,37 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                         <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                       ) : initials(authorName)}
                                     </div>
-                                    {canDelete && (
-                                      <button
-                                        onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id, comment.authorId)}
-                                        disabled={deletingFeedbackId === comment.id}
-                                        style={{
-                                          background: 'rgba(220,38,38,0.08)',
-                                          border: '1px solid rgba(185,28,28,0.24)',
-                                          borderRadius: 6,
-                                          width: 20,
-                                          height: 20,
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
-                                          opacity: deletingFeedbackId === comment.id ? 0.5 : 1,
-                                        }}
-                                        title={t('common.delete', 'Delete')}
-                                      >
-                                        <Trash2 size={10} color="#991b1b" />
-                                      </button>
-                                    )}
                                   </div>
-                                  {comment.authorRole && (
-                                    <span style={{
-                                      fontSize: 9,
-                                      fontWeight: 600,
-                                      color: 'var(--text-muted)',
-                                      background: 'var(--surface)',
-                                      padding: '1px 5px',
-                                      borderRadius: 4,
-                                      textTransform: 'uppercase',
-                                      letterSpacing: '0.03em',
-                                    }}>
-                                      {t(`roles.${comment.authorRole}`, comment.authorRole)}
-                                    </span>
-                                  )}
                                   <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
                                     {fmtDateTime(comment.createdAt)}
                                   </div>
                                 </div>
                               </div>
+                              {canDelete && (
+                                <button
+                                  onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id, comment.authorId)}
+                                  disabled={deletingFeedbackId === comment.id}
+                                  style={{
+                                    position: 'absolute',
+                                    right: 8,
+                                    bottom: 8,
+                                    background: hoveredFeedbackId === comment.id ? 'rgba(220,38,38,0.08)' : 'transparent',
+                                    border: '1px solid rgba(185,28,28,0.24)',
+                                    borderRadius: 6,
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                    opacity: hoveredFeedbackId === comment.id ? 1 : 0,
+                                    transition: 'opacity 0.15s ease, background 0.15s ease',
+                                  }}
+                                  title={t('common.delete', 'Delete')}
+                                >
+                                  <Trash2 size={10} color="#991b1b" />
+                                </button>
+                              )}
                             </div>
                           );
                         })}
@@ -4520,6 +4823,19 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [interviewInviteEnabled, setInterviewInviteEnabled] = useState<boolean | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
+  // Employee creation on hire
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [employeeEmail, setEmployeeEmail] = useState('');
+  const [employeeData, setEmployeeData] = useState<{
+    name: string;
+    surname: string;
+    personalEmail: string;
+    role: string;
+    companyId: number;
+    storeId: number | null;
+  } | null>(null);
+  const [creatingEmployee, setCreatingEmployee] = useState(false);
+
   const hasMultiCompanyScope = (allowedCompanyIds?.length ?? 0) > 1;
   const effectiveCompanyId = hasMultiCompanyScope
     ? undefined
@@ -4538,18 +4854,27 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
       
       // Load notification settings and SMTP config
       if (effectiveCompanyId) {
-        try {
-          const [notifSettings, emailConfig] = await Promise.all([
-            getNotificationSettings(effectiveCompanyId),
-            getEmailConfig(),
-          ]);
-          const interviewInviteSetting = notifSettings.find((s: NotificationSetting) => s.eventKey === 'ats.interview_invite');
-          setInterviewInviteEnabled(interviewInviteSetting?.enabled ?? null);
-          setSmtpConfigured(emailConfig?.config?.smtpHost ? true : false);
-        } catch {
+        const [notifResult, emailResult] = await Promise.allSettled([
+          getNotificationSettings(effectiveCompanyId),
+          getEmailConfig(),
+        ]);
+
+        if (notifResult.status === 'fulfilled') {
+          const interviewInviteSetting = notifResult.value.find((s: NotificationSetting) => s.eventKey === 'ats.interview_invite');
+          // Missing row means default-enabled behavior in backend.
+          setInterviewInviteEnabled(interviewInviteSetting?.enabled ?? true);
+        } else {
           setInterviewInviteEnabled(null);
+        }
+
+        if (emailResult.status === 'fulfilled') {
+          setSmtpConfigured(Boolean(emailResult.value?.config?.smtpHost));
+        } else {
           setSmtpConfigured(null);
         }
+      } else {
+        setInterviewInviteEnabled(null);
+        setSmtpConfigured(null);
       }
     } catch { showToast(t('ats.errorLoad'), 'error'); }
     finally { setLoading(false); }
@@ -4599,6 +4924,31 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const handleAdvance = async (status: CandidateStatus) => {
     if (!canEdit) return;
     if (!selected) return;
+    
+    // If moving to hired, prepare employee creation
+    if (status === 'hired') {
+      const candidate = selected;
+      const job = candidate.jobPostingId ? jobs.find((j) => j.id === candidate.jobPostingId) : null;
+      
+      // Parse name
+      const nameParts = candidate.fullName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      // Prepare employee data
+      setEmployeeData({
+        name: firstName,
+        surname: lastName,
+        personalEmail: candidate.email || '',
+        role: job?.targetRole || 'employee',
+        companyId: candidate.companyId,
+        storeId: candidate.storeId,
+      });
+      setEmployeeEmail('');
+      setShowEmployeeModal(true);
+      return; // Don't update stage yet, wait for employee creation
+    }
+    
     setSaving(true);
     try {
       const updated = await updateCandidateStage(selected.id, status);
@@ -4610,12 +4960,51 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
     } finally { setSaving(false); }
   };
 
-  const handleReject = async () => {
+  const handleCreateEmployeeFromCandidate = async () => {
+    if (!employeeEmail.trim()) {
+      showToast(t('ats.companyEmailRequired', 'Company email is required'), 'error');
+      return;
+    }
+    if (!employeeData || !selected) return;
+
+    setCreatingEmployee(true);
+    try {
+      // Create employee
+      await createEmployee({
+        name: employeeData.name,
+        surname: employeeData.surname,
+        email: employeeEmail.trim(),
+        personalEmail: employeeData.personalEmail,
+        role: employeeData.role as 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal',
+        companyId: employeeData.companyId,
+        storeId: employeeData.storeId || undefined,
+        status: 'active',
+      });
+
+      // Update candidate to hired
+      const updated = await updateCandidateStage(selected.id, 'hired');
+      setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setSelected(updated);
+
+      // Close modal and reset
+      setShowEmployeeModal(false);
+      setEmployeeData(null);
+      setEmployeeEmail('');
+
+      showToast(t('ats.employeeCreatedAndHired', 'Employee created and candidate marked as hired'), 'success');
+    } catch (err) {
+      showToast(translateApiError(err, t, t('ats.errorCreatingEmployee', 'Failed to create employee')) ?? t('ats.errorCreatingEmployee', 'Failed to create employee'), 'error');
+    } finally {
+      setCreatingEmployee(false);
+    }
+  };
+
+  const handleReject = async (reason?: string) => {
     if (!canEdit) return;
     if (!selected) return;
     setSaving(true);
     try {
-      const updated = await updateCandidateStage(selected.id, 'rejected');
+      const updated = await updateCandidateStage(selected.id, 'rejected', reason);
       setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       setSelected(null);
       showToast(t('ats.candidateRejected'), 'success');
@@ -5470,6 +5859,88 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
           onDelete={handleDelete}
           saving={saving}
         />
+      )}
+
+      {showEmployeeModal && employeeData && (
+        <ModalBackdrop onClose={() => !creatingEmployee && setShowEmployeeModal(false)} width={500}>
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '20px 24px',
+          }}>
+            <h3 style={{
+              fontSize: 18,
+              fontWeight: 700,
+              marginBottom: 8,
+              color: 'var(--text)',
+            }}>
+              {t('ats.createEmployee', 'Create Employee')}
+            </h3>
+            <p style={{
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              marginBottom: 20,
+            }}>
+              {t('ats.createEmployeePrompt', 'The candidate will be hired and an employee account will be created. Please provide the company email address.')}
+            </p>
+
+            {/* Pre-filled data display */}
+            <div style={{ marginBottom: 20, padding: '12px', background: 'var(--background)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                {t('ats.employeeDetails', 'Employee Details')}
+              </div>
+              <div style={{ display: 'grid', gap: 6, fontSize: 12 }}>
+                <div><strong>{t('common.firstName', 'First Name')}:</strong> {employeeData.name}</div>
+                <div><strong>{t('common.lastName', 'Last Name')}:</strong> {employeeData.surname}</div>
+                <div><strong>{t('common.personalEmail', 'Personal Email')}:</strong> {employeeData.personalEmail || t('common.notProvided', 'Not provided')}</div>
+                <div><strong>{t('common.role', 'Role')}:</strong> {t(`roles.${employeeData.role}`, employeeData.role)}</div>
+              </div>
+            </div>
+
+            {/* Company email input */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{
+                display: 'block',
+                fontSize: 13,
+                fontWeight: 600,
+                marginBottom: 6,
+                color: 'var(--text)',
+              }}>
+                {t('common.companyEmail', 'Company Email')} <span style={{ color: '#DC2626' }}>*</span>
+              </label>
+              <Input
+                type="email"
+                value={employeeEmail}
+                onChange={(e) => setEmployeeEmail(e.target.value)}
+                placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')}
+                disabled={creatingEmployee}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowEmployeeModal(false);
+                  setEmployeeData(null);
+                  setEmployeeEmail('');
+                }}
+                disabled={creatingEmployee}
+              >
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleCreateEmployeeFromCandidate}
+                loading={creatingEmployee}
+                disabled={!employeeEmail.trim()}
+              >
+                {t('ats.createAndHire', 'Create Employee & Hire')}
+              </Button>
+            </div>
+          </div>
+        </ModalBackdrop>
       )}
     </div>
   );

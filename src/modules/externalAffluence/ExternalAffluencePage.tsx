@@ -680,6 +680,12 @@ function formatDateTime(value: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleString();
 }
+function formatCompactDateTime(value: string | null | undefined): string {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
 
 function formatDateOnly(value: string | null | undefined): string {
   if (!value) return '-';
@@ -1733,7 +1739,10 @@ export default function ExternalAffluencePage() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.9 }}><Building2 size={14} /> {tx.companies}</div>
-            <div style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>{overview?.counts.companies ?? 0}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <Building2 size={18} />
+              <div style={{ fontSize: 30, fontWeight: 800 }}>{overview?.counts.companies ?? 0}</div>
+            </div>
             <button
               type="button"
               onClick={() => openPanel('companies')}
@@ -1771,7 +1780,10 @@ export default function ExternalAffluencePage() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.9 }}><Store size={14} /> {tx.stores}</div>
-            <div style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>{overview?.counts.stores ?? 0}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <Store size={18} />
+              <div style={{ fontSize: 30, fontWeight: 800 }}>{overview?.counts.stores ?? 0}</div>
+            </div>
             <button
               type="button"
               onClick={() => openPanel('stores')}
@@ -1809,7 +1821,10 @@ export default function ExternalAffluencePage() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.92 }}><Users size={14} /> {tx.employees}</div>
-            <div style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>{overview?.counts.employees ?? 0}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <Users size={18} />
+              <div style={{ fontSize: 30, fontWeight: 800 }}>{overview?.counts.employees ?? 0}</div>
+            </div>
             <button
               type="button"
               onClick={() => openPanel('employees')}
@@ -1845,14 +1860,27 @@ export default function ExternalAffluencePage() {
               background: 'linear-gradient(180deg, #ffffff 0%, #f7f5f1 100%)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}><Server size={14} /> {tx.internalDb}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+              <Server size={14} /> {tx.internalDb}
+            </div>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4 }}>
               {overview?.databases.internal.databaseName ?? '-'}
             </div>
             <div style={{ display: 'grid', gap: 4, marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
+              <div><strong style={{ color: 'var(--text-primary)' }}>Status:</strong> {internalConnectionStatus === 'connected' ? tx.connected : internalConnectionStatus === 'connecting' ? tx.connecting : tx.failed}</div>
+              <div><strong style={{ color: 'var(--text-primary)' }}>Name:</strong> {overview?.databases.internal.databaseName ?? '-'}</div>
               <div>{tx.engine}: {overview?.databases.internal.engine ?? 'PostgreSQL'}</div>
-              <div>{tx.tableCount}: {overview?.databases.internal.tableCount ?? 0}</div>
               <div>{tx.checkedAt}: {formatDateTime(overview?.databases.internal.checkedAt)}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 2 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Building2 size={12} color="var(--primary)" />
+                  <strong style={{ color: 'var(--text-primary)' }}>{tx.companies}: {overview?.counts?.companies ?? 0}</strong>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Store size={12} color="var(--accent)" />
+                  <strong style={{ color: 'var(--text-primary)' }}>{tx.stores}: {overview?.counts?.stores ?? 0}</strong>
+                </span>
+              </div>
               <StatusPill
                 status={internalConnectionStatus}
                 connecting={tx.connecting}
@@ -1895,14 +1923,26 @@ export default function ExternalAffluencePage() {
               background: 'linear-gradient(180deg, #ffffff 0%, #f7f5f1 100%)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}><Database size={14} /> {tx.externalDb}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}><Database size={14} /> {tx.externalDb}</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4 }}>
               {overview?.databases.external.databaseName ?? '-'}
             </div>
             <div style={{ display: 'grid', gap: 4, marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
+              <div><strong style={{ color: 'var(--text-primary)' }}>Status:</strong> {externalConnectionStatus === 'connected' ? tx.connected : externalConnectionStatus === 'connecting' ? tx.connecting : tx.failed}</div>
+              <div><strong style={{ color: 'var(--text-primary)' }}>Name:</strong> {overview?.databases.external.databaseName ?? '-'}</div>
               <div>{tx.engine}: {overview?.databases.external.engine ?? 'MySQL'}</div>
               <div>{tx.tableCount}: {overview?.databases.external.tableCount ?? 0}</div>
               <div>{tx.checkedAt}: {formatDateTime(overview?.databases.external.checkedAt)}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 2 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Building2 size={12} color="var(--primary)" />
+                  <strong style={{ color: 'var(--text-primary)' }}>{tx.companies}: {overview?.counts?.companies ?? 0}</strong>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Store size={12} color="var(--accent)" />
+                  <strong style={{ color: 'var(--text-primary)' }}>{tx.stores}: {overview?.counts?.stores ?? 0}</strong>
+                </span>
+              </div>
               <StatusPill
                 status={externalConnectionStatus}
                 connecting={tx.connecting}
@@ -2472,18 +2512,53 @@ export default function ExternalAffluencePage() {
                   <tr key={row.externalStoreCode} style={{ borderTop: '1px solid var(--border-light)' }}>
                     <td style={{ padding: 9, fontSize: 13, fontFamily: 'monospace' }}>{row.externalStoreCode}</td>
                     <td style={{ padding: 9, fontSize: 13 }}>{row.storeName ?? '-'}</td>
-                    <td style={{ padding: 9, fontSize: 13 }}>{row.companyName ?? '-'}</td>
+                    <td style={{ padding: 9, fontSize: 13 }}>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <Building2 size={12} color="var(--primary)" />
+                          <span>{row.companyName ?? '-'}</span>
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Store size={12} color="var(--muted)" />
+                          <span>{row.storeName ?? '-'}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{row.externalStoreCode}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: 9, fontSize: 13 }}>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <Building2 size={12} color="var(--primary)" />
+                          <span>{row.companyName ?? '-'}</span>
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Store size={12} color="var(--muted)" />
+                          <span>{row.storeName ?? '-'}</span>
+                        </div>
+                      </div>
+                    </td>
                     <td style={{ padding: 9, fontSize: 12, color: 'var(--text-secondary)' }}>
-                      {row.availableFromDate && row.availableToDate
-                        ? `${formatDateOnly(row.availableFromDate)} -> ${formatDateOnly(row.availableToDate)} (${row.availableDays ?? 0} ${isItalian ? 'giorni' : 'days'})`
-                        : '-'}
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <div>{row.availableDays ?? 0} {isItalian ? 'giorni' : 'days'}</div>
+                        <div>{row.availableFromDate && row.availableToDate
+                          ? `${formatDateOnly(row.availableFromDate)} -> ${formatDateOnly(row.availableToDate)}`
+                          : '-'}</div>
+                      </div>
                     </td>
                     <td style={{ padding: 9, fontSize: 13 }}>
                       {row.mappedLocalStoreCode ? (
                         <div style={{ display: 'grid', gap: 2 }}>
-                          <span style={{ fontFamily: 'monospace' }}>{row.mappedLocalStoreCode}</span>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <Store size={12} color="var(--accent)" />
+                            <span style={{ fontFamily: 'monospace' }}>{row.mappedLocalStoreCode}</span>
+                          </div>
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                             {tx.localStoreId}: {row.mappedLocalStoreId ?? '-'}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            {tx.integrationBy}: {row.mappedLocalStoreId
+                              ? `${mappingByStore.get(row.mappedLocalStoreId)?.createdByName ?? mappingByStore.get(row.mappedLocalStoreId)?.updatedByName ?? '-'} ${mappingByStore.get(row.mappedLocalStoreId)?.createdBySurname ?? mappingByStore.get(row.mappedLocalStoreId)?.updatedBySurname ?? ''}`.trim()
+                              : '-'}
                           </span>
                         </div>
                       ) : '-'}
@@ -2491,11 +2566,18 @@ export default function ExternalAffluencePage() {
                     <td style={{ padding: 9, fontSize: 13 }}>
                       {row.mappedLocalStoreName ? (
                         <div style={{ display: 'grid', gap: 2 }}>
-                          <span>{row.mappedLocalStoreName}</span>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Building2 size={12} color="var(--primary)" />
+                            <span>{row.mappedLocalStoreName}</span>
+                            <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{row.mappedLocalStoreCode}</span>
+                          </div>
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                             {tx.integrationBy}: {row.mappedLocalStoreId
                               ? `${mappingByStore.get(row.mappedLocalStoreId)?.createdByName ?? mappingByStore.get(row.mappedLocalStoreId)?.updatedByName ?? '-'} ${mappingByStore.get(row.mappedLocalStoreId)?.createdBySurname ?? mappingByStore.get(row.mappedLocalStoreId)?.updatedBySurname ?? ''}`.trim()
                               : '-'}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            {formatCompactDateTime(mappingByStore.get(row.mappedLocalStoreId ?? -1)?.updatedAt ?? null)}
                           </span>
                         </div>
                       ) : '-'}
@@ -2547,40 +2629,94 @@ export default function ExternalAffluencePage() {
                   const integratedAvatar = getAvatarUrl(mapping.createdByAvatarFilename ?? mapping.updatedByAvatarFilename);
                   return (
                   <tr key={mapping.id} style={{ borderTop: '1px solid var(--border-light)', background: idx % 2 === 0 ? 'rgba(13,33,55,0.02)' : '#fff' }}>
-                    <td style={{ padding: 9, fontSize: 13, color: 'var(--text-primary)' }}>{mapping.externalCompanyName ?? '-'}</td>
+                    <td style={{ padding: 9, fontSize: 13, color: 'var(--text-primary)' }}>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Building2 size={12} color="#c9973a" />
+                          <span>{mapping.externalCompanyName ?? '-'}</span>
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Store size={12} color="var(--accent)" />
+                          <span>{mapping.externalStoreName ?? '-'}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{mapping.externalStoreCode}</span>
+                        </div>
+                      </div>
+                    </td>
                     <td style={{ padding: 9, fontSize: 13 }}>
                       <div style={{ display: 'grid', gap: 2 }}>
-                        <span style={{ fontFamily: 'monospace' }}>{mapping.localStoreCode}</span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Building2 size={12} color="#c9973a" />
+                          <span>{mapping.localStoreName ?? '-'}</span>
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Store size={12} color="var(--accent)" />
+                          <span>{mapping.localStoreName ?? '-'}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{mapping.localStoreCode}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: 9, fontSize: 13 }}>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <Store size={12} color="var(--accent)" />
+                          <span style={{ fontFamily: 'monospace' }}>{mapping.localStoreCode}</span>
+                        </div>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tx.localStoreId}: {mapping.localStoreId}</span>
                       </div>
                     </td>
-                    <td style={{ padding: 9, fontSize: 13 }}>{mapping.localStoreName}</td>
-                    <td style={{ padding: 9, fontSize: 13, fontFamily: 'monospace' }}>{mapping.externalStoreCode}</td>
-                    <td style={{ padding: 9, fontSize: 13 }}>{mapping.externalStoreName ?? '-'}</td>
-                    <td style={{ padding: 9, fontSize: 12, color: 'var(--text-secondary)' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: '50%',
-                          overflow: 'hidden',
-                          background: 'rgba(13,33,55,0.14)',
-                          color: '#0D2137',
-                          fontSize: 10,
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}>
-                          {integratedAvatar ? (
-                            <img src={integratedAvatar} alt={integratedName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : integratedName.slice(0, 2).toUpperCase()}
-                        </span>
-                        <span>{integratedName || '-'}</span>
-                      </span>
+                    <td style={{ padding: 9, fontSize: 13 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Building2 size={12} color="var(--primary)" />
+                        <span>{mapping.localStoreName}</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{mapping.localStoreCode}</span>
+                      </div>
                     </td>
-                    <td style={{ padding: 9, fontSize: 13 }}>{formatDateTime(mapping.updatedAt)}</td>
+                    <td style={{ padding: 9, fontSize: 13, fontFamily: 'monospace' }}>{mapping.externalStoreCode}</td>
+                    <td style={{ padding: 9, fontSize: 13 }}>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Store size={12} color="var(--muted)" />
+                          <span>{mapping.externalStoreName ?? '-'}</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{formatCompactDateTime(mapping.updatedAt)}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: 9, fontSize: 13 }}>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            background: 'rgba(13,33,55,0.14)',
+                            color: '#0D2137',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            {integratedAvatar ? (
+                              <img src={integratedAvatar} alt={integratedName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : integratedName.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span>{integratedName || '-'}</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {formatCompactDateTime(mapping.updatedAt)}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ padding: 9, fontSize: 13 }}>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <span>{formatDateTime(mapping.updatedAt)}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {tx.integrationBy}: {integratedName || '-' }
+                        </span>
+                      </div>
+                    </td>
                     <td style={{ padding: 9 }}>
                       <button
                         type="button"
