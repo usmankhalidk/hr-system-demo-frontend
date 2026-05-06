@@ -195,22 +195,22 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
                       </thead>
                       <tbody>
                         {[
-                          { col: 'name', req: true, fmt: 'Text', ex: 'John' },
-                          { col: 'surname', req: true, fmt: 'Text', ex: 'Doe' },
-                          { col: 'email', req: true, fmt: 'Email', ex: 'john.doe@example.com' },
-                          { col: 'role', req: true, fmt: 'admin / hr / area_manager / store_manager / employee', ex: 'employee' },
-                          { col: 'company', req: false, fmt: 'Company name', ex: 'Acme Corp' },
-                          { col: 'store', req: false, fmt: 'Store name', ex: 'Paris Store' },
-                          { col: 'supervisor', req: false, fmt: 'Full name or Email', ex: 'Jane Smith' },
-                          { col: 'department', req: false, fmt: 'Text', ex: 'Sales' },
-                          { col: 'hire date', req: false, fmt: 'YYYY-MM-DD', ex: '2026-05-01' },
-                          { col: 'work schedule', req: false, fmt: 'Full Time / Part Time', ex: 'Full Time' },
-                          { col: 'weekly hours', req: false, fmt: 'Number', ex: '40' },
-                          { col: 'personal email', req: true, fmt: 'Email', ex: 'john.personal@gmail.com' },
-                          { col: 'date of birth', req: false, fmt: 'YYYY-MM-DD', ex: '1990-01-01' },
-                          { col: 'gender', req: false, fmt: 'M / F / Other', ex: 'M' },
-                          { col: 'postal code', req: false, fmt: '5 digits', ex: '00100' },
-                          { col: 'first aid', req: false, fmt: 'YES / NO', ex: 'NO' },
+                          { col: t('employees.bulkImportGuideCols.name', 'name'), req: true, fmt: t('employees.bulkImportGuideFmt.text', 'Text'), ex: 'John' },
+                          { col: t('employees.bulkImportGuideCols.surname', 'surname'), req: true, fmt: t('employees.bulkImportGuideFmt.text', 'Text'), ex: 'Doe' },
+                          { col: t('employees.bulkImportGuideCols.email', 'email'), req: true, fmt: t('employees.bulkImportGuideFmt.email', 'Email'), ex: 'john.doe@example.com' },
+                          { col: t('employees.bulkImportGuideCols.role', 'role'), req: true, fmt: t('employees.bulkImportGuideFmt.role', 'admin / hr / area_manager / store_manager / employee'), ex: 'employee' },
+                          { col: t('employees.bulkImportGuideCols.company', 'company'), req: false, fmt: t('employees.bulkImportGuideFmt.companyName', 'Company name'), ex: 'Acme Corp' },
+                          { col: t('employees.bulkImportGuideCols.store', 'store'), req: false, fmt: t('employees.bulkImportGuideFmt.storeName', 'Store name'), ex: 'Paris Store' },
+                          { col: t('employees.bulkImportGuideCols.supervisor', 'supervisor'), req: false, fmt: t('employees.bulkImportGuideFmt.supervisor', 'Full name or Email'), ex: 'Jane Smith' },
+                          { col: t('employees.bulkImportGuideCols.department', 'department'), req: false, fmt: t('employees.bulkImportGuideFmt.text', 'Text'), ex: 'Sales' },
+                          { col: t('employees.bulkImportGuideCols.hireDate', 'hire date'), req: false, fmt: t('employees.bulkImportGuideFmt.date', 'YYYY-MM-DD'), ex: '2026-05-01' },
+                          { col: t('employees.bulkImportGuideCols.workSchedule', 'work schedule'), req: false, fmt: t('employees.bulkImportGuideFmt.workSchedule', 'Full Time / Part Time'), ex: 'Full Time' },
+                          { col: t('employees.bulkImportGuideCols.weeklyHours', 'weekly hours'), req: false, fmt: t('employees.bulkImportGuideFmt.number', 'Number'), ex: '40' },
+                          { col: t('employees.bulkImportGuideCols.personalEmail', 'personal email'), req: true, fmt: t('employees.bulkImportGuideFmt.email', 'Email'), ex: 'john.personal@gmail.com' },
+                          { col: t('employees.bulkImportGuideCols.dateOfBirth', 'date of birth'), req: false, fmt: t('employees.bulkImportGuideFmt.date', 'YYYY-MM-DD'), ex: '1990-01-01' },
+                          { col: t('employees.bulkImportGuideCols.gender', 'gender'), req: false, fmt: t('employees.bulkImportGuideFmt.gender', 'M / F / Other'), ex: 'M' },
+                          { col: t('employees.bulkImportGuideCols.postalCode', 'postal code'), req: false, fmt: t('employees.bulkImportGuideFmt.digits5', '5 digits'), ex: '00100' },
+                          { col: t('employees.bulkImportGuideCols.firstAid', 'first aid'), req: false, fmt: t('employees.bulkImportGuideFmt.yesNo', 'YES / NO'), ex: 'NO' },
                         ].map((row, i) => (
                           <tr key={row.col} style={{ background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface-warm)', borderBottom: '1px solid var(--border-light)' }}>
                             <td style={{ padding: '6px 12px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>{row.col}</td>

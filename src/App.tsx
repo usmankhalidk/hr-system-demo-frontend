@@ -280,7 +280,7 @@ function AppRoutes() {
       } />
 
       <Route path="/reports" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager']} permissionKey="report">
+        <ProtectedRoute roles={['admin', 'hr']} permissionKey="report">
           <Layout title={t('nav.reports')}><ReportsPage /></Layout>
         </ProtectedRoute>
       } />

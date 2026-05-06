@@ -77,7 +77,8 @@ export const SYSTEM_MODULE_KEYS = [
   'gestione_accessi',
   'impostazioni',
   'automazioni',
-] as const;
+  'report',
+ ] as const;
 
 export type SystemModuleKey = typeof SYSTEM_MODULE_KEYS[number];
 
@@ -95,7 +96,7 @@ export const MODULE_ROLE_ELIGIBILITY: Record<ModuleKey, readonly ManagedRoleKey[
   documenti: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
   ats: ['admin', 'hr', 'area_manager'],
   onboarding: ['admin', 'hr', 'area_manager', 'store_manager', 'employee', 'store_terminal'],
-  report: [],
+  report: ['admin', 'hr'],
   gestione_accessi: ['admin', 'hr', 'area_manager'],
   terminali: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
   notifiche: ['admin', 'hr', 'area_manager', 'store_manager', 'employee'],
