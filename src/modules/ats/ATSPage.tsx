@@ -4975,7 +4975,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         surname: employeeData.surname,
         email: employeeEmail.trim(),
         personalEmail: employeeData.personalEmail,
-        role: employeeData.role,
+        role: employeeData.role as 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal',
         companyId: employeeData.companyId,
         storeId: employeeData.storeId || undefined,
         status: 'active',
