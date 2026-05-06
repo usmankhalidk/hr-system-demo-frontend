@@ -45,7 +45,7 @@ import { CitySelect, CountrySelect, StateSelect } from '../../components/locatio
 import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl, getResumeUrl } from '../../api/client';
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
-import { getEmployees } from '../../api/employees';
+import { getEmployees, createEmployee } from '../../api/employees';
 import { getNotificationSettings, type NotificationSetting } from '../../api/documents';
 import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
@@ -54,7 +54,7 @@ import {
   getCandidates, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
   getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
-  getInterviewNotifications, retryInterviewNotification,
+  getInterviewNotifications, sendInterviewEmail,
   getAlerts, getRisks,
   previewJobTranslation,
   JobPosting, Candidate, Interview, HRAlert, JobRisk,
@@ -1967,19 +1967,29 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
   }, [interviews, loadInterviewNotifications]);
 
-  // Retry failed notification
+  // Send/Resend notification or email
   const handleRetryNotification = async (
     interviewId: number,
     logId?: number,
     channel?: 'email' | 'in_app',
+    recipientType?: 'interviewer' | 'candidate',
   ) => {
     try {
-      await retryInterviewNotification(interviewId, logId, channel);
+      const result = await sendInterviewEmail(interviewId, logId, channel, recipientType);
       // Reload notification logs for this interview
       await loadInterviewNotifications([interviewId]);
-      showToast(t('ats.notificationRetried'), 'success');
+      
+      // Show success message with recipient info
+      const channelLabel = channel === 'email' ? t('ats.email', 'Email') : t('ats.notification', 'Notification');
+      const actionLabel = logId ? t('common.resent', 'resent') : t('common.sent', 'sent');
+      const recipientInfo = result.recipientName 
+        ? ` to ${result.recipientName}${result.recipientEmail ? ` (${result.recipientEmail})` : ''}`
+        : '';
+      
+      showToast(`${channelLabel} ${actionLabel}${recipientInfo}`, 'success');
     } catch (err) {
-      showToast(t('ats.notificationRetryError'), 'error');
+      const channelLabel = channel === 'email' ? t('ats.email', 'Email') : t('ats.notification', 'Notification');
+      showToast(`${t('common.error', 'Error')} sending ${channelLabel.toLowerCase()}`, 'error');
     }
   };
   const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
@@ -3507,6 +3517,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 const interviewerRole = interviewer ? t(`roles.${interviewer.role}`, interviewer.role) : null;
                 const emailLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'interviewer' && log.channel === 'email') ?? null;
                 const notificationLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'interviewer' && log.channel !== 'email') ?? null;
+                const candidateEmailLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'candidate' && log.channel === 'email') ?? null;
                 
                 return (
                   <div key={iv.id} style={{
@@ -3566,36 +3577,108 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                 </div>
                               </div>
 
-                              {/* Email and Notification status columns side-by-side */}
+                              {/* Candidate, Email and Notification status columns side-by-side */}
                               <div style={{ display: 'flex', gap: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                {/* Email Status */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }} title={smtpConfigured === false ? t('ats.emailDisabledTooltip', 'Email not configured. Enable from Settings') : ''}>
+                                {/* Candidate Email Status */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
-                                      📧 {t('ats.email', 'Email')}
+                                      <User2 size={11} /> {t('ats.candidateEmail', 'Candidate')}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                                      <span style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
-                                        background: smtpConfigured === false
-                                          ? 'rgba(107,114,128,0.08)'
-                                          : !emailLog
+                                      <span 
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                          background: smtpConfigured === false
                                             ? 'rgba(107,114,128,0.08)'
-                                            : emailLog.status === 'done'
-                                              ? 'rgba(21,128,61,0.1)'
-                                              : emailLog.status === 'error'
-                                                ? 'rgba(220,38,38,0.1)'
-                                                : 'rgba(107,114,128,0.1)',
-                                        color: smtpConfigured === false
-                                          ? '#9ca3af'
-                                          : !emailLog
-                                            ? '#6b7280'
-                                            : emailLog.status === 'done'
-                                              ? '#15803d'
-                                              : emailLog.status === 'error'
-                                                ? '#dc2626'
-                                                : '#6b7280',
-                                        fontWeight: 600,
-                                      }}>
+                                            : !candidateEmailLog
+                                              ? 'rgba(107,114,128,0.08)'
+                                              : candidateEmailLog.status === 'done'
+                                                ? 'rgba(21,128,61,0.1)'
+                                                : candidateEmailLog.status === 'error'
+                                                  ? 'rgba(220,38,38,0.1)'
+                                                  : 'rgba(107,114,128,0.1)',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !candidateEmailLog
+                                              ? '#6b7280'
+                                              : candidateEmailLog.status === 'done'
+                                                ? '#15803d'
+                                                : candidateEmailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          fontWeight: 600,
+                                          cursor: smtpConfigured === false ? 'help' : 'default',
+                                        }}
+                                        title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : candidateEmailLog?.errorMessage || ''}
+                                      >
+                                        {smtpConfigured === false
+                                          ? '⊗ Disabled'
+                                          : !candidateEmailLog
+                                            ? '• Not sent'
+                                            : candidateEmailLog.status === 'done'
+                                              ? '✓ Sent'
+                                              : candidateEmailLog.status === 'error'
+                                                ? '✗ Error'
+                                                : candidateEmailLog.status === 'sending'
+                                                  ? '⟳ Sending'
+                                                  : '⏳ Pending'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRetryNotification(iv.id, candidateEmailLog?.id, 'email', 'candidate')}
+                                        disabled={smtpConfigured === false}
+                                        title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : candidateEmailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                        style={{
+                                          background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !candidateEmailLog
+                                              ? '#6b7280'
+                                              : candidateEmailLog.status === 'done'
+                                                ? '#15803d'
+                                                : candidateEmailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
+                                        }}
+                                      >
+                                        <RotateCcw size={10} />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                {/* Interviewer Email Status */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                      📧 {t('ats.interviewerEmail', 'Interviewer')}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                                      <span 
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                          background: smtpConfigured === false
+                                            ? 'rgba(107,114,128,0.08)'
+                                            : !emailLog
+                                              ? 'rgba(107,114,128,0.08)'
+                                              : emailLog.status === 'done'
+                                                ? 'rgba(21,128,61,0.1)'
+                                                : emailLog.status === 'error'
+                                                  ? 'rgba(220,38,38,0.1)'
+                                                  : 'rgba(107,114,128,0.1)',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !emailLog
+                                              ? '#6b7280'
+                                              : emailLog.status === 'done'
+                                                ? '#15803d'
+                                                : emailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          fontWeight: 600,
+                                          cursor: smtpConfigured === false ? 'help' : 'default',
+                                        }}
+                                        title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : emailLog?.errorMessage || ''}
+                                      >
                                         {smtpConfigured === false
                                           ? '⊗ Disabled'
                                           : !emailLog
@@ -3610,9 +3693,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                       </span>
                                       <button
                                         type="button"
-                                        onClick={() => void handleRetryNotification(iv.id, emailLog?.id, 'email')}
+                                        onClick={() => void handleRetryNotification(iv.id, emailLog?.id, 'email', 'interviewer')}
                                         disabled={smtpConfigured === false}
-                                        title={smtpConfigured === false ? t('ats.emailDisabledTooltip', 'Email not configured') : emailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                        title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : emailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
                                         style={{
                                           background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
                                           color: smtpConfigured === false
@@ -3633,33 +3716,37 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                   </div>
 
                                 {/* Notification Status */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }} title={interviewInviteEnabled === false ? t('ats.notificationDisabledTooltip', 'Notifications disabled. Enable from Settings') : ''}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
                                       🔔 {t('ats.notification', 'Notification')}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                                      <span style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
-                                        background: interviewInviteEnabled === false
-                                          ? 'rgba(107,114,128,0.08)'
-                                          : !notificationLog
+                                      <span 
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                          background: interviewInviteEnabled === false
                                             ? 'rgba(107,114,128,0.08)'
-                                            : notificationLog.status === 'done'
-                                              ? 'rgba(21,128,61,0.1)'
-                                              : notificationLog.status === 'error'
-                                                ? 'rgba(220,38,38,0.1)'
-                                                : 'rgba(107,114,128,0.1)',
-                                        color: interviewInviteEnabled === false
-                                          ? '#9ca3af'
-                                          : !notificationLog
-                                            ? '#6b7280'
-                                            : notificationLog.status === 'done'
-                                              ? '#15803d'
-                                              : notificationLog.status === 'error'
-                                                ? '#dc2626'
-                                                : '#6b7280',
-                                        fontWeight: 600,
-                                      }}>
+                                            : !notificationLog
+                                              ? 'rgba(107,114,128,0.08)'
+                                              : notificationLog.status === 'done'
+                                                ? 'rgba(21,128,61,0.1)'
+                                                : notificationLog.status === 'error'
+                                                  ? 'rgba(220,38,38,0.1)'
+                                                  : 'rgba(107,114,128,0.1)',
+                                          color: interviewInviteEnabled === false
+                                            ? '#9ca3af'
+                                            : !notificationLog
+                                              ? '#6b7280'
+                                              : notificationLog.status === 'done'
+                                                ? '#15803d'
+                                                : notificationLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          fontWeight: 600,
+                                          cursor: interviewInviteEnabled === false ? 'help' : 'default',
+                                        }}
+                                        title={interviewInviteEnabled === false ? 'Notification functionality is disabled. Please enable "Interview Invite" notification in Company Settings → Notifications to send in-app notifications.' : notificationLog?.errorMessage || ''}
+                                      >
                                         {interviewInviteEnabled === false
                                           ? '⊗ Disabled'
                                           : !notificationLog
@@ -3674,9 +3761,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                       </span>
                                       <button
                                         type="button"
-                                        onClick={() => void handleRetryNotification(iv.id, notificationLog?.id, 'in_app')}
+                                        onClick={() => void handleRetryNotification(iv.id, notificationLog?.id, 'in_app', 'interviewer')}
                                         disabled={interviewInviteEnabled === false}
-                                        title={interviewInviteEnabled === false ? t('ats.notificationDisabledTooltip', 'Notifications disabled') : notificationLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                        title={interviewInviteEnabled === false ? 'Notifications are disabled. Enable in Settings to send.' : notificationLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
                                         style={{
                                           background: 'none', border: 'none', padding: '2px 4px', cursor: interviewInviteEnabled === false ? 'not-allowed' : 'pointer',
                                           color: interviewInviteEnabled === false
@@ -4736,6 +4823,19 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [interviewInviteEnabled, setInterviewInviteEnabled] = useState<boolean | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
+  // Employee creation on hire
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [employeeEmail, setEmployeeEmail] = useState('');
+  const [employeeData, setEmployeeData] = useState<{
+    name: string;
+    surname: string;
+    personalEmail: string;
+    role: string;
+    companyId: number;
+    storeId: number | null;
+  } | null>(null);
+  const [creatingEmployee, setCreatingEmployee] = useState(false);
+
   const hasMultiCompanyScope = (allowedCompanyIds?.length ?? 0) > 1;
   const effectiveCompanyId = hasMultiCompanyScope
     ? undefined
@@ -4824,6 +4924,31 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const handleAdvance = async (status: CandidateStatus) => {
     if (!canEdit) return;
     if (!selected) return;
+    
+    // If moving to hired, prepare employee creation
+    if (status === 'hired') {
+      const candidate = selected;
+      const job = candidate.jobPostingId ? jobs.find((j) => j.id === candidate.jobPostingId) : null;
+      
+      // Parse name
+      const nameParts = candidate.fullName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      // Prepare employee data
+      setEmployeeData({
+        name: firstName,
+        surname: lastName,
+        personalEmail: candidate.email || '',
+        role: job?.targetRole || 'employee',
+        companyId: candidate.companyId,
+        storeId: candidate.storeId,
+      });
+      setEmployeeEmail('');
+      setShowEmployeeModal(true);
+      return; // Don't update stage yet, wait for employee creation
+    }
+    
     setSaving(true);
     try {
       const updated = await updateCandidateStage(selected.id, status);
@@ -4833,6 +4958,45 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
     } catch (err) {
       showToast(translateApiError(err, t, t('ats.errorStage')) ?? t('ats.errorStage'), 'error');
     } finally { setSaving(false); }
+  };
+
+  const handleCreateEmployeeFromCandidate = async () => {
+    if (!employeeEmail.trim()) {
+      showToast(t('ats.companyEmailRequired', 'Company email is required'), 'error');
+      return;
+    }
+    if (!employeeData || !selected) return;
+
+    setCreatingEmployee(true);
+    try {
+      // Create employee
+      await createEmployee({
+        name: employeeData.name,
+        surname: employeeData.surname,
+        email: employeeEmail.trim(),
+        personalEmail: employeeData.personalEmail,
+        role: employeeData.role,
+        companyId: employeeData.companyId,
+        storeId: employeeData.storeId || undefined,
+        status: 'active',
+      });
+
+      // Update candidate to hired
+      const updated = await updateCandidateStage(selected.id, 'hired');
+      setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setSelected(updated);
+
+      // Close modal and reset
+      setShowEmployeeModal(false);
+      setEmployeeData(null);
+      setEmployeeEmail('');
+
+      showToast(t('ats.employeeCreatedAndHired', 'Employee created and candidate marked as hired'), 'success');
+    } catch (err) {
+      showToast(translateApiError(err, t, t('ats.errorCreatingEmployee', 'Failed to create employee')) ?? t('ats.errorCreatingEmployee', 'Failed to create employee'), 'error');
+    } finally {
+      setCreatingEmployee(false);
+    }
   };
 
   const handleReject = async (reason?: string) => {
@@ -5695,6 +5859,88 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
           onDelete={handleDelete}
           saving={saving}
         />
+      )}
+
+      {showEmployeeModal && employeeData && (
+        <ModalBackdrop onClose={() => !creatingEmployee && setShowEmployeeModal(false)} width={500}>
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '20px 24px',
+          }}>
+            <h3 style={{
+              fontSize: 18,
+              fontWeight: 700,
+              marginBottom: 8,
+              color: 'var(--text)',
+            }}>
+              {t('ats.createEmployee', 'Create Employee')}
+            </h3>
+            <p style={{
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              marginBottom: 20,
+            }}>
+              {t('ats.createEmployeePrompt', 'The candidate will be hired and an employee account will be created. Please provide the company email address.')}
+            </p>
+
+            {/* Pre-filled data display */}
+            <div style={{ marginBottom: 20, padding: '12px', background: 'var(--background)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                {t('ats.employeeDetails', 'Employee Details')}
+              </div>
+              <div style={{ display: 'grid', gap: 6, fontSize: 12 }}>
+                <div><strong>{t('common.firstName', 'First Name')}:</strong> {employeeData.name}</div>
+                <div><strong>{t('common.lastName', 'Last Name')}:</strong> {employeeData.surname}</div>
+                <div><strong>{t('common.personalEmail', 'Personal Email')}:</strong> {employeeData.personalEmail || t('common.notProvided', 'Not provided')}</div>
+                <div><strong>{t('common.role', 'Role')}:</strong> {t(`roles.${employeeData.role}`, employeeData.role)}</div>
+              </div>
+            </div>
+
+            {/* Company email input */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{
+                display: 'block',
+                fontSize: 13,
+                fontWeight: 600,
+                marginBottom: 6,
+                color: 'var(--text)',
+              }}>
+                {t('common.companyEmail', 'Company Email')} <span style={{ color: '#DC2626' }}>*</span>
+              </label>
+              <Input
+                type="email"
+                value={employeeEmail}
+                onChange={(e) => setEmployeeEmail(e.target.value)}
+                placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')}
+                disabled={creatingEmployee}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowEmployeeModal(false);
+                  setEmployeeData(null);
+                  setEmployeeEmail('');
+                }}
+                disabled={creatingEmployee}
+              >
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleCreateEmployeeFromCandidate}
+                loading={creatingEmployee}
+                disabled={!employeeEmail.trim()}
+              >
+                {t('ats.createAndHire', 'Create Employee & Hire')}
+              </Button>
+            </div>
+          </div>
+        </ModalBackdrop>
       )}
     </div>
   );
