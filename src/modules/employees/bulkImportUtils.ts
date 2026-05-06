@@ -4,6 +4,7 @@ import { Employee, Company, Store, UserRole } from '../../types';
 
 /* ── Column header → API field mapping ─────────────────────────────────── */
 const COLUMN_MAP: Record<string, string> = {
+  // English
   'name': 'name',
   'surname': 'surname',
   'email': 'email',
@@ -34,6 +35,57 @@ const COLUMN_MAP: Record<string, string> = {
   'probation period': 'probationMonths',
   'termination date': 'terminationDate',
   'termination type': 'terminationType',
+
+  // Italian
+  'nome': 'name',
+  'cognome': 'surname',
+  'ruolo': 'role',
+  'azienda': 'companyName',
+  'società': 'companyName',
+  'societa': 'companyName',
+  'impresa': 'companyName',
+  'negozio': 'storeName',
+  'punto vendita': 'storeName',
+  'filiale': 'storeName',
+  'sede': 'storeName',
+  'supervisore': 'supervisorName',
+  'responsabile': 'supervisorName',
+  'dipartimento': 'department',
+  'reparto': 'department',
+  'password temporanea': 'password',
+  'data di assunzione': 'hireDate',
+  'data assunzione': 'hireDate',
+  'fine contratto': 'contractEndDate',
+  'orario di lavoro': 'workingType',
+  'ore settimanali': 'weeklyHours',
+  'email personale': 'personalEmail',
+  'data di nascita': 'dateOfBirth',
+  'data nascita': 'dateOfBirth',
+  'nazionalità': 'nationality',
+  'nazionalita': 'nationality',
+  'genere': 'gender',
+  'sesso': 'gender',
+  'nazione': 'country',
+  'paese': 'country',
+  'stato': 'state',
+  'provincia': 'state',
+  'città': 'city',
+  'citta': 'city',
+  'indirizzo': 'address',
+  'cap': 'cap',
+  'codice postale': 'cap',
+  'numeri di telefono aziendali': 'phone',
+  'telefono aziendale': 'phone',
+  'telefono': 'phone',
+  'stato civile': 'maritalStatus',
+  'primo soccorso': 'firstAidFlag',
+  'tipo di contratto': 'contractType',
+  'tipo contratto': 'contractType',
+  'periodo di prova': 'probationMonths',
+  'data di cessazione': 'terminationDate',
+  'data cessazione': 'terminationDate',
+  'tipo di cessazione': 'terminationType',
+  'tipo cessazione': 'terminationType',
 };
 
 const ROLE_VALUES: UserRole[] = ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
@@ -178,7 +230,7 @@ export async function processRow(
 
   // 2. Required fields validation
   if (!mapped.name) {
-    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'name');
+    const hasHeader = Object.keys(data).some(h => COLUMN_MAP[h.trim().toLowerCase()] === 'name');
     return { 
       rowIndex, 
       success: false, 
@@ -188,7 +240,7 @@ export async function processRow(
     };
   }
   if (!mapped.surname) {
-    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'surname');
+    const hasHeader = Object.keys(data).some(h => COLUMN_MAP[h.trim().toLowerCase()] === 'surname');
     return { 
       rowIndex, 
       success: false, 
@@ -198,7 +250,7 @@ export async function processRow(
     };
   }
   if (!mapped.email) {
-    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'email');
+    const hasHeader = Object.keys(data).some(h => COLUMN_MAP[h.trim().toLowerCase()] === 'email');
     return { 
       rowIndex, 
       success: false, 
@@ -217,7 +269,7 @@ export async function processRow(
 
   // Required personal email
   if (!mapped.personalEmail) {
-    const hasHeader = Object.keys(data).some(h => h.trim().toLowerCase() === 'personal email');
+    const hasHeader = Object.keys(data).some(h => COLUMN_MAP[h.trim().toLowerCase()] === 'personalEmail');
     return { 
       rowIndex, 
       success: false, 
@@ -261,10 +313,14 @@ export async function processRow(
 
   // 5. Store lookup by name
   let storeId: number | null = null;
+  let inferredCompanyId: number | undefined;
   if (mapped.storeName) {
     const storeList = companyId ? stores.filter(s => s.companyId === companyId) : stores;
     const store = storeList.find(s => s.name.toLowerCase() === mapped.storeName.toLowerCase());
-    if (store) storeId = store.id;
+    if (store) {
+      storeId = store.id;
+      if (!companyId) inferredCompanyId = store.companyId;
+    }
     // skip silently if not found
   }
 
@@ -321,6 +377,7 @@ export async function processRow(
   };
 
   if (companyId) payload.companyId = companyId;
+  else if (inferredCompanyId) payload.companyId = inferredCompanyId;
 
   try {
     const emp = await createEmployee(payload as Parameters<typeof createEmployee>[0]);
