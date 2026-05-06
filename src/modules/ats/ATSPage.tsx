@@ -1968,9 +1968,13 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   }, [interviews, loadInterviewNotifications]);
 
   // Retry failed notification
-  const handleRetryNotification = async (interviewId: number, logId: number) => {
+  const handleRetryNotification = async (
+    interviewId: number,
+    logId?: number,
+    channel?: 'email' | 'in_app',
+  ) => {
     try {
-      await retryInterviewNotification(interviewId, logId);
+      await retryInterviewNotification(interviewId, logId, channel);
       // Reload notification logs for this interview
       await loadInterviewNotifications([interviewId]);
       showToast(t('ats.notificationRetried'), 'success');
@@ -3565,67 +3569,132 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                               {/* Email and Notification status columns side-by-side */}
                               <div style={{ display: 'flex', gap: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                 {/* Email Status */}
-                                {emailLog && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: !smtpConfigured ? 0.5 : 1, position: 'relative' }} title={!smtpConfigured ? t('ats.emailDisabledTooltip', 'Email not configured. Enable from Settings') : ''}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: !smtpConfigured ? 'var(--text-muted)' : 'var(--text-muted)' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }} title={smtpConfigured === false ? t('ats.emailDisabledTooltip', 'Email not configured. Enable from Settings') : ''}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
                                       📧 {t('ats.email', 'Email')}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
                                       <span style={{
                                         display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
-                                        background: !smtpConfigured ? 'rgba(107,114,128,0.08)' : emailLog.status === 'done' ? 'rgba(21,128,61,0.1)' : emailLog.status === 'error' ? 'rgba(220,38,38,0.1)' : 'rgba(107,114,128,0.1)',
-                                        color: !smtpConfigured ? '#9ca3af' : emailLog.status === 'done' ? '#15803d' : emailLog.status === 'error' ? '#dc2626' : '#6b7280',
+                                        background: smtpConfigured === false
+                                          ? 'rgba(107,114,128,0.08)'
+                                          : !emailLog
+                                            ? 'rgba(107,114,128,0.08)'
+                                            : emailLog.status === 'done'
+                                              ? 'rgba(21,128,61,0.1)'
+                                              : emailLog.status === 'error'
+                                                ? 'rgba(220,38,38,0.1)'
+                                                : 'rgba(107,114,128,0.1)',
+                                        color: smtpConfigured === false
+                                          ? '#9ca3af'
+                                          : !emailLog
+                                            ? '#6b7280'
+                                            : emailLog.status === 'done'
+                                              ? '#15803d'
+                                              : emailLog.status === 'error'
+                                                ? '#dc2626'
+                                                : '#6b7280',
                                         fontWeight: 600,
                                       }}>
-                                        {!smtpConfigured ? '⊗ Disabled' : emailLog.status === 'done' ? '✓ Sent' : emailLog.status === 'error' ? '✗ Error' : emailLog.status === 'sending' ? '⟳ Sending' : '⏳ Pending'}
-                                      </span>\n                                      <button
+                                        {smtpConfigured === false
+                                          ? '⊗ Disabled'
+                                          : !emailLog
+                                            ? '• Not sent'
+                                            : emailLog.status === 'done'
+                                              ? '✓ Sent'
+                                              : emailLog.status === 'error'
+                                                ? '✗ Error'
+                                                : emailLog.status === 'sending'
+                                                  ? '⟳ Sending'
+                                                  : '⏳ Pending'}
+                                      </span>
+                                      <button
                                         type="button"
-                                        onClick={() => void handleRetryNotification(iv.id, emailLog.id)}
-                                        disabled={!smtpConfigured}
-                                        title={!smtpConfigured ? t('ats.emailDisabledTooltip', 'Email not configured') : t('common.resend', 'Resend')}
+                                        onClick={() => void handleRetryNotification(iv.id, emailLog?.id, 'email')}
+                                        disabled={smtpConfigured === false}
+                                        title={smtpConfigured === false ? t('ats.emailDisabledTooltip', 'Email not configured') : emailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
                                         style={{
-                                          background: 'none', border: 'none', padding: '2px 4px', cursor: !smtpConfigured ? 'not-allowed' : 'pointer',
-                                          color: !smtpConfigured ? '#9ca3af' : emailLog.status === 'done' ? '#15803d' : emailLog.status === 'error' ? '#dc2626' : '#6b7280',
-                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: !smtpConfigured ? 0.4 : 0.7, fontSize: 10,
+                                          background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
+                                          color: smtpConfigured === false
+                                            ? '#9ca3af'
+                                            : !emailLog
+                                              ? '#6b7280'
+                                              : emailLog.status === 'done'
+                                                ? '#15803d'
+                                                : emailLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
                                         }}
                                       >
                                         <RotateCcw size={10} />
                                       </button>
                                     </div>
                                   </div>
-                                )}
 
                                 {/* Notification Status */}
-                                {notificationLog && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: !interviewInviteEnabled ? 0.5 : 1, position: 'relative' }} title={!interviewInviteEnabled ? t('ats.notificationDisabledTooltip', 'Notifications disabled. Enable from Settings') : ''}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: !interviewInviteEnabled ? 'var(--text-muted)' : 'var(--text-muted)' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }} title={interviewInviteEnabled === false ? t('ats.notificationDisabledTooltip', 'Notifications disabled. Enable from Settings') : ''}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
                                       🔔 {t('ats.notification', 'Notification')}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
                                       <span style={{
                                         display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
-                                        background: !interviewInviteEnabled ? 'rgba(107,114,128,0.08)' : notificationLog.status === 'done' ? 'rgba(21,128,61,0.1)' : notificationLog.status === 'error' ? 'rgba(220,38,38,0.1)' : 'rgba(107,114,128,0.1)',
-                                        color: !interviewInviteEnabled ? '#9ca3af' : notificationLog.status === 'done' ? '#15803d' : notificationLog.status === 'error' ? '#dc2626' : '#6b7280',
+                                        background: interviewInviteEnabled === false
+                                          ? 'rgba(107,114,128,0.08)'
+                                          : !notificationLog
+                                            ? 'rgba(107,114,128,0.08)'
+                                            : notificationLog.status === 'done'
+                                              ? 'rgba(21,128,61,0.1)'
+                                              : notificationLog.status === 'error'
+                                                ? 'rgba(220,38,38,0.1)'
+                                                : 'rgba(107,114,128,0.1)',
+                                        color: interviewInviteEnabled === false
+                                          ? '#9ca3af'
+                                          : !notificationLog
+                                            ? '#6b7280'
+                                            : notificationLog.status === 'done'
+                                              ? '#15803d'
+                                              : notificationLog.status === 'error'
+                                                ? '#dc2626'
+                                                : '#6b7280',
                                         fontWeight: 600,
                                       }}>
-                                        {!interviewInviteEnabled ? '⊗ Disabled' : notificationLog.status === 'done' ? '✓ Sent' : notificationLog.status === 'error' ? '✗ Error' : notificationLog.status === 'sending' ? '⟳ Sending' : '⏳ Pending'}
+                                        {interviewInviteEnabled === false
+                                          ? '⊗ Disabled'
+                                          : !notificationLog
+                                            ? '• Not sent'
+                                            : notificationLog.status === 'done'
+                                              ? '✓ Sent'
+                                              : notificationLog.status === 'error'
+                                                ? '✗ Error'
+                                                : notificationLog.status === 'sending'
+                                                  ? '⟳ Sending'
+                                                  : '⏳ Pending'}
                                       </span>
                                       <button
                                         type="button"
-                                        onClick={() => void handleRetryNotification(iv.id, notificationLog.id)}
-                                        disabled={!interviewInviteEnabled}
-                                        title={!interviewInviteEnabled ? t('ats.notificationDisabledTooltip', 'Notifications disabled') : t('common.resend', 'Resend')}
+                                        onClick={() => void handleRetryNotification(iv.id, notificationLog?.id, 'in_app')}
+                                        disabled={interviewInviteEnabled === false}
+                                        title={interviewInviteEnabled === false ? t('ats.notificationDisabledTooltip', 'Notifications disabled') : notificationLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
                                         style={{
-                                          background: 'none', border: 'none', padding: '2px 4px', cursor: !interviewInviteEnabled ? 'not-allowed' : 'pointer',
-                                          color: !interviewInviteEnabled ? '#9ca3af' : notificationLog.status === 'done' ? '#15803d' : notificationLog.status === 'error' ? '#dc2626' : '#6b7280',
-                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: !interviewInviteEnabled ? 0.4 : 0.7, fontSize: 10,
+                                          background: 'none', border: 'none', padding: '2px 4px', cursor: interviewInviteEnabled === false ? 'not-allowed' : 'pointer',
+                                          color: interviewInviteEnabled === false
+                                            ? '#9ca3af'
+                                            : !notificationLog
+                                              ? '#6b7280'
+                                              : notificationLog.status === 'done'
+                                                ? '#15803d'
+                                                : notificationLog.status === 'error'
+                                                  ? '#dc2626'
+                                                  : '#6b7280',
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: interviewInviteEnabled === false ? 0.4 : 0.7, fontSize: 10,
                                         }}
                                       >
                                         <RotateCcw size={10} />
                                       </button>
                                     </div>
                                   </div>
-                                )}
                               </div>
                             </div>
                           )}
@@ -4685,18 +4754,27 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
       
       // Load notification settings and SMTP config
       if (effectiveCompanyId) {
-        try {
-          const [notifSettings, emailConfig] = await Promise.all([
-            getNotificationSettings(effectiveCompanyId),
-            getEmailConfig(),
-          ]);
-          const interviewInviteSetting = notifSettings.find((s: NotificationSetting) => s.eventKey === 'ats.interview_invite');
-          setInterviewInviteEnabled(interviewInviteSetting?.enabled ?? null);
-          setSmtpConfigured(emailConfig?.config?.smtpHost ? true : false);
-        } catch {
+        const [notifResult, emailResult] = await Promise.allSettled([
+          getNotificationSettings(effectiveCompanyId),
+          getEmailConfig(),
+        ]);
+
+        if (notifResult.status === 'fulfilled') {
+          const interviewInviteSetting = notifResult.value.find((s: NotificationSetting) => s.eventKey === 'ats.interview_invite');
+          // Missing row means default-enabled behavior in backend.
+          setInterviewInviteEnabled(interviewInviteSetting?.enabled ?? true);
+        } else {
           setInterviewInviteEnabled(null);
+        }
+
+        if (emailResult.status === 'fulfilled') {
+          setSmtpConfigured(Boolean(emailResult.value?.config?.smtpHost));
+        } else {
           setSmtpConfigured(null);
         }
+      } else {
+        setInterviewInviteEnabled(null);
+        setSmtpConfigured(null);
       }
     } catch { showToast(t('ats.errorLoad'), 'error'); }
     finally { setLoading(false); }

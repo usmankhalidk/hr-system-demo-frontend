@@ -484,9 +484,13 @@ export async function getInterviewNotifications(interviewId: number): Promise<In
 
 export async function retryInterviewNotification(
   interviewId: number,
-  logId: number,
+  logId?: number,
+  channel?: 'email' | 'in_app',
 ): Promise<void> {
-  await apiClient.post(`/ats/interviews/${interviewId}/notifications/retry`, { logId });
+  await apiClient.post(`/ats/interviews/${interviewId}/notifications/retry`, {
+    logId,
+    channel,
+  });
 }
 
 // ---------------------------------------------------------------------------
