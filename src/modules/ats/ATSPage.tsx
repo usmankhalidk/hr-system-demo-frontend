@@ -3275,48 +3275,93 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               Pipeline
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-              {(['received', 'review', 'phone_interview', 'interview', 'hired'] as CandidateStatus[]).map((s, idx, stages) => {
-                const stageIdx = [...stages, 'rejected'].indexOf(candidate.status);
-                const isDone = candidate.status !== 'rejected' && stageIdx >= idx;
-                const isCurrent = candidate.status !== 'rejected' && stageIdx === idx;
-                const sc = STAGE_COLOR[s];
-                return (
-                  <React.Fragment key={s}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: '50%',
-                        background: isDone ? sc : 'var(--border)',
-                        border: isCurrent ? `3px solid ${sc}` : 'none',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.2s',
-                        boxShadow: isCurrent ? `0 0 0 3px ${sc}22` : 'none',
-                      }}>
-                        {isDone && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+              {(() => {
+                const allStages: CandidateStatus[] = ['received', 'review', 'phone_interview', 'interview', 'hired'];
+                
+                // For rejected candidates, show only stages up to their last stage before rejection
+                let stagesToShow: CandidateStatus[] = allStages;
+                
+                if (candidate.status === 'rejected') {
+                  // Determine which stage they were rejected from based on lastStageChange or interviews
+                  // Default to 'received' if we can't determine
+                  let lastStageBeforeRejection: CandidateStatus = 'received';
+                  
+                  // Check if there are interviews to determine the stage
+                  if (interviews.length > 0) {
+                    // If they had interviews, they at least reached interview stage
+                    lastStageBeforeRejection = 'interview';
+                  } else if (candidate.lastStageChange) {
+                    // Try to infer from lastStageChange timestamp
+                    // This is a simple heuristic - in a real system you'd track stage history
+                    const daysSinceLastChange = Math.floor((Date.now() - new Date(candidate.lastStageChange).getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysSinceLastChange > 7) {
+                      lastStageBeforeRejection = 'review';
+                    }
+                  }
+                  
+                  // Show stages up to and including the last stage before rejection
+                  const lastStageIndex = allStages.indexOf(lastStageBeforeRejection);
+                  stagesToShow = allStages.slice(0, lastStageIndex + 1);
+                }
+                
+                return stagesToShow.map((s, idx, stages) => {
+                  const stageIdx = [...stages, 'rejected'].indexOf(candidate.status);
+                  const isDone = candidate.status !== 'rejected' && stageIdx >= idx;
+                  const isCurrent = candidate.status !== 'rejected' && stageIdx === idx;
+                  const sc = STAGE_COLOR[s];
+                  return (
+                    <React.Fragment key={s}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: '50%',
+                          background: isDone ? sc : candidate.status === 'rejected' ? sc : 'var(--border)',
+                          border: isCurrent ? `3px solid ${sc}` : 'none',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s',
+                          boxShadow: isCurrent ? `0 0 0 3px ${sc}22` : 'none',
+                        }}>
+                          {(isDone || candidate.status === 'rejected') && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                        </div>
+                        <div style={{ fontSize: 10, color: (isDone || candidate.status === 'rejected') ? sc : 'var(--text-muted)', fontWeight: isCurrent ? 700 : 400, marginTop: 4, textAlign: 'center' }}>
+                          {t(`ats.stage_${s}`)}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 10, color: isDone ? sc : 'var(--text-muted)', fontWeight: isCurrent ? 700 : 400, marginTop: 4, textAlign: 'center' }}>
-                        {t(`ats.stage_${s}`)}
-                      </div>
+                      {idx < stages.length - 1 && (
+                        <div style={{
+                          height: 2, flex: 1, marginBottom: 18,
+                          background: candidate.status !== 'rejected' && stageIdx > idx ? sc : candidate.status === 'rejected' ? sc : 'var(--border)',
+                          transition: 'background 0.3s',
+                        }} />
+                      )}
+                    </React.Fragment>
+                  );
+                });
+              })()}
+              
+              {/* Show rejected stage at the end for rejected candidates */}
+              {candidate.status === 'rejected' && (
+                <>
+                  <div style={{
+                    height: 2, flex: 1, marginBottom: 18,
+                    background: '#DC2626',
+                    transition: 'background 0.3s',
+                  }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%',
+                      background: '#DC2626',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.2s',
+                    }}>
+                      <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✕</span>
                     </div>
-                    {idx < stages.length - 1 && (
-                      <div style={{
-                        height: 2, flex: 1, marginBottom: 18,
-                        background: candidate.status !== 'rejected' && stageIdx > idx ? sc : 'var(--border)',
-                        transition: 'background 0.3s',
-                      }} />
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                    <div style={{ fontSize: 10, color: '#DC2626', fontWeight: 700, marginTop: 4, textAlign: 'center' }}>
+                      {t('ats.stage_rejected')}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-            {candidate.status === 'rejected' && (
-              <div style={{
-                marginTop: 8, padding: '6px 12px', background: '#FEF2F2',
-                border: '1px solid #FCA5A5', borderRadius: 8,
-                fontSize: 12, color: '#DC2626', fontWeight: 600, textAlign: 'center',
-              }}>
-                ✕ {t('ats.stage_rejected')}
-              </div>
-            )}
           </div>
 
           {candidate.status === 'rejected' && candidate.rejectionReason && (
@@ -3597,7 +3642,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                                 ? 'rgba(21,128,61,0.1)'
                                                 : candidateEmailLog.status === 'error'
                                                   ? 'rgba(220,38,38,0.1)'
-                                                  : 'rgba(107,114,128,0.1)',
+                                                  : candidateEmailLog.status === 'sending'
+                                                    ? 'rgba(59,130,246,0.1)'
+                                                    : 'rgba(107,114,128,0.1)',
                                           color: smtpConfigured === false
                                             ? '#9ca3af'
                                             : !candidateEmailLog
@@ -3606,11 +3653,41 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                                 ? '#15803d'
                                                 : candidateEmailLog.status === 'error'
                                                   ? '#dc2626'
-                                                  : '#6b7280',
+                                                  : candidateEmailLog.status === 'sending'
+                                                    ? '#2563eb'
+                                                    : '#6b7280',
                                           fontWeight: 600,
                                           cursor: smtpConfigured === false ? 'help' : 'default',
+                                          position: 'relative',
                                         }}
                                         title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : candidateEmailLog?.errorMessage || ''}
+                                        onMouseEnter={(e) => {
+                                          if (smtpConfigured === false) {
+                                            const tooltip = document.createElement('div');
+                                            tooltip.id = 'smtp-tooltip-candidate';
+                                            tooltip.style.cssText = `
+                                              position: absolute;
+                                              bottom: calc(100% + 8px);
+                                              left: 50%;
+                                              transform: translateX(-50%);
+                                              background: #1f2937;
+                                              color: white;
+                                              padding: 8px 12px;
+                                              border-radius: 6px;
+                                              font-size: 11px;
+                                              white-space: nowrap;
+                                              z-index: 1000;
+                                              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                              pointer-events: none;
+                                            `;
+                                            tooltip.textContent = 'SMTP not configured for this company';
+                                            e.currentTarget.appendChild(tooltip);
+                                          }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          const tooltip = e.currentTarget.querySelector('#smtp-tooltip-candidate');
+                                          if (tooltip) tooltip.remove();
+                                        }}
                                       >
                                         {smtpConfigured === false
                                           ? '⊗ Disabled'
@@ -3621,7 +3698,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                               : candidateEmailLog.status === 'error'
                                                 ? '✗ Error'
                                                 : candidateEmailLog.status === 'sending'
-                                                  ? '⟳ Sending'
+                                                  ? '⟳ Sending...'
                                                   : '⏳ Pending'}
                                       </span>
                                       <button
@@ -3665,7 +3742,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                                 ? 'rgba(21,128,61,0.1)'
                                                 : emailLog.status === 'error'
                                                   ? 'rgba(220,38,38,0.1)'
-                                                  : 'rgba(107,114,128,0.1)',
+                                                  : emailLog.status === 'sending'
+                                                    ? 'rgba(59,130,246,0.1)'
+                                                    : 'rgba(107,114,128,0.1)',
                                           color: smtpConfigured === false
                                             ? '#9ca3af'
                                             : !emailLog
@@ -3674,11 +3753,41 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                                 ? '#15803d'
                                                 : emailLog.status === 'error'
                                                   ? '#dc2626'
-                                                  : '#6b7280',
+                                                  : emailLog.status === 'sending'
+                                                    ? '#2563eb'
+                                                    : '#6b7280',
                                           fontWeight: 600,
                                           cursor: smtpConfigured === false ? 'help' : 'default',
+                                          position: 'relative',
                                         }}
                                         title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : emailLog?.errorMessage || ''}
+                                        onMouseEnter={(e) => {
+                                          if (smtpConfigured === false) {
+                                            const tooltip = document.createElement('div');
+                                            tooltip.id = 'smtp-tooltip';
+                                            tooltip.style.cssText = `
+                                              position: absolute;
+                                              bottom: calc(100% + 8px);
+                                              left: 50%;
+                                              transform: translateX(-50%);
+                                              background: #1f2937;
+                                              color: white;
+                                              padding: 8px 12px;
+                                              border-radius: 6px;
+                                              font-size: 11px;
+                                              white-space: nowrap;
+                                              z-index: 1000;
+                                              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                              pointer-events: none;
+                                            `;
+                                            tooltip.textContent = 'SMTP not configured for this company';
+                                            e.currentTarget.appendChild(tooltip);
+                                          }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          const tooltip = e.currentTarget.querySelector('#smtp-tooltip');
+                                          if (tooltip) tooltip.remove();
+                                        }}
                                       >
                                         {smtpConfigured === false
                                           ? '⊗ Disabled'
@@ -3689,7 +3798,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                               : emailLog.status === 'error'
                                                 ? '✗ Error'
                                                 : emailLog.status === 'sending'
-                                                  ? '⟳ Sending'
+                                                  ? '⟳ Sending...'
                                                   : '⏳ Pending'}
                                       </span>
                                       <button

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Phone, Users, Video, MapPin, Calendar, Clock, User, Briefcase, Trash2, Save } from 'lucide-react';
+import { X, Phone, Users, MapPin, Calendar, Clock, User, Briefcase, Trash2, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Interview } from '../../api/ats';
 import { getAvatarUrl } from '../../api/client';
@@ -20,14 +20,6 @@ interface InterviewDetailsModalProps {
 const INTERVIEW_TYPE_OPTIONS = [
   { value: 'phone', label: 'Phone Interview', icon: Phone },
   { value: 'in_person', label: 'In-Person Interview', icon: Users },
-  { value: 'video', label: 'Video Interview', icon: Video },
-];
-
-const INTERVIEW_STATUS_OPTIONS = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'rescheduled', label: 'Rescheduled' },
 ];
 
 export default function InterviewDetailsModal({
@@ -42,21 +34,23 @@ export default function InterviewDetailsModal({
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Form state
+  // Form state - parse scheduledAt into date and time
+  const scheduledAtDate = new Date(interview.scheduledAt);
+  const initialDate = scheduledAtDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  const initialTime = scheduledAtDate.toTimeString().slice(0, 5); // HH:mm
+  
   const [interviewType, setInterviewType] = useState<Interview['interviewType']>(
     interview.interviewType
   );
-  const [scheduledDate, setScheduledDate] = useState(interview.scheduledDate);
-  const [scheduledTime, setScheduledTime] = useState(interview.scheduledTime);
-  const [durationMinutes, setDurationMinutes] = useState(String(interview.durationMinutes));
+  const [scheduledDate, setScheduledDate] = useState(initialDate);
+  const [scheduledTime, setScheduledTime] = useState(initialTime);
+  const [durationMinutes, setDurationMinutes] = useState(String(interview.durationMinutes || 60));
   const [location, setLocation] = useState(interview.location ?? '');
-  const [meetingLink, setMeetingLink] = useState(interview.meetingLink ?? '');
-  const [status, setStatus] = useState<Interview['status']>(interview.status);
   const [notes, setNotes] = useState(interview.notes ?? '');
   const [description, setDescription] = useState(interview.description ?? '');
 
-  const candidateFullName = fullName(interview.candidateName, interview.candidateSurname);
-  const candidateInitials = initials(interview.candidateName, interview.candidateSurname);
+  const candidateFullName = fullName(interview.candidateName || '', interview.candidateSurname || '');
+  const candidateInitials = initials(interview.candidateName || '', interview.candidateSurname || '');
   const candidateAvatarUrl = getAvatarUrl(interview.candidateAvatarFilename);
 
   const interviewerFullName = interview.interviewerName
@@ -66,14 +60,14 @@ export default function InterviewDetailsModal({
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Combine date and time into ISO string
+      const scheduledAt = `${scheduledDate}T${scheduledTime}:00`;
+      
       await onSave({
         interviewType,
-        scheduledDate,
-        scheduledTime,
+        scheduledAt,
         durationMinutes: parseInt(durationMinutes, 10),
         location: location || null,
-        meetingLink: meetingLink || null,
-        status,
         notes: notes || null,
         description: description || null,
       });
@@ -99,13 +93,12 @@ export default function InterviewDetailsModal({
 
   const handleCancel = () => {
     // Reset form
+    const scheduledAtDate = new Date(interview.scheduledAt);
     setInterviewType(interview.interviewType);
-    setScheduledDate(interview.scheduledDate);
-    setScheduledTime(interview.scheduledTime);
-    setDurationMinutes(String(interview.durationMinutes));
+    setScheduledDate(scheduledAtDate.toISOString().split('T')[0]);
+    setScheduledTime(scheduledAtDate.toTimeString().slice(0, 5));
+    setDurationMinutes(String(interview.durationMinutes || 60));
     setLocation(interview.location ?? '');
-    setMeetingLink(interview.meetingLink ?? '');
-    setStatus(interview.status);
     setNotes(interview.notes ?? '');
     setDescription(interview.description ?? '');
     setIsEditing(false);
@@ -234,16 +227,6 @@ export default function InterviewDetailsModal({
                 <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                   {candidateFullName}
                 </div>
-                {interview.candidateEmail && (
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                    {interview.candidateEmail}
-                  </div>
-                )}
-                {interview.candidatePhone && (
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                    {interview.candidatePhone}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -267,9 +250,6 @@ export default function InterviewDetailsModal({
               <div>
                 <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                   {interview.positionTitle}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                  {interview.jobReference}
                 </div>
               </div>
             </div>
@@ -433,13 +413,13 @@ export default function InterviewDetailsModal({
                   />
                 ) : (
                   <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                    {formatDuration(interview.durationMinutes)}
+                    {formatDuration(interview.durationMinutes || 60)}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Location / Meeting Link */}
+            {/* Location */}
             {(interviewType === 'in_person' || !isEditing && interview.location) && (
               <div style={{ marginBottom: 16 }}>
                 <label
@@ -467,100 +447,6 @@ export default function InterviewDetailsModal({
                 )}
               </div>
             )}
-
-            {(interviewType === 'video' || !isEditing && interview.meetingLink) && (
-              <div style={{ marginBottom: 16 }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
-                    color: 'var(--text-secondary)',
-                    marginBottom: 8,
-                  }}
-                >
-                  <Video size={14} style={{ display: 'inline', marginRight: 4 }} />
-                  {t('ats.meetingLink', 'Meeting Link')}
-                </label>
-                {isEditing ? (
-                  <Input
-                    value={meetingLink}
-                    onChange={(e) => setMeetingLink(e.target.value)}
-                    placeholder="https://meet.google.com/..."
-                  />
-                ) : interview.meetingLink ? (
-                  <a
-                    href={interview.meetingLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontSize: '0.85rem',
-                      color: 'var(--primary)',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    {interview.meetingLink}
-                  </a>
-                ) : (
-                  <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>-</div>
-                )}
-              </div>
-            )}
-
-            {/* Status */}
-            <div style={{ marginBottom: 16 }}>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: 8,
-                }}
-              >
-                {t('ats.status', 'Status')}
-              </label>
-              {isEditing ? (
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as Interview['status'])}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    color: 'var(--text-primary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {INTERVIEW_STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {t(`ats.interviewStatus.${option.value}`, option.label)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '4px 10px',
-                    borderRadius: 6,
-                    background: 'var(--primary)',
-                    color: '#fff',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.3,
-                  }}
-                >
-                  {t(`ats.interviewStatus.${interview.status}`, interview.status)}
-                </span>
-              )}
-            </div>
           </div>
 
           {/* Interviewer Section */}
@@ -766,5 +652,4 @@ export default function InterviewDetailsModal({
 const INTERVIEW_TYPE_ICONS: Record<Interview['interviewType'], typeof Phone> = {
   phone: Phone,
   in_person: Users,
-  video: Video,
 };

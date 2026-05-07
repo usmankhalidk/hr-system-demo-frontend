@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Phone, Users, Video, MapPin, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { Phone, Users, MapPin, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Interview } from '../../api/ats';
+import { Interview } from './atsCalendarUtils';
 import { getAvatarUrl } from '../../api/client';
 import {
   INTERVIEW_STATUS_COLORS,
@@ -23,7 +23,6 @@ interface InterviewEntryProps {
 const INTERVIEW_TYPE_ICONS = {
   phone: Phone,
   in_person: Users,
-  video: Video,
 };
 
 export default function InterviewEntry({
@@ -38,11 +37,11 @@ export default function InterviewEntry({
 
   const colors = INTERVIEW_STATUS_COLORS[interview.status];
   const Icon = INTERVIEW_TYPE_ICONS[interview.interviewType];
-  const candidateFullName = fullName(interview.candidateName, interview.candidateSurname);
+  const candidateFullName = fullName(interview.candidateName || '', interview.candidateSurname || '');
   const interviewerFullName = interview.interviewerName
     ? fullName(interview.interviewerName, interview.interviewerSurname || '')
     : null;
-  const candidateInitials = initials(interview.candidateName, interview.candidateSurname);
+  const candidateInitials = initials(interview.candidateName || '', interview.candidateSurname || '');
   const avatarUrl = getAvatarUrl(interview.candidateAvatarFilename);
 
   const isCancelled = interview.status === 'cancelled';
@@ -301,11 +300,6 @@ export default function InterviewEntry({
                   <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                     {candidateFullName}
                   </div>
-                  {interview.candidateEmail && (
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                      {interview.candidateEmail}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -324,9 +318,6 @@ export default function InterviewEntry({
               </div>
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                 {interview.positionTitle}
-              </div>
-              <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                {interview.jobReference}
               </div>
             </div>
 
@@ -388,33 +379,6 @@ export default function InterviewEntry({
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
                   {interview.location}
                 </div>
-              </div>
-            )}
-
-            {/* Meeting Link */}
-            {interview.meetingLink && interview.interviewType === 'video' && (
-              <div style={{ marginBottom: 8 }}>
-                <a
-                  href={interview.meetingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '4px 8px',
-                    borderRadius: 6,
-                    background: 'var(--primary)',
-                    color: '#fff',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    textDecoration: 'none',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Video size={12} />
-                  {t('ats.joinMeeting', 'Join Meeting')}
-                </a>
               </div>
             )}
 

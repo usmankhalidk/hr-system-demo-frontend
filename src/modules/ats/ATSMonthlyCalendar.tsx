@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Interview } from '../../api/ats';
+import { Interview } from './atsCalendarUtils';
 import InterviewEntry from './InterviewEntry';
 import {
   formatDate,
@@ -278,8 +278,8 @@ export default function ATSMonthlyCalendar({
 
                     {dayInterviews.map((interview, iIdx) => {
                       const candidateFullName = fullName(
-                        interview.candidateName,
-                        interview.candidateSurname
+                        interview.candidateName || '',
+                        interview.candidateSurname || ''
                       );
                       const avatarUrl = getAvatarUrl(interview.candidateAvatarFilename);
 

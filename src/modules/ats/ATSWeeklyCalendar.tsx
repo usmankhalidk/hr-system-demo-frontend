@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays } from 'lucide-react';
-import { Interview } from '../../api/ats';
+import { Interview } from './atsCalendarUtils';
 import InterviewEntry from './InterviewEntry';
 import {
   formatDate,
