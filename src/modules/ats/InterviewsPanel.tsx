@@ -129,248 +129,215 @@ export default function InterviewsPanel() {
                 style={{
                   background: '#fff',
                   border: '1px solid #e2e8f0',
-                  borderRadius: 16,
+                  borderRadius: 12,
                   overflow: 'hidden',
-                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
                   e.currentTarget.style.borderColor = '#3b82f6';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
-                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
                   e.currentTarget.style.borderColor = '#e2e8f0';
                 }}
               >
-                {/* Header with Date Badge */}
+                {/* Compact Header */}
                 <div
                   style={{
                     background: 'linear-gradient(135deg, #0D2137 0%, #1e3a5f 100%)',
-                    padding: '16px 20px',
+                    padding: '12px 16px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    gap: 12,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    {/* Date Badge */}
-                    <div
-                      style={{
-                        minWidth: 70,
-                        textAlign: 'center',
-                        padding: '10px 8px',
-                        background: 'rgba(255,255,255,0.15)',
-                        borderRadius: 12,
-                        color: '#fff',
-                        border: '2px solid rgba(255,255,255,0.2)',
-                      }}
-                    >
-                      <div style={{ fontSize: '1.6rem', fontWeight: 800, lineHeight: 1 }}>
-                        {scheduledDate.getDate()}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', fontWeight: 700, marginTop: 4, opacity: 0.9, letterSpacing: 0.5 }}>
-                        {scheduledDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
-                      </div>
+                  {/* Date Badge */}
+                  <div
+                    style={{
+                      minWidth: 56,
+                      textAlign: 'center',
+                      padding: '8px 6px',
+                      background: 'rgba(255,255,255,0.15)',
+                      borderRadius: 8,
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.3rem', fontWeight: 800, lineHeight: 1 }}>
+                      {scheduledDate.getDate()}
                     </div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
+                      {scheduledDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
+                    </div>
+                  </div>
 
-                    {/* Time and Duration */}
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#fff', marginBottom: 6 }}>
-                        <Clock size={18} />
-                        <span style={{ fontSize: '1.05rem', fontWeight: 700 }}>
-                          {scheduledDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      {interview.durationMinutes && (
-                        <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
-                          {interview.durationMinutes} {t('ats.minutes', 'minutes')}
-                        </div>
-                      )}
+                  {/* Time & Duration */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fff', fontSize: '0.95rem', fontWeight: 700 }}>
+                      <Clock size={16} />
+                      {scheduledDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                      {interview.durationMinutes && <span style={{ opacity: 0.8, fontSize: '0.85rem' }}>({interview.durationMinutes}min)</span>}
                     </div>
                   </div>
 
                   {/* Interview Type Badge */}
                   <div
                     style={{
-                      padding: '8px 16px',
-                      borderRadius: 999,
-                      background: interview.interviewType === 'phone' 
-                        ? 'rgba(234,88,12,0.2)' 
-                        : 'rgba(34,197,94,0.2)',
-                      border: interview.interviewType === 'phone'
-                        ? '2px solid rgba(234,88,12,0.4)'
-                        : '2px solid rgba(34,197,94,0.4)',
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      background: interview.interviewType === 'phone' ? 'rgba(234,88,12,0.25)' : 'rgba(34,197,94,0.25)',
+                      border: `1px solid ${interview.interviewType === 'phone' ? 'rgba(234,88,12,0.5)' : 'rgba(34,197,94,0.5)'}`,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 8,
+                      gap: 6,
                     }}
                   >
-                    {interview.interviewType === 'phone' ? (
-                      <Phone size={16} color="#fff" />
-                    ) : (
-                      <Users size={16} color="#fff" />
-                    )}
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {interview.interviewType === 'phone'
-                        ? t('ats.phone', 'Phone')
-                        : t('ats.inPerson', 'In-Person')}
+                    {interview.interviewType === 'phone' ? <Phone size={14} color="#fff" /> : <Users size={14} color="#fff" />}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
+                      {interview.interviewType === 'phone' ? t('ats.phone', 'Phone') : t('ats.inPerson', 'In-Person')}
                     </span>
                   </div>
                 </div>
 
-                {/* Content */}
-                <div style={{ padding: '20px' }}>
-                  {/* Candidate Section */}
-                  <div
-                    style={{
-                      padding: 16,
-                      background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(147,197,253,0.08) 100%)',
-                      borderRadius: 12,
-                      border: '1px solid rgba(59,130,246,0.2)',
-                      marginBottom: 16,
-                    }}
-                  >
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e40af', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                      {t('ats.candidate', 'Candidate')}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      {candidateAvatarUrl ? (
-                        <img
-                          src={candidateAvatarUrl}
-                          alt={candidateFullName}
-                          style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: '50%',
-                            objectFit: 'cover',
-                            border: '3px solid rgba(59,130,246,0.3)',
-                            boxShadow: '0 4px 12px rgba(59,130,246,0.15)',
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
-                            color: '#fff',
-                            fontSize: '1rem',
-                            fontWeight: 800,
-                            border: '3px solid rgba(59,130,246,0.3)',
-                            boxShadow: '0 4px 12px rgba(59,130,246,0.15)',
-                          }}
-                        >
-                          {candidateFullName.charAt(0).toUpperCase()}
+                {/* Compact Content */}
+                <div style={{ padding: '14px 16px' }}>
+                  {/* Candidate & Position Row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0' }}>
+                    {candidateAvatarUrl ? (
+                      <img
+                        src={candidateAvatarUrl}
+                        alt={candidateFullName}
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                          border: '2px solid #3b82f6',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
+                          color: '#fff',
+                          fontSize: '0.9rem',
+                          fontWeight: 800,
+                          border: '2px solid #3b82f6',
+                        }}
+                      >
+                        {candidateFullName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
+                        {candidateFullName}
+                      </div>
+                      {interview.positionTitle && (
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Briefcase size={12} />
+                          {interview.positionTitle}
                         </div>
                       )}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
-                          {candidateFullName}
-                        </div>
-                        {interview.positionTitle && (
-                          <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Briefcase size={14} />
-                            {interview.positionTitle}
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </div>
 
-                  {/* Interviewer Section */}
-                  {interviewerFullName && (
-                    <div
-                      style={{
-                        padding: 16,
-                        background: 'linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(168,85,247,0.08) 100%)',
-                        borderRadius: 12,
-                        border: '1px solid rgba(124,58,237,0.2)',
-                        marginBottom: 16,
-                      }}
-                    >
-                      <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b21a8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                        {t('ats.interviewer', 'Interviewer')}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Details Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                    {/* Interviewer */}
+                    {interviewerFullName && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {interviewerAvatarUrl ? (
                           <img
                             src={interviewerAvatarUrl}
                             alt={interviewerFullName}
                             style={{
-                              width: 44,
-                              height: 44,
+                              width: 32,
+                              height: 32,
                               borderRadius: '50%',
                               objectFit: 'cover',
-                              border: '3px solid rgba(124,58,237,0.3)',
-                              boxShadow: '0 4px 12px rgba(124,58,237,0.15)',
+                              border: '2px solid #7c3aed',
                             }}
                           />
                         ) : (
                           <div
                             style={{
-                              width: 44,
-                              height: 44,
+                              width: 32,
+                              height: 32,
                               borderRadius: '50%',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
                               color: '#fff',
-                              fontSize: '0.9rem',
+                              fontSize: '0.75rem',
                               fontWeight: 800,
-                              border: '3px solid rgba(124,58,237,0.3)',
-                              boxShadow: '0 4px 12px rgba(124,58,237,0.15)',
+                              border: '2px solid #7c3aed',
                             }}
                           >
                             {interviewerFullName.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#6b21a8' }}>
-                          {interviewerFullName}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 500 }}>
+                            {t('ats.interviewer', 'Interviewer')}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {interviewerFullName}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Location */}
-                  {interview.location && interview.interviewType === 'in_person' && (
-                    <div
-                      style={{
-                        padding: 14,
-                        background: 'rgba(34,197,94,0.08)',
-                        borderRadius: 10,
-                        border: '1px solid rgba(34,197,94,0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        marginBottom: 16,
-                      }}
-                    >
-                      <MapPin size={18} color="#15803d" />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#15803d' }}>
-                        {interview.location}
-                      </span>
-                    </div>
-                  )}
+                    {/* Location */}
+                    {interview.location && interview.interviewType === 'in_person' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'rgba(34,197,94,0.15)',
+                            border: '2px solid rgba(34,197,94,0.3)',
+                          }}
+                        >
+                          <MapPin size={16} color="#15803d" />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 500 }}>
+                            {t('ats.location', 'Location')}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {interview.location}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Description */}
                   {interview.description && (
                     <div
                       style={{
-                        padding: 14,
-                        background: 'rgba(148,163,184,0.08)',
-                        borderRadius: 10,
-                        border: '1px solid rgba(148,163,184,0.2)',
+                        marginTop: 10,
+                        padding: '8px 10px',
+                        background: 'rgba(148,163,184,0.06)',
+                        borderRadius: 6,
+                        borderLeft: '3px solid #94a3b8',
                       }}
                     >
-                      <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.6 }}>
+                      <div style={{ fontSize: '0.8rem', color: '#475569', lineHeight: 1.5 }}>
                         {interview.description}
                       </div>
                     </div>
