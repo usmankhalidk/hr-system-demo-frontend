@@ -120,6 +120,15 @@ export interface Interview {
   icsUid: string | null;
   createdAt: string;
   updatedAt: string;
+  // Extended fields for calendar view
+  candidateName?: string;
+  candidateSurname?: string;
+  candidateAvatarFilename?: string | null;
+  positionTitle?: string;
+  positionId?: number | null;
+  interviewerName?: string;
+  interviewerSurname?: string;
+  interviewerAvatarFilename?: string | null;
 }
 
 export interface CandidateComment {
@@ -394,6 +403,29 @@ export async function deleteCandidateComment(id: number): Promise<void> {
 export async function getInterviews(candidateId: number): Promise<Interview[]> {
   const { data } = await apiClient.get(`/ats/candidates/${candidateId}/interviews`);
   return (data.data.interviews ?? []) as Interview[];
+}
+
+export async function getAllInterviews(params?: {
+  dateFrom?: string;
+  dateTo?: string;
+  positionId?: number;
+  candidateId?: number;
+  interviewerId?: number;
+  status?: string;
+}): Promise<{ interviews: Interview[] }> {
+  const queryParams = new URLSearchParams();
+  if (params?.dateFrom) queryParams.append('date_from', params.dateFrom);
+  if (params?.dateTo) queryParams.append('date_to', params.dateTo);
+  if (params?.positionId) queryParams.append('position_id', String(params.positionId));
+  if (params?.candidateId) queryParams.append('candidate_id', String(params.candidateId));
+  if (params?.interviewerId) queryParams.append('interviewer_id', String(params.interviewerId));
+  if (params?.status) queryParams.append('status', params.status);
+
+  const queryString = queryParams.toString();
+  const url = queryString ? `/ats/interviews?${queryString}` : '/ats/interviews';
+  
+  const { data } = await apiClient.get(url);
+  return { interviews: (data.data?.interviews ?? []) as Interview[] };
 }
 
 export async function createInterview(

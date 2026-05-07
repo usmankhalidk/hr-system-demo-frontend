@@ -244,7 +244,7 @@ function AppRoutes() {
       } />
 
       <Route path="/ats" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager']} permissionKey="ats">
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager', 'store_manager', 'employee']} permissionKey="ats">
           <Layout title={t('nav.ats')}><ATSPage /></Layout>
         </ProtectedRoute>
       } />
