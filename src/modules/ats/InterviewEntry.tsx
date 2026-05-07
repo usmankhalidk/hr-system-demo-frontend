@@ -1,0 +1,560 @@
+import React, { useState } from 'react';
+import { Phone, Users, Video, MapPin, AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Interview } from '../../api/ats';
+import { getAvatarUrl } from '../../api/client';
+import {
+  INTERVIEW_STATUS_COLORS,
+  CONFLICT_COLORS,
+  initials,
+  fullName,
+  formatTime,
+  formatDuration,
+} from './atsCalendarUtils';
+
+interface InterviewEntryProps {
+  interview: Interview;
+  variant: 'weekly' | 'monthly';
+  onClick: () => void;
+  hasConflict?: boolean;
+  showTooltip?: boolean;
+}
+
+const INTERVIEW_TYPE_ICONS = {
+  phone: Phone,
+  in_person: Users,
+  video: Video,
+};
+
+export default function InterviewEntry({
+  interview,
+  variant,
+  onClick,
+  hasConflict = false,
+  showTooltip = true,
+}: InterviewEntryProps) {
+  const { t } = useTranslation();
+  const [isHovered, setIsHovered] = useState(false);
+
+  const colors = INTERVIEW_STATUS_COLORS[interview.status];
+  const Icon = INTERVIEW_TYPE_ICONS[interview.interviewType];
+  const candidateFullName = fullName(interview.candidateName, interview.candidateSurname);
+  const interviewerFullName = interview.interviewerName
+    ? fullName(interview.interviewerName, interview.interviewerSurname || '')
+    : null;
+  const candidateInitials = initials(interview.candidateName, interview.candidateSurname);
+  const avatarUrl = getAvatarUrl(interview.candidateAvatarFilename);
+
+  const isCancelled = interview.status === 'cancelled';
+
+  // Weekly variant: larger, more detailed
+  if (variant === 'weekly') {
+    return (
+      <div
+        style={{ position: 'relative' }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            borderRadius: 6,
+            border: hasConflict
+              ? `1px solid ${CONFLICT_COLORS.border}`
+              : `1px solid ${colors.border}`,
+            borderLeftWidth: 5,
+            borderLeftStyle: 'solid',
+            borderLeftColor: hasConflict ? CONFLICT_COLORS.border : colors.leftBorder,
+            background: hasConflict ? CONFLICT_COLORS.bg : colors.bg,
+            color: hasConflict ? CONFLICT_COLORS.text : colors.text,
+            padding: '6px 8px',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            lineHeight: 1.2,
+            cursor: 'pointer',
+            boxShadow: isCancelled ? 'none' : '0 1px 4px rgba(0,0,0,0.15)',
+            opacity: isCancelled ? 0.6 : 1,
+            textDecoration: isCancelled ? 'line-through' : 'none',
+            transition: 'transform 0.1s, filter 0.15s',
+            overflow: 'hidden',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.02)';
+            e.currentTarget.style.filter = 'brightness(1.05)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.filter = '';
+          }}
+        >
+          {/* Conflict warning */}
+          {hasConflict && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                background: '#fef3c7',
+                border: '1px solid #f59e0b',
+              }}
+            >
+              <AlertTriangle size={10} color="#92400e" strokeWidth={2.5} />
+            </div>
+          )}
+
+          {/* Header: Avatar + Name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={candidateFullName}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '1px solid rgba(148,163,184,0.45)',
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
+                  color: '#fff',
+                  fontSize: '0.6rem',
+                  fontWeight: 800,
+                  border: '1px solid rgba(148,163,184,0.45)',
+                  flexShrink: 0,
+                }}
+              >
+                {candidateInitials}
+              </div>
+            )}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 800,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={candidateFullName}
+              >
+                {candidateFullName}
+              </div>
+            </div>
+          </div>
+
+          {/* Position */}
+          <div
+            style={{
+              fontSize: '0.65rem',
+              fontWeight: 600,
+              opacity: 0.85,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={interview.positionTitle}
+          >
+            {interview.positionTitle}
+          </div>
+
+          {/* Time + Type */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <Icon size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: '0.68rem', fontWeight: 700 }}>
+              {formatTime(interview.scheduledTime)} ({formatDuration(interview.durationMinutes)})
+            </span>
+          </div>
+
+          {/* Location/Link */}
+          {interview.location && interview.interviewType === 'in_person' && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: '0.62rem',
+                opacity: 0.8,
+                marginTop: 2,
+              }}
+            >
+              <MapPin size={10} strokeWidth={2.5} />
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={interview.location}
+              >
+                {interview.location}
+              </span>
+            </div>
+          )}
+
+          {/* Status badge */}
+          <div style={{ marginTop: 4 }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '2px 6px',
+                borderRadius: 4,
+                background: 'rgba(255,255,255,0.7)',
+                border: `1px solid ${colors.border}`,
+                fontSize: '0.6rem',
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                letterSpacing: 0.3,
+              }}
+            >
+              {t(`ats.interviewStatus.${interview.status}`, interview.status)}
+            </span>
+          </div>
+        </div>
+
+        {/* Tooltip */}
+        {showTooltip && isHovered && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 4px)',
+              left: 0,
+              minWidth: 240,
+              maxWidth: 320,
+              borderRadius: 10,
+              border: '1px solid rgba(148,163,184,0.44)',
+              background: '#ffffff',
+              boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
+              padding: '10px 12px',
+              zIndex: 100,
+              pointerEvents: 'none',
+            }}
+          >
+            {/* Candidate */}
+            <div style={{ marginBottom: 8 }}>
+              <div
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  marginBottom: 4,
+                }}
+              >
+                {t('ats.candidate', 'Candidate')}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={candidateFullName}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: '1px solid rgba(148,163,184,0.45)',
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
+                      color: '#fff',
+                      fontSize: '0.7rem',
+                      fontWeight: 800,
+                      border: '1px solid rgba(148,163,184,0.45)',
+                    }}
+                  >
+                    {candidateInitials}
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {candidateFullName}
+                  </div>
+                  {interview.candidateEmail && (
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                      {interview.candidateEmail}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Position */}
+            <div style={{ marginBottom: 8 }}>
+              <div
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  marginBottom: 4,
+                }}
+              >
+                {t('ats.position', 'Position')}
+              </div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {interview.positionTitle}
+              </div>
+              <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                {interview.jobReference}
+              </div>
+            </div>
+
+            {/* Interview Details */}
+            <div style={{ marginBottom: 8 }}>
+              <div
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  marginBottom: 4,
+                }}
+              >
+                {t('ats.interviewDetails', 'Interview Details')}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Icon size={14} strokeWidth={2.5} color="var(--text-secondary)" />
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {t(`ats.interviewType.${interview.interviewType}`, interview.interviewType)}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+                {formatTime(interview.scheduledTime)} • {formatDuration(interview.durationMinutes)}
+              </div>
+            </div>
+
+            {/* Interviewer */}
+            {interviewerFullName && (
+              <div style={{ marginBottom: 8 }}>
+                <div
+                  style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    marginBottom: 4,
+                  }}
+                >
+                  {t('ats.interviewer', 'Interviewer')}
+                </div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {interviewerFullName}
+                </div>
+              </div>
+            )}
+
+            {/* Location */}
+            {interview.location && (
+              <div style={{ marginBottom: 8 }}>
+                <div
+                  style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    marginBottom: 4,
+                  }}
+                >
+                  {t('ats.location', 'Location')}
+                </div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+                  {interview.location}
+                </div>
+              </div>
+            )}
+
+            {/* Meeting Link */}
+            {interview.meetingLink && interview.interviewType === 'video' && (
+              <div style={{ marginBottom: 8 }}>
+                <a
+                  href={interview.meetingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    background: 'var(--primary)',
+                    color: '#fff',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Video size={12} />
+                  {t('ats.joinMeeting', 'Join Meeting')}
+                </a>
+              </div>
+            )}
+
+            {/* Notes Preview */}
+            {interview.notes && (
+              <div>
+                <div
+                  style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    marginBottom: 4,
+                  }}
+                >
+                  {t('ats.notes', 'Notes')}
+                </div>
+                <div
+                  style={{
+                    fontSize: '0.65rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.4,
+                    maxHeight: 60,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {interview.notes.slice(0, 100)}
+                  {interview.notes.length > 100 && '...'}
+                </div>
+              </div>
+            )}
+
+            {/* Conflict Warning */}
+            {hasConflict && (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  background: 'rgba(251,191,36,0.12)',
+                  border: '1px solid #f59e0b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <AlertTriangle size={14} color="#92400e" strokeWidth={2.5} />
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#92400e' }}>
+                  {t('ats.scheduleConflict', 'Schedule conflict detected')}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Monthly variant: compact, badge-like
+  return (
+    <div
+      style={{ position: 'relative' }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          borderRadius: 6,
+          border: hasConflict
+            ? `1px solid ${CONFLICT_COLORS.border}`
+            : `1px solid ${colors.border}`,
+          borderLeftWidth: 5,
+          borderLeftStyle: 'solid',
+          borderLeftColor: hasConflict ? CONFLICT_COLORS.border : colors.leftBorder,
+          background: hasConflict ? CONFLICT_COLORS.bg : colors.bg,
+          color: hasConflict ? CONFLICT_COLORS.text : colors.text,
+          padding: '3px 8px',
+          fontSize: '0.65rem',
+          fontWeight: 800,
+          lineHeight: 1,
+          cursor: 'pointer',
+          transition: 'transform 0.1s',
+          overflow: 'hidden',
+          opacity: isCancelled ? 0.6 : 1,
+          textDecoration: isCancelled ? 'line-through' : 'none',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.02)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+      >
+        <Icon size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {formatTime(interview.scheduledTime)} • {candidateFullName}
+        </span>
+        {hasConflict && <AlertTriangle size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />}
+      </div>
+
+      {/* Simplified tooltip for monthly view */}
+      {showTooltip && isHovered && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            minWidth: 200,
+            maxWidth: 280,
+            borderRadius: 8,
+            border: '1px solid rgba(148,163,184,0.44)',
+            background: '#ffffff',
+            boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
+            padding: '8px 10px',
+            zIndex: 100,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+            {candidateFullName}
+          </div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
+            {interview.positionTitle}
+          </div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+            {formatTime(interview.scheduledTime)} • {formatDuration(interview.durationMinutes)}
+          </div>
+          {interviewerFullName && (
+            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: 4 }}>
+              {t('ats.interviewer', 'Interviewer')}: {interviewerFullName}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -62,6 +62,7 @@ import {
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
 import DocumentPreviewModal from './DocumentPreviewModal';
+import CalendarPanel from './CalendarPanel';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -6176,11 +6177,33 @@ export default function ATSPage() {
   const canEdit = !!user && ['admin', 'hr'].includes(user.role);
   const canViewRisks = !!user && ['admin', 'hr'].includes(user.role);
   const canFeedback = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
-  const [tab, setTab] = useState<'jobs' | 'candidates' | 'alerts'>('candidates');
+  const [tab, setTab] = useState<'jobs' | 'candidates' | 'alerts' | 'calendar'>('candidates');
+  const [stores, setStores] = useState<Store[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [jobs, setJobs] = useState<JobPosting[]>([]);
+
+  // Fetch data for calendar when calendar tab is active
+  useEffect(() => {
+    if (tab === 'calendar') {
+      Promise.all([
+        getStores().catch(() => []),
+        getCompanies().catch(() => []),
+        getEmployees({ status: 'active', includeStoreTerminals: false, limit: 500 }).then(res => res.employees).catch(() => []),
+        getJobs().catch(() => []),
+      ]).then(([storesData, companiesData, employeesData, jobsData]) => {
+        setStores(storesData);
+        setCompanies(companiesData);
+        setEmployees(employeesData);
+        setJobs(jobsData);
+      });
+    }
+  }, [tab]);
 
   const tabs = [
     ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
     { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
+    { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
     { key: 'alerts', label: t('ats.tabAlerts'), icon: '🔔' },
   ];
 
@@ -6274,6 +6297,7 @@ export default function ATSPage() {
 
       {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} />}
       {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} />}
+      {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} />}
       {tab === 'alerts' && <AlertsPanel canViewRisks={canViewRisks} />}
     </div>
   );
