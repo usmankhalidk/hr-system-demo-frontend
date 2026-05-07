@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Phone, Users, MapPin, Calendar, Clock, User, Briefcase, Trash2, Save } from 'lucide-react';
+import { X, Phone, Users, MapPin, Calendar, Clock, User, Briefcase, Trash2, Save, Building2, Store as StoreIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Interview } from '../../api/ats';
 import { getAvatarUrl } from '../../api/client';
@@ -135,21 +135,35 @@ export default function InterviewDetailsModal({
         {/* Header */}
         <div
           style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid var(--border)',
+            padding: '24px 28px',
+            background: 'linear-gradient(135deg, #0D2137 0%, #1e3a5f 100%)',
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Calendar size={24} color="var(--primary)" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: 'rgba(255,255,255,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Calendar size={24} color="#fff" />
+            </div>
             <h2
               style={{
                 margin: 0,
-                fontSize: '1.25rem',
+                fontSize: '1.35rem',
                 fontWeight: 700,
-                color: 'var(--text-primary)',
+                color: '#fff',
               }}
             >
               {t('ats.interviewDetails', 'Interview Details')}
@@ -158,115 +172,121 @@ export default function InterviewDetailsModal({
           <button
             onClick={onClose}
             style={{
-              background: 'none',
+              background: 'rgba(255,255,255,0.1)',
               border: 'none',
               cursor: 'pointer',
-              padding: 8,
-              borderRadius: 8,
+              padding: 10,
+              borderRadius: 10,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
           >
-            <X size={20} color="var(--text-muted)" />
+            <X size={20} color="#fff" />
           </button>
         </div>
 
         {/* Content */}
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: '28px' }}>
           {/* Candidate Section */}
-          <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              marginBottom: 24,
+              padding: 20,
+              background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(147,197,253,0.08) 100%)',
+              borderRadius: 12,
+              border: '1px solid rgba(59,130,246,0.2)',
+            }}
+          >
             <div
               style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                marginBottom: 12,
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: '#1e40af',
+                marginBottom: 14,
                 textTransform: 'uppercase',
-                letterSpacing: 0.5,
+                letterSpacing: 0.8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
             >
+              <User size={14} />
               {t('ats.candidate', 'Candidate')}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               {candidateAvatarUrl ? (
                 <img
                   src={candidateAvatarUrl}
                   alt={candidateFullName}
                   style={{
-                    width: 48,
-                    height: 48,
+                    width: 56,
+                    height: 56,
                     borderRadius: '50%',
                     objectFit: 'cover',
-                    border: '2px solid var(--border)',
+                    border: '3px solid rgba(59,130,246,0.3)',
+                    boxShadow: '0 4px 12px rgba(59,130,246,0.15)',
                   }}
                 />
               ) : (
                 <div
                   style={{
-                    width: 48,
-                    height: 48,
+                    width: 56,
+                    height: 56,
                     borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
                     color: '#fff',
-                    fontSize: '1rem',
+                    fontSize: '1.1rem',
                     fontWeight: 800,
-                    border: '2px solid var(--border)',
+                    border: '3px solid rgba(59,130,246,0.3)',
+                    boxShadow: '0 4px 12px rgba(59,130,246,0.15)',
                   }}
                 >
                   {candidateInitials}
                 </div>
               )}
               <div>
-                <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
                   {candidateFullName}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Position Section */}
-          <div style={{ marginBottom: 24 }}>
-            <div
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                marginBottom: 12,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-              }}
-            >
-              {t('ats.position', 'Position')}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Briefcase size={18} color="var(--text-secondary)" />
-              <div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {interview.positionTitle}
+                <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Briefcase size={14} />
+                  {interview.positionTitle || t('ats.noPosition', 'No position specified')}
                 </div>
               </div>
             </div>
           </div>
 
           {/* Interview Details Section */}
-          <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              marginBottom: 24,
+              padding: 20,
+              background: 'linear-gradient(135deg, rgba(201,151,58,0.08) 0%, rgba(251,191,36,0.08) 100%)',
+              borderRadius: 12,
+              border: '1px solid rgba(201,151,58,0.2)',
+            }}
+          >
             <div
               style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                marginBottom: 12,
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: '#92400e',
+                marginBottom: 16,
                 textTransform: 'uppercase',
-                letterSpacing: 0.5,
+                letterSpacing: 0.8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
             >
+              <Calendar size={14} />
               {t('ats.interviewDetails', 'Interview Details')}
             </div>
 
@@ -451,22 +471,50 @@ export default function InterviewDetailsModal({
 
           {/* Interviewer Section */}
           {interviewerFullName && (
-            <div style={{ marginBottom: 24 }}>
+            <div
+              style={{
+                marginBottom: 24,
+                padding: 20,
+                background: 'linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(168,85,247,0.08) 100%)',
+                borderRadius: 12,
+                border: '1px solid rgba(124,58,237,0.2)',
+              }}
+            >
               <div
                 style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  marginBottom: 12,
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  color: '#6b21a8',
+                  marginBottom: 14,
                   textTransform: 'uppercase',
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
+                <User size={14} />
                 {t('ats.interviewer', 'Interviewer')}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <User size={18} color="var(--text-secondary)" />
-                <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                    fontWeight: 800,
+                    border: '2px solid rgba(124,58,237,0.3)',
+                  }}
+                >
+                  {interviewerFullName.charAt(0).toUpperCase()}
+                </div>
+                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#6b21a8' }}>
                   {interviewerFullName}
                 </span>
               </div>

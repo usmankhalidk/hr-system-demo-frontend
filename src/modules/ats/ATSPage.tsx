@@ -62,6 +62,7 @@ import {
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
 import DocumentPreviewModal from './DocumentPreviewModal';
+import InterviewsPanel from './InterviewsPanel';
 import CalendarPanel from './CalendarPanel';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1745,10 +1746,10 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
               )}
 
               {step === 3 && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, display: 'grid', gap: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, maxWidth: 680, margin: '0 auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, marginBottom: 12 }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid rgba(201,151,58,0.22)', background: '#fffdf6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid rgba(201,151,58,0.22)', background: '#fffdf6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
                         {selectedCompanyLogoUrl
                           ? <img src={selectedCompanyLogoUrl} alt={selectedCompanyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           : <Building2 size={14} color="#8a6318" />}
@@ -1768,10 +1769,10 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     </div>
                   </div>
 
-                  <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
-                  <p style={{ margin: 0, color: '#4b5563', fontSize: 13.5, lineHeight: 1.55 }}>{description.trim() || '-'}</p>
+                  <h4 style={{ margin: '0 0 8px 0', fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
+                  <p style={{ margin: '0 0 12px 0', color: '#4b5563', fontSize: 13.5, lineHeight: 1.55 }}>{description.trim() || '-'}</p>
 
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                     <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
                       {jobTypeDisplay}
                     </span>
@@ -1794,7 +1795,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     </span>
                   </div>
 
-                  <div style={{ display: 'grid', gap: 8, gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', border: '1px dashed rgba(148,163,184,0.38)', borderRadius: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.74)' }}>
+                  <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3, 1fr)', border: '1px dashed rgba(148,163,184,0.38)', borderRadius: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.74)', marginBottom: 12 }}>
                     <div style={{ display: 'grid', gap: 2 }}>
                       <strong style={{ color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('ats.salaryRange', 'Salary range')}</strong>
                       <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>€{salaryMinInput.trim() || '-'} - €{salaryMaxInput.trim() || '-'}</span>
@@ -1809,7 +1810,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                     {tags.length > 0 ? tags.map((tag) => (
                       <span key={`preview-${tag}`} style={{ fontSize: 11, borderRadius: 999, padding: '3px 9px', background: '#E9F8EE', color: '#1D6B3A', border: '1px solid #BFE8CC', fontWeight: 600 }}>
                         {tag}
@@ -1817,17 +1818,17 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     )) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.noTags', 'No tags')}</span>}
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       <button
                         type="button"
-                        style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}
                       >
                         <Heart size={15} />
                       </button>
                       <button
                         type="button"
-                        style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(13,33,55,0.2)', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}
                       >
                         <Bookmark size={15} />
                       </button>
@@ -1835,7 +1836,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
                     <button
                       type="button"
-                      style={{ border: 'none', background: 'transparent', color: '#9A6808', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}
+                      style={{ border: 'none', background: 'transparent', color: '#9A6808', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0, cursor: 'default' }}
                     >
                       {t('publicCareers.viewDetails', 'View details')} <ArrowRight size={14} />
                     </button>
@@ -4286,6 +4287,37 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   useEffect(() => { fetch(); }, [fetch]);
 
+  // Socket listeners for real-time job updates
+  const { socket } = useSocket();
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleJobCreated = (job: JobPosting) => {
+      setJobs((prev) => {
+        if (prev.some((j) => j.id === job.id)) return prev;
+        return [job, ...prev];
+      });
+    };
+
+    const handleJobUpdated = (job: JobPosting) => {
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+    };
+
+    const handleJobDeleted = (jobId: number) => {
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    };
+
+    socket.on('ATS_JOB_CREATED', handleJobCreated);
+    socket.on('ATS_JOB_UPDATED', handleJobUpdated);
+    socket.on('ATS_JOB_DELETED', handleJobDeleted);
+
+    return () => {
+      socket.off('ATS_JOB_CREATED', handleJobCreated);
+      socket.off('ATS_JOB_UPDATED', handleJobUpdated);
+      socket.off('ATS_JOB_DELETED', handleJobDeleted);
+    };
+  }, [socket]);
+
   useEffect(() => {
     if (!canEdit) return;
     Promise.all([
@@ -6286,7 +6318,7 @@ export default function ATSPage() {
   const canEdit = !!user && ['admin', 'hr'].includes(user.role);
   const canViewRisks = !!user && ['admin', 'hr'].includes(user.role);
   const canFeedback = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
-  const [tab, setTab] = useState<'jobs' | 'candidates' | 'alerts' | 'calendar'>('candidates');
+  const [tab, setTab] = useState<'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar'>('candidates');
   const [stores, setStores] = useState<Store[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -6309,12 +6341,23 @@ export default function ATSPage() {
     }
   }, [tab]);
 
-  const tabs = [
-    ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
-    { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
-    { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
-    { key: 'alerts', label: t('ats.tabAlerts'), icon: '🔔' },
-  ];
+  // For store managers, only show Interviews tab
+  const tabs = user?.role === 'store_manager' 
+    ? [{ key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' }]
+    : [
+        ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
+        { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
+        { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
+        { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
+        { key: 'alerts', label: t('ats.tabAlerts'), icon: '🔔' },
+      ];
+
+  // Set default tab for store managers
+  useEffect(() => {
+    if (user?.role === 'store_manager' && tab !== 'interviews') {
+      setTab('interviews');
+    }
+  }, [user?.role]);
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto' }} className="page-enter">
@@ -6406,6 +6449,7 @@ export default function ATSPage() {
 
       {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} />}
       {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} />}
+      {tab === 'interviews' && <InterviewsPanel />}
       {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} />}
       {tab === 'alerts' && <AlertsPanel canViewRisks={canViewRisks} />}
     </div>

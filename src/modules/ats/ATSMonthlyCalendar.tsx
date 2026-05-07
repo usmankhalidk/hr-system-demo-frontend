@@ -31,6 +31,7 @@ export default function ATSMonthlyCalendar({
 }: ATSMonthlyCalendarProps) {
   const { t } = useTranslation();
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const [hoveredInterview, setHoveredInterview] = useState<number | null>(null);
 
   const DAY_LABELS = [
     t('shifts.dayMon', 'Mon'),
@@ -210,17 +211,26 @@ export default function ATSMonthlyCalendar({
 
                 {/* Interview entries */}
                 {hasInterviews && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div 
+                    style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                    onMouseEnter={() => setHoveredDay(null)}
+                  >
                     {dayInterviews.slice(0, MAX_VISIBLE).map((interview) => {
                       const hasConflictFlag = hasConflict(interview.id, conflicts);
                       return (
-                        <InterviewEntry
+                        <div
                           key={interview.id}
-                          interview={interview}
-                          variant="monthly"
-                          onClick={() => onInterviewClick(interview)}
-                          hasConflict={hasConflictFlag}
-                        />
+                          onMouseEnter={() => setHoveredInterview(interview.id)}
+                          onMouseLeave={() => setHoveredInterview(null)}
+                        >
+                          <InterviewEntry
+                            interview={interview}
+                            variant="monthly"
+                            onClick={() => onInterviewClick(interview)}
+                            hasConflict={hasConflictFlag}
+                            showTooltip={hoveredInterview === interview.id}
+                          />
+                        </div>
                       );
                     })}
                     {dayInterviews.length > MAX_VISIBLE && (
@@ -239,7 +249,7 @@ export default function ATSMonthlyCalendar({
                 )}
 
                 {/* Hover tooltip with full list */}
-                {isHovered && hasInterviews && (
+                {isHovered && hasInterviews && !hoveredInterview && (
                   <div
                     style={{
                       position: 'absolute',
