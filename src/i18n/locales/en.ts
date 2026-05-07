@@ -2765,7 +2765,7 @@ const en = {
     },
     archive: {
       title: 'Recent report archive',
-      subtitle: 'Last 10 generated reports · downloadable in PDF',
+      subtitle: 'History of generated HR and operational reports available for PDF download',
       viewFull: 'View full archive',
       generatedOn: 'Generated on',
       downloadPdf: 'Download PDF'
@@ -2787,17 +2787,17 @@ const en = {
       },
       admin_monthly: {
         name: 'Monthly Admin Report',
-        desc: 'Monthly executive report with full KPIs: staff, costs, store performance, ATS funnel, critical deadlines.',
+        desc: 'Monthly executive report with full KPIs: staff, ATS funnel, onboarding in process, shift coverage, contract deadlines.',
         schedule: '1st of the month at 07:00'
       },
       hr_monthly: {
         name: 'Monthly HR Report',
-        desc: 'Monthly HR report focusing on personnel: hires, resignations, turnover, leave, training and medical exams expiring.',
+        desc: 'Monthly HR report focusing on personnel: staff variations, leave & permissions, training deadlines, medical exam deadlines, and expiring contracts.',
         schedule: '1st of the month at 08:00'
       },
       anomaly_daily: {
         name: 'Daily HR Alert (ATS)',
-        desc: 'Daily operational summary for HR: unread candidates, missing interviews, absent feedback, blocked pipeline.',
+        desc: 'Daily operational summary of the ATS pipeline: positions created, received, in review, phone interview, in-person interview, hired, and rejected candidates.',
         schedule: 'Every day (Mon–Fri) at 08:00'
       }
     },
@@ -2823,14 +2823,33 @@ const en = {
       'Candidati non letti': 'Unread candidates',
       'Colloqui non pianificati': 'Unplanned interviews',
       'Feedback mancanti': 'Missing feedback',
-      'Pipeline bloccata': 'Blocked pipeline'
+      'Pipeline bloccata': 'Blocked pipeline',
+      'KPI': 'KPI',
+      'Employees': 'Employees',
+      'ATS': 'ATS',
+      'Onboarding in process': 'Onboarding in process',
+      'Shift coverage': 'Shift coverage',
+      'Contract deadlines': 'Contract deadlines',
+      'Attendance': 'Attendance',
+      'Anomalies': 'Anomalies',
+      'Leave Requests': 'Leave Requests',
+      'Training deadlines': 'Training deadlines',
+      'position': 'Position',
+      'Received Candidates': 'Received Candidates',
+      'In Review Candidates': 'In Review Candidates',
+      'Phone Interview Candidates': 'Phone Interview Candidates',
+      'In-person Interview Candidates': 'In-person Interview Candidates',
+      'Hired Candidates': 'Hired Candidates',
+      'Rejected Candidates': 'Rejected Candidates'
     },
     days: {
       1: 'Monday',
       2: 'Tuesday',
       3: 'Wednesday',
       4: 'Thursday',
-      5: 'Friday'
+      5: 'Friday',
+      6: 'Saturday',
+      7: 'Sunday'
     },
     mock: {
       nextRunDate: 'Mon 04/28',

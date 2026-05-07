@@ -2766,7 +2766,7 @@ const it = {
     },
     archive: {
       title: 'Archivio report recenti',
-      subtitle: 'Ultimi 10 report generati · scaricabili in PDF',
+      subtitle: 'Cronologia dei report HR e operativi generati, disponibili per il download in PDF',
       viewFull: 'Vedi archivio completo',
       generatedOn: 'Generato il',
       downloadPdf: 'Scarica PDF'
@@ -2788,17 +2788,17 @@ const it = {
       },
       admin_monthly: {
         name: 'Report Admin Mensile',
-        desc: 'Report mensile direzionale con KPI completi: organico, costi, performance negozi, funnel ATS, scadenze critiche.',
+        desc: 'Report mensile direzionale con KPI completi: organico, funnel ATS, onboarding in corso, copertura turni, scadenze contratti.',
         schedule: '1° del mese alle 07:00'
       },
       hr_monthly: {
         name: 'Report HR Mensile',
-        desc: 'Report mensile HR con focus su personale: assunzioni, dimissioni, turnover, ferie, formazioni e visite mediche in scadenza.',
+        desc: 'Report mensile HR con focus su personale: variazioni organico, ferie & permessi, scadenze formazioni, scadenze visite mediche e contratti in scadenza.',
         schedule: '1° del mese alle 08:00'
       },
       anomaly_daily: {
         name: 'Alert Giornaliero HR (ATS)',
-        desc: 'Riepilogo operativo giornaliero per HR: candidati non letti, colloqui mancanti, feedback assenti, pipeline bloccata.',
+        desc: 'Riepilogo operativo giornaliero della pipeline ATS: posizioni create, candidati ricevuti, in esame, interviste telefoniche, interviste di persona, assunti e rifiutati.',
         schedule: 'Ogni giorno (lun–ven) alle 08:00'
       }
     },
@@ -2824,14 +2824,33 @@ const it = {
       'Candidati non letti': 'Candidati non letti',
       'Colloqui non pianificati': 'Colloqui non pianificati',
       'Feedback mancanti': 'Feedback mancanti',
-      'Pipeline bloccata': 'Pipeline bloccata'
+      'Pipeline bloccata': 'Pipeline bloccata',
+      'KPI': 'KPI',
+      'Employees': 'Dipendenti',
+      'ATS': 'ATS',
+      'Onboarding in process': 'Onboarding in corso',
+      'Shift coverage': 'Copertura turni',
+      'Contract deadlines': 'Scadenze contratti',
+      'Attendance': 'Presenze',
+      'Anomalies': 'Anomalie',
+      'Leave Requests': 'Richieste ferie',
+      'Training deadlines': 'Scadenze formazioni',
+      'position': 'Posizione',
+      'Received Candidates': 'Candidati Ricevuti',
+      'In Review Candidates': 'Candidati in Valutazione',
+      'Phone Interview Candidates': 'Candidati Intervista Telefonica',
+      'In-person Interview Candidates': 'Candidati Colloquio di Persona',
+      'Hired Candidates': 'Candidati Assunti',
+      'Rejected Candidates': 'Candidati Rifiutati'
     },
     days: {
       1: 'Lunedì',
       2: 'Martedì',
       3: 'Mercoledì',
       4: 'Giovedì',
-      5: 'Venerdì'
+      5: 'Venerdì',
+      6: 'Sabato',
+      7: 'Domenica'
     },
     mock: {
       nextRunDate: 'Lun 28/04',
