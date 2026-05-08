@@ -512,10 +512,8 @@ export default function PublicJobDetailPage() {
   const companyBannerUrl = getCompanyBannerUrl(companyMeta?.bannerFilename ?? job?.companyBannerFilename);
   const storeLogoUrl = getPublicStoreLogoUrl(job?.storeLogoFilename);
   const remoteFallback = uiLanguage === 'it' ? 'Remoto / Flessibile' : 'Remote / Flexible';
-  const fallbackBackPath = effectiveCompanySlug ? `/careers/${encodeURIComponent(effectiveCompanySlug)}` : '/careers';
-  const careersBackPath = companyMeta?.slug
-    ? `/careers/${encodeURIComponent(companyMeta.slug)}`
-    : fallbackBackPath;
+  // Always go back to /careers without company slug
+  const careersBackPath = '/careers';
   const isJobClosed = job?.status === 'closed';
   const storeCountryCode = job ? normalizeCountryCode(job.jobCountry ?? job.location.country) : '';
 
@@ -707,7 +705,7 @@ export default function PublicJobDetailPage() {
       <div className="careers-detail-shell">
         <div className="careers-detail-wrapper">
           <div className="careers-empty error" style={{ marginTop: 24 }}>{error ?? copy.jobNotFound}</div>
-          <Link className="careers-detail-back" to={fallbackBackPath}>
+          <Link className="careers-detail-back" to="/careers">
             <ArrowLeft size={14} />
             {copy.backToCareers}
           </Link>
