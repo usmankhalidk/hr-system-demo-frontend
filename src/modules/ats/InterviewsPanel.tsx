@@ -55,18 +55,18 @@ export default function InterviewsPanel() {
   }
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1400, margin: '0 auto' }}>
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '2px solid var(--border)' }}>
         <button
           onClick={() => setActiveTab('upcoming')}
           style={{
-            padding: '12px 24px',
+            padding: '10px 20px',
             background: 'none',
             border: 'none',
             borderBottom: activeTab === 'upcoming' ? '3px solid var(--primary)' : '3px solid transparent',
             color: activeTab === 'upcoming' ? 'var(--primary)' : 'var(--text-secondary)',
-            fontSize: '0.95rem',
+            fontSize: '0.9rem',
             fontWeight: 700,
             cursor: 'pointer',
             transition: 'all 0.2s',
@@ -78,12 +78,12 @@ export default function InterviewsPanel() {
         <button
           onClick={() => setActiveTab('past')}
           style={{
-            padding: '12px 24px',
+            padding: '10px 20px',
             background: 'none',
             border: 'none',
             borderBottom: activeTab === 'past' ? '3px solid var(--primary)' : '3px solid transparent',
             color: activeTab === 'past' ? 'var(--primary)' : 'var(--text-secondary)',
-            fontSize: '0.95rem',
+            fontSize: '0.9rem',
             fontWeight: 700,
             cursor: 'pointer',
             transition: 'all 0.2s',
@@ -111,7 +111,7 @@ export default function InterviewsPanel() {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {displayedInterviews.map((interview) => {
             const scheduledDate = new Date(interview.scheduledAt);
             const candidateFullName = `${interview.candidateName || ''} ${interview.candidateSurname || ''}`.trim() || t('ats.defaultCandidateName', 'Candidate');
@@ -129,7 +129,7 @@ export default function InterviewsPanel() {
                 style={{
                   background: '#fff',
                   border: '1px solid #e2e8f0',
-                  borderRadius: 12,
+                  borderRadius: 10,
                   overflow: 'hidden',
                   transition: 'all 0.2s',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
@@ -147,72 +147,72 @@ export default function InterviewsPanel() {
                 <div
                   style={{
                     background: 'linear-gradient(135deg, #0D2137 0%, #1e3a5f 100%)',
-                    padding: '12px 16px',
+                    padding: '10px 14px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: 12,
+                    gap: 10,
                   }}
                 >
                   {/* Date Badge */}
                   <div
                     style={{
-                      minWidth: 56,
+                      minWidth: 50,
                       textAlign: 'center',
-                      padding: '8px 6px',
+                      padding: '6px 4px',
                       background: 'rgba(255,255,255,0.15)',
-                      borderRadius: 8,
+                      borderRadius: 7,
                       color: '#fff',
                       border: '1px solid rgba(255,255,255,0.2)',
                     }}
                   >
-                    <div style={{ fontSize: '1.3rem', fontWeight: 800, lineHeight: 1 }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, lineHeight: 1 }}>
                       {scheduledDate.getDate()}
                     </div>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
+                    <div style={{ fontSize: '0.6rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
                       {scheduledDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
                     </div>
                   </div>
 
                   {/* Time & Duration */}
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fff', fontSize: '0.95rem', fontWeight: 700 }}>
-                      <Clock size={16} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#fff', fontSize: '0.9rem', fontWeight: 700 }}>
+                      <Clock size={15} />
                       {scheduledDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                      {interview.durationMinutes && <span style={{ opacity: 0.8, fontSize: '0.85rem' }}>({interview.durationMinutes}min)</span>}
+                      {interview.durationMinutes && <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>({interview.durationMinutes}min)</span>}
                     </div>
                   </div>
 
                   {/* Interview Type Badge */}
                   <div
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: 6,
+                      padding: '5px 10px',
+                      borderRadius: 5,
                       background: interview.interviewType === 'phone' ? 'rgba(234,88,12,0.25)' : 'rgba(34,197,94,0.25)',
                       border: `1px solid ${interview.interviewType === 'phone' ? 'rgba(234,88,12,0.5)' : 'rgba(34,197,94,0.5)'}`,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
+                      gap: 5,
                     }}
                   >
-                    {interview.interviewType === 'phone' ? <Phone size={14} color="#fff" /> : <Users size={14} color="#fff" />}
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
+                    {interview.interviewType === 'phone' ? <Phone size={13} color="#fff" /> : <Users size={13} color="#fff" />}
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
                       {interview.interviewType === 'phone' ? t('ats.phone', 'Phone') : t('ats.inPerson', 'In-Person')}
                     </span>
                   </div>
                 </div>
 
                 {/* Compact Content */}
-                <div style={{ padding: '14px 16px' }}>
+                <div style={{ padding: '12px 14px' }}>
                   {/* Candidate & Position Row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0' }}>
                     {candidateAvatarUrl ? (
                       <img
                         src={candidateAvatarUrl}
                         alt={candidateFullName}
                         style={{
-                          width: 44,
-                          height: 44,
+                          width: 40,
+                          height: 40,
                           borderRadius: '50%',
                           objectFit: 'cover',
                           border: '2px solid #3b82f6',
@@ -221,15 +221,15 @@ export default function InterviewsPanel() {
                     ) : (
                       <div
                         style={{
-                          width: 44,
-                          height: 44,
+                          width: 40,
+                          height: 40,
                           borderRadius: '50%',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
                           color: '#fff',
-                          fontSize: '0.9rem',
+                          fontSize: '0.85rem',
                           fontWeight: 800,
                           border: '2px solid #3b82f6',
                         }}
@@ -238,30 +238,30 @@ export default function InterviewsPanel() {
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
                         {candidateFullName}
                       </div>
                       {interview.positionTitle && (
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Briefcase size={12} />
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Briefcase size={11} />
                           {interview.positionTitle}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Details Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                    {/* Interviewer */}
+                  {/* Details Grid - Compact */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+                    {/* Interviewer & Location Row */}
                     {interviewerFullName && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                         {interviewerAvatarUrl ? (
                           <img
                             src={interviewerAvatarUrl}
                             alt={interviewerFullName}
                             style={{
-                              width: 32,
-                              height: 32,
+                              width: 28,
+                              height: 28,
                               borderRadius: '50%',
                               objectFit: 'cover',
                               border: '2px solid #7c3aed',
@@ -270,15 +270,15 @@ export default function InterviewsPanel() {
                         ) : (
                           <div
                             style={{
-                              width: 32,
-                              height: 32,
+                              width: 28,
+                              height: 28,
                               borderRadius: '50%',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
                               color: '#fff',
-                              fontSize: '0.75rem',
+                              fontSize: '0.7rem',
                               fontWeight: 800,
                               border: '2px solid #7c3aed',
                             }}
@@ -286,11 +286,11 @@ export default function InterviewsPanel() {
                             {interviewerFullName.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 500 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>
                             {t('ats.interviewer', 'Interviewer')}
                           </div>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {interviewerFullName}
                           </div>
                         </div>
@@ -299,11 +299,11 @@ export default function InterviewsPanel() {
 
                     {/* Location */}
                     {interview.location && interview.interviewType === 'in_person' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                         <div
                           style={{
-                            width: 32,
-                            height: 32,
+                            width: 28,
+                            height: 28,
                             borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
@@ -312,13 +312,13 @@ export default function InterviewsPanel() {
                             border: '2px solid rgba(34,197,94,0.3)',
                           }}
                         >
-                          <MapPin size={16} color="#15803d" />
+                          <MapPin size={14} color="#15803d" />
                         </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 500 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>
                             {t('ats.location', 'Location')}
                           </div>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {interview.location}
                           </div>
                         </div>
@@ -330,14 +330,14 @@ export default function InterviewsPanel() {
                   {interview.description && (
                     <div
                       style={{
-                        marginTop: 10,
-                        padding: '8px 10px',
+                        marginTop: 8,
+                        padding: '6px 8px',
                         background: 'rgba(148,163,184,0.06)',
-                        borderRadius: 6,
+                        borderRadius: 5,
                         borderLeft: '3px solid #94a3b8',
                       }}
                     >
-                      <div style={{ fontSize: '0.8rem', color: '#475569', lineHeight: 1.5 }}>
+                      <div style={{ fontSize: '0.75rem', color: '#475569', lineHeight: 1.4 }}>
                         {interview.description}
                       </div>
                     </div>

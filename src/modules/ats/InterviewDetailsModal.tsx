@@ -135,7 +135,7 @@ export default function InterviewDetailsModal({
         {/* Header */}
         <div
           style={{
-            padding: '24px 28px',
+            padding: '20px 24px',
             background: 'linear-gradient(135deg, #0D2137 0%, #1e3a5f 100%)',
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,
@@ -144,24 +144,24 @@ export default function InterviewDetailsModal({
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
+                width: 40,
+                height: 40,
+                borderRadius: 10,
                 background: 'rgba(255,255,255,0.15)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Calendar size={24} color="#fff" />
+              <Calendar size={22} color="#fff" />
             </div>
             <h2
               style={{
                 margin: 0,
-                fontSize: '1.35rem',
+                fontSize: '1.25rem',
                 fontWeight: 700,
                 color: '#fff',
               }}
@@ -175,8 +175,8 @@ export default function InterviewDetailsModal({
               background: 'rgba(255,255,255,0.1)',
               border: 'none',
               cursor: 'pointer',
-              padding: 10,
-              borderRadius: 10,
+              padding: 8,
+              borderRadius: 8,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -185,46 +185,46 @@ export default function InterviewDetailsModal({
             onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
           >
-            <X size={20} color="#fff" />
+            <X size={18} color="#fff" />
           </button>
         </div>
 
         {/* Content */}
-        <div style={{ padding: '28px' }}>
+        <div style={{ padding: '20px 24px' }}>
           {/* Candidate Section */}
           <div
             style={{
-              marginBottom: 24,
-              padding: 20,
+              marginBottom: 18,
+              padding: 16,
               background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(147,197,253,0.08) 100%)',
-              borderRadius: 12,
+              borderRadius: 10,
               border: '1px solid rgba(59,130,246,0.2)',
             }}
           >
             <div
               style={{
-                fontSize: '0.7rem',
+                fontSize: '0.65rem',
                 fontWeight: 700,
                 color: '#1e40af',
-                marginBottom: 14,
+                marginBottom: 12,
                 textTransform: 'uppercase',
                 letterSpacing: 0.8,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 5,
               }}
             >
-              <User size={14} />
+              <User size={13} />
               {t('ats.candidate', 'Candidate')}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {candidateAvatarUrl ? (
                 <img
                   src={candidateAvatarUrl}
                   alt={candidateFullName}
                   style={{
-                    width: 56,
-                    height: 56,
+                    width: 50,
+                    height: 50,
                     borderRadius: '50%',
                     objectFit: 'cover',
                     border: '3px solid rgba(59,130,246,0.3)',
@@ -234,15 +234,15 @@ export default function InterviewDetailsModal({
               ) : (
                 <div
                   style={{
-                    width: 56,
-                    height: 56,
+                    width: 50,
+                    height: 50,
                     borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
                     color: '#fff',
-                    fontSize: '1.1rem',
+                    fontSize: '1rem',
                     fontWeight: 800,
                     border: '3px solid rgba(59,130,246,0.3)',
                     boxShadow: '0 4px 12px rgba(59,130,246,0.15)',
@@ -252,11 +252,11 @@ export default function InterviewDetailsModal({
                 </div>
               )}
               <div>
-                <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1e40af', marginBottom: 3 }}>
                   {candidateFullName}
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Briefcase size={14} />
+                <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Briefcase size={13} />
                   {interview.positionTitle || t('ats.noPosition', 'No position specified')}
                 </div>
               </div>
@@ -266,39 +266,39 @@ export default function InterviewDetailsModal({
           {/* Interview Details Section */}
           <div
             style={{
-              marginBottom: 24,
-              padding: 20,
+              marginBottom: 18,
+              padding: 16,
               background: 'linear-gradient(135deg, rgba(201,151,58,0.08) 0%, rgba(251,191,36,0.08) 100%)',
-              borderRadius: 12,
+              borderRadius: 10,
               border: '1px solid rgba(201,151,58,0.2)',
             }}
           >
             <div
               style={{
-                fontSize: '0.7rem',
+                fontSize: '0.65rem',
                 fontWeight: 700,
                 color: '#92400e',
-                marginBottom: 16,
+                marginBottom: 14,
                 textTransform: 'uppercase',
                 letterSpacing: 0.8,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 5,
               }}
             >
-              <Calendar size={14} />
+              <Calendar size={13} />
               {t('ats.interviewDetails', 'Interview Details')}
             </div>
 
             {/* Interview Type */}
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 14 }}>
               <label
                 style={{
                   display: 'block',
-                  fontSize: '0.85rem',
+                  fontSize: '0.8rem',
                   fontWeight: 600,
                   color: 'var(--text-secondary)',
-                  marginBottom: 8,
+                  marginBottom: 7,
                 }}
               >
                 {t('ats.interviewType', 'Interview Type')}
@@ -363,15 +363,15 @@ export default function InterviewDetailsModal({
             </div>
 
             {/* Date and Time */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
               <div>
                 <label
                   style={{
                     display: 'block',
-                    fontSize: '0.85rem',
+                    fontSize: '0.8rem',
                     fontWeight: 600,
                     color: 'var(--text-secondary)',
-                    marginBottom: 8,
+                    marginBottom: 7,
                   }}
                 >
                   {t('ats.date', 'Date')}
@@ -473,48 +473,48 @@ export default function InterviewDetailsModal({
           {interviewerFullName && (
             <div
               style={{
-                marginBottom: 24,
-                padding: 20,
+                marginBottom: 18,
+                padding: 16,
                 background: 'linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(168,85,247,0.08) 100%)',
-                borderRadius: 12,
+                borderRadius: 10,
                 border: '1px solid rgba(124,58,237,0.2)',
               }}
             >
               <div
                 style={{
-                  fontSize: '0.7rem',
+                  fontSize: '0.65rem',
                   fontWeight: 700,
                   color: '#6b21a8',
-                  marginBottom: 14,
+                  marginBottom: 12,
                   textTransform: 'uppercase',
                   letterSpacing: 0.8,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
+                  gap: 5,
                 }}
               >
-                <User size={14} />
+                <User size={13} />
                 {t('ats.interviewer', 'Interviewer')}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <div
                   style={{
-                    width: 40,
-                    height: 40,
+                    width: 36,
+                    height: 36,
                     borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
                     color: '#fff',
-                    fontSize: '0.9rem',
+                    fontSize: '0.85rem',
                     fontWeight: 800,
                     border: '2px solid rgba(124,58,237,0.3)',
                   }}
                 >
                   {interviewerFullName.charAt(0).toUpperCase()}
                 </div>
-                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#6b21a8' }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#6b21a8' }}>
                   {interviewerFullName}
                 </span>
               </div>
@@ -522,14 +522,14 @@ export default function InterviewDetailsModal({
           )}
 
           {/* Description */}
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 18 }}>
             <label
               style={{
                 display: 'block',
-                fontSize: '0.85rem',
+                fontSize: '0.8rem',
                 fontWeight: 600,
                 color: 'var(--text-secondary)',
-                marginBottom: 8,
+                marginBottom: 7,
               }}
             >
               {t('ats.description', 'Description')}
@@ -559,14 +559,14 @@ export default function InterviewDetailsModal({
           </div>
 
           {/* Notes */}
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 18 }}>
             <label
               style={{
                 display: 'block',
-                fontSize: '0.85rem',
+                fontSize: '0.8rem',
                 fontWeight: 600,
                 color: 'var(--text-secondary)',
-                marginBottom: 8,
+                marginBottom: 7,
               }}
             >
               {t('ats.notes', 'Notes')}
