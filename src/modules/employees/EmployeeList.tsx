@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, Download } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftRight } from 'lucide-react';
@@ -20,6 +20,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Pagination } from '../../components/ui/Pagination';
 import { EmployeeForm } from './EmployeeForm';
 import { BulkImportModal } from './BulkImportModal';
+import { exportEmployeesToExcel } from './bulkImportUtils';
 
 interface CompanyOption {
   id: number;
@@ -69,6 +70,7 @@ export function EmployeeList() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [newFormInstance, setNewFormInstance] = useState(0);
   const [listReloadTick, setListReloadTick] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -94,6 +96,30 @@ export function EmployeeList() {
   const isSuperAdmin = user?.isSuperAdmin === true;
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
   const hasActiveFilters = !!(search || storeId || department || status || role || companyFilter);
+
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const res = await getEmployees({
+        search: search || undefined,
+        storeId: storeId ? parseInt(storeId, 10) : undefined,
+        department: department || undefined,
+        status: status || undefined,
+        role: role || undefined,
+        page: 1,
+        limit: 10000,
+        targetCompanyId: companyFilter ? parseInt(companyFilter, 10) : undefined,
+        includeSensitive: true,
+      });
+      const safeName = `employees_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      exportEmployeesToExcel(res.employees, safeName);
+    } catch {
+      // silently ignore — user stays on the page
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, search, storeId, department, status, role, companyFilter]);
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -422,6 +448,22 @@ export function EmployeeList() {
 
         {isAdminOrHr && (
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }}>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              style={{
+                background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', padding: '9px 18px',
+                fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                cursor: exporting ? 'not-allowed' : 'pointer',
+                opacity: exporting ? 0.65 : 1,
+                display: 'inline-flex', alignItems: 'center',
+                gap: '7px', flexShrink: 0, transition: 'border-color 0.15s, box-shadow 0.15s',
+              }}
+            >
+              <Download size={15} />
+              {exporting ? t('common.loading', 'Exporting…') : t('employees.exportBtn', 'Export Employees')}
+            </button>
             <button
               onClick={() => setShowBulkImport(true)}
               style={{

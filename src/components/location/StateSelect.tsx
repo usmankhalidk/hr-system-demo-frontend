@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo } from 'react';
-import { State } from 'country-state-city';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import CustomSelect, { SelectOption } from '../ui/CustomSelect';
+import { getStates, StateOption } from '../../api/location';
 
 interface StateSelectProps {
   countryCode: string | null;
@@ -25,20 +25,57 @@ export function StateSelect({
   isClearable = true,
   highlightSelected = false,
 }: StateSelectProps) {
-  const options = useMemo<SelectOption[]>(() => {
-    if (!countryCode) return [];
-    return State.getStatesOfCountry(countryCode)
-      .map((state) => ({ value: state.isoCode, label: state.name }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+  const [states, setStates] = useState<StateOption[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load states from backend API when countryCode changes
+  useEffect(() => {
+    if (!countryCode) {
+      setStates([]);
+      setLoading(false);
+      return;
+    }
+
+    let mounted = true;
+    setLoading(true);
+
+    getStates(countryCode)
+      .then((data) => {
+        if (!mounted) return;
+        setStates(data);
+      })
+      .catch((err) => {
+        console.error('Failed to load states:', err);
+        if (mounted) setStates([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [countryCode]);
+
+  const options = useMemo<SelectOption[]>(() => {
+    return states
+      .map((state) => ({ value: state.value, label: state.label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [states]);
+
+  // Prevent parent onChange updates from triggering the effect loop
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   useEffect(() => {
     if (!value) return;
+    if (loading) return; // Wait until options are loaded before validating
     if (options.some((option) => option.value === value)) return;
-    onChange(null);
-  }, [value, options, onChange]);
+    onChangeRef.current(null);
+  }, [value, options, loading]);
 
-  const isDisabled = disabled || !countryCode || options.length === 0;
+  const isDisabled = disabled || !countryCode || options.length === 0 || loading;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 4 }}>
@@ -51,7 +88,13 @@ export function StateSelect({
         options={options}
         value={value}
         onChange={onChange}
-        placeholder={countryCode ? placeholder : 'Select country first'}
+        placeholder={
+          loading
+            ? 'Loading states...'
+            : countryCode
+            ? placeholder
+            : 'Select country first'
+        }
         disabled={isDisabled}
         error={error}
         isClearable={isClearable}

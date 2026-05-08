@@ -14,6 +14,7 @@ export interface EmployeeListParams {
   includeStoreTerminals?: boolean;
   /** Area managers: employees in supervised stores (aligned with shift assignment). */
   forShiftPlanning?: boolean;
+  includeSensitive?: boolean;
 }
 
 // ── API functions ─────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ export async function getEmployees(params?: EmployeeListParams): Promise<Employe
   if (params?.excludeAdmins) query.exclude_admins = 1;
   if (params?.includeStoreTerminals) query.include_store_terminals = 1;
   if (params?.forShiftPlanning) query.for_shift_planning = 1;
+  if (params?.includeSensitive) query.include_sensitive = 1;
   const { data } = await apiClient.get('/employees', { params: query });
   return data.data;
 }

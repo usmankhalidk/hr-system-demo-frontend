@@ -28,7 +28,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
-import { Country } from 'country-state-city';
+import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -113,21 +113,23 @@ const JOB_TYPE_LABEL: Record<JobType, string> = {
   internship: 'internship',
 };
 
-const COUNTRY_ROWS = Country.getAllCountries();
-
 function normalizeCountryCode(value: string | null | undefined): string {
   const raw = (value ?? '').trim();
   if (!raw) return '';
   if (/^[A-Za-z]{2}$/.test(raw)) return raw.toUpperCase();
-  const byName = COUNTRY_ROWS.find((country) => country.name.toLowerCase() === raw.toLowerCase());
-  return byName?.isoCode ?? '';
+  return COUNTRY_NAME_TO_CODE[raw.toLowerCase()] ?? '';
 }
 
 function countryNameFromCode(value: string | null | undefined): string {
   const code = normalizeCountryCode(value);
   if (!code) return '-';
-  const found = COUNTRY_ROWS.find((country) => country.isoCode === code);
-  return found?.name ?? code;
+  try {
+    const lang = localStorage.getItem('hr_lang') || 'it';
+    const formatter = new Intl.DisplayNames([lang], { type: 'region' });
+    return formatter.of(code) ?? code;
+  } catch {
+    return code;
+  }
 }
 
 type ComplianceCheck = {
