@@ -17,7 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
-import { Country } from 'country-state-city';
+import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
 import {
   applyToPublicJob,
   getPublicJobDetail,
@@ -375,14 +375,11 @@ function formatRole(role: string, uiLanguage: UiLanguage): string {
   return ROLE_LABEL[uiLanguage][role] ?? role.replace(/_/g, ' ');
 }
 
-const COUNTRY_ROWS = Country.getAllCountries();
-
 function normalizeCountryCode(value: string | null | undefined): string {
   const raw = (value ?? '').trim();
   if (!raw) return '';
   if (/^[A-Za-z]{2}$/.test(raw)) return raw.toUpperCase();
-  const byName = COUNTRY_ROWS.find((c) => c.name.toLowerCase() === raw.toLowerCase());
-  return byName?.isoCode ?? '';
+  return COUNTRY_NAME_TO_CODE[raw.toLowerCase()] ?? '';
 }
 
 function formatLocation(job: PublicJob, remoteLabel: string): string {

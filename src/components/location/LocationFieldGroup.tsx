@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import { Input } from '../ui/Input';
 import { CountrySelect } from './CountrySelect';
 import { StateSelect } from './StateSelect';
@@ -48,15 +48,63 @@ export function LocationFieldGroup({
 }: LocationFieldGroupProps) {
   const current = { ...EMPTY_VALUE, ...value };
 
-  const patch = (changes: Partial<LocationFieldValue>) => {
-    onChange({ ...current, ...changes });
-  };
+  // Use refs to make handlers completely stable and prevent rendering loops
+  const currentRef = useRef(current);
+  currentRef.current = current;
+
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const handleCountryChange = useCallback((countryCode: string | null) => {
+    onChangeRef.current({
+      ...currentRef.current,
+      country: countryCode ?? '',
+      state: '',
+      city: '',
+    });
+  }, []);
+
+  const handleStateChange = useCallback((stateCode: string | null) => {
+    onChangeRef.current({
+      ...currentRef.current,
+      state: stateCode ?? '',
+      city: '',
+    });
+  }, []);
+
+  const handleCityChange = useCallback((cityName: string | null) => {
+    onChangeRef.current({
+      ...currentRef.current,
+      city: cityName ?? '',
+    });
+  }, []);
+
+  const handleAddressChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    onChangeRef.current({
+      ...currentRef.current,
+      address: event.target.value,
+    });
+  }, []);
+
+  const handlePostalCodeChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    onChangeRef.current({
+      ...currentRef.current,
+      postalCode: event.target.value,
+    });
+  }, []);
+
+  const handlePhoneChange = useCallback((phone: string) => {
+    onChangeRef.current({
+      ...currentRef.current,
+      phone,
+    });
+  }, []);
 
   return (
     <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
       <CountrySelect
         value={current.country || null}
-        onChange={(countryCode) => patch({ country: countryCode ?? '', state: '', city: '' })}
+        onChange={handleCountryChange}
         label={labels?.country ?? 'Country'}
         disabled={disabled}
         error={errors?.country}
@@ -65,7 +113,7 @@ export function LocationFieldGroup({
       <StateSelect
         countryCode={current.country || null}
         value={current.state || null}
-        onChange={(stateCode) => patch({ state: stateCode ?? '', city: '' })}
+        onChange={handleStateChange}
         label={labels?.state ?? 'State / Region'}
         disabled={disabled}
         error={errors?.state}
@@ -75,7 +123,7 @@ export function LocationFieldGroup({
         countryCode={current.country || null}
         stateCode={current.state || null}
         value={current.city || null}
-        onChange={(cityName) => patch({ city: cityName ?? '' })}
+        onChange={handleCityChange}
         label={labels?.city ?? 'City'}
         disabled={disabled}
         error={errors?.city}
@@ -85,7 +133,7 @@ export function LocationFieldGroup({
         <Input
           label={labels?.address ?? 'Address'}
           value={current.address}
-          onChange={(event) => patch({ address: event.target.value })}
+          onChange={handleAddressChange}
           disabled={disabled}
           error={errors?.address}
         />
@@ -95,7 +143,7 @@ export function LocationFieldGroup({
         <Input
           label={labels?.postalCode ?? 'Postal Code'}
           value={current.postalCode}
-          onChange={(event) => patch({ postalCode: event.target.value })}
+          onChange={handlePostalCodeChange}
           disabled={disabled}
           error={errors?.postalCode}
         />
@@ -105,7 +153,7 @@ export function LocationFieldGroup({
         <PhoneInputField
           label={labels?.phone ?? 'Phone'}
           value={current.phone}
-          onChange={(phone) => patch({ phone })}
+          onChange={handlePhoneChange}
           disabled={disabled}
           error={errors?.phone}
           defaultCountry={current.country || null}

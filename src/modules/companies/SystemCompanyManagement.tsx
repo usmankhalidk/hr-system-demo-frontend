@@ -228,6 +228,35 @@ function StatBox({ value, label, icon }: { value: number; label: string; icon: R
   );
 }
 
+function TimezoneOption({ timezone }: { timezone: string }) {
+  const formattedTime = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).format(new Date());
+    } catch {
+      return '';
+    }
+  }, [timezone]);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
+      <div style={{ display: 'grid', gap: 1, minWidth: 0 }}>
+        <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{timezone}</span>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
+      </div>
+      {formattedTime && (
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+          {formattedTime}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function SystemCompanyManagement() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -280,17 +309,7 @@ export default function SystemCompanyManagement() {
       .map((timezone) => ({
         value: timezone,
         label: timezone,
-        render: (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
-            <div style={{ display: 'grid', gap: 1, minWidth: 0 }}>
-              <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{timezone}</span>
-              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{timezone.split('/')[0]}</span>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-              {new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date())}
-            </span>
-          </div>
-        ),
+        render: <TimezoneOption timezone={timezone} />,
       }));
   }, [timezoneValues]);
 
