@@ -169,6 +169,14 @@ const LoginPage: React.FC = () => {
   const submittingRef = useRef(false);
 
   useEffect(() => {
+    const errCode = localStorage.getItem('login_error_code');
+    if (errCode) {
+      setErrorMessage(t(`errors.${errCode}`));
+      localStorage.removeItem('login_error_code');
+    }
+  }, [t]);
+
+  useEffect(() => {
     if (!loading && user !== null) navigate(returnTo, { replace: true });
   }, [user, loading, navigate, returnTo]);
 

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ReactCountryFlag from 'react-country-flag';
-import { ArrowRight, Building2, Users, Store, Plus, Layers } from 'lucide-react';
+import { ArrowRight, Building2, Users, Store, Plus, Layers, Smartphone, HardDrive, CalendarClock } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useAuth } from '../../context/AuthContext';
@@ -28,6 +28,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Select } from '../../components/ui/Select';
+import { DatePicker } from '../../components/ui/DatePicker';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Badge } from '../../components/ui/Badge';
 import { LocationFieldGroup } from '../../components/location';
@@ -140,6 +141,15 @@ type CompanyProfileForm = {
   address: string;
   timezones: string;
   currency: string;
+  pricePerEmployee: number | '';
+  pricePerDevice: number | '';
+  extraStoragePricePerGb: number | '';
+  storageLimitGb: number | '';
+  accessValidFrom: string;
+  accessValidTo: string;
+  discountPercent: number | '';
+  discountValidFrom: string;
+  discountValidTo: string;
 };
 
 const EMPTY_COMPANY_PROFILE_FORM: CompanyProfileForm = {
@@ -153,6 +163,15 @@ const EMPTY_COMPANY_PROFILE_FORM: CompanyProfileForm = {
   address: '',
   timezones: '',
   currency: '',
+  pricePerEmployee: '',
+  pricePerDevice: '',
+  extraStoragePricePerGb: '',
+  storageLimitGb: '',
+  accessValidFrom: '',
+  accessValidTo: '',
+  discountPercent: '',
+  discountValidFrom: '',
+  discountValidTo: '',
 };
 
 function profileFromCompany(company: Company | null): CompanyProfileForm {
@@ -168,6 +187,15 @@ function profileFromCompany(company: Company | null): CompanyProfileForm {
     address: company.address ?? '',
     timezones: company.timezones ?? '',
     currency: company.currency ?? '',
+    pricePerEmployee: company.pricePerEmployee ?? '',
+    pricePerDevice: company.pricePerDevice ?? '',
+    extraStoragePricePerGb: company.extraStoragePricePerGb ?? '',
+    storageLimitGb: company.storageLimitGb ?? 500,
+    accessValidFrom: company.accessValidFrom ? company.accessValidFrom.substring(0, 10) : '',
+    accessValidTo: company.accessValidTo ? company.accessValidTo.substring(0, 10) : '',
+    discountPercent: company.discountPercent ?? '',
+    discountValidFrom: company.discountValidFrom ? company.discountValidFrom.substring(0, 10) : '',
+    discountValidTo: company.discountValidTo ? company.discountValidTo.substring(0, 10) : '',
   };
 }
 
@@ -188,10 +216,19 @@ function payloadFromProfileForm(profile: CompanyProfileForm) {
     address: normalizeProfileValue(profile.address),
     timezones: normalizeProfileValue(profile.timezones),
     currency: normalizeProfileValue(profile.currency),
+    pricePerEmployee: profile.pricePerEmployee !== '' ? profile.pricePerEmployee : null,
+    pricePerDevice: profile.pricePerDevice !== '' ? profile.pricePerDevice : null,
+    extraStoragePricePerGb: profile.extraStoragePricePerGb !== '' ? profile.extraStoragePricePerGb : null,
+    storageLimitGb: profile.storageLimitGb !== '' ? profile.storageLimitGb : 500,
+    accessValidFrom: normalizeProfileValue(profile.accessValidFrom),
+    accessValidTo: normalizeProfileValue(profile.accessValidTo),
+    discountPercent: profile.discountPercent !== '' ? profile.discountPercent : null,
+    discountValidFrom: normalizeProfileValue(profile.discountValidFrom),
+    discountValidTo: normalizeProfileValue(profile.discountValidTo),
   };
 }
 
-function StatBox({ value, label, icon }: { value: number; label: string; icon: React.ReactNode }) {
+function StatBox({ value, label, icon }: { value: number | string; label: string; icon: React.ReactNode }) {
   return (
     <div style={{
       flex: 1,
@@ -278,6 +315,7 @@ export default function SystemCompanyManagement() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [editingCompanyId, setEditingCompanyId] = useState<number | null>(null);
 
   const [formName, setFormName] = useState('');
@@ -384,6 +422,7 @@ export default function SystemCompanyManagement() {
     setBannerError(null);
     setOwnerCandidates([]);
     setTimezoneDraft(null);
+    setCurrentStep(1);
     setModalOpen(true);
   };
 
@@ -399,6 +438,7 @@ export default function SystemCompanyManagement() {
     setLogoError(null);
     setBannerError(null);
     setTimezoneDraft(null);
+    setCurrentStep(1);
     setModalOpen(true);
   };
 
@@ -863,9 +903,145 @@ export default function SystemCompanyManagement() {
                 <div style={{ height: 1, background: 'var(--border-light)', margin: '0 20px' }} />
 
                 {/* Stats */}
-                <div style={{ padding: '14px 20px 18px', display: 'flex', gap: 10 }}>
+                <div style={{ padding: '14px 20px 18px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <StatBox value={c.storeCount} label={t('companies.statStores')} icon={<Store size={16} />} />
                   <StatBox value={c.employeeCount} label={t('companies.statEmployees')} icon={<Users size={16} />} />
+                  <StatBox value={c.activeDevicesCount || 0} label={t('companies.statDevices', 'Active devices')} icon={<Smartphone size={16} />} />
+                  <StatBox value={`${((c.storageUsedBytes || 0) / (1024 * 1024 * 1024)).toFixed(2)}/${c.storageLimitGb || 500} GB`} label={t('companies.statStorage', 'Storage')} icon={<HardDrive size={16} />} />
+                </div>
+
+                {/* Access Control & Discount Validity Dates */}
+                {(() => {
+                  const formatDate = (dateStr?: string | null) => {
+                    if (!dateStr) return '';
+                    const dObj = new Date(dateStr);
+                    if (isNaN(dObj.getTime())) return dateStr;
+                    return dObj.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+                  };
+
+                  const hasAccessFrom = !!c.accessValidFrom;
+                  const hasAccessTo = !!c.accessValidTo;
+                  const hasDiscount = c.discountPercent && c.discountPercent > 0;
+
+                  if (!hasAccessFrom && !hasAccessTo && !hasDiscount) return null;
+
+                  return (
+                    <div style={{
+                      margin: '0 20px 18px',
+                      padding: '12px 16px',
+                      background: 'var(--surface-warm)',
+                      border: '1px solid var(--border-light)',
+                      borderRadius: 'var(--radius)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}>
+                      {/* Access Valid Dates */}
+                      {(hasAccessFrom || hasAccessTo) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <CalendarClock size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {t('companies.accessRange', 'Access Period')}:
+                            </span>{' '}
+                            {c.accessValidFrom ? formatDate(c.accessValidFrom) : 'N/A'}{' '}
+                            —{' '}
+                            {c.accessValidTo ? formatDate(c.accessValidTo) : 'N/A'}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Discount Dates Badge */}
+                      {hasDiscount && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                            {t('companies.appliedDiscount', 'Discount Period')}:
+                          </span>
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: 'rgba(201,151,58,0.12)',
+                            color: 'var(--accent)',
+                            border: '1px solid rgba(201,151,58,0.22)',
+                            borderRadius: 4,
+                            padding: '2px 8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}>
+                            {c.discountValidFrom ? formatDate(c.discountValidFrom) : 'N/A'}
+                            {' — '}
+                            {c.discountValidTo ? formatDate(c.discountValidTo) : 'N/A'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                
+                {/* Total Price */}
+                <div style={{ padding: '14px 20px', background: 'var(--surface-warm)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {t('companies.totalPrice', 'Total Price')}
+                    {(() => {
+                      if (c.discountPercent && c.discountPercent > 0) {
+                        const now = new Date();
+                        const fromOk = !c.discountValidFrom || now >= new Date(c.discountValidFrom);
+                        const toOk = !c.discountValidTo || now <= (() => {
+                          const to = new Date(c.discountValidTo);
+                          to.setHours(23, 59, 59, 999);
+                          return to;
+                        })();
+                        if (fromOk && toOk) {
+                          return (
+                            <span style={{
+                              fontSize: 10,
+                              background: 'rgba(22,163,74,0.12)',
+                              color: '#16a34a',
+                              border: '1px solid rgba(22,163,74,0.22)',
+                              borderRadius: 4,
+                              padding: '1px 6px',
+                              fontWeight: 700
+                            }}>
+                              -{c.discountPercent}%
+                            </span>
+                          );
+                        }
+                      }
+                      return null;
+                    })()}
+                  </span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {(() => {
+                      const totalBill = ((c.employeeCount * (c.pricePerEmployee || 0)) +
+                        ((c.activeDevicesCount || 0) * (c.pricePerDevice || 0)) +
+                        (Math.max(0, ((c.storageUsedBytes || 0) / (1024 * 1024 * 1024)) - (c.storageLimitGb || 500)) * (c.extraStoragePricePerGb || 0)));
+
+                      let finalBill = totalBill;
+                      if (c.discountPercent && c.discountPercent > 0) {
+                        const now = new Date();
+                        const fromOk = !c.discountValidFrom || now >= new Date(c.discountValidFrom);
+                        const toOk = !c.discountValidTo || now <= (() => {
+                          const to = new Date(c.discountValidTo);
+                          to.setHours(23, 59, 59, 999);
+                          return to;
+                        })();
+                        if (fromOk && toOk) {
+                          finalBill = totalBill - (totalBill * c.discountPercent / 100);
+                        }
+                      }
+
+                      return (
+                        <>
+                          {finalBill < totalBill && (
+                            <span style={{ fontSize: 12, textDecoration: 'line-through', color: 'var(--text-muted)', marginRight: 6, fontWeight: 500 }}>
+                              €{totalBill.toFixed(2)}
+                            </span>
+                          )}
+                          €{finalBill.toFixed(2)}
+                        </>
+                      );
+                    })()}
+                  </span>
                 </div>
               </div>
             );
@@ -880,17 +1056,30 @@ export default function SystemCompanyManagement() {
         title={modalMode === 'create' ? t('companies.createCompany') : t('companies.editCompany')}
         footer={
           <>
-            <Button variant="secondary" onClick={closeModal} disabled={formSaving}>{t('common.cancel')}</Button>
-            <Button onClick={submit} loading={formSaving}>
-              {modalMode === 'create' ? t('common.create') : t('common.save')}
-            </Button>
+            {modalMode === 'create' && currentStep === 2 ? (
+              <Button variant="secondary" onClick={() => setCurrentStep(1)} disabled={formSaving}>{t('common.back', 'Back')}</Button>
+            ) : (
+              <Button variant="secondary" onClick={closeModal} disabled={formSaving}>{t('common.cancel')}</Button>
+            )}
+            {modalMode === 'create' && currentStep === 1 ? (
+              <Button onClick={() => {
+                if (!formName.trim()) { setFormNameError(t('companies.validationName')); return; }
+                setCurrentStep(2);
+              }}>{t('common.next', 'Next')}</Button>
+            ) : (
+              <Button onClick={submit} loading={formSaving}>
+                {modalMode === 'create' ? t('common.create') : t('common.save')}
+              </Button>
+            )}
           </>
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {formError && <Alert variant="danger" onClose={() => setFormError(null)}>{formError}</Alert>}
-          <Input
-            label={t('companies.fieldName')}
+          {(modalMode === 'edit' || currentStep === 1) && (
+            <>
+              <Input
+                label={t('companies.fieldName')}
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
             error={formNameError}
@@ -969,6 +1158,88 @@ export default function SystemCompanyManagement() {
               phone: t('companies.companyPhoneNumbers', 'Company Phone Numbers'),
             }}
           />
+          </>
+          )}
+
+          {(modalMode === 'edit' || currentStep === 2) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Input
+                type="number"
+                label={t('companies.pricePerEmployee', 'Set price per employee')}
+                value={formProfile.pricePerEmployee}
+                onChange={(e) => setFormProfile(p => ({ ...p, pricePerEmployee: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={formSaving}
+              />
+              <Input
+                type="number"
+                label={t('companies.pricePerDevice', 'Set price per device')}
+                value={formProfile.pricePerDevice}
+                onChange={(e) => setFormProfile(p => ({ ...p, pricePerDevice: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={formSaving}
+              />
+              <Input
+                type="number"
+                label={t('companies.extraStoragePrice', 'Set extra storage price (per GB)')}
+                value={formProfile.extraStoragePricePerGb}
+                onChange={(e) => setFormProfile(p => ({ ...p, extraStoragePricePerGb: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={formSaving}
+              />
+              <Input
+                type="number"
+                label={t('companies.storageLimit', 'Set Storage Limit (GB)')}
+                value={formProfile.storageLimitGb}
+                onChange={(e) => setFormProfile(p => ({ ...p, storageLimitGb: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={formSaving}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <DatePicker
+                  label={t('companies.accessValidFrom', 'From Date')}
+                  value={formProfile.accessValidFrom}
+                  onChange={(val) => setFormProfile(p => ({ ...p, accessValidFrom: val }))}
+                  disabled={formSaving}
+                />
+                <DatePicker
+                  label={t('companies.accessValidTo', 'To Date')}
+                  value={formProfile.accessValidTo}
+                  onChange={(val) => setFormProfile(p => ({ ...p, accessValidTo: val }))}
+                  disabled={formSaving}
+                />
+              </div>
+              <Input
+                type="number"
+                label={t('companies.discountPercent', 'Discount (%)')}
+                value={formProfile.discountPercent}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setFormProfile(p => ({ ...p, discountPercent: '' }));
+                  } else {
+                    const num = Number(val);
+                    if (num >= 0 && num <= 100) {
+                      setFormProfile(p => ({ ...p, discountPercent: num }));
+                    }
+                  }
+                }}
+                disabled={formSaving}
+                min={0}
+                max={100}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <DatePicker
+                  label={t('companies.discountValidFrom', 'Discount From Date')}
+                  value={formProfile.discountValidFrom}
+                  onChange={(val) => setFormProfile(p => ({ ...p, discountValidFrom: val }))}
+                  disabled={formSaving}
+                />
+                <DatePicker
+                  label={t('companies.discountValidTo', 'Discount To Date')}
+                  value={formProfile.discountValidTo}
+                  onChange={(val) => setFormProfile(p => ({ ...p, discountValidTo: val }))}
+                  disabled={formSaving}
+                />
+              </div>
+            </div>
+          )}
 
           {modalMode === 'edit' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

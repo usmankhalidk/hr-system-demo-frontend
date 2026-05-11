@@ -886,6 +886,8 @@ const en = {
     ACCOUNT_INACTIVE: 'Account deactivated. Please contact your administrator.',
     ACCOUNT_LOCKED: 'Account temporarily locked. Try again in 15 minutes.',
     RATE_LIMITED: 'Too many attempts. Please wait a moment and try again.',
+    COMPANY_ACCESS_EXPIRED: 'Your company access has been ended',
+    COMPANY_ACCESS_NOT_ACTIVE: 'Access is not yet active for this company.',
     // Data conflicts
     EMAIL_CONFLICT: 'An account with this email address already exists.',
     UNIQUE_ID_CONFLICT: 'This unique ID is already used by another employee.',

@@ -231,6 +231,13 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
     linkUrl: '',
   });
 
+  const taskTypeOptions = React.useMemo(() => {
+    return Object.entries(ONBOARDING_PHASE_META).map(([k, v]) => ({
+      value: k,
+      label: `${v.icon} ${v.label}`,
+    }));
+  }, []);
+
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
@@ -684,9 +691,14 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
               {t('onboarding.taskType')}
             </label>
-            <select value={createForm.taskType} onChange={(e) => setCreateForm((prev) => ({ ...prev, taskType: e.target.value as OnboardingTemplate['taskType'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
-              {Object.entries(ONBOARDING_PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-            </select>
+            <CustomSelect
+              value={createForm.taskType}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, taskType: ((value as OnboardingTemplate['taskType']) ?? 'day1') }))}
+              options={taskTypeOptions}
+              isClearable={false}
+              menuMaxHeight={220}
+              controlMinHeight={40}
+            />
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
@@ -1124,7 +1136,14 @@ export function EmployeeDetail() {
           </button>
 
           {isAdminOrHr && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexWrap: 'wrap',
+              marginLeft: isMobile ? 'auto' : '0',
+              justifyContent: isMobile ? 'flex-end' : 'flex-start',
+            }}>
               <button
                 onClick={() => setShowEditForm(true)}
                 style={{
@@ -1286,68 +1305,180 @@ export function EmployeeDetail() {
         {/* Tabs Navigation */}
         <div style={{
           display: 'flex',
-          flexWrap: 'wrap',
+          flexDirection: isMobile ? 'column' : 'row',
+          flexWrap: isMobile ? 'nowrap' : 'wrap',
           gap: '8px',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
           padding: '8px',
           background: 'var(--surface)',
           boxShadow: 'var(--shadow-xs)',
+          width: '100%',
         }}>
-          {[
-            { key: 'overview' as const, label: t('employees.tabOverview', 'Overview'), icon: <IconUser />, color: '#0D2137' },
-            { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1B4D3E' },
-            { key: 'qualifications' as const, label: t('employees.tabQualifications', 'Qualifications'), icon: <IconCertificate />, color: '#8B6914' },
-            { key: 'shifts' as const, label: t('employees.tabShifts', 'Shifts'), icon: <IconShifts />, color: '#1E4A7A' },
-            { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#4B5563' },
-          ].filter(tab => tab.key !== 'documents' || employee.role !== 'admin').map((tab) => {
-            const selected = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 13px',
-                  borderRadius: '16px',
-                  border: selected ? `1px solid ${tab.color}66` : `1px solid ${tab.color}20`,
-                  background: selected ? `${tab.color}18` : 'var(--surface-warm)',
-                  color: selected ? tab.color : 'var(--text-secondary)',
-                  fontSize: '12.5px',
-                  fontWeight: 800,
-                  fontFamily: 'var(--font-body)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  boxShadow: selected ? `0 8px 18px ${tab.color}18` : 'none',
-                }}
-                onMouseEnter={(event) => {
-                  if (!selected) {
-                    event.currentTarget.style.background = `${tab.color}14`;
-                    event.currentTarget.style.borderColor = `${tab.color}40`;
-                  }
-                }}
-                onMouseLeave={(event) => {
-                  if (!selected) {
-                    event.currentTarget.style.background = 'var(--surface-warm)';
-                    event.currentTarget.style.borderColor = `${tab.color}20`;
-                  }
-                }}
-              >
-                <span style={{
-                  display: 'inline-flex',
-                  color: selected ? '#fff' : 'var(--text-muted)',
-                  background: selected ? tab.color : 'transparent',
-                  borderRadius: 999,
-                  padding: selected ? 5 : 0,
-                }}>
-                  {tab.icon}
-                </span>
-                {tab.label}
-              </button>
+          {(() => {
+            const visibleTabs = [
+              { key: 'overview' as const, label: t('employees.tabOverview', 'Overview'), icon: <IconUser />, color: '#0D2137' },
+              { key: 'tasks' as const, label: t('employees.tabTasks', 'Tasks'), icon: <IconTasks />, color: '#1B4D3E' },
+              { key: 'qualifications' as const, label: t('employees.tabQualifications', 'Qualifications'), icon: <IconCertificate />, color: '#8B6914' },
+              { key: 'shifts' as const, label: t('employees.tabShifts', 'Shifts'), icon: <IconShifts />, color: '#1E4A7A' },
+              { key: 'documents' as const, label: t('documents.title'), icon: <IconFile />, color: '#4B5563' },
+            ].filter(tab => tab.key !== 'documents' || employee.role !== 'admin');
+
+            return isMobile ? (
+              <>
+                {/* Row 1: First 3 tabs */}
+                <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                  {visibleTabs.slice(0, 3).map((tab) => {
+                    const selected = activeTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '8px 4px',
+                          borderRadius: '16px',
+                          border: selected ? `1px solid ${tab.color}66` : `1px solid ${tab.color}20`,
+                          background: selected ? `${tab.color}18` : 'var(--surface-warm)',
+                          color: selected ? tab.color : 'var(--text-secondary)',
+                          fontSize: '11.5px',
+                          fontWeight: 800,
+                          fontFamily: 'var(--font-body)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          boxShadow: selected ? `0 8px 18px ${tab.color}18` : 'none',
+                          flex: 1,
+                          minWidth: 0,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{
+                          display: 'inline-flex',
+                          color: selected ? '#fff' : 'var(--text-muted)',
+                          background: selected ? tab.color : 'transparent',
+                          borderRadius: 999,
+                          padding: selected ? 4 : 0,
+                        }}>
+                          {tab.icon}
+                        </span>
+                        <span style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {tab.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Row 2: Remaining tabs */}
+                {visibleTabs.length > 3 && (
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    {visibleTabs.slice(3).map((tab) => {
+                      const selected = activeTab === tab.key;
+                      return (
+                        <button
+                          key={tab.key}
+                          onClick={() => setActiveTab(tab.key)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            padding: '8px 4px',
+                            borderRadius: '16px',
+                            border: selected ? `1px solid ${tab.color}66` : `1px solid ${tab.color}20`,
+                            background: selected ? `${tab.color}18` : 'var(--surface-warm)',
+                            color: selected ? tab.color : 'var(--text-secondary)',
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            fontFamily: 'var(--font-body)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            boxShadow: selected ? `0 8px 18px ${tab.color}18` : 'none',
+                            flex: 1,
+                            minWidth: 0,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <span style={{
+                            display: 'inline-flex',
+                            color: selected ? '#fff' : 'var(--text-muted)',
+                            background: selected ? tab.color : 'transparent',
+                            borderRadius: 999,
+                            padding: selected ? 4 : 0,
+                          }}>
+                            {tab.icon}
+                          </span>
+                          <span style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {tab.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              visibleTabs.map((tab) => {
+                const selected = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 13px',
+                      borderRadius: '16px',
+                      border: selected ? `1px solid ${tab.color}66` : `1px solid ${tab.color}20`,
+                      background: selected ? `${tab.color}18` : 'var(--surface-warm)',
+                      color: selected ? tab.color : 'var(--text-secondary)',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-body)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: selected ? `0 8px 18px ${tab.color}18` : 'none',
+                    }}
+                    onMouseEnter={(event) => {
+                      if (!selected) {
+                        event.currentTarget.style.background = `${tab.color}14`;
+                        event.currentTarget.style.borderColor = `${tab.color}40`;
+                      }
+                    }}
+                    onMouseLeave={(event) => {
+                      if (!selected) {
+                        event.currentTarget.style.background = 'var(--surface-warm)';
+                        event.currentTarget.style.borderColor = `${tab.color}20`;
+                      }
+                    }}
+                  >
+                    <span style={{
+                      display: 'inline-flex',
+                      color: selected ? '#fff' : 'var(--text-muted)',
+                      background: selected ? tab.color : 'transparent',
+                      borderRadius: 999,
+                      padding: selected ? 5 : 0,
+                    }}>
+                      {tab.icon}
+                    </span>
+                    {tab.label}
+                  </button>
+                );
+              })
             );
-          })}
+          })()}
         </div>
       </div>
 
