@@ -396,3 +396,47 @@ export async function processRow(
     return { rowIndex, success: false, error: msg };
   }
 }
+
+/* ── Export Employees to Excel ─────────────────────────────────────────────── */
+
+/**
+ * Exports an array of Employee objects to an Excel file (.xlsx) whose column
+ * structure exactly matches the import template (English column headers).
+ */
+export function exportEmployeesToExcel(employees: Employee[], filename = 'employees_export.xlsx'): void {
+  const rows = employees.map((emp) => ({
+    'Nome':                    emp.name ?? '',
+    'Cognome':                 emp.surname ?? '',
+    'Email':                   emp.email ?? '',
+    'Ruolo':                   emp.role ?? '',
+    'Negozio':                 emp.storeName ?? '',
+    'Supervisore':             emp.supervisorName ?? '',
+    'Dipartimento':            emp.department ?? '',
+    'Data assunzione':         emp.hireDate ?? '',
+    'Fine contratto':          emp.contractEndDate ?? '',
+    'Tipo contratto':          emp.contractType ?? '',
+    'Ore settimanali':         emp.weeklyHours != null ? emp.weeklyHours : '',
+    'Email personale':         emp.personalEmail ?? '',
+    'Data nascita':            emp.dateOfBirth ?? '',
+    'Nazionalità':             emp.nationality ?? '',
+    'Genere':                  emp.gender ?? '',
+    'IBAN':                    emp.iban ?? '',
+    'Primo soccorso':          emp.firstAidFlag ? 'Sì' : 'No',
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{}]);
+  const workbook  = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Employees');
+
+  // Set uniform column widths for readability
+  const colCount = Object.keys(rows[0] ?? {
+    'Nome': '', 'Cognome': '', 'Email': '', 'Ruolo': '', 'Negozio': '',
+    'Supervisore': '', 'Dipartimento': '', 'Data assunzione': '',
+    'Fine contratto': '', 'Tipo contratto': '', 'Ore settimanali': '',
+    'Email personale': '', 'Data nascita': '', 'Nazionalità': '',
+    'Genere': '', 'IBAN': '', 'Primo soccorso': '',
+  }).length;
+  worksheet['!cols'] = Array(colCount).fill({ wch: 22 });
+
+  XLSX.writeFile(workbook, filename);
+}
