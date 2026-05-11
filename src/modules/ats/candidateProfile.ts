@@ -5,6 +5,7 @@ export interface CandidateApplicationProfile {
   country: string;
   state: string;
   city: string;
+  address: string;
   dateOfBirth: string;
   currentEmployer: string;
   currentRole: string;
@@ -26,6 +27,7 @@ export const EMPTY_CANDIDATE_PROFILE: CandidateApplicationProfile = {
   country: '',
   state: '',
   city: '',
+  address: '',
   dateOfBirth: '',
   currentEmployer: '',
   currentRole: '',

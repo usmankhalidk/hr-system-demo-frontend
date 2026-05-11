@@ -189,6 +189,7 @@ export async function applyToPublicJob(params: {
   country?: string;
   state?: string;
   city?: string;
+  address?: string;
   dateOfBirth?: string;
   currentEmployer?: string;
   currentRole?: string;
@@ -209,6 +210,7 @@ export async function applyToPublicJob(params: {
   if (params.country) formData.append('country', params.country);
   if (params.state) formData.append('state', params.state);
   if (params.city) formData.append('city', params.city);
+  if (params.address) formData.append('address', params.address);
   if (params.dateOfBirth) formData.append('date_of_birth', params.dateOfBirth);
   if (params.currentEmployer) formData.append('current_employer', params.currentEmployer);
   if (params.currentRole) formData.append('current_role', params.currentRole);

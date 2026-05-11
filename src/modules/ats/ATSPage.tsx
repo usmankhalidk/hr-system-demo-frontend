@@ -5018,6 +5018,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     country: '',
     state: '',
     city: '',
+    address: '',
     dateOfBirth: '',
     currentEmployer: '',
     currentRole: '',
@@ -5387,6 +5388,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       country: '',
       state: '',
       city: '',
+      address: '',
       dateOfBirth: '',
       currentEmployer: '',
       currentRole: '',
@@ -6429,88 +6431,181 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
               </div>
             </div>
 
-            <div style={{ padding: '18px 22px 22px', display: 'grid', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 12 }}>
-                <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8A5A07', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('ats.employeeSetup', 'Employee setup')}</div>
-                  <Input type="email" label={t('common.companyEmail', 'Company Email')} value={employeeEmail} onChange={(e) => setEmployeeEmail(e.target.value)} placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')} disabled={creatingEmployee} autoFocus />
-                  <Input label={t('employees.uniqueIdField', 'Unique ID')} value={employeeData.uniqueId} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: e.target.value } : prev))} disabled={creatingEmployee} />
-                  <Input label={t('employees.tempPasswordLabel', 'Temporary password')} type="text" value={employeeData.password} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, password: e.target.value } : prev))} disabled={creatingEmployee} />
-                  <Button type="button" variant="secondary" onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId(), password: generateTempPassword() } : prev))} disabled={creatingEmployee}>
-                    {t('employees.regeneratePassword', 'Regenerate access')}
-                  </Button>
+            <div style={{ padding: '18px 22px 22px', display: 'grid', gap: 16, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+              
+              {/* Employee Setup Section */}
+              <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: 'rgba(201,151,58,0.04)', padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#8A5A07', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                  {t('ats.employeeSetup', 'Employee setup')}
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  <Input 
+                    type="email" 
+                    label={t('common.companyEmail', 'Company Email')} 
+                    value={employeeEmail} 
+                    onChange={(e) => setEmployeeEmail(e.target.value)} 
+                    placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')} 
+                    disabled={creatingEmployee} 
+                    autoFocus 
+                  />
+                  <Input 
+                    label={t('employees.uniqueIdField', 'Unique ID')} 
+                    value={employeeData.uniqueId} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
+                  <Input 
+                    label={t('employees.tempPasswordLabel', 'Temporary password')} 
+                    type="text" 
+                    value={employeeData.password} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, password: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <Button 
+                      type="button" 
+                      variant="secondary" 
+                      onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId(), password: generateTempPassword() } : prev))} 
+                      disabled={creatingEmployee}
+                      style={{ width: '100%' }}
+                    >
+                      {t('employees.regeneratePassword', 'Regenerate access')}
+                    </Button>
+                  </div>
+                </div>
+              </div>
 
-                <div style={{ border: '1px solid rgba(13,33,55,0.12)', borderRadius: 14, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0D2137', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('ats.employeeDetails', 'Employee details')}</div>
-                  <Select label={t('common.role', 'Role')} value={employeeData.role} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, role: e.target.value } : prev))}>
+              {/* Employee Details Section */}
+              <div style={{ border: '1px solid rgba(13,33,55,0.12)', borderRadius: 14, background: '#fff', padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2137', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                  {t('ats.employeeDetails', 'Employee details')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  <Select 
+                    label={t('common.role', 'Role')} 
+                    value={employeeData.role} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, role: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
                     <option value="employee">{t('roles.employee', 'Employee')}</option>
                     <option value="store_manager">{t('roles.store_manager', 'Store manager')}</option>
                     <option value="area_manager">{t('roles.area_manager', 'Area manager')}</option>
                     <option value="hr">{t('roles.hr', 'HR')}</option>
                     <option value="admin">{t('roles.admin', 'Admin')}</option>
                   </Select>
-                  <Select label={t('employees.workingTypeField', 'Working type')} value={employeeData.workingType} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, workingType: e.target.value } : prev))}>
+                  <Select 
+                    label={t('employees.workingTypeField', 'Working type')} 
+                    value={employeeData.workingType} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, workingType: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
                     <option value="full_time">{t('employees.fullTime', 'Full time')}</option>
                     <option value="part_time">{t('employees.partTime', 'Part time')}</option>
                   </Select>
-                  <Select label={t('employees.contractTypeField', 'Contract type')} value={employeeData.contractType} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, contractType: e.target.value } : prev))}>
+                  <Select 
+                    label={t('employees.contractTypeField', 'Contract type')} 
+                    value={employeeData.contractType} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, contractType: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
                     <option value="">{t('common.notProvided', 'Not provided')}</option>
                     <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
                     <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
                     <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
                     <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
                   </Select>
-                  <DatePicker label={t('employees.hireDateField', 'Hire date')} value={employeeData.hireDate} onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, hireDate: value } : prev))} placement="bottom" />
-                  <Input label={t('employees.maritalStatusField', 'Marital status')} value={employeeData.maritalStatus} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, maritalStatus: e.target.value } : prev))} />
-                  <Input label={t('employees.weeklyHoursField', 'Weekly hours')} value={employeeData.weeklyHours} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, weeklyHours: e.target.value } : prev))} />
+                  <DatePicker 
+                    label={t('employees.hireDateField', 'Hire date')} 
+                    value={employeeData.hireDate} 
+                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, hireDate: value } : prev))} 
+                    placement="bottom" 
+                  />
+                  <Input 
+                    label={t('employees.maritalStatusField', 'Marital status')} 
+                    value={employeeData.maritalStatus} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, maritalStatus: e.target.value } : prev))} 
+                    disabled={creatingEmployee}
+                  />
+                  <Input 
+                    label={`${t('employees.weeklyHoursField', 'Weekly hours')} (${t('ats.availabilityLabel', 'Availability')})`}
+                    value={employeeData.weeklyHours || employeeData.availability || ''} 
+                    disabled={true}
+                    style={{ background: 'rgba(0,0,0,0.02)', cursor: 'not-allowed' }}
+                  />
                 </div>
               </div>
 
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--background)', display: 'grid', gap: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {t('ats.candidateProfile', 'Candidate profile')}
+              {/* Contact Information Section */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                  {t('common.contact', 'Contact information')}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, fontSize: 12 }}>
-                  <div><strong>{t('common.firstName', 'First Name')}:</strong> {employeeData.name}</div>
-                  <div><strong>{t('common.lastName', 'Last Name')}:</strong> {employeeData.surname}</div>
-                  <div><strong>{t('common.personalEmail', 'Personal Email')}:</strong> {employeeData.personalEmail || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('ats.phone', 'Phone')}:</strong> {employeeData.phone || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('employees.dateOfBirthField', 'Date of birth')}:</strong> {employeeData.dateOfBirth || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('employees.genderField', 'Gender')}:</strong> {employeeData.gender || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('employees.nationalityField', 'Nationality')}:</strong> {employeeData.nationality || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('employees.addressField', 'Location')}:</strong> {[employeeData.city, employeeData.state, employeeData.country].filter(Boolean).join(', ') || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('ats.currentEmployerLabel', 'Current employer')}:</strong> {employeeData.currentEmployer || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('ats.currentRoleLabel', 'Current role')}:</strong> {employeeData.currentRole || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('ats.availabilityLabel', 'Working hours')}:</strong> {employeeData.availability || employeeData.weeklyHours || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('ats.applicationDateLabel', 'Application date')}:</strong> {employeeData.applicationDate || t('common.notProvided', 'Not provided')}</div>
-                  <div><strong>{t('ats.applicationSourceLabel', 'Source / channel')}:</strong> {[employeeData.applicationSource, employeeData.applicationChannel].filter(Boolean).join(' / ') || t('common.notProvided', 'Not provided')}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  <Input 
+                    label={t('common.firstName', 'First name')} 
+                    value={employeeData.name} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, name: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
+                  <Input 
+                    label={t('common.lastName', 'Last name')} 
+                    value={employeeData.surname} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, surname: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
+                  <Input 
+                    label={t('common.personalEmail', 'Personal Email')} 
+                    type="email" 
+                    value={employeeData.personalEmail} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, personalEmail: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
+                  <Input 
+                    label={t('ats.phone', 'Phone')} 
+                    value={employeeData.phone} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, phone: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
                 </div>
               </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: '#fff', display: 'grid', gap: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {t('common.contact', 'Contact')}
-                </div>
-                <Input label={t('common.firstName', 'First name')} value={employeeData.name} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, name: e.target.value } : prev))} disabled={creatingEmployee} />
-                <Input label={t('common.lastName', 'Last name')} value={employeeData.surname} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, surname: e.target.value } : prev))} disabled={creatingEmployee} />
-                <Input label={t('common.personalEmail', 'Personal Email')} type="email" value={employeeData.personalEmail} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, personalEmail: e.target.value } : prev))} disabled={creatingEmployee} />
-                <Input label={t('ats.phone', 'Phone')} value={employeeData.phone} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, phone: e.target.value } : prev))} disabled={creatingEmployee} />
-              </div>
-
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: '#fff', display: 'grid', gap: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {/* Personal Details Section */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
                   {t('ats.personalDetails', 'Personal details')}
                 </div>
-                <DatePicker label={t('employees.dateOfBirthField', 'Date of birth')} value={employeeData.dateOfBirth} onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, dateOfBirth: value } : prev))} placement="bottom" />
-                <Select label={t('employees.genderField', 'Gender')} value={employeeData.gender} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, gender: e.target.value } : prev))}>
-                  <option value="">{t('common.notProvided', 'Not provided')}</option>
-                  <option value="M">{t('employees.genderMale', 'Male')}</option>
-                  <option value="F">{t('employees.genderFemale', 'Female')}</option>
-                  <option value="other">{t('employees.genderOther', 'Other')}</option>
-                </Select>
-                <Input label={t('employees.nationalityField', 'Nationality')} value={employeeData.nationality} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, nationality: e.target.value } : prev))} disabled={creatingEmployee} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  <DatePicker 
+                    label={t('employees.dateOfBirthField', 'Date of birth')} 
+                    value={employeeData.dateOfBirth} 
+                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, dateOfBirth: value } : prev))} 
+                    placement="bottom" 
+                  />
+                  <Select 
+                    label={t('employees.genderField', 'Gender')} 
+                    value={employeeData.gender} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, gender: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
+                    <option value="">{t('common.notProvided', 'Not provided')}</option>
+                    <option value="M">{t('employees.genderMale', 'Male')}</option>
+                    <option value="F">{t('employees.genderFemale', 'Female')}</option>
+                    <option value="other">{t('employees.genderOther', 'Other')}</option>
+                  </Select>
+                  <Input 
+                    label={t('employees.nationalityField', 'Nationality')} 
+                    value={employeeData.nationality} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, nationality: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
+                </div>
+              </div>
+
+              {/* Location Section */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                  {t('employees.addressField', 'Location')}
+                </div>
                 <LocationFieldGroup
                   value={{ country: employeeData.country, state: employeeData.state, city: employeeData.city }}
                   onChange={(location) => setEmployeeData((prev) => (prev ? {
@@ -6529,22 +6624,22 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                   }}
                 />
               </div>
-            </div>
 
-            <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'rgba(201,151,58,0.05)', display: 'grid', gap: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {t('ats.applicationInfo', 'Application info')}
+              {/* Application Info Section (Read-only) */}
+              <div style={{ border: '1px solid rgba(201,151,58,0.18)', borderRadius: 14, padding: 14, background: 'rgba(201,151,58,0.04)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#8A5A07', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                  {t('ats.applicationInfo', 'Application info')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <div><strong style={{ color: 'var(--text)' }}>{t('ats.currentEmployerLabel', 'Current employer')}:</strong> {employeeData.currentEmployer || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong style={{ color: 'var(--text)' }}>{t('ats.currentRoleLabel', 'Current role')}:</strong> {employeeData.currentRole || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong style={{ color: 'var(--text)' }}>{t('ats.availabilityLabel', 'Working hours')}:</strong> {employeeData.availability || employeeData.weeklyHours || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong style={{ color: 'var(--text)' }}>{t('ats.applicationDateLabel', 'Application date')}:</strong> {employeeData.applicationDate || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong style={{ color: 'var(--text)' }}>{t('ats.applicationSourceLabel', 'Source / channel')}:</strong> {[employeeData.applicationSource, employeeData.applicationChannel].filter(Boolean).join(' / ') || t('common.notProvided', 'Not provided')}</div>
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, fontSize: 12 }}>
-                <div><strong>{t('ats.currentEmployerLabel', 'Current employer')}:</strong> {employeeData.currentEmployer || t('common.notProvided', 'Not provided')}</div>
-                <div><strong>{t('ats.currentRoleLabel', 'Current role')}:</strong> {employeeData.currentRole || t('common.notProvided', 'Not provided')}</div>
-                <div><strong>{t('ats.availabilityLabel', 'Working hours')}:</strong> {employeeData.availability || employeeData.weeklyHours || t('common.notProvided', 'Not provided')}</div>
-                <div><strong>{t('ats.applicationDateLabel', 'Application date')}:</strong> {employeeData.applicationDate || t('common.notProvided', 'Not provided')}</div>
-                <div><strong>{t('ats.applicationSourceLabel', 'Source / channel')}:</strong> {[employeeData.applicationSource, employeeData.applicationChannel].filter(Boolean).join(' / ') || t('common.notProvided', 'Not provided')}</div>
-              </div>
-            </div>
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid var(--border)', marginTop: 4 }}>
               <Button
                 variant="secondary"
                 onClick={() => {

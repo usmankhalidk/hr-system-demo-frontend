@@ -18,7 +18,6 @@ import {
   X,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
-import { Country } from 'country-state-city';
 import { getCompanyLogoUrl } from '../../api/client';
 import { getPublicJobsCatalog, PublicCompany, PublicJob, PublicStoreOption } from '../../api/publicCareers';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
@@ -264,16 +263,17 @@ function initials(value: string): string {
     .slice(0, 2);
 }
 
-const COUNTRY_ROWS = Country.getAllCountries();
+// Simple country list for normalization
+const COUNTRY_ROWS: Array<{ isoCode: string; name: string }> = [];
 
 function normalizeCountryCode(value?: string | null): string | null {
   if (!value) return null;
-  const trimmed = value.trim();
+  const trimmed = value.trim().toUpperCase();
   if (!trimmed) return null;
-  const exact = COUNTRY_ROWS.find((country) => country.isoCode.toLowerCase() === trimmed.toLowerCase());
-  if (exact) return exact.isoCode;
-  const byName = COUNTRY_ROWS.find((country) => country.name.toLowerCase() === trimmed.toLowerCase());
-  return byName?.isoCode ?? null;
+  // If it's already a 2-letter code, return it
+  if (/^[A-Z]{2}$/.test(trimmed)) return trimmed;
+  // Otherwise return null (we don't have a full country list in frontend)
+  return null;
 }
 
 function formatTimeAgo(isoDate: string | null | undefined, uiLanguage: UiLanguage, agoLabel: string): string {

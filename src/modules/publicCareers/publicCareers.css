@@ -729,6 +729,26 @@
   border: 1px solid rgba(201, 151, 58, 0.28);
   display: grid;
   grid-template-rows: auto 1fr;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 151, 58, 0.4) rgba(201, 151, 58, 0.1);
+}
+
+.careers-apply-modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.careers-apply-modal::-webkit-scrollbar-track {
+  background: rgba(201, 151, 58, 0.1);
+  border-radius: 4px;
+}
+
+.careers-apply-modal::-webkit-scrollbar-thumb {
+  background: rgba(201, 151, 58, 0.4);
+  border-radius: 4px;
+}
+
+.careers-apply-modal::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 151, 58, 0.6);
 }
 
 .careers-apply-modal .careers-filter-modal-header {
@@ -756,8 +776,92 @@
 }
 
 .careers-apply-modal .careers-form-grid {
-  padding: 0 4px;
-  padding-bottom: 8px;
+  padding: 16px 20px 8px;
+}
+
+.careers-apply-modal .careers-form-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.careers-apply-modal .careers-form-input,
+.careers-apply-modal input,
+.careers-apply-modal select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Ensure DatePicker components match other inputs */
+.careers-apply-modal .date-picker-wrapper,
+.careers-apply-modal .date-picker-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.careers-apply-modal .date-picker-input input {
+  height: 40px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+/* LocationFieldGroup styling within modal */
+.careers-apply-modal .location-field-group {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.careers-apply-modal .location-field-group select,
+.careers-apply-modal .location-field-group input {
+  height: 40px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+/* Candidate profile section styling */
+.careers-apply-modal section {
+  margin: 0;
+}
+
+.careers-apply-modal section h4 {
+  font-weight: 700;
+}
+
+/* File upload area styling */
+.careers-apply-modal input[type="file"] {
+  padding: 8px;
+  height: auto;
+  cursor: pointer;
+}
+
+.careers-apply-modal input[type="file"]::file-selector-button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(201, 151, 58, 0.4);
+  background: rgba(201, 151, 58, 0.1);
+  color: #8A5A07;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.careers-apply-modal input[type="file"]::file-selector-button:hover {
+  background: rgba(201, 151, 58, 0.2);
+}
+
+/* Checkbox styling */
+.careers-apply-modal .careers-checkbox {
+  cursor: pointer;
+  user-select: none;
+}
+
+.careers-apply-modal .careers-checkbox input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  margin: 0;
+  cursor: pointer;
 }
 
 .careers-apply-footer {
@@ -796,6 +900,23 @@
   
   .careers-apply-modal {
     max-height: calc(100vh - 24px);
+  }
+
+  .careers-apply-modal .careers-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .careers-apply-modal .careers-form-grid {
+    padding: 12px 16px 8px;
+  }
+
+  .careers-apply-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .careers-apply-footer button {
+    width: 100%;
   }
 }
 
@@ -1132,8 +1253,17 @@
 .careers-reply-box textarea,
 .careers-detail-card textarea,
 .careers-detail-card input,
+.careers-detail-card select,
 .careers-detail-card .careers-form-input,
-.careers-detail-card .careers-form-textarea {
+.careers-detail-card .careers-form-textarea,
+.careers-apply-modal .careers-form-input,
+.careers-apply-modal .careers-form-textarea,
+.careers-apply-modal input[type="text"],
+.careers-apply-modal input[type="email"],
+.careers-apply-modal input[type="tel"],
+.careers-apply-modal input[type="url"],
+.careers-apply-modal select,
+.careers-apply-modal textarea {
   width: 100%;
   border-radius: 10px;
   border: 1px solid #d6d3c9;
@@ -1141,28 +1271,52 @@
   color: #111827;
   outline: none;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 13px;
 }
 
 .careers-comment-box textarea,
 .careers-reply-box textarea,
-.careers-detail-card .careers-form-textarea {
+.careers-detail-card .careers-form-textarea,
+.careers-apply-modal .careers-form-textarea,
+.careers-apply-modal textarea {
   resize: vertical;
   min-height: 72px;
-  padding: 9px 11px;
+  padding: 10px 12px;
   font-size: 13px;
   line-height: 1.5;
-  font-family: inherit;
 }
 
-.careers-detail-card .careers-form-input {
-  padding: 9px 11px;
+.careers-detail-card .careers-form-input,
+.careers-detail-card input[type="text"],
+.careers-detail-card input[type="email"],
+.careers-detail-card input[type="tel"],
+.careers-detail-card input[type="url"],
+.careers-detail-card select,
+.careers-apply-modal .careers-form-input,
+.careers-apply-modal input[type="text"],
+.careers-apply-modal input[type="email"],
+.careers-apply-modal input[type="tel"],
+.careers-apply-modal input[type="url"],
+.careers-apply-modal select {
+  padding: 10px 12px;
   font-size: 13px;
+  height: 40px;
+  line-height: 1.4;
 }
 
 .careers-comment-box textarea:focus,
 .careers-reply-box textarea:focus,
 .careers-detail-card .careers-form-input:focus,
-.careers-detail-card .careers-form-textarea:focus {
+.careers-detail-card .careers-form-textarea:focus,
+.careers-detail-card input:focus,
+.careers-detail-card select:focus,
+.careers-apply-modal .careers-form-input:focus,
+.careers-apply-modal .careers-form-textarea:focus,
+.careers-apply-modal input:focus,
+.careers-apply-modal select:focus,
+.careers-apply-modal textarea:focus {
   border-color: #c9973a;
   box-shadow: 0 0 0 3px rgba(201, 151, 58, 0.12);
 }
