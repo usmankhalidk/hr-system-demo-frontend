@@ -226,6 +226,41 @@ export function StoreList() {
       render: <TimezoneOptionContent timezone={timezone} />,
     }));
   }, [browserTimezone, formData.timezone]);
+
+  const companyOptions = useMemo<SelectOption[]>(() => {
+    return companies.map((c) => ({
+      value: String(c.id),
+      label: c.name,
+      render: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {c.logoFilename && getCompanyLogoUrl(c.logoFilename) ? (
+            <img
+              src={getCompanyLogoUrl(c.logoFilename) || ''}
+              alt={c.name}
+              style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }}
+            />
+          ) : (
+            <div style={{
+              width: 18,
+              height: 18,
+              borderRadius: 4,
+              background: getCompanyAvatarColor(c.name),
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: 8,
+            }}>
+              {getCompanyInitials(c.name)}
+            </div>
+          )}
+          <span>{c.name}</span>
+        </div>
+      )
+    }));
+  }, [companies]);
+
   const activeEmployeeCount = editingStore?.employeeCount ?? 0;
   const maxCapacityLabel = editingStore?.maxStaff != null ? String(editingStore.maxStaff) : '—';
 
@@ -1726,28 +1761,23 @@ export function StoreList() {
             /* ========== STEP 1: Store Details ========== */
             <>
           {showCompanyPicker && !editingStore && (
-            <div>
-              <Select
-                label={t('stores.fieldCompany')}
-                value={formCompanyId ?? ''}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setFormCompanyId(raw ? parseInt(raw, 10) : null);
+            <div style={{ display: 'grid', gap: 4 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                {t('stores.fieldCompany')}
+              </label>
+              <CustomSelect
+                value={formCompanyId ? String(formCompanyId) : null}
+                onChange={(val) => {
+                  setFormCompanyId(val ? parseInt(val, 10) : null);
                 }}
+                options={companyOptions}
+                placeholder={t('stores.placeholderCompany')}
                 disabled={formSaving || companiesLoading}
-              >
-                <option value="">{t('stores.placeholderCompany')}</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-              {formErrors.companyId && (
-                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
-                  {formErrors.companyId}
-                </p>
-              )}
+                error={formErrors.companyId}
+                isClearable={false}
+                searchable={companies.length > 5}
+                highlightSelected={true}
+              />
             </div>
           )}
           <Input

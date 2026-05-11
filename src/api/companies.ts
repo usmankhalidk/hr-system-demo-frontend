@@ -11,6 +11,15 @@ export interface CompanyProfilePayload {
   state?: string | null;
   address?: string | null;
   currency?: string | null;
+  pricePerEmployee?: number | null;
+  pricePerDevice?: number | null;
+  extraStoragePricePerGb?: number | null;
+  storageLimitGb?: number | null;
+  accessValidFrom?: string | null;
+  accessValidTo?: string | null;
+  discountPercent?: number | null;
+  discountValidFrom?: string | null;
+  discountValidTo?: string | null;
 }
 
 export async function getCompanies(): Promise<Company[]> {

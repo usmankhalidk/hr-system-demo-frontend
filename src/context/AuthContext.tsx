@@ -129,9 +129,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // (wrong credentials returns 401 — we want the catch block to handle that)
         const requestUrl = (error.config?.url ?? '') as string;
         const isLoginRequest = requestUrl.includes('/auth/login');
-        if (error.response?.status === 401 && !isLoginRequest) {
+        const code = error.response?.data?.code;
+        const isExpired = error.response?.status === 403 && code === 'COMPANY_ACCESS_EXPIRED';
+        if ((error.response?.status === 401 || isExpired) && !isLoginRequest) {
           localStorage.removeItem(TOKEN_KEY);
           sessionStorage.removeItem(TOKEN_KEY);
+          if (isExpired) {
+            localStorage.setItem('login_error_code', 'COMPANY_ACCESS_EXPIRED');
+          }
           setUser(null);
           setPermissions({});
           setAllowedCompanyIds([]);

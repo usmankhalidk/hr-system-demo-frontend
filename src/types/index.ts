@@ -43,8 +43,19 @@ export interface Company {
   address?: string | null;
   timezones?: string | null;
   currency?: string | null;
+  pricePerEmployee?: number | null;
+  pricePerDevice?: number | null;
+  extraStoragePricePerGb?: number | null;
+  storageLimitGb?: number | null;
+  accessValidFrom?: string | null;
+  accessValidTo?: string | null;
+  discountPercent?: number | null;
+  discountValidFrom?: string | null;
+  discountValidTo?: string | null;
   storeCount: number;
   employeeCount: number;
+  activeDevicesCount: number;
+  storageUsedBytes: number;
   createdAt: string;
 }
 
