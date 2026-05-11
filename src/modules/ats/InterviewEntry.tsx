@@ -238,9 +238,7 @@ export default function InterviewEntry({
         {showTooltip && isHovered && (
           <div
             style={{
-              position: 'absolute',
-              top: 'calc(100% + 4px)',
-              left: 0,
+              position: 'fixed',
               minWidth: 240,
               maxWidth: 320,
               borderRadius: 10,
@@ -248,8 +246,9 @@ export default function InterviewEntry({
               background: '#ffffff',
               boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
               padding: '10px 12px',
-              zIndex: 100,
+              zIndex: 9999,
               pointerEvents: 'none',
+              transform: 'translate(10px, -50%)',
             }}
           >
             {/* Candidate */}

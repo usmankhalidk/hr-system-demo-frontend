@@ -64,7 +64,7 @@ export default function ATSWeeklyCalendar({
   const hasInterviews = interviews.length > 0;
 
   return (
-    <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column', height: '100%' }}>
       {!hasInterviews ? (
         <div
           style={{
@@ -91,30 +91,83 @@ export default function ATSWeeklyCalendar({
           </div>
         </div>
       ) : (
-        <div style={{ minWidth: 1000 }}>
-          {/* Day headers row */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-            {days.map((day, colIdx) => {
-              const dateStr = formatDate(day);
-              const isTodayCol = dateStr === today;
+        <div style={{ minWidth: 1000, display: 'flex', position: 'relative' }}>
+          {/* Time column on the left */}
+          <div
+            style={{
+              width: 70,
+              flexShrink: 0,
+              borderRight: '2px solid var(--border)',
+              background: 'var(--surface)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Empty space for day headers alignment */}
+            <div
+              style={{
+                height: 70,
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700,
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                flexShrink: 0,
+              }}
+            >
+              {t('ats.time', 'Time')}
+            </div>
 
-              return (
+            {/* Hour labels */}
+            <div style={{ position: 'relative', minHeight: 600, flex: 1 }}>
+              {hourLabels.map((h, i) => (
                 <div
-                  key={dateStr}
+                  key={h}
                   style={{
-                    flex: 1,
-                    minWidth: 140,
-                    padding: '10px 8px',
+                    position: 'absolute',
+                    top: `${(i / (hourLabels.length - 1)) * 100}%`,
+                    transform: 'translateY(-50%)',
+                    width: '100%',
                     textAlign: 'center',
-                    background: isTodayCol ? 'rgba(201,151,58,0.08)' : 'var(--background)',
-                    borderRight: colIdx < 6 ? '1px solid var(--border)' : 'none',
+                    fontSize: 11,
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-display)',
+                    padding: '4px 0',
                   }}
                 >
+                  {h}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Day columns container */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {/* Day headers row */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              {days.map((day, colIdx) => {
+                const dateStr = formatDate(day);
+                const isTodayCol = dateStr === today;
+
+                return (
                   <div
+                    key={dateStr}
                     style={{
+                      flex: 1,
+                      minWidth: 140,
+                      height: 70,
+                      padding: '8px',
+                      textAlign: 'center',
+                      background: isTodayCol ? 'rgba(201,151,58,0.08)' : 'var(--background)',
+                      borderRight: colIdx < 6 ? '1px solid var(--border)' : 'none',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
+                      justifyContent: 'center',
                       gap: 4,
                     }}
                   >
@@ -156,130 +209,102 @@ export default function ATSWeeklyCalendar({
                       {day.toLocaleDateString(locale, { month: 'short' })}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          {/* Hour ruler - times on top */}
-          <div
-            style={{
-              display: 'flex',
-              borderBottom: '1px solid var(--border)',
-              background: 'var(--surface)',
-            }}
-          >
-            {hourLabels.map((h, i) => (
-              <div
-                key={h}
-                style={{
-                  flex: i === hourLabels.length - 1 ? '0 0 0' : 1,
-                  fontSize: 10,
-                  color: 'var(--text-muted)',
-                  fontWeight: 600,
-                  padding: '6px 0',
-                  borderLeft: i === 0 ? 'none' : '1px solid var(--border)',
-                  paddingLeft: 4,
-                  fontFamily: 'var(--font-display)',
-                  textAlign: 'left',
-                }}
-              >
-                {h}
-              </div>
-            ))}
-          </div>
+            {/* Day columns with time slots */}
+            <div style={{ display: 'flex', flex: 1 }}>
+              {days.map((day, colIdx) => {
+                const dateStr = formatDate(day);
+                const dayInterviews = sortInterviewsByTime(interviewsByDate.get(dateStr) ?? []);
+                const isTodayCol = dateStr === today;
 
-          {/* Day columns with time slots */}
-          <div style={{ display: 'flex' }}>
-            {days.map((day, colIdx) => {
-              const dateStr = formatDate(day);
-              const dayInterviews = sortInterviewsByTime(interviewsByDate.get(dateStr) ?? []);
-              const isTodayCol = dateStr === today;
-
-              return (
-                <div
-                  key={dateStr}
-                  style={{
-                    flex: 1,
-                    minWidth: 140,
-                    borderRight: colIdx < 6 ? '1px solid var(--border)' : 'none',
-                    background: isTodayCol ? 'rgba(201,151,58,0.04)' : 'var(--surface)',
-                  }}
-                >
-                  {/* Time slots with interviews */}
+                return (
                   <div
+                    key={dateStr}
                     style={{
-                      position: 'relative',
-                      minHeight: 600,
-                      padding: '8px 4px',
+                      flex: 1,
+                      minWidth: 140,
+                      borderRight: colIdx < 6 ? '1px solid var(--border)' : 'none',
+                      background: isTodayCol ? 'rgba(201,151,58,0.04)' : 'var(--surface)',
                     }}
                   >
-                    {/* Hour grid lines */}
-                    {hourLabels.map((_, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          top: `${(i / hourLabels.length) * 100}%`,
-                          borderTop: '1px solid rgba(0,0,0,0.05)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                    ))}
-
-                    {/* Interview entries */}
-                    {dayInterviews.map((interview, idx) => {
-                      const top = timeToPosition(interview.scheduledTime);
-                      const height = durationToWidth(interview.durationMinutes);
-                      const hasConflictFlag = hasConflict(interview.id, conflicts);
-
-                      return (
+                    {/* Time slots with interviews */}
+                    <div
+                      style={{
+                        position: 'relative',
+                        minHeight: 600,
+                        padding: '8px 4px',
+                      }}
+                    >
+                      {/* Hour grid lines */}
+                      {hourLabels.map((_, i) => (
                         <div
-                          key={interview.id}
+                          key={i}
                           style={{
                             position: 'absolute',
-                            left: 4,
-                            right: 4,
-                            top,
-                            minHeight: 40,
-                            maxHeight: height,
-                            zIndex: 10 + idx,
+                            left: 0,
+                            right: 0,
+                            top: `${(i / (hourLabels.length - 1)) * 100}%`,
+                            borderTop: '1px solid rgba(0,0,0,0.05)',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                      ))}
+
+                      {/* Interview entries */}
+                      {dayInterviews.map((interview, idx) => {
+                        const top = timeToPosition(interview.scheduledTime);
+                        const height = durationToWidth(interview.durationMinutes);
+                        const hasConflictFlag = hasConflict(interview.id, conflicts);
+
+                        return (
+                          <div
+                            key={interview.id}
+                            style={{
+                              position: 'absolute',
+                              left: 4,
+                              right: 4,
+                              top,
+                              minHeight: 40,
+                              maxHeight: height,
+                              zIndex: 10 + idx,
+                            }}
+                          >
+                            <InterviewEntry
+                              interview={interview}
+                              variant="weekly"
+                              onClick={() => onInterviewClick(interview)}
+                              hasConflict={hasConflictFlag}
+                            />
+                          </div>
+                        );
+                      })}
+
+                      {/* Empty state for day */}
+                      {dayInterviews.length === 0 && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--text-muted)',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            opacity: 0.4,
                           }}
                         >
-                          <InterviewEntry
-                            interview={interview}
-                            variant="weekly"
-                            onClick={() => onInterviewClick(interview)}
-                            hasConflict={hasConflictFlag}
-                          />
+                          {t('ats.noInterviews', 'No interviews')}
                         </div>
-                      );
-                    })}
-
-                    {/* Empty state for day */}
-                    {dayInterviews.length === 0 && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'var(--text-muted)',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          opacity: 0.4,
-                        }}
-                      >
-                        {t('ats.noInterviews', 'No interviews')}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

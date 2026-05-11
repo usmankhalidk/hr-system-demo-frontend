@@ -43,6 +43,7 @@ export interface PublicJob {
   companyId: number;
   companyName: string;
   companySlug: string;
+  companyCountry?: string | null;
   storeId: number | null;
   storeName: string | null;
   title: string;
@@ -98,8 +99,9 @@ function buildCatalogFromJobs(jobs: PublicJob[], company?: PublicCompany): { com
         slug: job.companySlug,
         city: job.location.city,
         state: job.location.state,
-        country: job.location.country,
+        country: job.companyCountry ?? job.location.country,
         address: job.location.address,
+        groupName: job.companyGroupName ?? null,
         logoFilename: job.companyLogoFilename ?? null,
         bannerFilename: job.companyBannerFilename ?? null,
         openRolesCount: 0,
@@ -181,6 +183,19 @@ export async function applyToPublicJob(params: {
   gdprConsent: boolean;
   applicantLocale?: string;
   utmSource?: string;
+  availability?: string;
+  gender?: string;
+  nationality?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  address?: string;
+  dateOfBirth?: string;
+  currentEmployer?: string;
+  currentRole?: string;
+  maritalStatus?: string;
+  hasCurrentEmployer?: string;
+  applicationDate?: string;
 }): Promise<void> {
   const formData = new FormData();
   formData.append('full_name', params.fullName);
@@ -189,6 +204,19 @@ export async function applyToPublicJob(params: {
   if (params.linkedinUrl) formData.append('linkedin_url', params.linkedinUrl);
   if (params.coverLetter) formData.append('cover_letter', params.coverLetter);
   if (params.applicantLocale) formData.append('applicant_locale', params.applicantLocale);
+  if (params.availability) formData.append('availability', params.availability);
+  if (params.gender) formData.append('gender', params.gender);
+  if (params.nationality) formData.append('nationality', params.nationality);
+  if (params.country) formData.append('country', params.country);
+  if (params.state) formData.append('state', params.state);
+  if (params.city) formData.append('city', params.city);
+  if (params.address) formData.append('address', params.address);
+  if (params.dateOfBirth) formData.append('date_of_birth', params.dateOfBirth);
+  if (params.currentEmployer) formData.append('current_employer', params.currentEmployer);
+  if (params.currentRole) formData.append('current_role', params.currentRole);
+  if (params.maritalStatus) formData.append('marital_status', params.maritalStatus);
+  if (params.hasCurrentEmployer) formData.append('has_current_employer', params.hasCurrentEmployer);
+  if (params.applicationDate) formData.append('application_date', params.applicationDate);
   formData.append('gdpr_consent', params.gdprConsent ? 'true' : 'false');
   formData.append('resume', params.resume);
 

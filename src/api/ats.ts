@@ -29,6 +29,7 @@ export interface JobPosting {
   storeId: number | null;
   storeName: string | null;
   storeLogoFilename: string | null;
+  storeEmployeeCount: number | null;
   storeCountry: string | null;
   storeHrName: string | null;
   storeHrSurname: string | null;

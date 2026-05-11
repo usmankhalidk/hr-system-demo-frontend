@@ -18,7 +18,7 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const resolvedUrl = useMemo(() => {
-    if (/^https?:\/\//i.test(url)) return url;
+    if (/^(https?:|blob:|data:)/i.test(url)) return url;
     const envBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || '';
     if (envBase) {
       return `${envBase}${url.startsWith('/') ? url : `/${url}`}`;
@@ -31,6 +31,13 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
     if (!shouldInlinePreview) {
       setLoading(false);
       setPreviewUrl(null);
+      setLoadError(null);
+      return;
+    }
+
+    if (/^(blob:|data:)/i.test(resolvedUrl)) {
+      setLoading(false);
+      setPreviewUrl(resolvedUrl);
       setLoadError(null);
       return;
     }

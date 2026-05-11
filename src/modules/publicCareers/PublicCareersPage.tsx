@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
   BadgeCheck,
-  Bookmark,
   BriefcaseBusiness,
   Building2,
   CalendarClock,
+  Calendar,
   Globe2,
-  Heart,
+  Languages,
   MapPin,
   Search,
   SlidersHorizontal,
@@ -17,6 +17,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import ReactCountryFlag from 'react-country-flag';
 import { getCompanyLogoUrl } from '../../api/client';
 import { getPublicJobsCatalog, PublicCompany, PublicJob, PublicStoreOption } from '../../api/publicCareers';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
@@ -132,6 +133,7 @@ const COPY: Record<UiLanguage, {
   jobType: string;
   remoteType: string;
   appliedShort: string;
+  location: string;
 }> = {
   en: {
     kicker: 'Public Careers',
@@ -186,6 +188,7 @@ const COPY: Record<UiLanguage, {
     jobType: 'Job type',
     remoteType: 'Remote type',
     appliedShort: 'applied',
+    location: 'Location',
   },
   it: {
     kicker: 'Careers Pubbliche',
@@ -240,6 +243,7 @@ const COPY: Record<UiLanguage, {
     jobType: 'Tipo contratto',
     remoteType: 'Modalita lavoro',
     appliedShort: 'candidature',
+    location: 'Posizione',
   },
 };
 
@@ -257,6 +261,19 @@ function initials(value: string): string {
     .join('')
     .toUpperCase()
     .slice(0, 2);
+}
+
+// Simple country list for normalization
+const COUNTRY_ROWS: Array<{ isoCode: string; name: string }> = [];
+
+function normalizeCountryCode(value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim().toUpperCase();
+  if (!trimmed) return null;
+  // If it's already a 2-letter code, return it
+  if (/^[A-Z]{2}$/.test(trimmed)) return trimmed;
+  // Otherwise return null (we don't have a full country list in frontend)
+  return null;
 }
 
 function formatTimeAgo(isoDate: string | null | undefined, uiLanguage: UiLanguage, agoLabel: string): string {
@@ -332,8 +349,6 @@ export default function PublicCareersPage() {
   const [filters, setFilters] = useState<CareersFilters>(DEFAULT_FILTERS);
   const [draftFilters, setDraftFilters] = useState<CareersFilters>(DEFAULT_FILTERS);
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [savedJobs, setSavedJobs] = useState<Record<number, boolean>>({});
-  const [likedJobs, setLikedJobs] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     setFilters(DEFAULT_FILTERS);
@@ -434,14 +449,6 @@ export default function PublicCareersPage() {
     setShowFilterModal(false);
   };
 
-  const toggleLike = (jobId: number) => {
-    setLikedJobs((prev) => ({ ...prev, [jobId]: !prev[jobId] }));
-  };
-
-  const toggleSave = (jobId: number) => {
-    setSavedJobs((prev) => ({ ...prev, [jobId]: !prev[jobId] }));
-  };
-
   return (
     <div className="careers-shell">
       <section className="careers-hero">
@@ -514,18 +521,18 @@ export default function PublicCareersPage() {
             {filteredJobs.map((job) => {
               const company = companyById.get(job.companyId);
               const logoUrl = getCompanyLogoUrl(company?.logoFilename ?? job.companyLogoFilename);
+              const companyCountryCode = normalizeCountryCode(company?.country ?? job.companyCountry ?? job.location.country);
+              const groupLabel = (company?.groupName ?? job.companyGroupName ?? '').trim() || null;
               const city = job.location.city ?? job.storeName ?? copy.flexible;
               const detailUrl = job.companySlug
                 ? `/careers/${encodeURIComponent(job.companySlug)}/jobs/${job.id}`
                 : `/careers/jobs/${job.id}`;
               const typeLabel = JOB_TYPE_LABEL[uiLanguage][job.jobType] ?? job.jobType;
               const remoteTypeLabel = REMOTE_TYPE_LABEL[uiLanguage][job.remoteType] ?? job.remoteType;
-              const languageLabel = formatLanguageWithFlag(job.language, copy.italian, copy.english);
               const postedDate = job.publishedAt ?? job.createdAt;
               const postedLabel = formatTimeAgo(postedDate, uiLanguage, copy.postedAgo);
+              const jobLocationDisplay = [job.location.city || job.storeName, job.location.state, job.location.country].filter(Boolean).join(', ') || city;
               const salaryLabel = formatSalary(job, locale, copy.notSpecified, copy.upTo);
-              const isLiked = Boolean(likedJobs[job.id]);
-              const isSaved = Boolean(savedJobs[job.id]);
               const statusLabel = job.status === 'closed' ? copy.statusClosed : copy.statusPublished;
 
               return (
@@ -536,8 +543,13 @@ export default function PublicCareersPage() {
                         {logoUrl ? <img src={logoUrl} alt={job.companyName} /> : <span>{initials(job.companyName)}</span>}
                       </div>
                       <div>
-                        <strong>{job.companyName}</strong>
-                        <span>{company?.groupName ?? copy.independentCompany}</span>
+                        <strong style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.companyName}</span>
+                          {companyCountryCode ? (
+                            <ReactCountryFlag countryCode={companyCountryCode} svg style={{ width: '0.95em', height: '0.95em', borderRadius: 2 }} />
+                          ) : null}
+                        </strong>
+                        {groupLabel ? <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupLabel}</span> : null}
                       </div>
                     </div>
                     <div className="careers-job-head-right">
@@ -561,16 +573,30 @@ export default function PublicCareersPage() {
 
                   <div className="careers-job-extra-grid">
                     <div>
-                      <strong>{copy.posted}</strong>
-                      <span>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(postedDate ?? job.createdAt))}</span>
+                      <strong><Calendar size={11} /> {copy.posted}</strong>
+                      <span>{postedLabel}</span>
                     </div>
                     <div>
-                      <strong><Wallet size={12} /> {copy.salary}</strong>
+                      <strong><Wallet size={11} /> {copy.salary}</strong>
                       <span>{salaryLabel}</span>
                     </div>
                     <div>
-                      <strong>{copy.language}</strong>
-                      <span>{languageLabel}</span>
+                      <strong><Languages size={11} /> {copy.language}</strong>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {job.language === 'it' && <ReactCountryFlag countryCode="IT" svg style={{ width: '1em', height: '1em', borderRadius: 2 }} />}
+                        {job.language === 'en' && <ReactCountryFlag countryCode="GB" svg style={{ width: '1em', height: '1em', borderRadius: 2 }} />}
+                        {job.language === 'both' && (
+                          <>
+                            <ReactCountryFlag countryCode="IT" svg style={{ width: '1em', height: '1em', borderRadius: 2 }} />
+                            <ReactCountryFlag countryCode="GB" svg style={{ width: '1em', height: '1em', borderRadius: 2 }} />
+                          </>
+                        )}
+                        {job.language === 'it' ? copy.italian : job.language === 'en' ? copy.english : `${copy.italian} + ${copy.english}`}
+                      </span>
+                    </div>
+                    <div>
+                      <strong><MapPin size={11} /> {copy.location}</strong>
+                      <span>{jobLocationDisplay}</span>
                     </div>
                   </div>
 
@@ -580,22 +606,6 @@ export default function PublicCareersPage() {
                       {job.tags.length === 0 && <span>{job.department ?? copy.generalHiring}</span>}
                     </div>
                     <div className="careers-job-actions">
-                      <button
-                        type="button"
-                        className={`careers-icon-btn like ${isLiked ? 'active' : ''}`}
-                        onClick={() => toggleLike(job.id)}
-                        aria-label="Like job"
-                      >
-                        <Heart size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className={`careers-icon-btn save ${isSaved ? 'active' : ''}`}
-                        onClick={() => toggleSave(job.id)}
-                        aria-label="Save job"
-                      >
-                        <Bookmark size={15} />
-                      </button>
                       <Link to={detailUrl} className="careers-view-details-link">{copy.viewDetails} <ArrowRight size={15} /></Link>
                     </div>
                   </div>
