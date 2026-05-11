@@ -19,6 +19,11 @@ import {
   Image as ImageIcon,
   Hash,
   CalendarClock,
+  HardDrive,
+  Smartphone,
+  Receipt,
+  Tag,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -46,6 +51,7 @@ import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Select } from '../../components/ui/Select';
+import { DatePicker } from '../../components/ui/DatePicker';
 import { LocationFieldGroup } from '../../components/location';
 import { getCountryDisplayName } from '../../utils/country';
 import { getCompanies } from '../../api/companies';
@@ -85,6 +91,15 @@ type CompanyProfileForm = {
   state: string;
   address: string;
   currency: string;
+  pricePerEmployee: number | '';
+  pricePerDevice: number | '';
+  extraStoragePricePerGb: number | '';
+  storageLimitGb: number | '';
+  accessValidFrom: string;
+  accessValidTo: string;
+  discountPercent: number | '';
+  discountValidFrom: string;
+  discountValidTo: string;
 };
 
 const EMPTY_PROFILE_FORM: CompanyProfileForm = {
@@ -97,6 +112,15 @@ const EMPTY_PROFILE_FORM: CompanyProfileForm = {
   state: '',
   address: '',
   currency: '',
+  pricePerEmployee: '',
+  pricePerDevice: '',
+  extraStoragePricePerGb: '',
+  storageLimitGb: '',
+  accessValidFrom: '',
+  accessValidTo: '',
+  discountPercent: '',
+  discountValidFrom: '',
+  discountValidTo: '',
 };
 
 function profileFromCompany(company: Company | null): CompanyProfileForm {
@@ -111,6 +135,15 @@ function profileFromCompany(company: Company | null): CompanyProfileForm {
     state: company.state ?? '',
     address: company.address ?? '',
     currency: company.currency ?? '',
+    pricePerEmployee: company.pricePerEmployee ?? '',
+    pricePerDevice: company.pricePerDevice ?? '',
+    extraStoragePricePerGb: company.extraStoragePricePerGb ?? '',
+    storageLimitGb: company.storageLimitGb ?? 500,
+    accessValidFrom: company.accessValidFrom ? company.accessValidFrom.substring(0, 10) : '',
+    accessValidTo: company.accessValidTo ? company.accessValidTo.substring(0, 10) : '',
+    discountPercent: company.discountPercent ?? '',
+    discountValidFrom: company.discountValidFrom ? company.discountValidFrom.substring(0, 10) : '',
+    discountValidTo: company.discountValidTo ? company.discountValidTo.substring(0, 10) : '',
   };
 }
 
@@ -130,6 +163,15 @@ function profilePayload(profile: CompanyProfileForm) {
     state: normalizeProfileValue(profile.state),
     address: normalizeProfileValue(profile.address),
     currency: normalizeProfileValue(profile.currency),
+    pricePerEmployee: profile.pricePerEmployee !== '' ? profile.pricePerEmployee : null,
+    pricePerDevice: profile.pricePerDevice !== '' ? profile.pricePerDevice : null,
+    extraStoragePricePerGb: profile.extraStoragePricePerGb !== '' ? profile.extraStoragePricePerGb : null,
+    storageLimitGb: profile.storageLimitGb !== '' ? profile.storageLimitGb : 500,
+    accessValidFrom: normalizeProfileValue(profile.accessValidFrom),
+    accessValidTo: normalizeProfileValue(profile.accessValidTo),
+    discountPercent: profile.discountPercent !== '' ? profile.discountPercent : null,
+    discountValidFrom: normalizeProfileValue(profile.discountValidFrom),
+    discountValidTo: normalizeProfileValue(profile.discountValidTo),
   };
 }
 
@@ -142,6 +184,7 @@ export default function CompanyDetail() {
   const companyId = useMemo(() => parseCompanyIdFromSlug(slug), [slug]);
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
   const canManageStatus = user?.isSuperAdmin === true;
+  const isSuperAdmin = !!user?.isSuperAdmin || (user?.role as string) === 'super_admin';
 
   const [company, setCompany] = useState<Company | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
@@ -179,6 +222,8 @@ export default function CompanyDetail() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'billing'>('overview');
 
   const canEdit = user?.role === 'admin' || (company?.ownerUserId != null && user?.id === company.ownerUserId);
 
@@ -685,6 +730,36 @@ export default function CompanyDetail() {
         </div>
       </div>
 
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+        {(['overview', 'billing'] as const).map((tab) => {
+          const isActive = activeTab === tab;
+          const label = tab === 'overview' ? 'Overview' : 'Billing';
+          const icon = tab === 'overview' ? <LayoutDashboard size={14} /> : <Receipt size={14} />;
+          return (
+            <button
+              key={tab}
+              id={`company-detail-tab-${tab}`}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '9px 18px',
+                fontSize: 13, fontWeight: 700,
+                border: 'none', background: 'none', cursor: 'pointer',
+                borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                marginBottom: -2,
+                color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                transition: 'color 0.15s, border-color 0.15s',
+              }}
+            >
+              {icon}{label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Overview Tab ── */}
+      {activeTab === 'overview' && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         <div style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'linear-gradient(135deg, rgba(13,33,55,0.94) 0%, rgba(16,40,66,0.88) 100%)' }}>
@@ -771,6 +846,236 @@ export default function CompanyDetail() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ── Billing Tab ── */}
+      {activeTab === 'billing' && (() => {
+        const storageUsedGb = (company.storageUsedBytes || 0) / (1024 * 1024 * 1024);
+        const storageLimitGb = company.storageLimitGb || 500;
+        const storageOverageGb = Math.max(0, storageUsedGb - storageLimitGb);
+        const storageUsedPct = Math.min(100, (storageUsedGb / storageLimitGb) * 100);
+
+        const pricePerEmp = company.pricePerEmployee || 0;
+        const pricePerDev = company.pricePerDevice || 0;
+        const pricePerGb = company.extraStoragePricePerGb || 0;
+        const activeDevCount = company.activeDevicesCount || 0;
+        const activeEmpCount = activeEmployees.length;
+
+        const empSubtotal = activeEmpCount * pricePerEmp;
+        const devSubtotal = activeDevCount * pricePerDev;
+        const storageSubtotal = storageOverageGb * pricePerGb;
+        const grandTotal = empSubtotal + devSubtotal + storageSubtotal;
+
+        const now = new Date();
+        const discountActive = (() => {
+          if (!company.discountPercent || company.discountPercent <= 0) return false;
+          const fromOk = !company.discountValidFrom || now >= new Date(company.discountValidFrom);
+          const toOk = !company.discountValidTo || now <= (() => { const d = new Date(company.discountValidTo); d.setHours(23, 59, 59, 999); return d; })();
+          return fromOk && toOk;
+        })();
+        const discountAmt = discountActive ? grandTotal * (company.discountPercent! / 100) : 0;
+        const finalTotal = grandTotal - discountAmt;
+
+        const formatDate = (s?: string | null) => {
+          if (!s) return '';
+          const d = new Date(s);
+          return isNaN(d.getTime()) ? s : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+        };
+
+        const sectionStyle: React.CSSProperties = {
+          border: '1px solid var(--border)',
+          borderRadius: 12,
+          background: 'var(--surface)',
+          overflow: 'hidden',
+        };
+        const sectionHeaderStyle: React.CSSProperties = {
+          padding: '12px 18px',
+          borderBottom: '1px solid var(--border-light)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        };
+        const rowStyle: React.CSSProperties = {
+          display: 'grid',
+          gridTemplateColumns: '1fr auto auto',
+          gap: 12,
+          alignItems: 'center',
+          padding: '14px 18px',
+        };
+        const subtotalBadge = (val: number): React.ReactNode => (
+          <span style={{
+            display: 'inline-block',
+            minWidth: 90, textAlign: 'right',
+            fontSize: 15, fontWeight: 800,
+            color: 'var(--text-primary)',
+            fontFamily: 'var(--font-display)',
+          }}>
+            €{val.toFixed(2)}
+          </span>
+        );
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* Employees */}
+            <div style={sectionStyle}>
+              <div style={sectionHeaderStyle}>
+                <span style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(201,151,58,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
+                  <Users size={16} />
+                </span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Active Employees</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Live count from employees table where status = active</div>
+                </div>
+              </div>
+              <div style={rowStyle}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>COUNT (LIVE)</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 24, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{activeEmpCount}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>employees</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>UNIT PRICE</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>€{pricePerEmp.toFixed(2)} / employee / month</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>SUBTOTAL</div>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+                    €{empSubtotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Devices */}
+            <div style={sectionStyle}>
+              <div style={sectionHeaderStyle}>
+                <span style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(201,151,58,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
+                  <Smartphone size={16} />
+                </span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Active Devices / Terminals</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Live count from devices table where status = active</div>
+                </div>
+              </div>
+              <div style={rowStyle}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>COUNT (LIVE)</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 24, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{activeDevCount}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>devices</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>UNIT PRICE</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>€{pricePerDev.toFixed(2)} / device / month</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>SUBTOTAL</div>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+                    €{devSubtotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Documents Storage */}
+            <div style={sectionStyle}>
+              <div style={sectionHeaderStyle}>
+                <span style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(201,151,58,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
+                  <HardDrive size={16} />
+                </span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Documents Storage</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Aggregated from documents table — active + trash tabs</div>
+                </div>
+              </div>
+              {/* Storage bar */}
+              <div style={{ padding: '14px 18px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  <span>Used: <strong>{storageUsedGb.toFixed(2)} GB</strong></span>
+                  <span>Included: <strong>{storageLimitGb} GB</strong></span>
+                </div>
+                <div style={{ height: 8, borderRadius: 999, background: 'var(--border)', overflow: 'hidden', position: 'relative' }}>
+                  <div style={{ width: `${storageUsedPct}%`, height: '100%', borderRadius: 999, background: storageUsedPct >= 90 ? 'var(--danger)' : storageUsedPct >= 70 ? '#f59e0b' : 'var(--primary)', transition: 'width 0.4s' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-disabled)', marginTop: 4 }}>
+                  <span>0 GB</span>
+                  <span>{storageLimitGb} GB</span>
+                </div>
+              </div>
+              <div style={rowStyle}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>INCLUDED GB</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{storageLimitGb}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>GB</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>OVERAGE PRICE</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>€{pricePerGb.toFixed(2)} / GB extra</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>SUBTOTAL</div>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+                    €{storageSubtotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Grand Total */}
+            <div style={{ ...sectionStyle, background: 'linear-gradient(135deg, rgba(13,33,55,0.96) 0%, rgba(22,51,82,0.93) 100%)' }}>
+              <div style={{ padding: '16px 20px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>LIVE REFERENCE TOTAL</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
+                    <span>Employees ({activeEmpCount} × €{pricePerEmp.toFixed(2)})</span>
+                    <span style={{ fontWeight: 700 }}>€{empSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
+                    <span>Devices ({activeDevCount} × €{pricePerDev.toFixed(2)})</span>
+                    <span style={{ fontWeight: 700 }}>€{devSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
+                    <span>Storage overage ({storageOverageGb.toFixed(2)} GB extra)</span>
+                    <span style={{ fontWeight: 700 }}>€{storageSubtotal.toFixed(2)}</span>
+                  </div>
+                </div>
+                {discountActive && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(201,151,58,0.14)', border: '1px solid rgba(201,151,58,0.3)', borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+                      <Tag size={13} />
+                      Discount {company.discountPercent}%
+                      {(company.discountValidFrom || company.discountValidTo) && (
+                        <span style={{ fontSize: 11, color: 'rgba(201,151,58,0.8)', fontWeight: 400 }}>
+                          ({formatDate(company.discountValidFrom)} — {formatDate(company.discountValidTo)})
+                        </span>
+                      )}
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent)' }}>-€{discountAmt.toFixed(2)}</span>
+                  </div>
+                )}
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>GRAND TOTAL (REFERENCE)</div>
+                  <div style={{ fontSize: 38, fontWeight: 900, fontFamily: 'var(--font-display)', color: '#fff', lineHeight: 1 }}>€{finalTotal.toFixed(2)}</div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>€{(finalTotal * 12).toFixed(2)} / year estimated</div>
+                </div>
+                {(company.accessValidFrom || company.accessValidTo) && (
+                  <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(255,255,255,0.06)', borderRadius: 8 }}>
+                    <CalendarClock size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                      Access period: <strong style={{ color: '#fff' }}>{formatDate(company.accessValidFrom) || 'N/A'} — {formatDate(company.accessValidTo) || 'N/A'}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        );
+      })()}
 
       <Modal
         open={editOpen}
@@ -882,6 +1187,86 @@ export default function CompanyDetail() {
               phone: t('companies.companyPhoneNumbers', 'Company phone numbers'),
             }}
           />
+
+          {isSuperAdmin && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Input
+                type="number"
+                label={t('companies.pricePerEmployee', 'Set price per employee')}
+                value={editProfile.pricePerEmployee}
+                onChange={(e) => setEditProfile(p => ({ ...p, pricePerEmployee: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={editSaving}
+              />
+              <Input
+                type="number"
+                label={t('companies.pricePerDevice', 'Set price per device')}
+                value={editProfile.pricePerDevice}
+                onChange={(e) => setEditProfile(p => ({ ...p, pricePerDevice: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={editSaving}
+              />
+              <Input
+                type="number"
+                label={t('companies.extraStoragePrice', 'Set extra storage price (per GB)')}
+                value={editProfile.extraStoragePricePerGb}
+                onChange={(e) => setEditProfile(p => ({ ...p, extraStoragePricePerGb: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={editSaving}
+              />
+              <Input
+                type="number"
+                label={t('companies.storageLimit', 'Set Storage Limit (GB)')}
+                value={editProfile.storageLimitGb}
+                onChange={(e) => setEditProfile(p => ({ ...p, storageLimitGb: e.target.value ? Number(e.target.value) : '' }))}
+                disabled={editSaving}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <DatePicker
+                  label={t('companies.accessValidFrom', 'From Date')}
+                  value={editProfile.accessValidFrom}
+                  onChange={(val) => setEditProfile(p => ({ ...p, accessValidFrom: val }))}
+                  disabled={editSaving}
+                />
+                <DatePicker
+                  label={t('companies.accessValidTo', 'To Date')}
+                  value={editProfile.accessValidTo}
+                  onChange={(val) => setEditProfile(p => ({ ...p, accessValidTo: val }))}
+                  disabled={editSaving}
+                />
+              </div>
+              <Input
+                type="number"
+                label={t('companies.discountPercent', 'Discount (%)')}
+                value={editProfile.discountPercent}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setEditProfile(p => ({ ...p, discountPercent: '' }));
+                  } else {
+                    const num = Number(val);
+                    if (num >= 0 && num <= 100) {
+                      setEditProfile(p => ({ ...p, discountPercent: num }));
+                    }
+                  }
+                }}
+                disabled={editSaving}
+                min={0}
+                max={100}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <DatePicker
+                  label={t('companies.discountValidFrom', 'Discount From Date')}
+                  value={editProfile.discountValidFrom}
+                  onChange={(val) => setEditProfile(p => ({ ...p, discountValidFrom: val }))}
+                  disabled={editSaving}
+                />
+                <DatePicker
+                  label={t('companies.discountValidTo', 'Discount To Date')}
+                  value={editProfile.discountValidTo}
+                  onChange={(val) => setEditProfile(p => ({ ...p, discountValidTo: val }))}
+                  disabled={editSaving}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 

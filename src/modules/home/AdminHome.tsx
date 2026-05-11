@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -236,6 +236,173 @@ const Panel: React.FC<{ title: string; subtitle?: string; children: React.ReactN
   </div>
 );
 
+// ── Custom Dropdown for Time Range ───────────────────────────────────────────
+interface CustomTimeRangeDropdownProps {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+const CustomTimeRangeDropdown: React.FC<CustomTimeRangeDropdownProps> = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const options = [
+    { value: 'this_week', label: 'This Week' },
+    { value: 'this_month', label: 'This Month' },
+    { value: 'three_months', label: 'Three Months' },
+  ];
+
+  const selectedOption = options.find(opt => opt.value === value) || options[1];
+
+  return (
+    <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          padding: '8px 14px',
+          borderRadius: '8px',
+          border: isOpen ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.25)',
+          background: isOpen ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.18)',
+          color: '#FFFFFF',
+          fontSize: '13px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          outline: 'none',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          minWidth: '135px',
+          boxShadow: isOpen ? '0 0 0 3px rgba(201,151,58,0.25)' : 'none',
+        }}
+        onMouseEnter={(e) => {
+          if (!isOpen) {
+            e.currentTarget.style.background = 'rgba(0,0,0,0.28)';
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isOpen) {
+            e.currentTarget.style.background = 'rgba(0,0,0,0.18)';
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)';
+          }
+        }}
+      >
+        <span>{selectedOption.label}</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            opacity: 0.9,
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          className="pop-in"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            boxShadow: 'var(--shadow-lg)',
+            padding: '6px',
+            zIndex: 100,
+            minWidth: '150px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+          }}
+        >
+          {options.map((option) => {
+            const isSelected = option.value === value;
+            return (
+              <button
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  background: isSelected ? 'var(--accent-light)' : 'transparent',
+                  color: isSelected ? 'var(--accent-hover)' : 'var(--text-secondary)',
+                  fontSize: '13px',
+                  fontWeight: isSelected ? 600 : 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s ease',
+                  width: '100%',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = 'var(--border-light)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }
+                }}
+              >
+                <span>{option.label}</span>
+                {isSelected && (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Component ──────────────────────────────────────────────────────────────────
 export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRangeChange }) => {
   const { stats, dashboardStats, roleBreakdown, storeBreakdown } = data;
@@ -268,30 +435,7 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRan
           <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '13px', margin: 0 }}>{t('home.admin.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <select
-            value={timeRange}
-            onChange={(e) => onTimeRangeChange(e.target.value)}
-            style={{
-              padding: '6px 28px 6px 12px',
-              borderRadius: '8px',
-              border: '1px solid rgba(255,255,255,0.2)',
-              background: 'rgba(0,0,0,0.2)',
-              color: '#FFFFFF',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              appearance: 'none',
-              outline: 'none',
-              backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23FFFFFF%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 8px center',
-              backgroundSize: '14px',
-            }}
-          >
-            <option value="this_week" style={{ color: '#000' }}>This Week</option>
-            <option value="this_month" style={{ color: '#000' }}>This Month</option>
-            <option value="three_months" style={{ color: '#000' }}>Three Months</option>
-          </select>
+          <CustomTimeRangeDropdown value={timeRange} onChange={onTimeRangeChange} />
 
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px',

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Upload, Download } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,7 @@ import { Pagination } from '../../components/ui/Pagination';
 import { EmployeeForm } from './EmployeeForm';
 import { BulkImportModal } from './BulkImportModal';
 import { exportEmployeesToExcel } from './bulkImportUtils';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 
 interface CompanyOption {
   id: number;
@@ -96,6 +97,33 @@ export function EmployeeList() {
   const isSuperAdmin = user?.isSuperAdmin === true;
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
   const hasActiveFilters = !!(search || storeId || department || status || role || companyFilter);
+
+  const companyOptions = useMemo<SelectOption[]>(() => {
+    return companies.map((c) => ({
+      value: String(c.id),
+      label: c.name,
+    }));
+  }, [companies]);
+
+  const storeOptions = useMemo<SelectOption[]>(() => {
+    return stores.map((s) => ({
+      value: String(s.id),
+      label: s.companyName ? `${s.name} (${s.companyName})` : s.name,
+    }));
+  }, [stores]);
+
+  const statusOptions = useMemo<SelectOption[]>(() => [
+    { value: 'active', label: t('employees.statusActive') },
+    { value: 'inactive', label: t('employees.statusInactive') },
+  ], [t]);
+
+  const roleOptions = useMemo<SelectOption[]>(() => [
+    { value: 'admin', label: tRole('admin') },
+    { value: 'hr', label: tRole('hr') },
+    { value: 'area_manager', label: tRole('area_manager') },
+    { value: 'store_manager', label: tRole('store_manager') },
+    { value: 'employee', label: tRole('employee') },
+  ], [t, tRole]);
 
   const handleExport = useCallback(async () => {
     if (exporting) return;
@@ -447,124 +475,306 @@ export function EmployeeList() {
         </div>
 
         {isAdminOrHr && (
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }}>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              style={{
-                background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', padding: '9px 18px',
-                fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
-                cursor: exporting ? 'not-allowed' : 'pointer',
-                opacity: exporting ? 0.65 : 1,
-                display: 'inline-flex', alignItems: 'center',
-                gap: '7px', flexShrink: 0, transition: 'border-color 0.15s, box-shadow 0.15s',
-              }}
-            >
-              <Download size={15} />
-              {exporting ? t('common.loading', 'Exporting…') : t('employees.exportBtn', 'Export Employees')}
-            </button>
-            <button
-              onClick={() => setShowBulkImport(true)}
-              style={{
-                background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', padding: '9px 18px',
-                fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
-                gap: '7px', flexShrink: 0, transition: 'border-color 0.15s, box-shadow 0.15s',
-              }}
-            >
-              <Upload size={15} />
-              {t('employees.bulkImportBtn', 'Import Employees')}
-            </button>
-            <button
-              onClick={() => setShowNewForm(true)}
-              className="btn btn-primary"
-              style={{
-                background: 'var(--primary)', color: '#fff', border: 'none',
-                borderRadius: 'var(--radius)', padding: '9px 18px',
-                fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
-                gap: '7px', flexShrink: 0, boxShadow: '0 2px 8px rgba(13,33,55,0.18)',
-              }}
-            >
-              <span style={{ fontSize: '17px', lineHeight: 1, marginTop: '-1px', fontWeight: 300 }}>+</span>
-              {t('employees.newEmployee')}
-            </button>
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center',
+            flexShrink: 0,
+            width: isMobile ? '100%' : 'auto',
+            flexDirection: isMobile ? 'column' : 'row',
+          }}>
+            {isMobile ? (
+              <>
+                {/* First Row: Export and Import (Full width, 50% split) */}
+                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                  <button
+                    onClick={handleExport}
+                    disabled={exporting}
+                    style={{
+                      background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)', padding: '9px 18px',
+                      fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                      cursor: exporting ? 'not-allowed' : 'pointer',
+                      opacity: exporting ? 0.65 : 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      gap: '7px', flex: 1, transition: 'border-color 0.15s, box-shadow 0.15s',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <Download size={15} />
+                    {exporting ? t('common.loading', 'Exporting…') : t('employees.exportBtn', 'Export Employees')}
+                  </button>
+                  <button
+                    onClick={() => setShowBulkImport(true)}
+                    style={{
+                      background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)', padding: '9px 18px',
+                      fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      gap: '7px', flex: 1, transition: 'border-color 0.15s, box-shadow 0.15s',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <Upload size={15} />
+                    {t('employees.bulkImportBtn', 'Import Employees')}
+                  </button>
+                </div>
+                {/* Second Row: New Employee (Full width) */}
+                <button
+                  onClick={() => setShowNewForm(true)}
+                  className="btn btn-primary"
+                  style={{
+                    background: 'var(--primary)', color: '#fff', border: 'none',
+                    borderRadius: 'var(--radius)', padding: '9px 18px',
+                    fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: '7px', width: '100%', boxShadow: '0 2px 8px rgba(13,33,55,0.18)',
+                  }}
+                >
+                  <span style={{ fontSize: '17px', lineHeight: 1, marginTop: '-1px', fontWeight: 300 }}>+</span>
+                  {t('employees.newEmployee')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  style={{
+                    background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)', padding: '9px 18px',
+                    fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                    cursor: exporting ? 'not-allowed' : 'pointer',
+                    opacity: exporting ? 0.65 : 1,
+                    display: 'inline-flex', alignItems: 'center',
+                    gap: '7px', flexShrink: 0, transition: 'border-color 0.15s, box-shadow 0.15s',
+                  }}
+                >
+                  <Download size={15} />
+                  {exporting ? t('common.loading', 'Exporting…') : t('employees.exportBtn', 'Export Employees')}
+                </button>
+                <button
+                  onClick={() => setShowBulkImport(true)}
+                  style={{
+                    background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)', padding: '9px 18px',
+                    fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                    cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                    gap: '7px', flexShrink: 0, transition: 'border-color 0.15s, box-shadow 0.15s',
+                  }}
+                >
+                  <Upload size={15} />
+                  {t('employees.bulkImportBtn', 'Import Employees')}
+                </button>
+                <button
+                  onClick={() => setShowNewForm(true)}
+                  className="btn btn-primary"
+                  style={{
+                    background: 'var(--primary)', color: '#fff', border: 'none',
+                    borderRadius: 'var(--radius)', padding: '9px 18px',
+                    fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-body)',
+                    cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                    gap: '7px', flexShrink: 0, boxShadow: '0 2px 8px rgba(13,33,55,0.18)',
+                  }}
+                >
+                  <span style={{ fontSize: '17px', lineHeight: 1, marginTop: '-1px', fontWeight: 300 }}>+</span>
+                  {t('employees.newEmployee')}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
 
       {/* Filter bar */}
       <div style={{
-        display: 'flex', gap: '10px', flexWrap: 'wrap',
-        marginBottom: '18px', alignItems: 'flex-end',
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)', padding: '14px 16px',
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: '10px',
+        flexWrap: isMobile ? 'nowrap' : 'wrap',
+        marginBottom: '18px',
+        alignItems: isMobile ? 'stretch' : 'flex-end',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '14px 16px',
         boxShadow: 'var(--shadow-xs)',
       }}>
-        <div style={{ flex: '2 1 200px', minWidth: '150px', maxWidth: '300px' }}>
-          <Input
-            placeholder={t('employees.searchPlaceholder')}
-            value={search}
-            onChange={(e) => updateParam('search', e.target.value)}
-          />
-        </div>
-        {(isAdminOrHr || isSuperAdmin) && companies.length > 0 && (
-          <div style={{ flex: '1 1 175px', minWidth: '140px', maxWidth: '240px' }}>
-            <Select value={companyFilter} onChange={(e) => updateParam('company_id', e.target.value)}>
-              <option value="">{t('employees.allCompanies')}</option>
-              {companies.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-            </Select>
-          </div>
-        )}
-        <div style={{ flex: '1 1 155px', minWidth: '130px', maxWidth: '220px' }}>
-          <Select value={storeId} onChange={(e) => updateParam('store_id', e.target.value)}>
-            <option value="">{t('employees.allStores')}</option>
-            {stores.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.companyName ? `${s.name} (${s.companyName})` : s.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div style={{ flex: '1 1 155px', minWidth: '130px', maxWidth: '220px' }}>
-          <Input
-            placeholder={t('employees.departmentFilter')}
-            value={department}
-            onChange={(e) => updateParam('department', e.target.value)}
-          />
-        </div>
-        <div style={{ flex: '1 1 140px', minWidth: '120px', maxWidth: '190px' }}>
-          <Select value={status} onChange={(e) => updateParam('status', e.target.value)}>
-            <option value="">{t('employees.allStatuses')}</option>
-            <option value="active">{t('employees.statusActive')}</option>
-            <option value="inactive">{t('employees.statusInactive')}</option>
-          </Select>
-        </div>
-        <div style={{ flex: '1 1 155px', minWidth: '130px', maxWidth: '220px' }}>
-          <Select value={role} onChange={(e) => updateParam('role', e.target.value)}>
-            <option value="">{t('employees.allRoles')}</option>
-            <option value="admin">{tRole('admin')}</option>
-            <option value="hr">{tRole('hr')}</option>
-            <option value="area_manager">{tRole('area_manager')}</option>
-            <option value="store_manager">{tRole('store_manager')}</option>
-            <option value="employee">{tRole('employee')}</option>
-          </Select>
-        </div>
-        {hasActiveFilters && (
-          <button
-            onClick={() => setSearchParams(new URLSearchParams())}
-            style={{
-              background: 'none', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)', padding: '7px 12px',
-              fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer',
-              fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
-              transition: 'border-color 0.15s, color 0.15s',
-            }}
-          >
-            ✕ Reset
-          </button>
+        {isMobile ? (
+          <>
+            {/* Row 1: Search bar (Full width) */}
+            <div style={{ width: '100%' }}>
+              <Input
+                placeholder={t('employees.searchPlaceholder')}
+                value={search}
+                onChange={(e) => updateParam('search', e.target.value)}
+              />
+            </div>
+
+            {/* Row 2: Company dropdown selector (Full width) */}
+            {(isAdminOrHr || isSuperAdmin) && companies.length > 0 && (
+              <div style={{ width: '100%' }}>
+                <CustomSelect
+                  value={companyFilter || null}
+                  onChange={(value) => updateParam('company_id', value || '')}
+                  options={companyOptions}
+                  placeholder={t('employees.allCompanies')}
+                  isClearable={true}
+                  searchable={companies.length > 5}
+                  highlightSelected={true}
+                  controlMinHeight={38}
+                />
+              </div>
+            )}
+
+            {/* Row 3: Store dropdown + Department search bar (50% / 50% split) */}
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <CustomSelect
+                  value={storeId || null}
+                  onChange={(value) => updateParam('store_id', value || '')}
+                  options={storeOptions}
+                  placeholder={t('employees.allStores')}
+                  isClearable={true}
+                  searchable={stores.length > 5}
+                  highlightSelected={true}
+                  controlMinHeight={38}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Input
+                  placeholder={t('employees.departmentFilter')}
+                  value={department}
+                  onChange={(e) => updateParam('department', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Row 4: Status dropdown + Roles dropdown (50% / 50% split) */}
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <CustomSelect
+                  value={status || null}
+                  onChange={(value) => updateParam('status', value || '')}
+                  options={statusOptions}
+                  placeholder={t('employees.allStatuses')}
+                  isClearable={true}
+                  searchable={false}
+                  highlightSelected={true}
+                  controlMinHeight={38}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <CustomSelect
+                  value={role || null}
+                  onChange={(value) => updateParam('role', value || '')}
+                  options={roleOptions}
+                  placeholder={t('employees.allRoles')}
+                  isClearable={true}
+                  searchable={false}
+                  highlightSelected={true}
+                  controlMinHeight={38}
+                />
+              </div>
+            </div>
+
+            {/* Row 5: Reset Filters button (Full width if active) */}
+            {hasActiveFilters && (
+              <button
+                onClick={() => setSearchParams(new URLSearchParams())}
+                style={{
+                  background: 'none', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)', padding: '10px 12px',
+                  fontSize: '13px', color: 'var(--text-muted)', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', width: '100%', textAlign: 'center',
+                  transition: 'border-color 0.15s, color 0.15s',
+                }}
+              >
+                ✕ Reset Filters
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ flex: '2 1 200px', minWidth: '150px', maxWidth: '300px' }}>
+              <Input
+                placeholder={t('employees.searchPlaceholder')}
+                value={search}
+                onChange={(e) => updateParam('search', e.target.value)}
+              />
+            </div>
+            {(isAdminOrHr || isSuperAdmin) && companies.length > 0 && (
+              <div style={{ flex: '1 1 175px', minWidth: '140px', maxWidth: '240px' }}>
+                <CustomSelect
+                  value={companyFilter || null}
+                  onChange={(value) => updateParam('company_id', value || '')}
+                  options={companyOptions}
+                  placeholder={t('employees.allCompanies')}
+                  isClearable={true}
+                  searchable={companies.length > 5}
+                  highlightSelected={true}
+                  controlMinHeight={38}
+                />
+              </div>
+            )}
+            <div style={{ flex: '1 1 155px', minWidth: '130px', maxWidth: '220px' }}>
+              <CustomSelect
+                value={storeId || null}
+                onChange={(value) => updateParam('store_id', value || '')}
+                options={storeOptions}
+                placeholder={t('employees.allStores')}
+                isClearable={true}
+                searchable={stores.length > 5}
+                highlightSelected={true}
+                controlMinHeight={38}
+              />
+            </div>
+            <div style={{ flex: '1 1 155px', minWidth: '130px', maxWidth: '220px' }}>
+              <Input
+                placeholder={t('employees.departmentFilter')}
+                value={department}
+                onChange={(e) => updateParam('department', e.target.value)}
+              />
+            </div>
+            <div style={{ flex: '1 1 140px', minWidth: '120px', maxWidth: '190px' }}>
+              <CustomSelect
+                value={status || null}
+                onChange={(value) => updateParam('status', value || '')}
+                options={statusOptions}
+                placeholder={t('employees.allStatuses')}
+                isClearable={true}
+                searchable={false}
+                highlightSelected={true}
+                controlMinHeight={38}
+              />
+            </div>
+            <div style={{ flex: '1 1 155px', minWidth: '130px', maxWidth: '220px' }}>
+              <CustomSelect
+                value={role || null}
+                onChange={(value) => updateParam('role', value || '')}
+                options={roleOptions}
+                placeholder={t('employees.allRoles')}
+                isClearable={true}
+                searchable={false}
+                highlightSelected={true}
+                controlMinHeight={38}
+              />
+            </div>
+            {hasActiveFilters && (
+              <button
+                onClick={() => setSearchParams(new URLSearchParams())}
+                style={{
+                  background: 'none', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)', padding: '7px 12px',
+                  fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                  transition: 'border-color 0.15s, color 0.15s',
+                }}
+              >
+                ✕ Reset
+              </button>
+            )}
+          </>
         )}
       </div>
 

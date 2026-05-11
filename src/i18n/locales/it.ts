@@ -880,6 +880,8 @@ const it = {
     ACCOUNT_INACTIVE: 'Account disattivato. Contatta l\'amministratore.',
     ACCOUNT_LOCKED: 'Account bloccato temporaneamente. Riprova tra 15 minuti.',
     RATE_LIMITED: 'Troppi tentativi. Riprova tra qualche minuto.',
+    COMPANY_ACCESS_EXPIRED: 'Il periodo di accesso per questa azienda è scaduto.',
+    COMPANY_ACCESS_NOT_ACTIVE: 'Accesso non ancora attivo per questa azienda.',
     // Data conflicts
     EMAIL_CONFLICT: 'Esiste già un account con questo indirizzo email.',
     UNIQUE_ID_CONFLICT: 'Questo ID univoco è già in uso da un altro dipendente.',
