@@ -39,9 +39,10 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import Select from '../../components/ui/Select';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
-import { CitySelect, CountrySelect, StateSelect } from '../../components/location';
+import { CitySelect, CountrySelect, StateSelect, LocationFieldGroup } from '../../components/location';
 import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl, getResumeUrl } from '../../api/client';
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
@@ -61,6 +62,7 @@ import {
   InterviewFeedbackComment, InterviewNotificationLog,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
+import { parseCandidateProfile, serializeCandidateProfile, type CandidateApplicationProfile } from './candidateProfile';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import InterviewsPanel from './InterviewsPanel';
 import CalendarPanel from './CalendarPanel';
@@ -94,6 +96,42 @@ const STAGE_BG: Record<CandidateStatus, string> = {
   rejected: 'rgba(220,38,38,0.07)',
 };
 
+interface HiringEmployeeDraft {
+  name: string;
+  surname: string;
+  personalEmail: string;
+  phone: string;
+  role: string;
+  companyId: number;
+  storeId: number | null;
+  companyName: string;
+  companyGroupName: string;
+  companyLogoFilename: string | null;
+  storeName: string;
+  storeLogoFilename: string | null;
+  storeEmployeeCount: number | null;
+  jobTitle: string;
+  uniqueId: string;
+  password: string;
+  hireDate: string;
+  contractType: string;
+  maritalStatus: string;
+  workingType: string;
+  weeklyHours: string;
+  dateOfBirth: string;
+  nationality: string;
+  gender: string;
+  country: string;
+  state: string;
+  city: string;
+  currentEmployer: string;
+  currentRole: string;
+  availability: string;
+  applicationDate: string;
+  applicationSource: string;
+  applicationChannel: string;
+}
+
 const ROLE_BADGE_VARIANT: Record<string, 'accent' | 'info' | 'warning' | 'neutral'> = {
   hr: 'accent',
   area_manager: 'info',
@@ -114,6 +152,20 @@ const JOB_TYPE_LABEL: Record<JobType, string> = {
 };
 
 const COUNTRY_ROWS = Country.getAllCountries();
+
+function generateEmployeeUniqueId(): string {
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `EMP-${Date.now().toString().slice(-6)}-${suffix}`;
+}
+
+function generateTempPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#';
+  let result = '';
+  for (let index = 0; index < 12; index += 1) {
+    result += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return result;
+}
 
 function normalizeCountryCode(value: string | null | undefined): string {
   const raw = (value ?? '').trim();
@@ -1900,6 +1952,7 @@ interface CandidateModalProps {
   jobs: JobPosting[];
   employees: Employee[];
   canEdit: boolean;
+  canTag: boolean;
   canFeedback: boolean;
   interviewInviteEnabled: boolean | null;
   smtpConfigured: boolean | null;
@@ -1911,7 +1964,7 @@ interface CandidateModalProps {
 }
 
 const CandidateModal: React.FC<CandidateModalProps> = ({
-  candidate, jobs, employees, canEdit, canFeedback, interviewInviteEnabled, smtpConfigured,
+  candidate, jobs, employees, canEdit, canTag, canFeedback, interviewInviteEnabled, smtpConfigured,
   onClose, onAdvance, onReject, onDelete, saving,
 }) => {
   const { t, i18n } = useTranslation();
@@ -3123,7 +3176,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
                 🏷️ {t('ats.candidateTags', 'Candidate Tags')}
               </div>
-              {canEdit && !editingTags && (
+              {canTag && !editingTags && (
                 <button
                   type="button"
                   onClick={() => setEditingTags(true)}
@@ -4935,7 +4988,7 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
 // ─── Kanban Panel ─────────────────────────────────────────────────────────────
 
-const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ canEdit, canFeedback }) => {
+const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: boolean }> = ({ canEdit, canFeedback, canTag }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
@@ -4956,6 +5009,26 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
+  const [addProfile, setAddProfile] = useState<CandidateApplicationProfile>(() => ({
+    availability: '',
+    gender: '',
+    nationality: '',
+    country: '',
+    state: '',
+    city: '',
+    dateOfBirth: '',
+    currentEmployer: '',
+    currentRole: '',
+    hasCurrentEmployer: '',
+    maritalStatus: '',
+    uniqueId: generateEmployeeUniqueId(),
+    password: generateTempPassword(),
+    hireDate: new Date().toISOString().slice(0, 10),
+    contractType: '',
+    applicationDate: new Date().toISOString().slice(0, 10),
+    applicationSource: 'ats',
+    applicationChannel: 'internal',
+  }));
   const [addCvFile, setAddCvFile] = useState<File | null>(null);
   const [addCoverLetter, setAddCoverLetter] = useState('');
   const [addGdprConsent, setAddGdprConsent] = useState(false);
@@ -4968,14 +5041,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
   // Employee creation on hire
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [employeeEmail, setEmployeeEmail] = useState('');
-  const [employeeData, setEmployeeData] = useState<{
-    name: string;
-    surname: string;
-    personalEmail: string;
-    role: string;
-    companyId: number;
-    storeId: number | null;
-  } | null>(null);
+  const [employeeData, setEmployeeData] = useState<HiringEmployeeDraft | null>(null);
   const [creatingEmployee, setCreatingEmployee] = useState(false);
 
   const hasMultiCompanyScope = (allowedCompanyIds?.length ?? 0) > 1;
@@ -5063,29 +5129,59 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
+  const buildHiringDraft = (candidate: Candidate): HiringEmployeeDraft => {
+    const job = candidate.jobPostingId ? jobs.find((item) => item.id === candidate.jobPostingId) : null;
+    const profile = parseCandidateProfile(candidate.sourceRef);
+    const nameParts = candidate.fullName.trim().split(/\s+/);
+    const hireDate = profile.hireDate || candidate.appliedAt?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+    const workingType = job?.jobType === 'parttime' ? 'part_time' : 'full_time';
+    const contractType = profile.contractType || job?.contractType || '';
+
+    return {
+      name: nameParts[0] || '',
+      surname: nameParts.slice(1).join(' ') || '',
+      personalEmail: candidate.email || '',
+      phone: candidate.phone || '',
+      role: job?.targetRole || 'employee',
+      companyId: candidate.companyId,
+      storeId: candidate.storeId,
+      companyName: job?.companyName || '',
+      companyGroupName: job?.companyGroupName || '',
+      companyLogoFilename: job?.companyLogoFilename ?? null,
+      storeName: job?.storeName || '',
+      storeLogoFilename: job?.storeLogoFilename ?? null,
+      storeEmployeeCount: job?.storeEmployeeCount ?? null,
+      jobTitle: job?.title || '',
+      uniqueId: profile.uniqueId || generateEmployeeUniqueId(),
+      password: profile.password || generateTempPassword(),
+      hireDate,
+      contractType,
+      maritalStatus: profile.maritalStatus || '',
+      workingType,
+      weeklyHours: job?.weeklyHours != null ? String(job.weeklyHours) : '',
+      dateOfBirth: profile.dateOfBirth,
+      nationality: profile.nationality,
+      gender: profile.gender,
+      country: profile.country,
+      state: profile.state,
+      city: profile.city,
+      currentEmployer: profile.currentEmployer,
+      currentRole: profile.currentRole,
+      availability: profile.availability,
+      applicationDate: profile.applicationDate || candidate.appliedAt?.slice(0, 10) || '',
+      applicationSource: profile.applicationSource || candidate.source,
+      applicationChannel: profile.applicationChannel || candidate.source,
+    };
+  };
+
   const handleAdvance = async (status: CandidateStatus) => {
     if (!canEdit) return;
     if (!selected) return;
     
     // If moving to hired, prepare employee creation
     if (status === 'hired') {
-      const candidate = selected;
-      const job = candidate.jobPostingId ? jobs.find((j) => j.id === candidate.jobPostingId) : null;
-      
-      // Parse name
-      const nameParts = candidate.fullName.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-      
       // Prepare employee data
-      setEmployeeData({
-        name: firstName,
-        surname: lastName,
-        personalEmail: candidate.email || '',
-        role: job?.targetRole || 'employee',
-        companyId: candidate.companyId,
-        storeId: candidate.storeId,
-      });
+      setEmployeeData(buildHiringDraft(selected));
       setEmployeeEmail('');
       setShowEmployeeModal(true);
       return; // Don't update stage yet, wait for employee creation
@@ -5116,10 +5212,24 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         name: employeeData.name,
         surname: employeeData.surname,
         email: employeeEmail.trim(),
+        uniqueId: employeeData.uniqueId || undefined,
+        password: employeeData.password || undefined,
+        hireDate: employeeData.hireDate || undefined,
+        contractType: employeeData.contractType || undefined,
+        maritalStatus: employeeData.maritalStatus || undefined,
+        workingType: (employeeData.workingType === 'full_time' || employeeData.workingType === 'part_time') ? employeeData.workingType : undefined,
         personalEmail: employeeData.personalEmail,
+        phone: employeeData.phone || undefined,
         role: employeeData.role as 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee' | 'store_terminal',
         companyId: employeeData.companyId,
         storeId: employeeData.storeId || undefined,
+        weeklyHours: employeeData.weeklyHours ? Number(employeeData.weeklyHours) : undefined,
+        dateOfBirth: employeeData.dateOfBirth || undefined,
+        nationality: employeeData.nationality || undefined,
+        gender: employeeData.gender || undefined,
+        country: employeeData.country || undefined,
+        state: employeeData.state || undefined,
+        city: employeeData.city || undefined,
         status: 'active',
       });
 
@@ -5196,6 +5306,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
 
     setAddSaving(true);
     try {
+      const applicationDate = addProfile.applicationDate || new Date().toISOString().slice(0, 10);
       const c = await createCandidate({
         fullName: normalizedName,
         email: addEmail.trim() || undefined,
@@ -5207,6 +5318,13 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
         gdprConsent: addGdprConsent,
         resumeFile: addCvFile,
         source: 'internal_manual',
+        sourceRef: serializeCandidateProfile({
+          ...addProfile,
+          availability: addProfile.availability,
+          applicationDate,
+          applicationSource: 'ats',
+          applicationChannel: 'internal',
+        }),
         appliedAt: new Date().toISOString(),
       });
       setCandidates((prev) => {
@@ -5260,6 +5378,26 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
     setAddEmail('');
     setAddPhone('');
     setAddLinkedinUrl('');
+    setAddProfile({
+      availability: '',
+      gender: '',
+      nationality: '',
+      country: '',
+      state: '',
+      city: '',
+      dateOfBirth: '',
+      currentEmployer: '',
+      currentRole: '',
+      hasCurrentEmployer: '',
+      maritalStatus: '',
+      uniqueId: generateEmployeeUniqueId(),
+      password: generateTempPassword(),
+      hireDate: new Date().toISOString().slice(0, 10),
+      contractType: '',
+      applicationDate: new Date().toISOString().slice(0, 10),
+      applicationSource: 'ats',
+      applicationChannel: 'internal',
+    });
     setAddCvFile(null);
     setAddCoverLetter('');
     setAddGdprConsent(false);
@@ -5309,6 +5447,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
       .join(', ')
       || t(`ats.remoteType_${jobOption.remoteType}`, jobOption.remoteType);
     const companyLabel = jobOption.companyName || `Company #${jobOption.companyId}`;
+    const companyCountryCode = normalizeCountryCode(jobOption.companyCountry ?? '');
+    const storeCountryCode = normalizeCountryCode(jobOption.jobCountry ?? jobOption.country ?? '');
     const toneColor = tone === 'published' ? '#166534' : tone === 'draft' ? '#92400E' : '#991B1B';
     const chipBackground = tone === 'published' ? 'rgba(22,163,74,0.08)' : tone === 'draft' ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.08)';
     const chipBorder = tone === 'published' ? '1px solid rgba(22,163,74,0.22)' : tone === 'draft' ? '1px solid rgba(245,158,11,0.28)' : '1px solid rgba(239,68,68,0.24)';
@@ -5323,11 +5463,23 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
           <span style={{ fontSize: 11, color: toneColor, background: chipBackground, border: chipBorder, borderRadius: 999, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Building2 size={11} /> {companyLabel}
+            {companyLabel}
+            {companyCountryCode && <ReactCountryFlag countryCode={companyCountryCode} svg style={{ width: '0.9em', height: '0.9em', marginLeft: 2 }} />}
           </span>
+          {jobOption.companyGroupName && (
+            <span style={{ fontSize: 11, color: '#64748B', background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)', borderRadius: 999, padding: '2px 7px' }}>
+              {jobOption.companyGroupName}
+            </span>
+          )}
           {jobOption.storeName && (
             <span style={{ fontSize: 11, color: toneColor, background: chipBackground, border: chipBorder, borderRadius: 999, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <StoreIcon size={11} /> {jobOption.storeName}
+              {jobOption.storeName}
+              {storeCountryCode && <ReactCountryFlag countryCode={storeCountryCode} svg style={{ width: '0.9em', height: '0.9em', marginLeft: 2 }} />}
+            </span>
+          )}
+          {jobOption.storeName && jobOption.storeEmployeeCount !== null && jobOption.storeEmployeeCount !== undefined && (
+            <span style={{ fontSize: 11, color: toneColor, background: chipBackground, border: chipBorder, borderRadius: 999, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Users size={11} /> {jobOption.storeEmployeeCount} {t('ats.employees', 'employees')}
             </span>
           )}
           <span style={{ fontSize: 11, color: toneColor, background: chipBackground, border: chipBorder, borderRadius: 999, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -5902,39 +6054,189 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
               </>
             ) : (
               <>
-                <div style={{ border: '1px solid rgba(201,151,58,0.35)', borderRadius: 10, padding: '9px 11px', background: 'rgba(201,151,58,0.09)', color: '#5F4308', fontSize: 12.5 }}>
-                  <strong>{t('ats.position', 'Position')}:</strong> {addSelectedJob?.title ?? '-'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <span style={{ 
+                    fontSize: 11, 
+                    fontWeight: 700, 
+                    color: '#9A6808', 
+                    background: 'rgba(201,151,58,0.12)', 
+                    border: '1px solid rgba(201,151,58,0.35)', 
+                    borderRadius: 999, 
+                    padding: '4px 10px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    {addSelectedJob?.title ?? t('ats.position', 'Position')}
+                  </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
-                  <Input
-                    label={t('employees.firstName', 'First name')}
-                    value={addFirstName}
-                    onChange={(e) => setAddFirstName(e.target.value)}
-                    placeholder={t('ats.addCandidateFirstNamePh', 'Mario')}
-                    autoFocus
+                {/* Personal Information Section */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('ats.personalInformation', 'Personal Information')}
+                    </h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('ats.personalInformationHint', 'Basic candidate details')}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <Input
+                      label={t('employees.firstName', 'First name')}
+                      value={addFirstName}
+                      onChange={(e) => setAddFirstName(e.target.value)}
+                      placeholder={t('ats.addCandidateFirstNamePh', 'Mario')}
+                      autoFocus
+                    />
+                    <Input
+                      label={t('employees.lastName', 'Last name')}
+                      value={addLastName}
+                      onChange={(e) => setAddLastName(e.target.value)}
+                      placeholder={t('ats.addCandidateLastNamePh', 'Rossi')}
+                    />
+                    <Input
+                      label={t('login.email', 'Email')}
+                      type="email"
+                      value={addEmail}
+                      onChange={(e) => setAddEmail(e.target.value)}
+                      placeholder={t('ats.addCandidateEmailPh', 'mario@email.com')}
+                    />
+                    <Input
+                      label={t('ats.phone')}
+                      type="tel"
+                      value={addPhone}
+                      onChange={(e) => setAddPhone(e.target.value)}
+                      placeholder={t('ats.addCandidatePhonePh', '+39 345...')}
+                    />
+                    <Input
+                      label={t('employees.nationalityField', 'Nationality')}
+                      value={addProfile.nationality}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, nationality: e.target.value }))}
+                      placeholder={t('ats.nationalityPlaceholder', 'Italian')}
+                    />
+                    <Select
+                      label={t('employees.genderField', 'Gender')}
+                      value={addProfile.gender}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, gender: e.target.value }))}
+                    >
+                      <option value="">{t('ats.selectOption', 'Select option')}</option>
+                      <option value="M">{t('employees.genderMale', 'Male')}</option>
+                      <option value="F">{t('employees.genderFemale', 'Female')}</option>
+                      <option value="other">{t('employees.genderOther', 'Other')}</option>
+                    </Select>
+                    <DatePicker
+                      label={t('employees.dateOfBirthField', 'Date of birth')}
+                      value={addProfile.dateOfBirth}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                      initialViewYear={new Date().getFullYear() - 30}
+                      placement="bottom"
+                    />
+                    <Select
+                      label={t('employees.maritalStatusField', 'Marital status')}
+                      value={addProfile.maritalStatus}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, maritalStatus: e.target.value }))}
+                    >
+                      <option value="">{t('ats.selectOption', 'Select option')}</option>
+                      <option value="single">{t('employees.maritalStatusSingle', 'Single')}</option>
+                      <option value="married">{t('employees.maritalStatusMarried', 'Married')}</option>
+                      <option value="divorced">{t('employees.maritalStatusDivorced', 'Divorced')}</option>
+                      <option value="partnered">{t('employees.maritalStatusPartnered', 'Partnered')}</option>
+                    </Select>
+                  </div>
+
+                  <LocationFieldGroup
+                    value={{
+                      country: addProfile.country,
+                      state: addProfile.state,
+                      city: addProfile.city,
+                    }}
+                    onChange={(location) => setAddProfile((prev) => ({
+                      ...prev,
+                      country: location.country,
+                      state: location.state,
+                      city: location.city,
+                    }))}
+                    includeAddress={false}
+                    includePostalCode={false}
+                    includePhone={false}
+                    labels={{
+                      country: t('companies.country', 'Country'),
+                      state: t('companies.state', 'State'),
+                      city: t('companies.city', 'City'),
+                    }}
                   />
-                  <Input
-                    label={t('employees.lastName', 'Last name')}
-                    value={addLastName}
-                    onChange={(e) => setAddLastName(e.target.value)}
-                    placeholder={t('ats.addCandidateLastNamePh', 'Rossi')}
-                  />
-                  <Input
-                    label={t('login.email', 'Email')}
-                    type="email"
-                    value={addEmail}
-                    onChange={(e) => setAddEmail(e.target.value)}
-                    placeholder={t('ats.addCandidateEmailPh', 'mario@email.com')}
-                  />
-                  <Input
-                    label={t('ats.phone')}
-                    type="tel"
-                    value={addPhone}
-                    onChange={(e) => setAddPhone(e.target.value)}
-                    placeholder={t('ats.addCandidatePhonePh', '+39 345...')}
-                  />
-                  <div style={{ gridColumn: '1 / -1' }}>
+                </div>
+
+                {/* Employment Information Section */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('ats.employmentInformation', 'Employment Information')}
+                    </h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('ats.employmentInformationHint', 'Current and future employment details')}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <Input
+                      label={t('ats.currentEmployerLabel', 'Current employer')}
+                      value={addProfile.currentEmployer}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentEmployer: e.target.value }))}
+                      placeholder={t('ats.currentEmployerPlaceholder', 'Company name')}
+                    />
+                    <Input
+                      label={t('ats.currentRoleLabel', 'Current role')}
+                      value={addProfile.currentRole}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentRole: e.target.value }))}
+                      placeholder={t('ats.currentRolePlaceholder', 'Store assistant')}
+                    />
+                    <DatePicker
+                      label={t('employees.hireDateField', 'Hire date')}
+                      value={addProfile.hireDate}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, hireDate: value }))}
+                      placement="bottom"
+                    />
+                    <Select
+                      label={t('employees.contractTypeField', 'Contract type')}
+                      value={addProfile.contractType}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, contractType: e.target.value }))}
+                    >
+                      <option value="">{t('ats.selectOption', 'Select option')}</option>
+                      <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
+                      <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
+                      <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
+                      <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* System Information Section */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('ats.systemInformation', 'System Information')}
+                    </h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('ats.systemInformationHint', 'Credentials and identifiers')}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <Input
+                      label={t('employees.uniqueIdField', 'Unique ID')}
+                      value={addProfile.uniqueId}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, uniqueId: e.target.value }))}
+                      placeholder={t('employees.colUniqueId', 'Unique ID')}
+                    />
+                    <Input
+                      label={t('employees.tempPasswordLabel', 'Temporary password')}
+                      type="text"
+                      value={addProfile.password}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, password: e.target.value }))}
+                      placeholder={t('employees.tempPasswordLabel', 'Temporary password')}
+                    />
                     <Input
                       label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
                       type="url"
@@ -5945,60 +6247,72 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    border: '1px dashed rgba(201,151,58,0.45)',
-                    borderRadius: 12,
-                    padding: 14,
-                    background: 'rgba(201,151,58,0.06)',
-                    display: 'grid',
-                    gap: 8,
-                  }}
-                >
-                  <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    {t('ats.candidateCvUpload', 'CV / Resume')}
-                  </label>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                    {t('ats.candidateCvUploadHint', 'PDF, DOC or DOCX — max 5 MB. Optional for internal entries; attach when available.')}
-                  </p>
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,application/pdf"
-                    onChange={(e) => setAddCvFile(e.target.files?.[0] ?? null)}
-                    style={{ fontSize: 13 }}
-                  />
-                  {addCvFile && (
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                      {addCvFile.name}
-                    </span>
-                  )}
-                </div>
+                {/* Documents Section */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('ats.documents', 'Documents')}
+                    </h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('ats.documentsHint', 'CV and cover letter')}
+                    </p>
+                  </div>
 
-                <div>
-                  <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                    {t('publicCareers.coverLetterLabel', 'Cover letter')}
-                  </label>
-                  <textarea
-                    className="field-input"
-                    value={addCoverLetter}
-                    onChange={(e) => setAddCoverLetter(e.target.value)}
-                    rows={4}
-                    maxLength={1000}
-                    placeholder={t('publicCareers.coverLetterPlaceholder', 'Tell us a bit about this candidate profile')}
-                    style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
-                  />
-                  <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{addCoverLetter.length}/1000</div>
-                </div>
+                  <div
+                    style={{
+                      border: '1px dashed rgba(201,151,58,0.45)',
+                      borderRadius: 12,
+                      padding: 14,
+                      background: 'rgba(201,151,58,0.06)',
+                      display: 'grid',
+                      gap: 8,
+                    }}
+                  >
+                    <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      {t('ats.candidateCvUpload', 'CV / Resume')}
+                    </label>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                      {t('ats.candidateCvUploadHint', 'PDF, DOC or DOCX — max 5 MB. Optional for internal entries; attach when available.')}
+                    </p>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,application/pdf"
+                      onChange={(e) => setAddCvFile(e.target.files?.[0] ?? null)}
+                      style={{ fontSize: 13 }}
+                    />
+                    {addCvFile && (
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {addCvFile.name}
+                      </span>
+                    )}
+                  </div>
 
-                <label style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                  <input
-                    type="checkbox"
-                    checked={addGdprConsent}
-                    onChange={(e) => setAddGdprConsent(e.target.checked)}
-                    style={{ marginTop: 2 }}
-                  />
-                  <span>{t('publicCareers.privacyConsent', 'Privacy consent collected')}</span>
-                </label>
+                  <div>
+                    <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      {t('publicCareers.coverLetterLabel', 'Cover letter')}
+                    </label>
+                    <textarea
+                      className="field-input"
+                      value={addCoverLetter}
+                      onChange={(e) => setAddCoverLetter(e.target.value)}
+                      rows={4}
+                      maxLength={1000}
+                      placeholder={t('publicCareers.coverLetterPlaceholder', 'Tell us a bit about this candidate profile')}
+                      style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
+                    />
+                    <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{addCoverLetter.length}/1000</div>
+                  </div>
+
+                  <label style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={addGdprConsent}
+                      onChange={(e) => setAddGdprConsent(e.target.checked)}
+                      style={{ marginTop: 2 }}
+                    />
+                    <span>{t('publicCareers.privacyConsent', 'Privacy consent collected')}</span>
+                  </label>
+                </div>
               </>
             )}
 
@@ -6039,6 +6353,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
           jobs={jobs}
           employees={employees}
           canEdit={canEdit}
+          canTag={canTag}
           canFeedback={canFeedback}
           interviewInviteEnabled={interviewInviteEnabled}
           smtpConfigured={smtpConfigured}
@@ -6051,63 +6366,183 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
       )}
 
       {showEmployeeModal && employeeData && (
-        <ModalBackdrop onClose={() => !creatingEmployee && setShowEmployeeModal(false)} width={500}>
+        <ModalBackdrop onClose={() => !creatingEmployee && setShowEmployeeModal(false)} width={1040}>
           <div style={{
             background: 'var(--surface)',
             borderRadius: 'var(--radius-lg)',
-            padding: '20px 24px',
+            padding: 0,
+            width: '100%',
+            maxWidth: 1120,
+            overflow: 'hidden',
           }}>
-            <h3 style={{
-              fontSize: 18,
-              fontWeight: 700,
-              marginBottom: 8,
-              color: 'var(--text)',
-            }}>
-              {t('ats.createEmployee', 'Create Employee')}
-            </h3>
-            <p style={{
-              fontSize: 13,
-              color: 'var(--text-secondary)',
-              marginBottom: 20,
-            }}>
-              {t('ats.createEmployeePrompt', 'The candidate will be hired and an employee account will be created. Please provide the company email address.')}
-            </p>
-
-            {/* Pre-filled data display */}
-            <div style={{ marginBottom: 20, padding: '12px', background: 'var(--background)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                {t('ats.employeeDetails', 'Employee Details')}
+            <div style={{ padding: '18px 22px 16px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(135deg, rgba(201,151,58,0.10), rgba(255,255,255,0.96))' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: 'var(--text)' }}>
+                    {t('ats.createEmployee', 'Create Employee')}
+                  </h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '6px 0 0', maxWidth: 760 }}>
+                    {t('ats.createEmployeePrompt', 'Review the candidate profile, confirm the employee setup fields, and complete the company email before hiring.')}
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gap: 6, justifyItems: 'end', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>{employeeData.jobTitle || t('ats.candidateProfile', 'Candidate')}</span>
+                  <span>{employeeData.hireDate ? `${t('employees.hireDateField', 'Hire date')}: ${employeeData.hireDate}` : ''}</span>
+                  <span>{employeeData.uniqueId ? `${t('employees.uniqueIdField', 'Unique ID')}: ${employeeData.uniqueId}` : ''}</span>
+                </div>
               </div>
-              <div style={{ display: 'grid', gap: 6, fontSize: 12 }}>
-                <div><strong>{t('common.firstName', 'First Name')}:</strong> {employeeData.name}</div>
-                <div><strong>{t('common.lastName', 'Last Name')}:</strong> {employeeData.surname}</div>
-                <div><strong>{t('common.personalEmail', 'Personal Email')}:</strong> {employeeData.personalEmail || t('common.notProvided', 'Not provided')}</div>
-                <div><strong>{t('common.role', 'Role')}:</strong> {t(`roles.${employeeData.role}`, employeeData.role)}</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 14 }}>
+                <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: '#fff', padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(201,151,58,0.18)', background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {employeeData.companyLogoFilename ? (
+                      <img src={getCompanyLogoUrl(employeeData.companyLogoFilename) ?? ''} alt={employeeData.companyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontWeight: 800, color: '#8A5A07', fontSize: 12 }}>{(employeeData.companyName || 'CO').slice(0, 2).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{t('common.company', 'Company')}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{employeeData.companyName || t('common.notProvided', 'Not provided')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{employeeData.companyGroupName || t('companies.group', 'No group')}</div>
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid rgba(13,33,55,0.12)', borderRadius: 14, background: '#fff', padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(13,33,55,0.12)', background: 'rgba(13,33,55,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {employeeData.storeLogoFilename ? (
+                      <img src={getStoreLogoUrl(employeeData.storeLogoFilename) ?? ''} alt={employeeData.storeName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontWeight: 800, color: '#0D2137', fontSize: 12 }}>{(employeeData.storeName || 'ST').slice(0, 2).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{t('common.store', 'Store')}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{employeeData.storeName || t('common.notProvided', 'Not provided')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {employeeData.storeEmployeeCount != null ? `${employeeData.storeEmployeeCount} ${t('employees.totalEmployees', 'employees')}` : t('common.notProvided', 'Not provided')}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Company email input */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 6,
-                color: 'var(--text)',
-              }}>
-                {t('common.companyEmail', 'Company Email')} <span style={{ color: '#DC2626' }}>*</span>
-              </label>
-              <Input
-                type="email"
-                value={employeeEmail}
-                onChange={(e) => setEmployeeEmail(e.target.value)}
-                placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')}
-                disabled={creatingEmployee}
-                autoFocus
-              />
+            <div style={{ padding: '18px 22px 22px', display: 'grid', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 12 }}>
+                <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8A5A07', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('ats.employeeSetup', 'Employee setup')}</div>
+                  <Input type="email" label={t('common.companyEmail', 'Company Email')} value={employeeEmail} onChange={(e) => setEmployeeEmail(e.target.value)} placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')} disabled={creatingEmployee} autoFocus />
+                  <Input label={t('employees.uniqueIdField', 'Unique ID')} value={employeeData.uniqueId} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: e.target.value } : prev))} disabled={creatingEmployee} />
+                  <Input label={t('employees.tempPasswordLabel', 'Temporary password')} type="text" value={employeeData.password} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, password: e.target.value } : prev))} disabled={creatingEmployee} />
+                  <Button type="button" variant="secondary" onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId(), password: generateTempPassword() } : prev))} disabled={creatingEmployee}>
+                    {t('employees.regeneratePassword', 'Regenerate access')}
+                  </Button>
+                </div>
+
+                <div style={{ border: '1px solid rgba(13,33,55,0.12)', borderRadius: 14, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0D2137', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('ats.employeeDetails', 'Employee details')}</div>
+                  <Select label={t('common.role', 'Role')} value={employeeData.role} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, role: e.target.value } : prev))}>
+                    <option value="employee">{t('roles.employee', 'Employee')}</option>
+                    <option value="store_manager">{t('roles.store_manager', 'Store manager')}</option>
+                    <option value="area_manager">{t('roles.area_manager', 'Area manager')}</option>
+                    <option value="hr">{t('roles.hr', 'HR')}</option>
+                    <option value="admin">{t('roles.admin', 'Admin')}</option>
+                  </Select>
+                  <Select label={t('employees.workingTypeField', 'Working type')} value={employeeData.workingType} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, workingType: e.target.value } : prev))}>
+                    <option value="full_time">{t('employees.fullTime', 'Full time')}</option>
+                    <option value="part_time">{t('employees.partTime', 'Part time')}</option>
+                  </Select>
+                  <Select label={t('employees.contractTypeField', 'Contract type')} value={employeeData.contractType} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, contractType: e.target.value } : prev))}>
+                    <option value="">{t('common.notProvided', 'Not provided')}</option>
+                    <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
+                    <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
+                    <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
+                    <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
+                  </Select>
+                  <DatePicker label={t('employees.hireDateField', 'Hire date')} value={employeeData.hireDate} onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, hireDate: value } : prev))} placement="bottom" />
+                  <Input label={t('employees.maritalStatusField', 'Marital status')} value={employeeData.maritalStatus} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, maritalStatus: e.target.value } : prev))} />
+                  <Input label={t('employees.weeklyHoursField', 'Weekly hours')} value={employeeData.weeklyHours} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, weeklyHours: e.target.value } : prev))} />
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--background)', display: 'grid', gap: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {t('ats.candidateProfile', 'Candidate profile')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, fontSize: 12 }}>
+                  <div><strong>{t('common.firstName', 'First Name')}:</strong> {employeeData.name}</div>
+                  <div><strong>{t('common.lastName', 'Last Name')}:</strong> {employeeData.surname}</div>
+                  <div><strong>{t('common.personalEmail', 'Personal Email')}:</strong> {employeeData.personalEmail || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('ats.phone', 'Phone')}:</strong> {employeeData.phone || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('employees.dateOfBirthField', 'Date of birth')}:</strong> {employeeData.dateOfBirth || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('employees.genderField', 'Gender')}:</strong> {employeeData.gender || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('employees.nationalityField', 'Nationality')}:</strong> {employeeData.nationality || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('employees.addressField', 'Location')}:</strong> {[employeeData.city, employeeData.state, employeeData.country].filter(Boolean).join(', ') || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('ats.currentEmployerLabel', 'Current employer')}:</strong> {employeeData.currentEmployer || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('ats.currentRoleLabel', 'Current role')}:</strong> {employeeData.currentRole || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('ats.availabilityLabel', 'Working hours')}:</strong> {employeeData.availability || employeeData.weeklyHours || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('ats.applicationDateLabel', 'Application date')}:</strong> {employeeData.applicationDate || t('common.notProvided', 'Not provided')}</div>
+                  <div><strong>{t('ats.applicationSourceLabel', 'Source / channel')}:</strong> {[employeeData.applicationSource, employeeData.applicationChannel].filter(Boolean).join(' / ') || t('common.notProvided', 'Not provided')}</div>
+                </div>
+              </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: '#fff', display: 'grid', gap: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {t('common.contact', 'Contact')}
+                </div>
+                <Input label={t('common.firstName', 'First name')} value={employeeData.name} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, name: e.target.value } : prev))} disabled={creatingEmployee} />
+                <Input label={t('common.lastName', 'Last name')} value={employeeData.surname} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, surname: e.target.value } : prev))} disabled={creatingEmployee} />
+                <Input label={t('common.personalEmail', 'Personal Email')} type="email" value={employeeData.personalEmail} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, personalEmail: e.target.value } : prev))} disabled={creatingEmployee} />
+                <Input label={t('ats.phone', 'Phone')} value={employeeData.phone} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, phone: e.target.value } : prev))} disabled={creatingEmployee} />
+              </div>
+
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: '#fff', display: 'grid', gap: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {t('ats.personalDetails', 'Personal details')}
+                </div>
+                <DatePicker label={t('employees.dateOfBirthField', 'Date of birth')} value={employeeData.dateOfBirth} onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, dateOfBirth: value } : prev))} placement="bottom" />
+                <Select label={t('employees.genderField', 'Gender')} value={employeeData.gender} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, gender: e.target.value } : prev))}>
+                  <option value="">{t('common.notProvided', 'Not provided')}</option>
+                  <option value="M">{t('employees.genderMale', 'Male')}</option>
+                  <option value="F">{t('employees.genderFemale', 'Female')}</option>
+                  <option value="other">{t('employees.genderOther', 'Other')}</option>
+                </Select>
+                <Input label={t('employees.nationalityField', 'Nationality')} value={employeeData.nationality} onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, nationality: e.target.value } : prev))} disabled={creatingEmployee} />
+                <LocationFieldGroup
+                  value={{ country: employeeData.country, state: employeeData.state, city: employeeData.city }}
+                  onChange={(location) => setEmployeeData((prev) => (prev ? {
+                    ...prev,
+                    country: location.country,
+                    state: location.state,
+                    city: location.city,
+                  } : prev))}
+                  includeAddress={false}
+                  includePostalCode={false}
+                  includePhone={false}
+                  labels={{
+                    country: t('companies.country', 'Country'),
+                    state: t('companies.state', 'State'),
+                    city: t('companies.city', 'City'),
+                  }}
+                />
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'rgba(201,151,58,0.05)', display: 'grid', gap: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {t('ats.applicationInfo', 'Application info')}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, fontSize: 12 }}>
+                <div><strong>{t('ats.currentEmployerLabel', 'Current employer')}:</strong> {employeeData.currentEmployer || t('common.notProvided', 'Not provided')}</div>
+                <div><strong>{t('ats.currentRoleLabel', 'Current role')}:</strong> {employeeData.currentRole || t('common.notProvided', 'Not provided')}</div>
+                <div><strong>{t('ats.availabilityLabel', 'Working hours')}:</strong> {employeeData.availability || employeeData.weeklyHours || t('common.notProvided', 'Not provided')}</div>
+                <div><strong>{t('ats.applicationDateLabel', 'Application date')}:</strong> {employeeData.applicationDate || t('common.notProvided', 'Not provided')}</div>
+                <div><strong>{t('ats.applicationSourceLabel', 'Source / channel')}:</strong> {[employeeData.applicationSource, employeeData.applicationChannel].filter(Boolean).join(' / ') || t('common.notProvided', 'Not provided')}</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -6127,6 +6562,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
               >
                 {t('ats.createAndHire', 'Create Employee & Hire')}
               </Button>
+            </div>
             </div>
           </div>
         </ModalBackdrop>
@@ -6362,9 +6798,11 @@ export default function ATSPage() {
   const { user } = useAuth();
   const { t } = useTranslation();
 
+  const isStoreManager = user?.role === 'store_manager';
   const canEdit = !!user && ['admin', 'hr'].includes(user.role);
   const canViewRisks = !!user && ['admin', 'hr'].includes(user.role);
   const canFeedback = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
+  const canTag = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
   const [tab, setTab] = useState<'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar'>('candidates');
   const [stores, setStores] = useState<Store[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -6388,9 +6826,11 @@ export default function ATSPage() {
     }
   }, [tab]);
 
-  // For store managers, only show Interviews tab
-  const tabs = user?.role === 'store_manager' 
-    ? [{ key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' }]
+  const tabs = isStoreManager
+    ? [
+        { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
+        { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
+      ]
     : [
         ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
         { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
@@ -6399,12 +6839,12 @@ export default function ATSPage() {
         { key: 'alerts', label: t('ats.tabAlerts'), icon: '🔔' },
       ];
 
-  // Set default tab for store managers
+  // Keep store managers on their allowed tabs only
   useEffect(() => {
-    if (user?.role === 'store_manager' && tab !== 'interviews') {
-      setTab('interviews');
+    if (isStoreManager && !['candidates', 'interviews'].includes(tab)) {
+      setTab('candidates');
     }
-  }, [user?.role]);
+  }, [isStoreManager, tab]);
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto' }} className="page-enter">
@@ -6495,7 +6935,7 @@ export default function ATSPage() {
       </div>
 
       {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} />}
-      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} />}
+      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} canTag={canTag} />}
       {tab === 'interviews' && <InterviewsPanel />}
       {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} />}
       {tab === 'alerts' && <AlertsPanel canViewRisks={canViewRisks} />}

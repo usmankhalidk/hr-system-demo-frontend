@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -6,6 +7,8 @@ import {
   Bookmark,
   Building2,
   CalendarDays,
+  Clock,
+  Globe2,
   Heart,
   Languages,
   MapPin,
@@ -15,9 +18,14 @@ import {
   Store as StoreIcon,
   User2,
   Users,
+  Wallet,
+  BriefcaseBusiness,
+  X,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { Country } from 'country-state-city';
+import { DatePicker } from '../../components/ui/DatePicker';
+import { LocationFieldGroup } from '../../components/location';
 import {
   applyToPublicJob,
   getPublicJobDetail,
@@ -29,9 +37,12 @@ import {
   getCompanyLogoUrl,
   getPublicAvatarUrl,
   getPublicStoreLogoUrl,
+  getResumeUrl,
 } from '../../api/client';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import { useAuth } from '../../context/AuthContext';
+import { buildCandidateProfile, type CandidateApplicationProfile } from '../ats/candidateProfile';
+import DocumentPreviewModal from '../ats/DocumentPreviewModal';
 import './publicCareers.css';
 
 type UiLanguage = 'it' | 'en';
@@ -443,11 +454,30 @@ export default function PublicJobDetailPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [appProfile, setAppProfile] = useState<CandidateApplicationProfile>(() => buildCandidateProfile({
+    availability: '',
+    gender: '',
+    nationality: '',
+    country: '',
+    state: '',
+    city: '',
+    dateOfBirth: '',
+    currentEmployer: '',
+    currentRole: '',
+    hasCurrentEmployer: 'no',
+    maritalStatus: '',
+    applicationDate: new Date().toISOString().slice(0, 10),
+    applicationSource: 'public-careers',
+    applicationChannel: 'public',
+  }));
   const [coverLetter, setCoverLetter] = useState('');
   const [resume, setResume] = useState<File | null>(null);
+  const [resumePreviewUrl, setResumePreviewUrl] = useState<string | null>(null);
+  const [showResumePreview, setShowResumePreview] = useState(false);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [showApplyModal, setShowApplyModal] = useState(false);
 
   const [saved, setSaved] = useState(false);
   const [liked, setLiked] = useState(false);
@@ -519,6 +549,8 @@ export default function PublicJobDetailPage() {
   const careersBackPath = '/careers';
   const isJobClosed = job?.status === 'closed';
   const storeCountryCode = job ? normalizeCountryCode(job.jobCountry ?? job.location.country) : '';
+  const companyCountryCode = job ? normalizeCountryCode(job.companyCountry ?? job.location.country) : '';
+  const companyGroupName = (companyMeta?.groupName ?? (job ? job.companyGroupName : '') ?? '').trim();
 
   useEffect(() => {
     if (!job) return;
@@ -670,6 +702,18 @@ export default function PublicJobDetailPage() {
         gdprConsent: true,
         applicantLocale: browserLanguage,
         utmSource,
+        availability: appProfile.availability || (job.weeklyHours != null ? String(job.weeklyHours) : undefined),
+        gender: appProfile.gender || undefined,
+        nationality: appProfile.nationality || undefined,
+        country: appProfile.country || undefined,
+        state: appProfile.state || undefined,
+        city: appProfile.city || undefined,
+        dateOfBirth: appProfile.dateOfBirth || undefined,
+        currentEmployer: appProfile.hasCurrentEmployer === 'yes' ? appProfile.currentEmployer || undefined : undefined,
+        currentRole: appProfile.hasCurrentEmployer === 'yes' ? appProfile.currentRole || undefined : undefined,
+        maritalStatus: appProfile.maritalStatus || undefined,
+        hasCurrentEmployer: appProfile.hasCurrentEmployer || undefined,
+        applicationDate: appProfile.applicationDate || undefined,
       });
 
       setSubmitMessage(browserLanguage === 'it'
@@ -680,14 +724,42 @@ export default function PublicJobDetailPage() {
       setEmail('');
       setPhone('');
       setLinkedinUrl('');
+      setAppProfile(buildCandidateProfile({
+        availability: '',
+        gender: '',
+        nationality: '',
+        country: '',
+        state: '',
+        city: '',
+        dateOfBirth: '',
+        currentEmployer: '',
+        currentRole: '',
+        hasCurrentEmployer: 'no',
+        maritalStatus: '',
+        applicationDate: new Date().toISOString().slice(0, 10),
+        applicationSource: 'public-careers',
+        applicationChannel: 'public',
+      }));
       setCoverLetter('');
       setResume(null);
+      setResumePreviewUrl(null);
       setAgree(false);
     } catch (err: any) {
       const message = err?.response?.data?.error || copy.submitError;
       setSubmitMessage(message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setResume(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setResumePreviewUrl(url);
+    } else {
+      setResumePreviewUrl(null);
     }
   };
 
@@ -738,12 +810,23 @@ export default function PublicJobDetailPage() {
                   {companyLogoUrl ? <img src={companyLogoUrl} alt={companyName} /> : <span>{toInitials(companyName)}</span>}
                 </div>
                 <div>
-                  <strong>{companyName}</strong>
-                  <span>{companyMeta?.groupName ?? copy.independentCompany}</span>
+                  <strong className="careers-detail-company-name">
+                    <span>{companyName}</span>
+                    {companyCountryCode && (
+                      <ReactCountryFlag countryCode={companyCountryCode} svg style={{ width: '1.1em', height: '1.1em', borderRadius: 3 }} />
+                    )}
+                  </strong>
+                  {companyGroupName ? <span className="careers-detail-company-group">{companyGroupName}</span> : null}
                 </div>
               </div>
 
               <h1 className="careers-detail-title">{job.title}</h1>
+              
+              {job.description && (
+                <p className="careers-detail-description">
+                  {job.description}
+                </p>
+              )}
 
               <div className="careers-detail-meta">
                 <span>{TYPE_LABEL[uiLanguage][job.jobType] ?? job.jobType}</span>
@@ -760,10 +843,10 @@ export default function PublicJobDetailPage() {
               </div>
 
               {!isJobClosed ? (
-                <a className="careers-detail-primary-btn" href="#apply-form">
+                <button type="button" className="careers-detail-primary-btn" onClick={() => setShowApplyModal(true)}>
                   {copy.applyNow}
                   <Send size={14} />
-                </a>
+                </button>
               ) : (
                 <span className="careers-detail-primary-btn" style={{ opacity: 0.8, cursor: 'default' }}>
                   {copy.positionClosedNotice}
@@ -774,7 +857,7 @@ export default function PublicJobDetailPage() {
         </section>
 
         <div className="careers-detail-grid">
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             <section className="careers-detail-card">
               <h2>{copy.roleOverview}</h2>
               {languageMismatch && (
@@ -879,7 +962,7 @@ export default function PublicJobDetailPage() {
               </div>
             </section>
 
-            <section id="apply-form" className="careers-detail-card">
+            <section id="apply-form" className="careers-detail-card" style={{ display: 'none' }}>
               <h3>{copy.applyTitle}</h3>
               <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
                 {isJobClosed ? copy.positionClosedNotice : copy.applySubtitle}
@@ -936,6 +1019,94 @@ export default function PublicJobDetailPage() {
                     autoComplete="tel"
                   />
                 </div>
+
+                <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(201,151,58,0.28)', background: 'rgba(201,151,58,0.06)' }}>
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    <h4 style={{ margin: 0, fontSize: 15, color: '#6B4A06' }}>{uiLanguage === 'it' ? 'Profilo candidato' : 'Candidate profile'}</h4>
+                    <p style={{ margin: 0, color: '#7C5A14', fontSize: 12.5, lineHeight: 1.5 }}>
+                      {uiLanguage === 'it'
+                        ? 'Completa questi dati per trasferire il candidato più facilmente alla fase di assunzione.'
+                        : 'Complete these details so the candidate can move into hiring without losing profile data.'}
+                    </p>
+                  </div>
+
+                  <div className="careers-form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <input
+                      className="careers-form-input"
+                      value={appProfile.availability}
+                      onChange={(event) => setAppProfile((prev) => ({ ...prev, availability: event.target.value }))}
+                      placeholder={uiLanguage === 'it' ? 'Disponibilità / ore settimanali' : 'Availability / weekly hours'}
+                      required
+                    />
+                    <input
+                      className="careers-form-input"
+                      value={appProfile.nationality}
+                      onChange={(event) => setAppProfile((prev) => ({ ...prev, nationality: event.target.value }))}
+                      placeholder={uiLanguage === 'it' ? 'Nazionalità' : 'Nationality'}
+                      required
+                    />
+                    <select
+                      className="careers-form-input"
+                      value={appProfile.gender}
+                      onChange={(event) => setAppProfile((prev) => ({ ...prev, gender: event.target.value }))}
+                      required
+                    >
+                      <option value="">{uiLanguage === 'it' ? 'Genere' : 'Gender'}</option>
+                      <option value="M">{uiLanguage === 'it' ? 'Maschio' : 'Male'}</option>
+                      <option value="F">{uiLanguage === 'it' ? 'Femmina' : 'Female'}</option>
+                      <option value="other">{uiLanguage === 'it' ? 'Altro' : 'Other'}</option>
+                    </select>
+                    <DatePicker
+                      value={appProfile.dateOfBirth}
+                      onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                      label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
+                      initialViewYear={new Date().getFullYear() - 30}
+                      placement="bottom"
+                    />
+                    <DatePicker
+                      value={appProfile.applicationDate}
+                      onChange={(value) => setAppProfile((prev) => ({ ...prev, applicationDate: value }))}
+                      label={uiLanguage === 'it' ? 'Data candidatura' : 'Application date'}
+                      placement="bottom"
+                    />
+                    <input
+                      className="careers-form-input"
+                      value={appProfile.currentEmployer}
+                      onChange={(event) => setAppProfile((prev) => ({ ...prev, currentEmployer: event.target.value }))}
+                      placeholder={uiLanguage === 'it' ? 'Azienda attuale' : 'Current employer'}
+                      required
+                    />
+                    <input
+                      className="careers-form-input"
+                      value={appProfile.currentRole}
+                      onChange={(event) => setAppProfile((prev) => ({ ...prev, currentRole: event.target.value }))}
+                      placeholder={uiLanguage === 'it' ? 'Ruolo attuale' : 'Current role'}
+                      required
+                    />
+                  </div>
+
+                  <LocationFieldGroup
+                    value={{
+                      country: appProfile.country,
+                      state: appProfile.state,
+                      city: appProfile.city,
+                    }}
+                    onChange={(location) => setAppProfile((prev) => ({
+                      ...prev,
+                      country: location.country,
+                      state: location.state,
+                      city: location.city,
+                    }))}
+                    includeAddress={false}
+                    includePostalCode={false}
+                    includePhone={false}
+                    labels={{
+                      country: uiLanguage === 'it' ? 'Paese' : 'Country',
+                      state: uiLanguage === 'it' ? 'Regione / Stato' : 'State / Region',
+                      city: uiLanguage === 'it' ? 'Città' : 'City',
+                    }}
+                  />
+                </section>
 
                 <input
                   className="careers-form-input"
@@ -999,13 +1170,13 @@ export default function PublicJobDetailPage() {
             <section className="careers-detail-card">
               <h3>{copy.roleFacts}</h3>
               <div className="careers-facts-grid">
-                <div><strong>{copy.posted}</strong><span>{formatDate(job.publishedAt, uiLanguage, job.createdAt)}</span></div>
-                <div><strong>{copy.contract}</strong><span>{job.contractType ?? copy.notSpecified}</span></div>
-                <div><strong>{copy.weeklyHours}</strong><span>{job.weeklyHours ?? copy.notSpecified}</span></div>
-                <div><strong>{copy.salaryRange}</strong><span>{formatSalary(job.salaryMin, uiLanguage)} - {formatSalary(job.salaryMax, uiLanguage)}</span></div>
-                <div><strong>{copy.department}</strong><span>{job.department ?? copy.general}</span></div>
-                <div><strong>{copy.language}</strong><span><Languages size={12} style={{ marginRight: 4 }} />{job.language.toUpperCase()}</span></div>
-                <div><strong>{copy.remoteType}</strong><span>{REMOTE_LABEL[uiLanguage][job.remoteType] ?? job.remoteType}</span></div>
+                <div><strong><CalendarDays size={13} style={{ marginRight: 4 }} />{copy.posted}</strong><span>{formatDate(job.publishedAt, uiLanguage, job.createdAt)}</span></div>
+                <div><strong><BriefcaseBusiness size={13} style={{ marginRight: 4 }} />{copy.contract}</strong><span>{job.contractType ?? copy.notSpecified}</span></div>
+                <div><strong><Clock size={13} style={{ marginRight: 4 }} />{copy.weeklyHours}</strong><span>{job.weeklyHours ?? copy.notSpecified}</span></div>
+                <div><strong><Wallet size={13} style={{ marginRight: 4 }} />{copy.salaryRange}</strong><span>{formatSalary(job.salaryMin, uiLanguage)} - {formatSalary(job.salaryMax, uiLanguage)}</span></div>
+                <div><strong><Building2 size={13} style={{ marginRight: 4 }} />{copy.department}</strong><span>{job.department ?? copy.general}</span></div>
+                <div><strong><Languages size={13} style={{ marginRight: 4 }} />{copy.language}</strong><span>{job.language.toUpperCase()}</span></div>
+                <div><strong><Globe2 size={13} style={{ marginRight: 4 }} />{copy.remoteType}</strong><span>{REMOTE_LABEL[uiLanguage][job.remoteType] ?? job.remoteType}</span></div>
               </div>
             </section>
 
@@ -1106,6 +1277,219 @@ export default function PublicJobDetailPage() {
             </section>
           </aside>
         </div>
+
+        {showApplyModal && !isJobClosed && createPortal(
+          <div className="careers-filter-modal-backdrop" onClick={() => setShowApplyModal(false)}>
+            <div className="careers-filter-modal careers-apply-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="careers-filter-modal-header">
+                <div>
+                  <h3>{copy.applyTitle}</h3>
+                  <p>{copy.applySubtitle}</p>
+                </div>
+                <button type="button" onClick={() => setShowApplyModal(false)} aria-label={copy.backToCareers}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                  <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 12, padding: 12, background: 'rgba(201,151,58,0.06)' }}>
+                    <strong style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#8A5A07' }}>{copy.weeklyHours}</strong>
+                    <span style={{ display: 'block', marginTop: 4, fontSize: 13, color: '#1f2937', fontWeight: 700 }}>{job.weeklyHours ?? copy.notSpecified}</span>
+                  </div>
+                  <div style={{ border: '1px solid rgba(13,33,55,0.14)', borderRadius: 12, padding: 12, background: '#fff' }}>
+                    <strong style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#334155' }}>{copy.contract}</strong>
+                    <span style={{ display: 'block', marginTop: 4, fontSize: 13, color: '#1f2937', fontWeight: 700 }}>{job.contractType ?? copy.notSpecified}</span>
+                  </div>
+                  <div style={{ border: '1px solid rgba(13,33,55,0.14)', borderRadius: 12, padding: 12, background: '#fff' }}>
+                    <strong style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#334155' }}>{copy.location}</strong>
+                    <span style={{ display: 'block', marginTop: 4, fontSize: 13, color: '#1f2937', fontWeight: 700 }}>{formatLocation(job, remoteFallback)}</span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="careers-form-grid">
+                  <div className="careers-form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <input className="careers-form-input" value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder={copy.firstNamePlaceholder} autoComplete="given-name" />
+                    <input className="careers-form-input" value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder={copy.lastNamePlaceholder} autoComplete="family-name" />
+                  </div>
+
+                  <div className="careers-form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <input className="careers-form-input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={copy.emailPlaceholder} required autoComplete="email" />
+                    <input className="careers-form-input" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder={copy.phonePlaceholder} autoComplete="tel" />
+                  </div>
+
+                  <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(201,151,58,0.28)', background: 'rgba(201,151,58,0.06)' }}>
+                    <div style={{ display: 'grid', gap: 4 }}>
+                      <h4 style={{ margin: 0, fontSize: 15, color: '#6B4A06' }}>{uiLanguage === 'it' ? 'Profilo candidato' : 'Candidate profile'}</h4>
+                      <p style={{ margin: 0, color: '#7C5A14', fontSize: 12.5, lineHeight: 1.5 }}>
+                        {uiLanguage === 'it'
+                          ? 'Compila i dati che vuoi portare nella fase di assunzione.'
+                          : 'Complete the fields that should carry through to the hiring stage.'}
+                      </p>
+                    </div>
+
+                    <div className="careers-form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                      <select
+                        className="careers-form-input"
+                        value={appProfile.maritalStatus}
+                        onChange={(event) => setAppProfile((prev) => ({ ...prev, maritalStatus: event.target.value }))}
+                      >
+                        <option value="">{uiLanguage === 'it' ? 'Stato civile' : 'Marital status'}</option>
+                        <option value="single">{uiLanguage === 'it' ? 'Single' : 'Single'}</option>
+                        <option value="married">{uiLanguage === 'it' ? 'Sposato/a' : 'Married'}</option>
+                        <option value="divorced">{uiLanguage === 'it' ? 'Divorziato/a' : 'Divorced'}</option>
+                        <option value="partnered">{uiLanguage === 'it' ? 'In coppia' : 'Partnered'}</option>
+                      </select>
+                      <select
+                        className="careers-form-input"
+                        value={appProfile.hasCurrentEmployer}
+                        onChange={(event) => setAppProfile((prev) => ({ ...prev, hasCurrentEmployer: event.target.value }))}
+                      >
+                        <option value="no">{uiLanguage === 'it' ? 'Azienda attuale: No' : 'Current employer: No'}</option>
+                        <option value="yes">{uiLanguage === 'it' ? 'Azienda attuale: Sì' : 'Current employer: Yes'}</option>
+                      </select>
+                      <DatePicker
+                        value={appProfile.dateOfBirth}
+                        onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                        label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
+                        initialViewYear={new Date().getFullYear() - 30}
+                        placement="bottom"
+                      />
+                      <input
+                        className="careers-form-input"
+                        value={appProfile.nationality}
+                        onChange={(event) => setAppProfile((prev) => ({ ...prev, nationality: event.target.value }))}
+                        placeholder={uiLanguage === 'it' ? 'Nazionalità' : 'Nationality'}
+                        required
+                      />
+                      <select
+                        className="careers-form-input"
+                        value={appProfile.gender}
+                        onChange={(event) => setAppProfile((prev) => ({ ...prev, gender: event.target.value }))}
+                      >
+                        <option value="">{uiLanguage === 'it' ? 'Genere' : 'Gender'}</option>
+                        <option value="M">{uiLanguage === 'it' ? 'Maschio' : 'Male'}</option>
+                        <option value="F">{uiLanguage === 'it' ? 'Femmina' : 'Female'}</option>
+                        <option value="other">{uiLanguage === 'it' ? 'Altro' : 'Other'}</option>
+                      </select>
+
+                      {appProfile.hasCurrentEmployer === 'yes' && (
+                        <>
+                          <input
+                            className="careers-form-input"
+                            value={appProfile.currentEmployer}
+                            onChange={(event) => setAppProfile((prev) => ({ ...prev, currentEmployer: event.target.value }))}
+                            placeholder={uiLanguage === 'it' ? 'Azienda attuale' : 'Current employer'}
+                            required
+                          />
+                          <input
+                            className="careers-form-input"
+                            value={appProfile.currentRole}
+                            onChange={(event) => setAppProfile((prev) => ({ ...prev, currentRole: event.target.value }))}
+                            placeholder={uiLanguage === 'it' ? 'Ruolo attuale' : 'Current role'}
+                            required
+                          />
+                        </>
+                      )}
+                    </div>
+
+                    <LocationFieldGroup
+                      value={{ country: appProfile.country, state: appProfile.state, city: appProfile.city }}
+                      onChange={(location) => setAppProfile((prev) => ({ ...prev, country: location.country, state: location.state, city: location.city }))}
+                      includeAddress={false}
+                      includePostalCode={false}
+                      includePhone={false}
+                      labels={{
+                        country: uiLanguage === 'it' ? 'Paese' : 'Country',
+                        state: uiLanguage === 'it' ? 'Regione / Stato' : 'State / Region',
+                        city: uiLanguage === 'it' ? 'Città' : 'City',
+                      }}
+                    />
+                  </section>
+
+                  <input
+                    className="careers-form-input"
+                    type="url"
+                    value={linkedinUrl}
+                    onChange={(event) => setLinkedinUrl(event.target.value)}
+                    placeholder={copy.linkedinPlaceholder}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
+
+                  <textarea
+                    className="careers-form-textarea"
+                    value={coverLetter}
+                    onChange={(event) => setCoverLetter(event.target.value)}
+                    placeholder={copy.coverLetterPlaceholder}
+                    maxLength={1000}
+                    rows={5}
+                  />
+                  <div className="careers-form-help">{coverLetter.length}/1000</div>
+
+                  <div style={{ display: 'grid', gap: 8, padding: 14, borderRadius: 12, border: '1px dashed rgba(201,151,58,0.45)', background: 'rgba(201,151,58,0.06)' }}>
+                    <label style={{ fontSize: 12.5, color: '#374151', fontWeight: 700 }}>{copy.cvLabel}</label>
+                    {!resume ? (
+                      <input type="file" accept=".pdf,.doc,.docx,application/pdf" onChange={handleResumeChange} required />
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(201,151,58,0.3)', background: '#fff' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #C9973A, #B5852E)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                            {resume.name.split('.').pop()?.toUpperCase()}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resume.name}</div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>{(resume.size / 1024).toFixed(1)} KB</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowResumePreview(true)}
+                            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(201,151,58,0.4)', background: 'rgba(201,151,58,0.1)', color: '#8A5A07', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            {uiLanguage === 'it' ? 'Visualizza' : 'View'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setResume(null); setResumePreviewUrl(null); }}
+                            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(220,38,38,0.3)', background: 'rgba(220,38,38,0.08)', color: '#991B1B', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            {uiLanguage === 'it' ? 'Rimuovi' : 'Remove'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="careers-checkbox">
+                    <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
+                    {copy.privacyConsent}
+                  </label>
+
+                  {submitMessage && <div className={`careers-submit-message ${submitSuccess ? 'success' : ''}`}>{submitMessage}</div>}
+
+                  <div className="careers-apply-footer">
+                    <button type="button" className="careers-form-submit" onClick={() => setShowApplyModal(false)} style={{ background: '#fff', color: '#334155', borderColor: 'rgba(13,33,55,0.16)' }}>
+                      {copy.backToCareers}
+                    </button>
+                    <button type="submit" className="careers-form-submit" disabled={submitting || isJobClosed}>
+                      {submitting ? copy.submitting : copy.submitApplication}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+        {showResumePreview && resumePreviewUrl && resume && (
+          <DocumentPreviewModal
+            url={resumePreviewUrl}
+            filename={resume.name}
+            onClose={() => setShowResumePreview(false)}
+          />
+        )}
       </div>
     </div>
   );
