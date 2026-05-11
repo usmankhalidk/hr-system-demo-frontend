@@ -5483,7 +5483,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
           ))}
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 16, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 16, alignItems: 'flex-start' }}>
           {STAGES.map((stage) => {
             const sc = STAGE_COLOR[stage];
             const sb = STAGE_BG[stage];
@@ -5503,7 +5503,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
 
                 {/* Column header */}
                 <div style={{
-                  padding: '10px 14px 10px',
+                  padding: '8px 12px 8px',
                   borderBottom: `1px solid var(--border)`,
                   background: sb,
                   display: 'flex', alignItems: 'center', gap: 8,
@@ -5541,7 +5541,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
                         style={{
                           background: 'var(--surface)',
                           border: `1px solid ${c.unread ? sc : 'var(--border)'}`,
-                          borderRadius: 10, padding: '10px 12px',
+                          borderRadius: 10, padding: '10px 10px',
                           textAlign: 'left', cursor: 'pointer', width: '100%',
                           boxShadow: c.unread
                             ? `0 0 0 2px ${sc}22, 0 2px 8px rgba(0,0,0,0.07)`
@@ -5609,9 +5609,56 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean }> = ({ can
                             fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4,
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                           }}>
-                            ✉ {c.email}
+                            📧 {c.email}
                           </div>
                         )}
+
+                        {/* Tags - Only show user tags, not system tags */}
+                        {(() => {
+                          const { userTags } = splitCandidateTags(c.tags || []);
+                          if (userTags.length === 0) return null;
+                          
+                          return (
+                            <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {userTags.slice(0, 4).map((tag) => (
+                                <span
+                                  key={tag}
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 600,
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    background: 'rgba(59,130,246,0.12)',
+                                    color: '#2563EB',
+                                    border: '1px solid rgba(59,130,246,0.25)',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '100%',
+                                  }}
+                                  title={tag}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                              {userTags.length > 3 && (
+                                <span
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 600,
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    background: 'rgba(59,130,246,0.08)',
+                                    color: '#2563EB',
+                                    border: '1px solid rgba(59,130,246,0.2)',
+                                  }}
+                                >
+                                  +{userTags.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </button>
                     );
                   })}

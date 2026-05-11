@@ -64,7 +64,7 @@ export default function ATSWeeklyCalendar({
   const hasInterviews = interviews.length > 0;
 
   return (
-    <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column', height: '100%' }}>
       {!hasInterviews ? (
         <div
           style={{
@@ -91,7 +91,7 @@ export default function ATSWeeklyCalendar({
           </div>
         </div>
       ) : (
-        <div style={{ minWidth: 1000, display: 'flex' }}>
+        <div style={{ minWidth: 1000, display: 'flex', position: 'relative' }}>
           {/* Time column on the left */}
           <div
             style={{
@@ -99,6 +99,8 @@ export default function ATSWeeklyCalendar({
               flexShrink: 0,
               borderRight: '2px solid var(--border)',
               background: 'var(--surface)',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             {/* Empty space for day headers alignment */}
@@ -113,13 +115,14 @@ export default function ATSWeeklyCalendar({
                 fontWeight: 700,
                 color: 'var(--text-muted)',
                 textTransform: 'uppercase',
+                flexShrink: 0,
               }}
             >
               {t('ats.time', 'Time')}
             </div>
 
             {/* Hour labels */}
-            <div style={{ position: 'relative', minHeight: 600 }}>
+            <div style={{ position: 'relative', minHeight: 600, flex: 1 }}>
               {hourLabels.map((h, i) => (
                 <div
                   key={h}
@@ -142,10 +145,10 @@ export default function ATSWeeklyCalendar({
             </div>
           </div>
 
-          {/* Day columns */}
-          <div style={{ flex: 1, display: 'flex' }}>
+          {/* Day columns container */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {/* Day headers row */}
-            <div style={{ position: 'absolute', top: 0, left: 70, right: 0, display: 'flex', borderBottom: '1px solid var(--border)', zIndex: 5 }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               {days.map((day, colIdx) => {
                 const dateStr = formatDate(day);
                 const isTodayCol = dateStr === today;
@@ -211,7 +214,7 @@ export default function ATSWeeklyCalendar({
             </div>
 
             {/* Day columns with time slots */}
-            <div style={{ display: 'flex', width: '100%', marginTop: 70 }}>
+            <div style={{ display: 'flex', flex: 1 }}>
               {days.map((day, colIdx) => {
                 const dateStr = formatDate(day);
                 const dayInterviews = sortInterviewsByTime(interviewsByDate.get(dateStr) ?? []);
