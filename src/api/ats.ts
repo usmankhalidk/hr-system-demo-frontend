@@ -126,6 +126,8 @@ export interface Interview {
   candidateSurname?: string;
   candidateAvatarFilename?: string | null;
   candidateEmail?: string;
+  candidatePhone?: string | null;
+  candidateLinkedinUrl?: string | null;
   resumePath?: string | null;
   cvPath?: string | null;
   positionTitle?: string;
@@ -135,9 +137,17 @@ export interface Interview {
   positionSalaryMin?: number;
   positionSalaryMax?: number;
   positionLocation?: string;
+  companyId?: number;
+  companyName?: string;
+  companyLogoFilename?: string | null;
+  companyGroupName?: string | null;
+  storeId?: number | null;
+  storeName?: string | null;
+  storeLogoFilename?: string | null;
   interviewerName?: string;
   interviewerSurname?: string;
   interviewerAvatarFilename?: string | null;
+  interviewerRole?: string;
 }
 
 export interface CandidateComment {

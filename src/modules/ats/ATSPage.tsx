@@ -69,6 +69,18 @@ import CalendarPanel from './CalendarPanel';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Country flag helper
+const getCountryFlag = (countryCode: string | null | undefined): string => {
+  if (!countryCode) return '';
+  const code = countryCode.toUpperCase();
+  const flags: Record<string, string> = {
+    'IT': '🇮🇹', 'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪', 
+    'ES': '🇪🇸', 'PT': '🇵🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭',
+    'AT': '🇦🇹', 'PL': '🇵🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰',
+  };
+  return flags[code] || '🌍';
+};
+
 const STAGES: CandidateStatus[] = ['received', 'review', 'phone_interview', 'interview', 'hired', 'rejected'];
 
 const NEXT_STAGE: Partial<Record<CandidateStatus, CandidateStatus>> = {
@@ -2089,6 +2101,16 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const stageBg = STAGE_BG[candidate.status];
   const next = NEXT_STAGE[candidate.status];
 
+  // Parse candidate profile to get available start date
+  const candidateProfile = parseCandidateProfile(candidate.sourceRef);
+  const availableStartDate = candidateProfile.availableStartDate 
+    ? new Date(candidateProfile.availableStartDate).toLocaleDateString(i18n.language === 'it' ? 'it-IT' : 'en-GB', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+    : null;
+
   const interviewerOptions = useMemo<SelectOption[]>(() => {
     return interviewerUsers
       .filter((emp) => ['hr', 'area_manager', 'store_manager'].includes(emp.role))
@@ -2595,13 +2617,24 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               </span>
             </div>
             
-            {/* Full Name */}
+            {/* Full Name with Avatar */}
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
                 {t('common.fullName', 'Full Name')}
               </div>
-              <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                {candidate.fullName}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                  background: stageColor, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 10,
+                  boxShadow: `0 2px 8px ${stageColor}30`,
+                }}>
+                  {initials(candidate.fullName)}
+                </div>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  {candidate.fullName}
+                </div>
               </div>
             </div>
 
@@ -2644,6 +2677,19 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                 </div>
               </div>
+              {availableStartDate && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>📅</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                      {t('ats.availableStartDate', 'Available Start Date')}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>
+                      {availableStartDate}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {candidate.coverLetter && (
@@ -5025,6 +5071,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     state: '',
     city: '',
     address: '',
+    postalCode: '',
     dateOfBirth: '',
     currentEmployer: '',
     currentRole: '',
@@ -5035,6 +5082,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     hireDate: new Date().toISOString().slice(0, 10),
     contractType: '',
     applicationDate: new Date().toISOString().slice(0, 10),
+    availableStartDate: '',
     applicationSource: 'ats',
     applicationChannel: 'internal',
   }));
@@ -5404,6 +5452,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       state: '',
       city: '',
       address: '',
+      postalCode: '',
       dateOfBirth: '',
       currentEmployer: '',
       currentRole: '',
@@ -5414,6 +5463,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       hireDate: new Date().toISOString().slice(0, 10),
       contractType: '',
       applicationDate: new Date().toISOString().slice(0, 10),
+      availableStartDate: '',
       applicationSource: 'ats',
       applicationChannel: 'internal',
     });
@@ -5749,8 +5799,35 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                             <div style={{
                               fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)',
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              display: 'flex', alignItems: 'center', gap: 6,
                             }}>
-                              {c.fullName}
+                              <span>{c.fullName}</span>
+                              {(() => {
+                                const profile = parseCandidateProfile(c.sourceRef);
+                                if (!profile.country) return null;
+                                
+                                // Try to get country code - either directly or from country name
+                                let countryCode = profile.country.toUpperCase();
+                                if (countryCode.length > 2) {
+                                  // It's a country name, convert to code
+                                  countryCode = COUNTRY_NAME_TO_CODE[profile.country] || '';
+                                }
+                                
+                                if (!countryCode || countryCode.length !== 2) return null;
+                                
+                                return (
+                                  <ReactCountryFlag
+                                    countryCode={countryCode}
+                                    svg
+                                    style={{
+                                      width: '14px',
+                                      height: '14px',
+                                      borderRadius: '4px',
+                                    }}
+                                    title={profile.country}
+                                  />
+                                );
+                              })()}
                             </div>
                             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }} title={fmtDateTime(c.appliedAt ?? c.createdAt)}>
                               {fmtRelativeTime(c.appliedAt ?? c.createdAt)}
@@ -6271,8 +6348,12 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
                       label={t('employees.jobTypeField', 'Job type')}
-                      value={addSelectedJob?.jobType === 'full_time' ? t('employees.workingTypeFull', 'Full time') : 
-                             addSelectedJob?.jobType === 'part_time' ? t('employees.workingTypePart', 'Part time') : ''}
+                      value={
+                        addSelectedJob?.jobType === 'fulltime' ? t('employees.workingTypeFull', 'Full time') : 
+                        addSelectedJob?.jobType === 'parttime' ? t('employees.workingTypePart', 'Part time') :
+                        addSelectedJob?.jobType === 'contract' ? t('employees.contractTypeContract', 'Contract') :
+                        addSelectedJob?.jobType === 'internship' ? t('employees.contractInternship', 'Internship') : ''
+                      }
                       disabled
                       style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }}
                       placeholder={t('common.notSet', 'Not set')}
