@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays } from 'lucide-react';
 import { Interview } from './atsCalendarUtils';
@@ -31,6 +31,7 @@ export default function ATSWeeklyCalendar({
   onSlotClick,
 }: ATSWeeklyCalendarProps) {
   const { t, i18n } = useTranslation();
+  const [hoveredInterviewId, setHoveredInterviewId] = useState<number | string | null>(null);
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
 
   const DAY_LABELS = [
@@ -122,7 +123,7 @@ export default function ATSWeeklyCalendar({
             </div>
 
             {/* Hour labels */}
-            <div style={{ position: 'relative', minHeight: 600, flex: 1 }}>
+            <div style={{ position: 'relative', minHeight: 960, flex: 1 }}>
               {hourLabels.map((h, i) => (
                 <div
                   key={h}
@@ -234,8 +235,8 @@ export default function ATSWeeklyCalendar({
                     <div
                       style={{
                         position: 'relative',
-                        minHeight: 600,
-                        padding: '8px 4px',
+                        minHeight: 960,
+                        padding: '8px 0',
                       }}
                     >
                       {/* Hour grid lines */}
@@ -264,13 +265,15 @@ export default function ATSWeeklyCalendar({
                             key={interview.id}
                             style={{
                               position: 'absolute',
-                              left: 4,
-                              right: 4,
+                              left: 0,
+                              right: 0,
                               top,
-                              minHeight: 40,
+                              minHeight: 'auto',
                               maxHeight: height,
-                              zIndex: 10 + idx,
+                              zIndex: hoveredInterviewId === interview.id ? 10000 : 10 + idx,
                             }}
+                            onMouseEnter={() => setHoveredInterviewId(interview.id)}
+                            onMouseLeave={() => setHoveredInterviewId(null)}
                           >
                             <InterviewEntry
                               interview={interview}

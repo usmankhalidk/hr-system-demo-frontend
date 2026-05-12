@@ -120,13 +120,12 @@ export async function deleteDocument(id: number): Promise<void> {
   await apiClient.delete(`/documents/${id}`);
 }
 
-export async function getDeletedDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
+export async function getDeletedDocuments(employeeId?: number, tab?: 'my' | 'team'): Promise<EmployeeDocument[]> {
   const { data } = await apiClient.get('/documents/trash', {
-    params: { employee_id: employeeId }
+    params: { employee_id: employeeId, tab }
   });
   return data.data as EmployeeDocument[];
 }
-
 
 export async function restoreDocument(id: number, source: 'documents' | 'employee_documents'): Promise<void> {
   await apiClient.post(`/documents/${source}/${id}/restore`);
@@ -228,8 +227,8 @@ export async function updateDocumentGeneric(id: number, payload: DocumentUpdateP
   await apiClient.put(`/documents/${id}`, payload);
 }
 
-export async function getDocumentsGeneric(): Promise<any[]> {
-  const { data } = await apiClient.get('/documents');
+export async function getDocumentsGeneric(tab?: 'my' | 'team'): Promise<any[]> {
+  const { data } = await apiClient.get('/documents', { params: { tab } });
   return data.data;
 }
 
