@@ -3675,42 +3675,101 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     marginBottom: 8, borderLeft: `3px solid ${STAGE_COLOR.interview}`,
                     position: 'relative',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
-                            🕐 {fmtDateTime(iv.scheduledAt)}
-                          </div>
-                          <span style={{
-                            background: statusBg,
-                            color: statusColor,
-                            borderRadius: 99,
-                            padding: '2px 8px',
-                            fontSize: 10,
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.03em',
-                          }}>
-                            {statusLabel}
-                          </span>
+                    {/* Top Row: Date/Time/Status and Edit/Delete buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+                          🕐 {fmtDateTime(iv.scheduledAt)}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                          {iv.location && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                              📍 {iv.location}
-                            </span>
-                          )}
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                            {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
-                          </span>
-                          {iv.durationMinutes && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                              ⏱ {iv.durationMinutes}min
-                            </span>
-                          )}
+                        <span style={{
+                          background: statusBg,
+                          color: statusColor,
+                          borderRadius: 99,
+                          padding: '2px 8px',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.03em',
+                        }}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      {canEdit && (
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            onClick={() => {
+                              // Populate form with existing interview data
+                              const ivDate = new Date(iv.scheduledAt);
+                              setIntDate(ivDate.toISOString().split('T')[0]);
+                              setIntTime(ivDate.toTimeString().slice(0, 5));
+                              setIntLocation(iv.location || '');
+                              setIntType(iv.interviewType || 'in_person');
+                              setIntDescription(iv.description || iv.notes || '');
+                              setIntDuration(iv.durationMinutes || '');
+                              setIntInterviewerId(iv.interviewerId ? String(iv.interviewerId) : null);
+                              setIntSendIcs(false);
+                              setEditingInterviewId(iv.id);
+                              setShowInterviewForm(true);
+                            }}
+                            style={{
+                              background: 'rgba(13,33,55,0.08)',
+                              border: '1px solid rgba(13,33,55,0.2)',
+                              borderRadius: 6,
+                              width: 24,
+                              height: 24,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                            title={t('common.edit', 'Edit')}
+                          >
+                            <Pencil size={12} color="var(--primary)" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInterview(iv.id)}
+                            disabled={deletingInterviewId === iv.id}
+                            style={{
+                              background: 'rgba(220,38,38,0.08)',
+                              border: '1px solid rgba(185,28,28,0.24)',
+                              borderRadius: 6,
+                              width: 24,
+                              height: 24,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: deletingInterviewId === iv.id ? 'not-allowed' : 'pointer',
+                              opacity: deletingInterviewId === iv.id ? 0.5 : 1,
+                              transition: 'all 0.15s',
+                            }}
+                            title={t('common.delete', 'Delete')}
+                          >
+                            <Trash2 size={12} color="#991b1b" />
+                          </button>
                         </div>
+                      )}
+                    </div>
 
-                        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                    {/* Second Row: Location, Type, Duration tags */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      {iv.location && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                          📍 {iv.location}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                        {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
+                      </span>
+                      {iv.durationMinutes && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                          ⏱ {iv.durationMinutes}min
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Full Width Interviewer Row and Notification Status */}
+                    <div style={{ display: 'grid', gap: 8 }}>
                           {interviewer && (
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
@@ -3829,7 +3888,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                     </div>
                                   </div>
 
-                                {/* Interviewer Email Status */}
+                                {/* Interviewer Email Status - Hidden for store managers */}
+                                {user?.role !== 'store_manager' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
                                       📧 {t('ats.interviewerEmail', 'Interviewer')}
@@ -3928,8 +3988,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                       </button>
                                     </div>
                                   </div>
+                                )}
 
-                                {/* Notification Status */}
+                                {/* Notification Status - Hidden for store managers */}
+                                {user?.role !== 'store_manager' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
                                       🔔 {t('ats.notification', 'Notification')}
@@ -3996,6 +4058,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                       </button>
                                     </div>
                                   </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -4006,63 +4069,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             </div>
                           )}
                         </div>
-                      </div>
-                      {canEdit && (
-                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                          <button
-                            onClick={() => {
-                              // Populate form with existing interview data
-                              const ivDate = new Date(iv.scheduledAt);
-                              setIntDate(ivDate.toISOString().split('T')[0]);
-                              setIntTime(ivDate.toTimeString().slice(0, 5));
-                              setIntLocation(iv.location || '');
-                              setIntType(iv.interviewType || 'in_person');
-                              setIntDescription(iv.description || iv.notes || '');
-                              setIntDuration(iv.durationMinutes || '');
-                              setIntInterviewerId(iv.interviewerId ? String(iv.interviewerId) : null);
-                              setIntSendIcs(false);
-                              setEditingInterviewId(iv.id);
-                              setShowInterviewForm(true);
-                            }}
-                            style={{
-                              background: 'rgba(13,33,55,0.08)',
-                              border: '1px solid rgba(13,33,55,0.2)',
-                              borderRadius: 6,
-                              width: 24,
-                              height: 24,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s',
-                            }}
-                            title={t('common.edit', 'Edit')}
-                          >
-                            <Pencil size={12} color="var(--primary)" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteInterview(iv.id)}
-                            disabled={deletingInterviewId === iv.id}
-                            style={{
-                              background: 'rgba(220,38,38,0.08)',
-                              border: '1px solid rgba(185,28,28,0.24)',
-                              borderRadius: 6,
-                              width: 24,
-                              height: 24,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: deletingInterviewId === iv.id ? 'not-allowed' : 'pointer',
-                              opacity: deletingInterviewId === iv.id ? 0.5 : 1,
-                              transition: 'all 0.15s',
-                            }}
-                            title={t('common.delete', 'Delete')}
-                          >
-                            <Trash2 size={12} color="#991b1b" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
                     
                     {/* Feedback Comments List */}
                     {interviewFeedback[iv.id] && interviewFeedback[iv.id].length > 0 && (
@@ -7156,6 +7162,7 @@ export default function ATSPage() {
     ? [
         { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
         { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
+        { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
       ]
     : [
         ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
@@ -7167,7 +7174,7 @@ export default function ATSPage() {
 
   // Keep store managers on their allowed tabs only
   useEffect(() => {
-    if (isStoreManager && !['candidates', 'interviews'].includes(tab)) {
+    if (isStoreManager && !['candidates', 'interviews', 'calendar'].includes(tab)) {
       setTab('candidates');
     }
   }, [isStoreManager, tab]);

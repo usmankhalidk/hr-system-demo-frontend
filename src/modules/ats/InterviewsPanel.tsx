@@ -1,18 +1,28 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, Phone, Users, Briefcase, FileText, Mail, PhoneIcon, Linkedin, Building2, Store } from 'lucide-react';
+import { Calendar, Clock, Phone, Users, Briefcase, FileText, Mail, PhoneIcon, Linkedin, Building2, Store, MessageSquare, Trash2 } from 'lucide-react';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { getResumeUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
 import { useTranslation } from 'react-i18next';
-import { getAllInterviews, Interview as APIInterview } from '../../api/ats';
+import { getAllInterviews, Interview as APIInterview, getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment, InterviewFeedbackComment } from '../../api/ats';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { Spinner } from '../../components/ui/Spinner';
+import { Button } from '../../components/ui/Button';
 
 export default function InterviewsPanel() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [interviews, setInterviews] = useState<APIInterview[]>([]);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [selectedInterview, setSelectedInterview] = useState<APIInterview | null>(null);
+  const [feedbackComments, setFeedbackComments] = useState<InterviewFeedbackComment[]>([]);
+  const [feedbackDraft, setFeedbackDraft] = useState('');
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [savingFeedback, setSavingFeedback] = useState(false);
+  const [deletingFeedbackId, setDeletingFeedbackId] = useState<number | null>(null);
+  const [hoveredFeedbackId, setHoveredFeedbackId] = useState<number | null>(null);
 
   useEffect(() => {
     loadInterviews();
@@ -29,6 +39,58 @@ export default function InterviewsPanel() {
       console.error('❌ Failed to load interviews:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFeedbackClick = async (interview: APIInterview) => {
+    setSelectedInterview(interview);
+    setFeedbackDraft('');
+    setLoadingFeedback(true);
+    try {
+      const comments = await getInterviewFeedbackComments(interview.id);
+      setFeedbackComments(comments);
+    } catch (error) {
+      console.error('Failed to load feedback:', error);
+      showToast(t('ats.errorLoadFeedback', 'Failed to load feedback'), 'error');
+    } finally {
+      setLoadingFeedback(false);
+    }
+  };
+
+  const handleCloseFeedbackModal = () => {
+    setSelectedInterview(null);
+    setFeedbackComments([]);
+    setFeedbackDraft('');
+  };
+
+  const handleAddFeedback = async () => {
+    if (!selectedInterview || !feedbackDraft.trim()) return;
+    
+    setSavingFeedback(true);
+    try {
+      const newComment = await addInterviewFeedbackComment(selectedInterview.id, feedbackDraft.trim());
+      setFeedbackComments(prev => [...prev, newComment]);
+      setFeedbackDraft('');
+      showToast(t('ats.feedbackAdded', 'Feedback added successfully'), 'success');
+    } catch (error) {
+      console.error('Failed to add feedback:', error);
+      showToast(t('ats.errorAddFeedback', 'Failed to add feedback'), 'error');
+    } finally {
+      setSavingFeedback(false);
+    }
+  };
+
+  const handleDeleteFeedback = async (commentId: number) => {
+    setDeletingFeedbackId(commentId);
+    try {
+      await deleteInterviewFeedbackComment(commentId);
+      setFeedbackComments(prev => prev.filter(c => c.id !== commentId));
+      showToast(t('ats.feedbackDeleted', 'Feedback deleted successfully'), 'success');
+    } catch (error) {
+      console.error('Failed to delete feedback:', error);
+      showToast(t('ats.errorDeleteFeedback', 'Failed to delete feedback'), 'error');
+    } finally {
+      setDeletingFeedbackId(null);
     }
   };
 
@@ -177,9 +239,12 @@ export default function InterviewsPanel() {
                   {/* Date Badge */}
                   <div
                     style={{
+                      display: 'flex',
+                      gap: 6,
                       minWidth: 50,
+                      alignItems: 'center',
                       textAlign: 'center',
-                      padding: '6px 4px',
+                      padding: '4px 8px',
                       background: 'rgba(255,255,255,0.15)',
                       borderRadius: 7,
                       color: '#fff',
@@ -189,7 +254,7 @@ export default function InterviewsPanel() {
                     <div style={{ fontSize: '1.2rem', fontWeight: 800, lineHeight: 1 }}>
                       {scheduledDate.getDate()}
                     </div>
-                    <div style={{ fontSize: '0.6rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
                       {scheduledDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
                     </div>
                   </div>
@@ -202,6 +267,38 @@ export default function InterviewsPanel() {
                       {interview.durationMinutes && <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>({interview.durationMinutes}min)</span>}
                     </div>
                   </div>
+
+                  {/* Feedback Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFeedbackClick(interview);
+                    }}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 5,
+                      background: 'rgba(124,58,237,0.25)',
+                      border: '1px solid rgba(124,58,237,0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(124,58,237,0.35)';
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(124,58,237,0.25)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                  >
+                    <MessageSquare size={13} color="#fff" />
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
+                      {t('ats.feedback', 'Feedback')}
+                    </span>
+                  </button>
 
                   {/* Interview Type Badge */}
                   <div
@@ -626,6 +723,304 @@ export default function InterviewsPanel() {
       )}
       {showResumePreview && resumePreviewUrl && resumeFilename && (
         <DocumentPreviewModal url={resumePreviewUrl} filename={resumeFilename} onClose={() => setShowResumePreview(false)} />
+      )}
+
+      {/* Interview Feedback Modal */}
+      {selectedInterview && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(13,33,55,0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            padding: '32px 16px',
+            overflowY: 'auto',
+          }}
+          onClick={handleCloseFeedbackModal}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 700,
+              boxShadow: '0 24px 72px rgba(0,0,0,0.22)',
+              animation: 'popIn 0.22s cubic-bezier(0.16,1,0.3,1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                background: 'linear-gradient(135deg, #0D2137 0%, #1e3a5f 100%)',
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MessageSquare size={22} color="#fff" />
+                </div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    color: '#fff',
+                  }}
+                >
+                  {t('ats.interviewFeedback', 'Interview Feedback')}
+                </h2>
+              </div>
+              <button
+                onClick={handleCloseFeedbackModal}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 8,
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '24px' }}>
+              {/* Interview Info */}
+              <div
+                style={{
+                  marginBottom: 20,
+                  padding: 16,
+                  background: 'linear-gradient(135deg, rgba(201,151,58,0.08) 0%, rgba(251,191,36,0.08) 100%)',
+                  borderRadius: 10,
+                  border: '1px solid rgba(201,151,58,0.2)',
+                }}
+              >
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#92400e', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {t('ats.interviewDetails', 'Interview Details')}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                  <Calendar size={18} color="#92400e" />
+                  <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                    {new Date(selectedInterview.scheduledAt).toLocaleString(undefined, {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+                {selectedInterview.candidateName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                    <Users size={16} color="#64748b" />
+                    <span style={{ fontSize: '0.9rem', color: '#475569' }}>
+                      <strong>{t('ats.candidate', 'Candidate')}:</strong> {selectedInterview.candidateName} {selectedInterview.candidateSurname}
+                    </span>
+                  </div>
+                )}
+                {selectedInterview.positionTitle && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Briefcase size={16} color="#64748b" />
+                    <span style={{ fontSize: '0.9rem', color: '#475569' }}>
+                      <strong>{t('ats.position', 'Position')}:</strong> {selectedInterview.positionTitle}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Feedback Comments */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  💬 {t('ats.feedback', 'Feedback')} ({feedbackComments.length})
+                </div>
+
+                {loadingFeedback ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+                    <Spinner size="md" color="var(--primary)" />
+                  </div>
+                ) : feedbackComments.length === 0 ? (
+                  <div
+                    style={{
+                      padding: 16,
+                      background: 'rgba(148,163,184,0.06)',
+                      borderRadius: 8,
+                      fontSize: '0.85rem',
+                      color: '#64748b',
+                      textAlign: 'center',
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    {t('ats.noFeedbackYet', 'No feedback yet. Be the first to add feedback!')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {feedbackComments.map((comment) => {
+                      const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
+                      const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
+                      const canDelete = user?.id === comment.authorId || ['admin', 'hr'].includes(user?.role || '');
+
+                      return (
+                        <div
+                          key={comment.id}
+                          style={{
+                            background: 'var(--background)',
+                            borderRadius: 8,
+                            padding: '12px 14px',
+                            border: '1px solid var(--border)',
+                            position: 'relative',
+                          }}
+                          onMouseEnter={() => setHoveredFeedbackId(comment.id)}
+                          onMouseLeave={() => setHoveredFeedbackId(null)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, marginBottom: 8 }}>
+                                {comment.body}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: '50%',
+                                  overflow: 'hidden',
+                                  background: authorAvatar ? 'transparent' : 'var(--primary)',
+                                  color: '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.7rem',
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                }}>
+                                  {authorAvatar ? (
+                                    <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    {authorName}
+                                  </div>
+                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                    {new Date(comment.createdAt).toLocaleString(undefined, {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDeleteFeedback(comment.id)}
+                                disabled={deletingFeedbackId === comment.id}
+                                style={{
+                                  background: hoveredFeedbackId === comment.id ? 'rgba(220,38,38,0.08)' : 'transparent',
+                                  border: '1px solid rgba(185,28,28,0.24)',
+                                  borderRadius: 6,
+                                  width: 28,
+                                  height: 28,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                  opacity: hoveredFeedbackId === comment.id ? 1 : 0.5,
+                                  transition: 'all 0.15s',
+                                  flexShrink: 0,
+                                }}
+                                title={t('common.delete', 'Delete')}
+                              >
+                                <Trash2 size={14} color="#991b1b" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Add Feedback */}
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 8 }}>
+                  {t('ats.addFeedback', 'Add Your Feedback')}
+                </div>
+                <textarea
+                  value={feedbackDraft}
+                  onChange={(e) => setFeedbackDraft(e.target.value)}
+                  rows={4}
+                  placeholder={t('ats.feedbackPlaceholder', 'Share your thoughts about this interview...')}
+                  style={{
+                    width: '100%',
+                    fontFamily: 'inherit',
+                    fontSize: '0.9rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    padding: '10px 12px',
+                    resize: 'vertical',
+                    background: 'var(--surface)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid var(--border)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <Button variant="secondary" onClick={handleCloseFeedbackModal}>
+                {t('common.close', 'Close')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleAddFeedback}
+                disabled={!feedbackDraft.trim() || savingFeedback}
+                loading={savingFeedback}
+              >
+                {t('ats.saveFeedback', 'Save Feedback')}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
