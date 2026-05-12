@@ -88,8 +88,8 @@ export function getMonthEnd(date: Date): Date {
 
 // ─── Time Slot Calculations ───────────────────────────────────────────────────
 
-const START_HOUR = 7; // 07:00
-const END_HOUR = 22; // 22:00
+const START_HOUR = 1; // 01:00
+const END_HOUR = 24; // 24:00
 const TOTAL_MINS = (END_HOUR - START_HOUR) * 60;
 
 export function timeToMinutes(time: string): number {

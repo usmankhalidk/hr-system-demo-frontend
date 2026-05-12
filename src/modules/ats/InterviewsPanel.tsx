@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, Clock, Phone, Users, Briefcase, FileText, Mail, PhoneIcon, Linkedin, Building2, Store, MessageSquare, Trash2 } from 'lucide-react';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { getResumeUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
@@ -726,7 +727,7 @@ export default function InterviewsPanel() {
       )}
 
       {/* Interview Feedback Modal */}
-      {selectedInterview && (
+      {selectedInterview && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -735,10 +736,9 @@ export default function InterviewsPanel() {
             background: 'rgba(13,33,55,0.55)',
             backdropFilter: 'blur(4px)',
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: 'center',
             justifyContent: 'center',
-            padding: '32px 16px',
-            overflowY: 'auto',
+            padding: 16,
           }}
           onClick={handleCloseFeedbackModal}
         >
@@ -748,6 +748,8 @@ export default function InterviewsPanel() {
               borderRadius: 16,
               width: '100%',
               maxWidth: 700,
+              maxHeight: '92vh',
+              overflowY: 'auto',
               boxShadow: '0 24px 72px rgba(0,0,0,0.22)',
               animation: 'popIn 0.22s cubic-bezier(0.16,1,0.3,1)',
             }}
@@ -1020,7 +1022,8 @@ export default function InterviewsPanel() {
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -31,11 +31,12 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   isTrashEnabled = true
 }) => {
   const { t } = useTranslation();
-  const { user, loading: authLoading } = useAuth();
+  const { user, permissions, loading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
 
-  const [docs, setDocs] = useState<EmployeeDocument[]>([]);
+  const [myDocs, setMyDocs] = useState<EmployeeDocument[]>([]);
+  const [teamDocs, setTeamDocs] = useState<EmployeeDocument[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,10 +46,23 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const [showUpload, setShowUpload] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [editDoc, setEditDoc] = useState<any | null>(null);
+  const [activeTab, setActiveTab] = useState<'my' | 'team'>('my');
 
   const canManage = ['admin', 'hr'].includes(user?.role || '');
   const isEmployee = user?.role === 'employee';
   const isStoreManager = user?.role === 'store_manager';
+
+  const showTeamTab = !isEmployee && !employeeId && permissions?.team_documents === true;
+
+  const docs = showTeamTab
+    ? (activeTab === 'my' ? myDocs : teamDocs)
+    : myDocs;
+
+  useEffect(() => {
+    if (permissions && permissions.team_documents === false && activeTab === 'team') {
+      setActiveTab('my');
+    }
+  }, [permissions, activeTab]);
 
   const load = useCallback(async () => {
     if (authLoading) return;
@@ -75,31 +89,57 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         setSelectedCompanyId(allowedComps[0].id);
       }
 
-      let fetchedDocs: EmployeeDocument[] = [];
+      let fetchedMy: EmployeeDocument[] = [];
+      let fetchedTeam: EmployeeDocument[] = [];
+
+      const hasTeamPerm = permissions?.team_documents === true;
+
       if (view === 'trash') {
-        fetchedDocs = await getDeletedDocuments(employeeId);
+        if (!isEmployee && !employeeId) {
+          if (hasTeamPerm) {
+            const [my, team] = await Promise.all([
+              getDeletedDocuments(employeeId, 'my'),
+              getDeletedDocuments(employeeId, 'team')
+            ]);
+            fetchedMy = my;
+            fetchedTeam = team;
+          } else {
+            fetchedMy = await getDeletedDocuments(employeeId, 'my');
+          }
+        } else {
+          fetchedMy = await getDeletedDocuments(employeeId);
+        }
       } else {
         if (employeeId) {
-          fetchedDocs = await getEmployeeDocuments(employeeId);
+          fetchedMy = await getEmployeeDocuments(employeeId);
         } else if (isEmployee) {
-          fetchedDocs = await getMyDocuments();
+          fetchedMy = await getMyDocuments();
         } else {
-          fetchedDocs = await getDocumentsGeneric();
+          if (hasTeamPerm) {
+            const [my, team] = await Promise.all([
+              getDocumentsGeneric('my'),
+              getDocumentsGeneric('team')
+            ]);
+            fetchedMy = my;
+            fetchedTeam = team;
+          } else {
+            fetchedMy = await getDocumentsGeneric('my');
+          }
         }
       }
-      setDocs(fetchedDocs);
+      setMyDocs(fetchedMy);
+      setTeamDocs(fetchedTeam);
     } catch (err) {
       console.error('Error loading documents:', err);
       showToast(t('documents.errorLoad'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [employeeId, isEmployee, view, t, showToast, authLoading, user]);
+  }, [employeeId, isEmployee, view, t, showToast, authLoading, user, permissions]);
 
   useEffect(() => {
     load();
   }, [load]);
-
   const groups = React.useMemo(() => {
     const map = new Map<string, { companyId: number; categoryId: number | null; count: number }>();
     docs.forEach(d => {
@@ -123,11 +163,25 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     return name.includes(term) || emp.includes(term);
   });
 
+  const getFilteredCount = (tabDocs: EmployeeDocument[]) => {
+    return tabDocs.filter(d => {
+      if (selectedCompanyId !== null) {
+        if (Number(d.companyId) !== selectedCompanyId) return false;
+      }
+      if (search.trim()) {
+        const term = search.toLowerCase();
+        const name = (d.fileName || '').toLowerCase();
+        const emp = (d.employeeName || '').toLowerCase();
+        return name.includes(term) || emp.includes(term);
+      }
+      return true;
+    }).length;
+  };
+
   const getCompanyName = (compId: number | null) => {
     if (!compId) return '';
     return companies.find(c => c.id === compId)?.name || `Company ${compId}`;
   };
-
   const getCompanyCategories = (compId: number) => {
     const list = categories
       .filter(c => c.companyId === compId && c.isActive)
@@ -136,7 +190,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   };
 
   const getCompanyFileCount = (compId: number) => {
-    return docs.filter(d => Number(d.companyId) === compId).length;
+    // Combine myDocs and teamDocs to show the total files across both tabs
+    const allDocs = [...myDocs, ...teamDocs];
+    const uniqueDocs = Array.from(new Map(allDocs.map(d => [d.id, d])).values());
+    return uniqueDocs.filter(d => Number(d.companyId) === compId).length;
   };
 
   return (
@@ -343,6 +400,91 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
               </p>
             </div>
           </div>
+
+          {/* ── Tab Filter (My Documents vs Team Documents) ── */}
+          {showTeamTab && (
+            <div style={{
+              padding: isMobile ? '16px 20px 0 20px' : '24px 40px 0 40px',
+              borderBottom: '1px solid var(--border-light)',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              background: 'rgba(0,0,0,0.002)'
+            }}>
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                background: 'rgba(0,0,0,0.03)',
+                padding: 4,
+                borderRadius: 12,
+                border: '1px solid var(--border-light)',
+                marginBottom: 16
+              }}>
+                <button
+                  id="tab-my-documents"
+                  onClick={() => setActiveTab('my')}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: 9,
+                    border: 'none',
+                    background: activeTab === 'my' ? 'var(--surface)' : 'transparent',
+                    color: activeTab === 'my' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    boxShadow: activeTab === 'my' ? '0 4px 12px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                  {t('documents.myDocuments', 'My Documents')}
+                  <span style={{
+                    background: activeTab === 'my' ? 'var(--primary)' : 'rgba(0,0,0,0.06)',
+                    color: activeTab === 'my' ? '#fff' : 'var(--text-muted)',
+                    padding: '2px 8px',
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    transition: 'all 0.2s'
+                  }}>
+                    {getFilteredCount(myDocs)}
+                  </span>
+                </button>
+                <button
+                  id="tab-team-documents"
+                  onClick={() => setActiveTab('team')}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: 9,
+                    border: 'none',
+                    background: activeTab === 'team' ? 'var(--surface)' : 'transparent',
+                    color: activeTab === 'team' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    boxShadow: activeTab === 'team' ? '0 4px 12px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                  {t('documents.teamDocuments', 'Team Documents')}
+                  <span style={{
+                    background: activeTab === 'team' ? 'var(--primary)' : 'rgba(0,0,0,0.06)',
+                    color: activeTab === 'team' ? '#fff' : 'var(--text-muted)',
+                    padding: '2px 8px',
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    transition: 'all 0.2s'
+                  }}>
+                    {getFilteredCount(teamDocs)}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
 
           <div style={{ padding: '0 12px 12px 12px' }}>
             {loading ? (
