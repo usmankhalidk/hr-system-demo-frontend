@@ -6372,36 +6372,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       placeholder={t('common.notSet', 'Not set')}
                     />
                   </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                    <div>
-                      <Input
-                        label={t('employees.uniqueIdField', 'Unique ID')}
-                        value={addProfile.uniqueId}
-                        onChange={(e) => setAddProfile((prev) => ({ ...prev, uniqueId: e.target.value }))}
-                        placeholder={t('employees.colUniqueId', 'EMP-XXXXXX')}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setAddProfile((prev) => ({ ...prev, uniqueId: generateEmployeeUniqueId() }))}
-                        style={{
-                          marginTop: '5px', background: 'none', border: 'none',
-                          cursor: 'pointer', fontSize: '11px', color: 'var(--accent)',
-                          fontFamily: 'var(--font-body)', fontWeight: 500,
-                          padding: '2px 0', display: 'flex', alignItems: 'center', gap: '4px',
-                        }}
-                      >
-                        <RotateCcw size={12} /> {t('employees.regenerateId', 'Regenerate ID')}
-                      </button>
-                    </div>
-                    <Input
-                      label={t('employees.tempPasswordLabel', 'Password')}
-                      type="text"
-                      value={addProfile.password}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, password: e.target.value }))}
-                      placeholder={t('employees.tempPasswordLabel', 'Auto-generated')}
-                    />
-                  </div>
                 </div>
 
                 {/* Documents Section */}
@@ -6668,12 +6638,29 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
 
             <div style={{ padding: '18px 22px 22px', display: 'grid', gap: 16, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
               
-              {/* Employee Setup Section */}
-              <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: 'rgba(201,151,58,0.04)', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#8A5A07', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('ats.employeeSetup', 'Employee setup')}
+              {/* Section 1: Basic Information */}
+              <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: '#fff', padding: '16px 16px 12px', display: 'grid', gap: 12 }}>
+                <div style={{ paddingBottom: 8, borderBottom: '1px solid rgba(201,151,58,0.18)' }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#8A5A07' }}>
+                    {t('ats.basicInformation', 'Basic Information')}
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.basicInformationHint', 'Required candidate contact details')}
+                  </p>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <Input 
+                    label={t('common.firstName', 'First name')} 
+                    value={employeeData.name} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, name: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
+                  <Input 
+                    label={t('common.lastName', 'Last name')} 
+                    value={employeeData.surname} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, surname: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
                   <Input 
                     type="email" 
                     label={t('common.companyEmail', 'Company Email')} 
@@ -6684,38 +6671,61 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     autoFocus 
                   />
                   <Input 
-                    label={t('employees.uniqueIdField', 'Unique ID')} 
-                    value={employeeData.uniqueId} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: e.target.value } : prev))} 
+                    label={t('common.personalEmail', 'Personal Email')} 
+                    type="email" 
+                    value={employeeData.personalEmail} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, personalEmail: e.target.value } : prev))} 
                     disabled={creatingEmployee} 
                   />
                   <Input 
-                    label={t('employees.tempPasswordLabel', 'Temporary password')} 
-                    type="text" 
-                    value={employeeData.password} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, password: e.target.value } : prev))} 
+                    label={t('ats.phone', 'Phone')} 
+                    value={employeeData.phone} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, phone: e.target.value } : prev))} 
                     disabled={creatingEmployee} 
                   />
-                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                    <Button 
-                      type="button" 
-                      variant="secondary" 
-                      onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId(), password: generateTempPassword() } : prev))} 
-                      disabled={creatingEmployee}
-                      style={{ width: '100%' }}
-                    >
-                      {t('employees.regeneratePassword', 'Regenerate access')}
-                    </Button>
-                  </div>
                 </div>
               </div>
 
-              {/* Employee Details Section */}
-              <div style={{ border: '1px solid rgba(13,33,55,0.12)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2137', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('ats.employeeDetails', 'Employee details')}
+              {/* Section 2: Employee Details */}
+              <div style={{ border: '1px solid rgba(13,33,55,0.15)', borderRadius: 14, background: '#fff', padding: '16px 16px 12px', display: 'grid', gap: 12 }}>
+                <div style={{ paddingBottom: 8, borderBottom: '1px solid rgba(13,33,55,0.12)' }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0D2137' }}>
+                    {t('ats.employeeDetails', 'Employee Details')}
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.personalDetailsHint', 'Optional demographic and location information')}
+                  </p>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <DatePicker 
+                    label={t('employees.dateOfBirthField', 'Date of birth')} 
+                    value={employeeData.dateOfBirth} 
+                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, dateOfBirth: value } : prev))} 
+                    placement="bottom" 
+                  />
+                  <Select 
+                    label={t('employees.genderField', 'Gender')} 
+                    value={employeeData.gender} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, gender: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
+                    <option value="">{t('common.notProvided', 'Not provided')}</option>
+                    <option value="M">{t('employees.genderMale', 'Male')}</option>
+                    <option value="F">{t('employees.genderFemale', 'Female')}</option>
+                    <option value="other">{t('employees.genderOther', 'Other')}</option>
+                  </Select>
+                  <Input 
+                    label={t('employees.maritalStatusField', 'Marital status')} 
+                    value={employeeData.maritalStatus} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, maritalStatus: e.target.value } : prev))} 
+                    disabled={creatingEmployee}
+                  />
+                  <Input 
+                    label={t('employees.nationalityField', 'Nationality')} 
+                    value={employeeData.nationality} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, nationality: e.target.value } : prev))} 
+                    disabled={creatingEmployee} 
+                  />
                   <Select 
                     label={t('common.role', 'Role')} 
                     value={employeeData.role} 
@@ -6728,6 +6738,37 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     <option value="hr">{t('roles.hr', 'HR')}</option>
                     <option value="admin">{t('roles.admin', 'Admin')}</option>
                   </Select>
+                </div>
+                <LocationFieldGroup
+                  value={{ country: employeeData.country, state: employeeData.state, city: employeeData.city }}
+                  onChange={(location) => setEmployeeData((prev) => (prev ? {
+                    ...prev,
+                    country: location.country,
+                    state: location.state,
+                    city: location.city,
+                  } : prev))}
+                  includeAddress={false}
+                  includePostalCode={false}
+                  includePhone={false}
+                  labels={{
+                    country: t('companies.country', 'Country'),
+                    state: t('companies.state', 'State'),
+                    city: t('companies.city', 'City'),
+                  }}
+                />
+              </div>
+
+              {/* Section 3: Job Position Details */}
+              <div style={{ border: '1px solid rgba(59,130,246,0.18)', borderRadius: 14, background: 'rgba(59,130,246,0.04)', padding: '16px 16px 12px', display: 'grid', gap: 12 }}>
+                <div style={{ paddingBottom: 8, borderBottom: '1px solid rgba(59,130,246,0.15)' }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e40af' }}>
+                    {t('ats.employmentDetails', 'Job Position Details')}
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.employmentDetailsHint', 'Work-related information and dates')}
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
                   <Select 
                     label={t('employees.workingTypeField', 'Working type')} 
                     value={employeeData.workingType} 
@@ -6756,108 +6797,52 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     placement="bottom" 
                   />
                   <Input 
-                    label={t('employees.maritalStatusField', 'Marital status')} 
-                    value={employeeData.maritalStatus} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, maritalStatus: e.target.value } : prev))} 
-                    disabled={creatingEmployee}
-                  />
-                  <Input 
                     label={`${t('employees.weeklyHoursField', 'Weekly hours')} (${t('ats.availabilityLabel', 'Availability')})`}
                     value={employeeData.weeklyHours || employeeData.availability || ''} 
                     disabled={true}
                     style={{ background: 'rgba(0,0,0,0.02)', cursor: 'not-allowed' }}
                   />
-                </div>
-              </div>
-
-              {/* Contact Information Section */}
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('common.contact', 'Contact information')}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  <div>
+                    <Input 
+                      label={t('employees.uniqueIdField', 'Unique ID')} 
+                      value={employeeData.uniqueId} 
+                      onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: e.target.value } : prev))} 
+                      disabled={creatingEmployee} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId() } : prev))}
+                      disabled={creatingEmployee}
+                      style={{
+                        marginTop: '5px', background: 'none', border: 'none',
+                        cursor: creatingEmployee ? 'not-allowed' : 'pointer', fontSize: '11px', color: 'var(--accent)',
+                        fontFamily: 'var(--font-body)', fontWeight: 500,
+                        padding: '2px 0', display: 'flex', alignItems: 'center', gap: '4px',
+                        opacity: creatingEmployee ? 0.5 : 1,
+                      }}
+                    >
+                      <RotateCcw size={12} /> {t('employees.regenerateId', 'Regenerate ID')}
+                    </button>
+                  </div>
                   <Input 
-                    label={t('common.firstName', 'First name')} 
-                    value={employeeData.name} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, name: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                  <Input 
-                    label={t('common.lastName', 'Last name')} 
-                    value={employeeData.surname} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, surname: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                  <Input 
-                    label={t('common.personalEmail', 'Personal Email')} 
-                    type="email" 
-                    value={employeeData.personalEmail} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, personalEmail: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                  <Input 
-                    label={t('ats.phone', 'Phone')} 
-                    value={employeeData.phone} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, phone: e.target.value } : prev))} 
+                    label={t('employees.tempPasswordLabel', 'Temporary password')} 
+                    type="text" 
+                    value={employeeData.password} 
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, password: e.target.value } : prev))} 
                     disabled={creatingEmployee} 
                   />
                 </div>
-              </div>
-
-              {/* Personal Details Section */}
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('ats.personalDetails', 'Personal details')}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                  <DatePicker 
-                    label={t('employees.dateOfBirthField', 'Date of birth')} 
-                    value={employeeData.dateOfBirth} 
-                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, dateOfBirth: value } : prev))} 
-                    placement="bottom" 
-                  />
-                  <Select 
-                    label={t('employees.genderField', 'Gender')} 
-                    value={employeeData.gender} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, gender: e.target.value } : prev))}
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId(), password: generateTempPassword() } : prev))} 
                     disabled={creatingEmployee}
+                    style={{ width: '100%', maxWidth: 280 }}
                   >
-                    <option value="">{t('common.notProvided', 'Not provided')}</option>
-                    <option value="M">{t('employees.genderMale', 'Male')}</option>
-                    <option value="F">{t('employees.genderFemale', 'Female')}</option>
-                    <option value="other">{t('employees.genderOther', 'Other')}</option>
-                  </Select>
-                  <Input 
-                    label={t('employees.nationalityField', 'Nationality')} 
-                    value={employeeData.nationality} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, nationality: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
+                    {t('employees.regeneratePassword', 'Regenerate access credentials')}
+                  </Button>
                 </div>
-              </div>
-
-              {/* Location Section */}
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('employees.addressField', 'Location')}
-                </div>
-                <LocationFieldGroup
-                  value={{ country: employeeData.country, state: employeeData.state, city: employeeData.city }}
-                  onChange={(location) => setEmployeeData((prev) => (prev ? {
-                    ...prev,
-                    country: location.country,
-                    state: location.state,
-                    city: location.city,
-                  } : prev))}
-                  includeAddress={false}
-                  includePostalCode={false}
-                  includePhone={false}
-                  labels={{
-                    country: t('companies.country', 'Country'),
-                    state: t('companies.state', 'State'),
-                    city: t('companies.city', 'City'),
-                  }}
-                />
               </div>
 
               {/* Application Info Section (Read-only) */}
