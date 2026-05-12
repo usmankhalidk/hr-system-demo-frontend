@@ -90,9 +90,6 @@ export default function CalendarPanel({
       if (filters.interviewerId !== null) {
         params.interviewerId = filters.interviewerId;
       }
-      if (filters.status !== null) {
-        params.status = filters.status;
-      }
 
       const response = await getAllInterviews(params);
       
