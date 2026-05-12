@@ -21,6 +21,7 @@ const MODULE_KEYS: GridModuleDef[] = [
   { key: 'ats',          implemented: true,  icon: <Briefcase size={15} /> },
   { key: 'onboarding',   implemented: true,  icon: <Clipboard size={15} /> },
   { key: 'documenti',    implemented: true,  icon: <FileText size={15} /> },
+  { key: 'team_documents', implemented: true, icon: <FileText size={15} /> },
   { key: 'terminali',    implemented: true,  icon: <Monitor size={15} /> },
   { key: 'turni',        implemented: true,  icon: <Clock size={15} /> },
   { key: 'trasferimenti',implemented: true,  icon: <ArrowLeftRight size={15} /> },

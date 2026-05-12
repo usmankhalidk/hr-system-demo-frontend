@@ -34,6 +34,25 @@ export default function InterviewEntry({
 }: InterviewEntryProps) {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(false);
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsHovered(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+
+    // If card is lower than 55% of the viewport height, display tooltip on top of the card
+    if (rect.top > viewportHeight * 0.55) {
+      setIsNearBottom(true);
+    } else {
+      setIsNearBottom(false);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    setIsNearBottom(false);
+  };
 
   const colors = INTERVIEW_STATUS_COLORS[interview.status];
   const Icon = INTERVIEW_TYPE_ICONS[interview.interviewType];
@@ -51,8 +70,8 @@ export default function InterviewEntry({
     return (
       <div
         style={{ position: 'relative' }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div
           onClick={(e) => {
@@ -61,8 +80,8 @@ export default function InterviewEntry({
           }}
           style={{
             display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
+            alignItems: 'center',
+            gap: 6,
             borderRadius: 6,
             border: hasConflict
               ? `1px solid ${CONFLICT_COLORS.border}`
@@ -72,16 +91,15 @@ export default function InterviewEntry({
             borderLeftColor: hasConflict ? CONFLICT_COLORS.border : colors.leftBorder,
             background: hasConflict ? CONFLICT_COLORS.bg : colors.bg,
             color: hasConflict ? CONFLICT_COLORS.text : colors.text,
-            padding: '6px 8px',
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            lineHeight: 1.2,
+            padding: '3px 8px',
+            fontSize: '0.65rem',
+            fontWeight: 800,
+            lineHeight: 1,
             cursor: 'pointer',
-            boxShadow: isCancelled ? 'none' : '0 1px 4px rgba(0,0,0,0.15)',
-            opacity: isCancelled ? 0.6 : 1,
-            textDecoration: isCancelled ? 'line-through' : 'none',
             transition: 'transform 0.1s, filter 0.15s',
             overflow: 'hidden',
+            opacity: isCancelled ? 0.6 : 1,
+            textDecoration: isCancelled ? 'line-through' : 'none',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'scale(1.02)';
@@ -92,185 +110,55 @@ export default function InterviewEntry({
             e.currentTarget.style.filter = '';
           }}
         >
-          {/* Conflict warning */}
-          {hasConflict && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 4,
-                right: 4,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 16,
-                height: 16,
-                borderRadius: '50%',
-                background: '#fef3c7',
-                border: '1px solid #f59e0b',
-              }}
-            >
-              <AlertTriangle size={10} color="#92400e" strokeWidth={2.5} />
-            </div>
-          )}
-
-          {/* Header: Avatar + Name */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={candidateFullName}
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: '1px solid rgba(148,163,184,0.45)',
-                  flexShrink: 0,
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
-                  color: '#fff',
-                  fontSize: '0.6rem',
-                  fontWeight: 800,
-                  border: '1px solid rgba(148,163,184,0.45)',
-                  flexShrink: 0,
-                }}
-              >
-                {candidateInitials}
-              </div>
-            )}
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                title={candidateFullName}
-              >
-                {candidateFullName}
-              </div>
-            </div>
-          </div>
-
-          {/* Position */}
-          <div
-            style={{
-              fontSize: '0.65rem',
-              fontWeight: 600,
-              opacity: 0.85,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-            title={interview.positionTitle}
-          >
-            {interview.positionTitle}
-          </div>
-
-          {/* Time + Type */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <Icon size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: '0.68rem', fontWeight: 700 }}>
-              {formatTime(interview.scheduledTime)} ({formatDuration(interview.durationMinutes)})
-            </span>
-          </div>
-
-          {/* Location/Link */}
-          {interview.location && interview.interviewType === 'in_person' && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: '0.62rem',
-                opacity: 0.8,
-                marginTop: 2,
-              }}
-            >
-              <MapPin size={10} strokeWidth={2.5} />
-              <span
-                style={{
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                title={interview.location}
-              >
-                {interview.location}
-              </span>
-            </div>
-          )}
-
-          {/* Status badge */}
-          <div style={{ marginTop: 4 }}>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '2px 6px',
-                borderRadius: 4,
-                background: 'rgba(255,255,255,0.7)',
-                border: `1px solid ${colors.border}`,
-                fontSize: '0.6rem',
-                fontWeight: 900,
-                textTransform: 'uppercase',
-                letterSpacing: 0.3,
-              }}
-            >
-              {t(`ats.interviewStatus.${interview.status}`, interview.status)}
-            </span>
-          </div>
+          <Icon size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {formatTime(interview.scheduledTime)} • {candidateFullName}
+          </span>
+          {hasConflict && <AlertTriangle size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />}
         </div>
 
         {/* Tooltip */}
         {showTooltip && isHovered && (
           <div
             style={{
-              position: 'fixed',
-              minWidth: 240,
-              maxWidth: 320,
-              borderRadius: 10,
+              position: 'absolute',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              top: isNearBottom ? 'auto' : '100%',
+              bottom: isNearBottom ? '100%' : 'auto',
+              marginTop: isNearBottom ? 0 : 4,
+              marginBottom: isNearBottom ? 4 : 0,
+              minWidth: 190,
+              maxWidth: 240,
+              borderRadius: 8,
               border: '1px solid rgba(148,163,184,0.44)',
               background: '#ffffff',
-              boxShadow: '0 14px 36px rgba(15,23,42,0.22)',
-              padding: '10px 12px',
+              boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
+              padding: '8px 10px',
               zIndex: 9999,
               pointerEvents: 'none',
-              transform: 'translate(10px, -50%)',
             }}
           >
             {/* Candidate */}
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 5 }}>
               <div
                 style={{
-                  fontSize: '0.65rem',
+                  fontSize: '0.62rem',
                   fontWeight: 600,
                   color: 'var(--text-muted)',
-                  marginBottom: 4,
+                  marginBottom: 2,
                 }}
               >
                 {t('ats.candidate', 'Candidate')}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt={candidateFullName}
                     style={{
-                      width: 32,
-                      height: 32,
+                      width: 26,
+                      height: 26,
                       borderRadius: '50%',
                       objectFit: 'cover',
                       border: '1px solid rgba(148,163,184,0.45)',
@@ -279,15 +167,15 @@ export default function InterviewEntry({
                 ) : (
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
+                      width: 26,
+                      height: 26,
                       borderRadius: '50%',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
                       color: '#fff',
-                      fontSize: '0.7rem',
+                      fontSize: '0.65rem',
                       fontWeight: 800,
                       border: '1px solid rgba(148,163,184,0.45)',
                     }}
@@ -296,7 +184,7 @@ export default function InterviewEntry({
                   </div>
                 )}
                 <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                     {candidateFullName}
                   </div>
                 </div>
@@ -304,59 +192,59 @@ export default function InterviewEntry({
             </div>
 
             {/* Position */}
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 5 }}>
               <div
                 style={{
-                  fontSize: '0.65rem',
+                  fontSize: '0.62rem',
                   fontWeight: 600,
                   color: 'var(--text-muted)',
-                  marginBottom: 4,
+                  marginBottom: 2,
                 }}
               >
                 {t('ats.position', 'Position')}
               </div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                 {interview.positionTitle}
               </div>
             </div>
 
             {/* Interview Details */}
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 5 }}>
               <div
                 style={{
-                  fontSize: '0.65rem',
+                  fontSize: '0.62rem',
                   fontWeight: 600,
                   color: 'var(--text-muted)',
-                  marginBottom: 4,
+                  marginBottom: 2,
                 }}
               >
                 {t('ats.interviewDetails', 'Interview Details')}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Icon size={14} strokeWidth={2.5} color="var(--text-secondary)" />
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Icon size={12} strokeWidth={2.5} color="var(--text-secondary)" />
+                <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                   {t(`ats.interviewType.${interview.interviewType}`, interview.interviewType)}
                 </span>
               </div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
                 {formatTime(interview.scheduledTime)} • {formatDuration(interview.durationMinutes)}
               </div>
             </div>
 
             {/* Interviewer */}
             {interviewerFullName && (
-              <div style={{ marginBottom: 8 }}>
+              <div style={{ marginBottom: 5 }}>
                 <div
                   style={{
-                    fontSize: '0.65rem',
+                    fontSize: '0.62rem',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
-                    marginBottom: 4,
+                    marginBottom: 2,
                   }}
                 >
                   {t('ats.interviewer', 'Interviewer')}
                 </div>
-                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                   {interviewerFullName}
                 </div>
               </div>
@@ -364,18 +252,18 @@ export default function InterviewEntry({
 
             {/* Location */}
             {interview.location && (
-              <div style={{ marginBottom: 8 }}>
+              <div style={{ marginBottom: 5 }}>
                 <div
                   style={{
-                    fontSize: '0.65rem',
+                    fontSize: '0.62rem',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
-                    marginBottom: 4,
+                    marginBottom: 2,
                   }}
                 >
                   {t('ats.location', 'Location')}
                 </div>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
                   {interview.location}
                 </div>
               </div>
@@ -386,20 +274,20 @@ export default function InterviewEntry({
               <div>
                 <div
                   style={{
-                    fontSize: '0.65rem',
+                    fontSize: '0.62rem',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
-                    marginBottom: 4,
+                    marginBottom: 2,
                   }}
                 >
                   {t('ats.notes', 'Notes')}
                 </div>
                 <div
                   style={{
-                    fontSize: '0.65rem',
+                    fontSize: '0.62rem',
                     color: 'var(--text-secondary)',
-                    lineHeight: 1.4,
-                    maxHeight: 60,
+                    lineHeight: 1.3,
+                    maxHeight: 50,
                     overflow: 'hidden',
                   }}
                 >
