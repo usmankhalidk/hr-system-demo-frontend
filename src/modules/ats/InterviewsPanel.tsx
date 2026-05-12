@@ -1,17 +1,29 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Phone, Users, User, Briefcase, Building2, Store as StoreIcon, Mail, Hash } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Calendar, Clock, Phone, Users, Briefcase, FileText, Mail, PhoneIcon, Linkedin, Building2, Store, MessageSquare, Trash2 } from 'lucide-react';
+import DocumentPreviewModal from './DocumentPreviewModal';
+import { getResumeUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
 import { useTranslation } from 'react-i18next';
-import { getAllInterviews, Interview as APIInterview } from '../../api/ats';
+import { getAllInterviews, Interview as APIInterview, getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment, InterviewFeedbackComment } from '../../api/ats';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { Spinner } from '../../components/ui/Spinner';
-import { getAvatarUrl } from '../../api/client';
+import { Button } from '../../components/ui/Button';
 
 export default function InterviewsPanel() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [interviews, setInterviews] = useState<APIInterview[]>([]);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [selectedInterview, setSelectedInterview] = useState<APIInterview | null>(null);
+  const [feedbackComments, setFeedbackComments] = useState<InterviewFeedbackComment[]>([]);
+  const [feedbackDraft, setFeedbackDraft] = useState('');
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [savingFeedback, setSavingFeedback] = useState(false);
+  const [deletingFeedbackId, setDeletingFeedbackId] = useState<number | null>(null);
+  const [hoveredFeedbackId, setHoveredFeedbackId] = useState<number | null>(null);
 
   useEffect(() => {
     loadInterviews();
@@ -21,11 +33,65 @@ export default function InterviewsPanel() {
     try {
       setLoading(true);
       const { interviews: data } = await getAllInterviews();
+      console.log('✅ Interviews loaded successfully:', data.length, 'interviews');
+      console.log('📊 First interview sample:', data[0]);
       setInterviews(data);
     } catch (error) {
-      console.error('Failed to load interviews:', error);
+      console.error('❌ Failed to load interviews:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFeedbackClick = async (interview: APIInterview) => {
+    setSelectedInterview(interview);
+    setFeedbackDraft('');
+    setLoadingFeedback(true);
+    try {
+      const comments = await getInterviewFeedbackComments(interview.id);
+      setFeedbackComments(comments);
+    } catch (error) {
+      console.error('Failed to load feedback:', error);
+      showToast(t('ats.errorLoadFeedback', 'Failed to load feedback'), 'error');
+    } finally {
+      setLoadingFeedback(false);
+    }
+  };
+
+  const handleCloseFeedbackModal = () => {
+    setSelectedInterview(null);
+    setFeedbackComments([]);
+    setFeedbackDraft('');
+  };
+
+  const handleAddFeedback = async () => {
+    if (!selectedInterview || !feedbackDraft.trim()) return;
+    
+    setSavingFeedback(true);
+    try {
+      const newComment = await addInterviewFeedbackComment(selectedInterview.id, feedbackDraft.trim());
+      setFeedbackComments(prev => [...prev, newComment]);
+      setFeedbackDraft('');
+      showToast(t('ats.feedbackAdded', 'Feedback added successfully'), 'success');
+    } catch (error) {
+      console.error('Failed to add feedback:', error);
+      showToast(t('ats.errorAddFeedback', 'Failed to add feedback'), 'error');
+    } finally {
+      setSavingFeedback(false);
+    }
+  };
+
+  const handleDeleteFeedback = async (commentId: number) => {
+    setDeletingFeedbackId(commentId);
+    try {
+      await deleteInterviewFeedbackComment(commentId);
+      setFeedbackComments(prev => prev.filter(c => c.id !== commentId));
+      showToast(t('ats.feedbackDeleted', 'Feedback deleted successfully'), 'success');
+    } catch (error) {
+      console.error('Failed to delete feedback:', error);
+      showToast(t('ats.errorDeleteFeedback', 'Failed to delete feedback'), 'error');
+    } finally {
+      setDeletingFeedbackId(null);
     }
   };
 
@@ -36,6 +102,13 @@ export default function InterviewsPanel() {
     ? interviews.filter((interview) => interview.interviewerId === user.id)
     : interviews;
 
+  console.log('🔍 Filtering results:', {
+    totalInterviews: interviews.length,
+    userRole: user?.role,
+    filteredCount: filteredByRole.length,
+    userId: user?.id
+  });
+
   const upcomingInterviews = filteredByRole
     .filter((interview) => new Date(interview.scheduledAt) >= now)
     .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
@@ -44,7 +117,17 @@ export default function InterviewsPanel() {
     .filter((interview) => new Date(interview.scheduledAt) < now)
     .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
 
+  console.log('📅 Interview counts:', {
+    upcoming: upcomingInterviews.length,
+    past: pastInterviews.length,
+    activeTab
+  });
+
   const displayedInterviews = activeTab === 'upcoming' ? upcomingInterviews : pastInterviews;
+
+  const [resumePreviewUrl, setResumePreviewUrl] = useState<string | null>(null);
+  const [resumeFilename, setResumeFilename] = useState<string | null>(null);
+  const [showResumePreview, setShowResumePreview] = useState(false);
 
   if (loading) {
     return (
@@ -157,9 +240,12 @@ export default function InterviewsPanel() {
                   {/* Date Badge */}
                   <div
                     style={{
+                      display: 'flex',
+                      gap: 6,
                       minWidth: 50,
+                      alignItems: 'center',
                       textAlign: 'center',
-                      padding: '6px 4px',
+                      padding: '4px 8px',
                       background: 'rgba(255,255,255,0.15)',
                       borderRadius: 7,
                       color: '#fff',
@@ -169,7 +255,7 @@ export default function InterviewsPanel() {
                     <div style={{ fontSize: '1.2rem', fontWeight: 800, lineHeight: 1 }}>
                       {scheduledDate.getDate()}
                     </div>
-                    <div style={{ fontSize: '0.6rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
                       {scheduledDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
                     </div>
                   </div>
@@ -182,6 +268,38 @@ export default function InterviewsPanel() {
                       {interview.durationMinutes && <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>({interview.durationMinutes}min)</span>}
                     </div>
                   </div>
+
+                  {/* Feedback Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFeedbackClick(interview);
+                    }}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 5,
+                      background: 'rgba(124,58,237,0.25)',
+                      border: '1px solid rgba(124,58,237,0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(124,58,237,0.35)';
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(124,58,237,0.25)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                  >
+                    <MessageSquare size={13} color="#fff" />
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
+                      {t('ats.feedback', 'Feedback')}
+                    </span>
+                  </button>
 
                   {/* Interview Type Badge */}
                   <div
@@ -204,129 +322,385 @@ export default function InterviewsPanel() {
 
                 {/* Compact Content */}
                 <div style={{ padding: '12px 14px' }}>
-                  {/* Candidate & Position Row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0' }}>
-                    {candidateAvatarUrl ? (
-                      <img
-                        src={candidateAvatarUrl}
-                        alt={candidateFullName}
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: '50%',
-                          objectFit: 'cover',
-                          border: '2px solid #3b82f6',
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
-                          color: '#fff',
-                          fontSize: '0.85rem',
-                          fontWeight: 800,
-                          border: '2px solid #3b82f6',
-                        }}
-                      >
-                        {candidateFullName.charAt(0).toUpperCase()}
+                  {/* Second Row: Candidate Details with Labels */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                    {/* Candidate Block */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
+                      <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {t('ats.candidate', 'Candidate')}
                       </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
-                        {candidateFullName}
-                      </div>
-                      {interview.positionTitle && (
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Briefcase size={11} />
-                          {interview.positionTitle}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Details Grid - Compact */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-                    {/* Interviewer & Location Row */}
-                    {interviewerFullName && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        {interviewerAvatarUrl ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {candidateAvatarUrl ? (
                           <img
-                            src={interviewerAvatarUrl}
-                            alt={interviewerFullName}
+                            src={candidateAvatarUrl}
+                            alt={candidateFullName}
                             style={{
-                              width: 28,
-                              height: 28,
+                              width: 32,
+                              height: 32,
                               borderRadius: '50%',
                               objectFit: 'cover',
-                              border: '2px solid #7c3aed',
+                              border: '2px solid #3b82f6',
                             }}
                           />
                         ) : (
                           <div
                             style={{
-                              width: 28,
-                              height: 28,
+                              width: 32,
+                              height: 32,
                               borderRadius: '50%',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
+                              background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
                               color: '#fff',
-                              fontSize: '0.7rem',
+                              fontSize: '0.8rem',
                               fontWeight: 800,
-                              border: '2px solid #7c3aed',
+                              border: '2px solid #3b82f6',
                             }}
                           >
-                            {interviewerFullName.charAt(0).toUpperCase()}
+                            {candidateFullName.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>
-                            {t('ats.interviewer', 'Interviewer')}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {interviewerFullName}
-                          </div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>{candidateFullName}</div>
+                      </div>
+                    </div>
+
+                    {/* Email Block */}
+                    {interview.candidateEmail && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('common.email', 'Email')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Mail size={14} color="#3b82f6" />
+                          <span style={{ fontSize: '0.85rem', color: '#475569' }}>{interview.candidateEmail}</span>
                         </div>
                       </div>
                     )}
 
-                    {/* Location */}
-                    {interview.location && interview.interviewType === 'in_person' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <div
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: 'rgba(34,197,94,0.15)',
-                            border: '2px solid rgba(34,197,94,0.3)',
-                          }}
-                        >
-                          <MapPin size={14} color="#15803d" />
+                    {/* Phone Block */}
+                    {interview.candidatePhone && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('common.phone', 'Phone')}
                         </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>
-                            {t('ats.location', 'Location')}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {interview.location}
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <PhoneIcon size={14} color="#10b981" />
+                          <span style={{ fontSize: '0.85rem', color: '#475569' }}>{interview.candidatePhone}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* LinkedIn Block */}
+                    {interview.candidateLinkedinUrl && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          LinkedIn
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Linkedin size={14} color="#0077b5" />
+                          <a 
+                            href={interview.candidateLinkedinUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.85rem', color: '#0077b5', textDecoration: 'none' }}
+                            onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                            onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                          >
+                            {t('ats.viewProfile', 'View Profile')}
+                          </a>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Description */}
+                  {/* CV / Resume - Full Width Row */}
+                  {(() => {
+                    const candidateCvPath = interview.resumePath || interview.cvPath || null;
+                    if (!candidateCvPath) return null;
+                    const url = getResumeUrl(candidateCvPath);
+                    const filename = candidateCvPath.split('/').pop() ?? candidateCvPath;
+                    return (
+                      <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px dashed rgba(148,163,184,0.25)', background: 'rgba(241,245,249,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                          <FileText size={16} color="#64748b" />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#334155' }}>{filename}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{t('ats.cvAttached', 'CV attached')}</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!url) return;
+                            setResumePreviewUrl(url);
+                            setResumeFilename(filename);
+                            setShowResumePreview(true);
+                          }}
+                          style={{ 
+                            padding: '5px 12px', 
+                            borderRadius: 6, 
+                            border: '1px solid rgba(13,33,55,0.15)', 
+                            background: '#fff', 
+                            fontSize: '0.75rem',
+                            fontWeight: 700, 
+                            cursor: 'pointer',
+                            color: '#0f172a',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f1f5f9';
+                            e.currentTarget.style.borderColor = '#3b82f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#fff';
+                            e.currentTarget.style.borderColor = 'rgba(13,33,55,0.15)';
+                          }}
+                        >
+                          {t('ats.viewCv', 'View')}
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Third Row: Interviewer, Company, Store, Position, Location, Salary */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                    {/* Interviewer Block */}
+                    {interviewerFullName && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('ats.interviewer', 'Interviewer')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          {interviewerAvatarUrl ? (
+                            <img
+                              src={interviewerAvatarUrl}
+                              alt={interviewerFullName}
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: '50%',
+                                objectFit: 'cover',
+                                border: '2px solid #7c3aed',
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
+                                color: '#fff',
+                                fontSize: '0.7rem',
+                                fontWeight: 800,
+                                border: '2px solid #7c3aed',
+                              }}
+                            >
+                              {interviewerFullName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>
+                              {interviewerFullName}
+                            </div>
+                            {interview.interviewerRole && (
+                              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{interview.interviewerRole}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Company Block */}
+                    {interview.companyName && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('common.company', 'Company')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {interview.companyLogoFilename ? (
+                            <img
+                              src={getCompanyLogoUrl(interview.companyLogoFilename) || ''}
+                              alt={interview.companyName}
+                              style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 6,
+                                objectFit: 'cover',
+                                border: '1px solid #e2e8f0',
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                color: '#fff',
+                                fontSize: '0.7rem',
+                                fontWeight: 800,
+                                border: '1px solid #e2e8f0',
+                              }}
+                            >
+                              <Building2 size={16} />
+                            </div>
+                          )}
+                          <div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{interview.companyName}</div>
+                            {interview.companyGroupName && (
+                              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{interview.companyGroupName}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Store Block */}
+                    {interview.storeName && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('common.store', 'Store')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {interview.storeLogoFilename ? (
+                            <img
+                              src={getStoreLogoUrl(interview.storeLogoFilename) || ''}
+                              alt={interview.storeName}
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 6,
+                                objectFit: 'cover',
+                                border: '1px solid #e2e8f0',
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: 'linear-gradient(135deg, #10b981, #059669)',
+                                color: '#fff',
+                                fontSize: '0.7rem',
+                                fontWeight: 800,
+                                border: '1px solid #e2e8f0',
+                              }}
+                            >
+                              <Store size={16} />
+                            </div>
+                          )}
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{interview.storeName}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Position Block */}
+                    {interview.positionTitle && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 120 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('ats.position', 'Position')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0f172a', fontWeight: 700 }}>
+                          <Briefcase size={14} />
+                          <span style={{ fontSize: '0.9rem' }}>{interview.positionTitle}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Working Hours Block */}
+                    {interview.positionWeeklyHours && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 90 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('ats.workingHours', 'Working Hours')}
+                        </div>
+                        <span
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 4,
+                            background: '#dbeafe',
+                            color: '#1e40af',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            display: 'inline-block',
+                            width: 'fit-content',
+                          }}
+                        >
+                          {interview.positionWeeklyHours}h/week
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Job Type Block */}
+                    {interview.positionJobType && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 90 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('ats.jobType', 'Job Type')}
+                        </div>
+                        <span
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 4,
+                            background: '#e0e7ff',
+                            color: '#4338ca',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            display: 'inline-block',
+                            width: 'fit-content',
+                          }}
+                        >
+                          {interview.positionJobType === 'fulltime' ? t('ats.jobType_fulltime', 'Full-time') :
+                           interview.positionJobType === 'parttime' ? t('ats.jobType_parttime', 'Part-time') :
+                           interview.positionJobType === 'contract' ? t('ats.jobType_contract', 'Contract') :
+                           interview.positionJobType === 'internship' ? t('ats.jobType_internship', 'Internship') :
+                           interview.positionJobType}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Location Block */}
+                    {interview.positionLocation && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 100 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('common.location', 'Location')}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+                          📍 {interview.positionLocation}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Salary Block */}
+                    {(interview.positionSalaryMin || interview.positionSalaryMax) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 80 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {t('ats.salary', 'Salary')}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#059669', fontWeight: 700 }}>
+                          💰 {interview.positionSalaryMin && interview.positionSalaryMax
+                            ? `€${interview.positionSalaryMin.toLocaleString()} - €${interview.positionSalaryMax.toLocaleString()}`
+                            : interview.positionSalaryMin
+                            ? `€${interview.positionSalaryMin.toLocaleString()}+`
+                            : interview.positionSalaryMax
+                            ? `Up to €${interview.positionSalaryMax.toLocaleString()}`
+                            : ''}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Position Description */}
                   {interview.description && (
                     <div
                       style={{
@@ -348,6 +722,310 @@ export default function InterviewsPanel() {
           })}
         </div>
       )}
+      {showResumePreview && resumePreviewUrl && resumeFilename && (
+        <DocumentPreviewModal url={resumePreviewUrl} filename={resumeFilename} onClose={() => setShowResumePreview(false)} />
+      )}
+
+      {/* Interview Feedback Modal */}
+      {selectedInterview && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(13,33,55,0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={handleCloseFeedbackModal}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 700,
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              boxShadow: '0 24px 72px rgba(0,0,0,0.22)',
+              animation: 'popIn 0.22s cubic-bezier(0.16,1,0.3,1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                background: 'linear-gradient(135deg, #0D2137 0%, #1e3a5f 100%)',
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MessageSquare size={22} color="#fff" />
+                </div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    color: '#fff',
+                  }}
+                >
+                  {t('ats.interviewFeedback', 'Interview Feedback')}
+                </h2>
+              </div>
+              <button
+                onClick={handleCloseFeedbackModal}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 8,
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '24px' }}>
+              {/* Interview Info */}
+              <div
+                style={{
+                  marginBottom: 20,
+                  padding: 16,
+                  background: 'linear-gradient(135deg, rgba(201,151,58,0.08) 0%, rgba(251,191,36,0.08) 100%)',
+                  borderRadius: 10,
+                  border: '1px solid rgba(201,151,58,0.2)',
+                }}
+              >
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#92400e', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {t('ats.interviewDetails', 'Interview Details')}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                  <Calendar size={18} color="#92400e" />
+                  <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                    {new Date(selectedInterview.scheduledAt).toLocaleString(undefined, {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+                {selectedInterview.candidateName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                    <Users size={16} color="#64748b" />
+                    <span style={{ fontSize: '0.9rem', color: '#475569' }}>
+                      <strong>{t('ats.candidate', 'Candidate')}:</strong> {selectedInterview.candidateName} {selectedInterview.candidateSurname}
+                    </span>
+                  </div>
+                )}
+                {selectedInterview.positionTitle && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Briefcase size={16} color="#64748b" />
+                    <span style={{ fontSize: '0.9rem', color: '#475569' }}>
+                      <strong>{t('ats.position', 'Position')}:</strong> {selectedInterview.positionTitle}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Feedback Comments */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  💬 {t('ats.feedback', 'Feedback')} ({feedbackComments.length})
+                </div>
+
+                {loadingFeedback ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+                    <Spinner size="md" color="var(--primary)" />
+                  </div>
+                ) : feedbackComments.length === 0 ? (
+                  <div
+                    style={{
+                      padding: 16,
+                      background: 'rgba(148,163,184,0.06)',
+                      borderRadius: 8,
+                      fontSize: '0.85rem',
+                      color: '#64748b',
+                      textAlign: 'center',
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    {t('ats.noFeedbackYet', 'No feedback yet. Be the first to add feedback!')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {feedbackComments.map((comment) => {
+                      const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
+                      const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
+                      const canDelete = user?.id === comment.authorId || ['admin', 'hr'].includes(user?.role || '');
+
+                      return (
+                        <div
+                          key={comment.id}
+                          style={{
+                            background: 'var(--background)',
+                            borderRadius: 8,
+                            padding: '12px 14px',
+                            border: '1px solid var(--border)',
+                            position: 'relative',
+                          }}
+                          onMouseEnter={() => setHoveredFeedbackId(comment.id)}
+                          onMouseLeave={() => setHoveredFeedbackId(null)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, marginBottom: 8 }}>
+                                {comment.body}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: '50%',
+                                  overflow: 'hidden',
+                                  background: authorAvatar ? 'transparent' : 'var(--primary)',
+                                  color: '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.7rem',
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                }}>
+                                  {authorAvatar ? (
+                                    <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    {authorName}
+                                  </div>
+                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                    {new Date(comment.createdAt).toLocaleString(undefined, {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDeleteFeedback(comment.id)}
+                                disabled={deletingFeedbackId === comment.id}
+                                style={{
+                                  background: hoveredFeedbackId === comment.id ? 'rgba(220,38,38,0.08)' : 'transparent',
+                                  border: '1px solid rgba(185,28,28,0.24)',
+                                  borderRadius: 6,
+                                  width: 28,
+                                  height: 28,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                  opacity: hoveredFeedbackId === comment.id ? 1 : 0.5,
+                                  transition: 'all 0.15s',
+                                  flexShrink: 0,
+                                }}
+                                title={t('common.delete', 'Delete')}
+                              >
+                                <Trash2 size={14} color="#991b1b" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Add Feedback */}
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 8 }}>
+                  {t('ats.addFeedback', 'Add Your Feedback')}
+                </div>
+                <textarea
+                  value={feedbackDraft}
+                  onChange={(e) => setFeedbackDraft(e.target.value)}
+                  rows={4}
+                  placeholder={t('ats.feedbackPlaceholder', 'Share your thoughts about this interview...')}
+                  style={{
+                    width: '100%',
+                    fontFamily: 'inherit',
+                    fontSize: '0.9rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    padding: '10px 12px',
+                    resize: 'vertical',
+                    background: 'var(--surface)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid var(--border)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <Button variant="secondary" onClick={handleCloseFeedbackModal}>
+                {t('common.close', 'Close')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleAddFeedback}
+                disabled={!feedbackDraft.trim() || savingFeedback}
+                loading={savingFeedback}
+              >
+                {t('ats.saveFeedback', 'Save Feedback')}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
+

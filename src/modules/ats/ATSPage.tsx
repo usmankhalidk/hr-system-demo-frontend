@@ -69,6 +69,18 @@ import CalendarPanel from './CalendarPanel';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Country flag helper
+const getCountryFlag = (countryCode: string | null | undefined): string => {
+  if (!countryCode) return '';
+  const code = countryCode.toUpperCase();
+  const flags: Record<string, string> = {
+    'IT': '🇮🇹', 'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪', 
+    'ES': '🇪🇸', 'PT': '🇵🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭',
+    'AT': '🇦🇹', 'PL': '🇵🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰',
+  };
+  return flags[code] || '🌍';
+};
+
 const STAGES: CandidateStatus[] = ['received', 'review', 'phone_interview', 'interview', 'hired', 'rejected'];
 
 const NEXT_STAGE: Partial<Record<CandidateStatus, CandidateStatus>> = {
@@ -152,8 +164,10 @@ const JOB_TYPE_LABEL: Record<JobType, string> = {
 };
 
 function generateEmployeeUniqueId(): string {
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `EMP-${Date.now().toString().slice(-6)}-${suffix}`;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id = 'EMP-';
+  for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
 }
 
 function generateTempPassword(): string {
@@ -2087,6 +2101,16 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const stageBg = STAGE_BG[candidate.status];
   const next = NEXT_STAGE[candidate.status];
 
+  // Parse candidate profile to get available start date
+  const candidateProfile = parseCandidateProfile(candidate.sourceRef);
+  const availableStartDate = candidateProfile.availableStartDate 
+    ? new Date(candidateProfile.availableStartDate).toLocaleDateString(i18n.language === 'it' ? 'it-IT' : 'en-GB', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+    : null;
+
   const interviewerOptions = useMemo<SelectOption[]>(() => {
     return interviewerUsers
       .filter((emp) => ['hr', 'area_manager', 'store_manager'].includes(emp.role))
@@ -2593,13 +2617,24 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               </span>
             </div>
             
-            {/* Full Name */}
+            {/* Full Name with Avatar */}
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
                 {t('common.fullName', 'Full Name')}
               </div>
-              <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                {candidate.fullName}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                  background: stageColor, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 10,
+                  boxShadow: `0 2px 8px ${stageColor}30`,
+                }}>
+                  {initials(candidate.fullName)}
+                </div>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  {candidate.fullName}
+                </div>
               </div>
             </div>
 
@@ -2642,6 +2677,19 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                 </div>
               </div>
+              {availableStartDate && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>📅</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                      {t('ats.availableStartDate', 'Available Start Date')}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>
+                      {availableStartDate}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {candidate.coverLetter && (
@@ -3627,42 +3675,101 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     marginBottom: 8, borderLeft: `3px solid ${STAGE_COLOR.interview}`,
                     position: 'relative',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
-                            🕐 {fmtDateTime(iv.scheduledAt)}
-                          </div>
-                          <span style={{
-                            background: statusBg,
-                            color: statusColor,
-                            borderRadius: 99,
-                            padding: '2px 8px',
-                            fontSize: 10,
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.03em',
-                          }}>
-                            {statusLabel}
-                          </span>
+                    {/* Top Row: Date/Time/Status and Edit/Delete buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+                          🕐 {fmtDateTime(iv.scheduledAt)}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                          {iv.location && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                              📍 {iv.location}
-                            </span>
-                          )}
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                            {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
-                          </span>
-                          {iv.durationMinutes && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                              ⏱ {iv.durationMinutes}min
-                            </span>
-                          )}
+                        <span style={{
+                          background: statusBg,
+                          color: statusColor,
+                          borderRadius: 99,
+                          padding: '2px 8px',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.03em',
+                        }}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      {canEdit && (
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            onClick={() => {
+                              // Populate form with existing interview data
+                              const ivDate = new Date(iv.scheduledAt);
+                              setIntDate(ivDate.toISOString().split('T')[0]);
+                              setIntTime(ivDate.toTimeString().slice(0, 5));
+                              setIntLocation(iv.location || '');
+                              setIntType(iv.interviewType || 'in_person');
+                              setIntDescription(iv.description || iv.notes || '');
+                              setIntDuration(iv.durationMinutes || '');
+                              setIntInterviewerId(iv.interviewerId ? String(iv.interviewerId) : null);
+                              setIntSendIcs(false);
+                              setEditingInterviewId(iv.id);
+                              setShowInterviewForm(true);
+                            }}
+                            style={{
+                              background: 'rgba(13,33,55,0.08)',
+                              border: '1px solid rgba(13,33,55,0.2)',
+                              borderRadius: 6,
+                              width: 24,
+                              height: 24,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                            title={t('common.edit', 'Edit')}
+                          >
+                            <Pencil size={12} color="var(--primary)" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInterview(iv.id)}
+                            disabled={deletingInterviewId === iv.id}
+                            style={{
+                              background: 'rgba(220,38,38,0.08)',
+                              border: '1px solid rgba(185,28,28,0.24)',
+                              borderRadius: 6,
+                              width: 24,
+                              height: 24,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: deletingInterviewId === iv.id ? 'not-allowed' : 'pointer',
+                              opacity: deletingInterviewId === iv.id ? 0.5 : 1,
+                              transition: 'all 0.15s',
+                            }}
+                            title={t('common.delete', 'Delete')}
+                          >
+                            <Trash2 size={12} color="#991b1b" />
+                          </button>
                         </div>
+                      )}
+                    </div>
 
-                        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                    {/* Second Row: Location, Type, Duration tags */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      {iv.location && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                          📍 {iv.location}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                        {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
+                      </span>
+                      {iv.durationMinutes && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                          ⏱ {iv.durationMinutes}min
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Full Width Interviewer Row and Notification Status */}
+                    <div style={{ display: 'grid', gap: 8 }}>
                           {interviewer && (
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
@@ -3781,7 +3888,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                     </div>
                                   </div>
 
-                                {/* Interviewer Email Status */}
+                                {/* Interviewer Email Status - Hidden for store managers */}
+                                {user?.role !== 'store_manager' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
                                       📧 {t('ats.interviewerEmail', 'Interviewer')}
@@ -3880,8 +3988,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                       </button>
                                     </div>
                                   </div>
+                                )}
 
-                                {/* Notification Status */}
+                                {/* Notification Status - Hidden for store managers */}
+                                {user?.role !== 'store_manager' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
                                       🔔 {t('ats.notification', 'Notification')}
@@ -3948,6 +4058,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                       </button>
                                     </div>
                                   </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -3958,63 +4069,6 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             </div>
                           )}
                         </div>
-                      </div>
-                      {canEdit && (
-                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                          <button
-                            onClick={() => {
-                              // Populate form with existing interview data
-                              const ivDate = new Date(iv.scheduledAt);
-                              setIntDate(ivDate.toISOString().split('T')[0]);
-                              setIntTime(ivDate.toTimeString().slice(0, 5));
-                              setIntLocation(iv.location || '');
-                              setIntType(iv.interviewType || 'in_person');
-                              setIntDescription(iv.description || iv.notes || '');
-                              setIntDuration(iv.durationMinutes || '');
-                              setIntInterviewerId(iv.interviewerId ? String(iv.interviewerId) : null);
-                              setIntSendIcs(false);
-                              setEditingInterviewId(iv.id);
-                              setShowInterviewForm(true);
-                            }}
-                            style={{
-                              background: 'rgba(13,33,55,0.08)',
-                              border: '1px solid rgba(13,33,55,0.2)',
-                              borderRadius: 6,
-                              width: 24,
-                              height: 24,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s',
-                            }}
-                            title={t('common.edit', 'Edit')}
-                          >
-                            <Pencil size={12} color="var(--primary)" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteInterview(iv.id)}
-                            disabled={deletingInterviewId === iv.id}
-                            style={{
-                              background: 'rgba(220,38,38,0.08)',
-                              border: '1px solid rgba(185,28,28,0.24)',
-                              borderRadius: 6,
-                              width: 24,
-                              height: 24,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: deletingInterviewId === iv.id ? 'not-allowed' : 'pointer',
-                              opacity: deletingInterviewId === iv.id ? 0.5 : 1,
-                              transition: 'all 0.15s',
-                            }}
-                            title={t('common.delete', 'Delete')}
-                          >
-                            <Trash2 size={12} color="#991b1b" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
                     
                     {/* Feedback Comments List */}
                     {interviewFeedback[iv.id] && interviewFeedback[iv.id].length > 0 && (
@@ -5011,6 +5065,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
+  const [addCompanyEmail, setAddCompanyEmail] = useState('');
+  const [addAvailableStartDate, setAddAvailableStartDate] = useState('');
+  const [addPostalCode, setAddPostalCode] = useState('');
+  const [addAddress, setAddAddress] = useState('');
   const [addProfile, setAddProfile] = useState<CandidateApplicationProfile>(() => ({
     availability: '',
     gender: '',
@@ -5019,6 +5077,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     state: '',
     city: '',
     address: '',
+    postalCode: '',
     dateOfBirth: '',
     currentEmployer: '',
     currentRole: '',
@@ -5029,6 +5088,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     hireDate: new Date().toISOString().slice(0, 10),
     contractType: '',
     applicationDate: new Date().toISOString().slice(0, 10),
+    availableStartDate: '',
     applicationSource: 'ats',
     applicationChannel: 'internal',
   }));
@@ -5038,6 +5098,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [addSaving, setAddSaving] = useState(false);
   const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
   const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
+  const [showCvPreview, setShowCvPreview] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [interviewInviteEnabled, setInterviewInviteEnabled] = useState<boolean | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
@@ -5325,6 +5387,9 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
           ...addProfile,
           availability: addProfile.availability,
           applicationDate,
+          availableStartDate: addAvailableStartDate.trim() || '',
+          postalCode: addPostalCode.trim() || '',
+          address: addAddress.trim() || '',
           applicationSource: 'ats',
           applicationChannel: 'internal',
         }),
@@ -5381,6 +5446,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     setAddEmail('');
     setAddPhone('');
     setAddLinkedinUrl('');
+    setAddCompanyEmail('');
+    setAddAvailableStartDate('');
+    setAddPostalCode('');
+    setAddAddress('');
     setAddProfile({
       availability: '',
       gender: '',
@@ -5389,6 +5458,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       state: '',
       city: '',
       address: '',
+      postalCode: '',
       dateOfBirth: '',
       currentEmployer: '',
       currentRole: '',
@@ -5399,13 +5469,19 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       hireDate: new Date().toISOString().slice(0, 10),
       contractType: '',
       applicationDate: new Date().toISOString().slice(0, 10),
+      availableStartDate: '',
       applicationSource: 'ats',
       applicationChannel: 'internal',
     });
     setAddCvFile(null);
     setAddCoverLetter('');
     setAddGdprConsent(false);
-  }, []);
+    setShowCvPreview(false);
+    if (cvPreviewUrl) {
+      URL.revokeObjectURL(cvPreviewUrl);
+      setCvPreviewUrl(null);
+    }
+  }, [cvPreviewUrl]);
 
   const loadAddModalJobs = useCallback(async () => {
     setAddModalJobsLoading(true);
@@ -5729,8 +5805,35 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                             <div style={{
                               fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)',
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              display: 'flex', alignItems: 'center', gap: 6,
                             }}>
-                              {c.fullName}
+                              <span>{c.fullName}</span>
+                              {(() => {
+                                const profile = parseCandidateProfile(c.sourceRef);
+                                if (!profile.country) return null;
+                                
+                                // Try to get country code - either directly or from country name
+                                let countryCode = profile.country.toUpperCase();
+                                if (countryCode.length > 2) {
+                                  // It's a country name, convert to code
+                                  countryCode = COUNTRY_NAME_TO_CODE[profile.country] || '';
+                                }
+                                
+                                if (!countryCode || countryCode.length !== 2) return null;
+                                
+                                return (
+                                  <ReactCountryFlag
+                                    countryCode={countryCode}
+                                    svg
+                                    style={{
+                                      width: '14px',
+                                      height: '14px',
+                                      borderRadius: '4px',
+                                    }}
+                                    title={profile.country}
+                                  />
+                                );
+                              })()}
                             </div>
                             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }} title={fmtDateTime(c.appliedAt ?? c.createdAt)}>
                               {fmtRelativeTime(c.appliedAt ?? c.createdAt)}
@@ -6058,30 +6161,39 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                  <span style={{ 
-                    fontSize: 11, 
-                    fontWeight: 700, 
-                    color: '#9A6808', 
-                    background: 'rgba(201,151,58,0.12)', 
-                    border: '1px solid rgba(201,151,58,0.35)', 
-                    borderRadius: 999, 
-                    padding: '4px 10px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                  }}>
-                    {addSelectedJob?.title ?? t('ats.position', 'Position')}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BriefcaseBusiness size={16} style={{ color: '#9A6808' }} />
+                    <span style={{ 
+                      fontSize: 13, 
+                      fontWeight: 700, 
+                      color: '#9A6808', 
+                    }}>
+                      {addSelectedJob?.title ?? t('ats.position', 'Position')}
+                    </span>
+                  </div>
+                  {addSelectedJob?.storeName && (
+                    <span style={{ 
+                      fontSize: 12, 
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}>
+                      <StoreIcon size={14} />
+                      {addSelectedJob.storeName}
+                    </span>
+                  )}
                 </div>
 
-                {/* Personal Information Section */}
+                {/* Section 1: Basic Information */}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.personalInformation', 'Personal Information')}
+                      {t('ats.basicInformation', 'Basic Information')}
                     </h4>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.personalInformationHint', 'Basic candidate details')}
+                      {t('ats.basicInformationHint', 'Required candidate contact details')}
                     </p>
                   </div>
 
@@ -6114,10 +6226,33 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       placeholder={t('ats.addCandidatePhonePh', '+39 345...')}
                     />
                     <Input
-                      label={t('employees.nationalityField', 'Nationality')}
-                      value={addProfile.nationality}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, nationality: e.target.value }))}
-                      placeholder={t('ats.nationalityPlaceholder', 'Italian')}
+                      label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
+                      type="url"
+                      value={addLinkedinUrl}
+                      onChange={(e) => setAddLinkedinUrl(e.target.value)}
+                      placeholder={t('ats.addCandidateLinkedinPh', 'https://linkedin.com/in/...')}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 2: Personal Details */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('ats.personalDetails', 'Personal Details')}
+                    </h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('ats.personalDetailsHint', 'Optional demographic and location information')}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <DatePicker
+                      label={t('employees.dateOfBirthField', 'Date of birth')}
+                      value={addProfile.dateOfBirth}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                      initialViewYear={new Date().getFullYear() - 30}
+                      placement="bottom"
                     />
                     <Select
                       label={t('employees.genderField', 'Gender')}
@@ -6129,13 +6264,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       <option value="F">{t('employees.genderFemale', 'Female')}</option>
                       <option value="other">{t('employees.genderOther', 'Other')}</option>
                     </Select>
-                    <DatePicker
-                      label={t('employees.dateOfBirthField', 'Date of birth')}
-                      value={addProfile.dateOfBirth}
-                      onChange={(value) => setAddProfile((prev) => ({ ...prev, dateOfBirth: value }))}
-                      initialViewYear={new Date().getFullYear() - 30}
-                      placement="bottom"
-                    />
                     <Select
                       label={t('employees.maritalStatusField', 'Marital status')}
                       value={addProfile.maritalStatus}
@@ -6147,6 +6275,24 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       <option value="divorced">{t('employees.maritalStatusDivorced', 'Divorced')}</option>
                       <option value="partnered">{t('employees.maritalStatusPartnered', 'Partnered')}</option>
                     </Select>
+                    <Input
+                      label={t('employees.nationalityField', 'Nationality')}
+                      value={addProfile.nationality}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, nationality: e.target.value }))}
+                      placeholder={t('ats.nationalityPlaceholder', 'Italian')}
+                    />
+                    <Input
+                      label={t('employees.addressField', 'Address')}
+                      value={addAddress}
+                      onChange={(e) => setAddAddress(e.target.value)}
+                      placeholder={t('employees.addressPlaceholder', 'Street address')}
+                    />
+                    <Input
+                      label={t('employees.postalCodeField', 'Postal code')}
+                      value={addPostalCode}
+                      onChange={(e) => setAddPostalCode(e.target.value)}
+                      placeholder={t('employees.postalCodePlaceholder', '00100')}
+                    />
                   </div>
 
                   <LocationFieldGroup
@@ -6172,81 +6318,88 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                   />
                 </div>
 
-                {/* Employment Information Section */}
+                {/* Section 3: Employment Details */}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.employmentInformation', 'Employment Information')}
+                      {t('ats.employmentDetails', 'Employment Details')}
                     </h4>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.employmentInformationHint', 'Current and future employment details')}
+                      {t('ats.employmentDetailsHint', 'Work-related information and dates')}
                     </p>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
-                      label={t('ats.currentEmployerLabel', 'Current employer')}
-                      value={addProfile.currentEmployer}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentEmployer: e.target.value }))}
-                      placeholder={t('ats.currentEmployerPlaceholder', 'Company name')}
-                    />
-                    <Input
-                      label={t('ats.currentRoleLabel', 'Current role')}
-                      value={addProfile.currentRole}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentRole: e.target.value }))}
-                      placeholder={t('ats.currentRolePlaceholder', 'Store assistant')}
+                      label={t('employees.companyEmailField', 'Company email')}
+                      type="email"
+                      value={addCompanyEmail}
+                      onChange={(e) => setAddCompanyEmail(e.target.value)}
+                      placeholder={t('employees.companyEmailPlaceholder', 'mario.rossi@company.com')}
                     />
                     <DatePicker
-                      label={t('employees.hireDateField', 'Hire date')}
-                      value={addProfile.hireDate}
-                      onChange={(value) => setAddProfile((prev) => ({ ...prev, hireDate: value }))}
+                      label={t('ats.candidateApplicationDate', 'Candidate application date')}
+                      value={addProfile.applicationDate}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, applicationDate: value }))}
                       placement="bottom"
                     />
-                    <Select
-                      label={t('employees.contractTypeField', 'Contract type')}
-                      value={addProfile.contractType}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, contractType: e.target.value }))}
-                    >
-                      <option value="">{t('ats.selectOption', 'Select option')}</option>
-                      <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
-                      <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
-                      <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
-                      <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* System Information Section */}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
-                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.systemInformation', 'System Information')}
-                    </h4>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.systemInformationHint', 'Credentials and identifiers')}
-                    </p>
+                    <DatePicker
+                      label={t('ats.availableStartDate', 'Available start date')}
+                      value={addAvailableStartDate}
+                      onChange={(value) => setAddAvailableStartDate(value)}
+                      placement="bottom"
+                    />
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
-                      label={t('employees.uniqueIdField', 'Unique ID')}
-                      value={addProfile.uniqueId}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, uniqueId: e.target.value }))}
-                      placeholder={t('employees.colUniqueId', 'Unique ID')}
+                      label={t('employees.jobTypeField', 'Job type')}
+                      value={
+                        addSelectedJob?.jobType === 'fulltime' ? t('employees.workingTypeFull', 'Full time') : 
+                        addSelectedJob?.jobType === 'parttime' ? t('employees.workingTypePart', 'Part time') :
+                        addSelectedJob?.jobType === 'contract' ? t('employees.contractTypeContract', 'Contract') :
+                        addSelectedJob?.jobType === 'internship' ? t('employees.contractInternship', 'Internship') : ''
+                      }
+                      disabled
+                      style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }}
+                      placeholder={t('common.notSet', 'Not set')}
                     />
                     <Input
-                      label={t('employees.tempPasswordLabel', 'Temporary password')}
+                      label={t('employees.weeklyHoursField', 'Working hours (availability)')}
+                      value={addSelectedJob?.weeklyHours ? `${addSelectedJob.weeklyHours}` : ''}
+                      disabled
+                      style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }}
+                      placeholder={t('common.notSet', 'Not set')}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <div>
+                      <Input
+                        label={t('employees.uniqueIdField', 'Unique ID')}
+                        value={addProfile.uniqueId}
+                        onChange={(e) => setAddProfile((prev) => ({ ...prev, uniqueId: e.target.value }))}
+                        placeholder={t('employees.colUniqueId', 'EMP-XXXXXX')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAddProfile((prev) => ({ ...prev, uniqueId: generateEmployeeUniqueId() }))}
+                        style={{
+                          marginTop: '5px', background: 'none', border: 'none',
+                          cursor: 'pointer', fontSize: '11px', color: 'var(--accent)',
+                          fontFamily: 'var(--font-body)', fontWeight: 500,
+                          padding: '2px 0', display: 'flex', alignItems: 'center', gap: '4px',
+                        }}
+                      >
+                        <RotateCcw size={12} /> {t('employees.regenerateId', 'Regenerate ID')}
+                      </button>
+                    </div>
+                    <Input
+                      label={t('employees.tempPasswordLabel', 'Password')}
                       type="text"
                       value={addProfile.password}
                       onChange={(e) => setAddProfile((prev) => ({ ...prev, password: e.target.value }))}
-                      placeholder={t('employees.tempPasswordLabel', 'Temporary password')}
-                    />
-                    <Input
-                      label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
-                      type="url"
-                      value={addLinkedinUrl}
-                      onChange={(e) => setAddLinkedinUrl(e.target.value)}
-                      placeholder={t('ats.addCandidateLinkedinPh', 'https://linkedin.com/in/...')}
+                      placeholder={t('employees.tempPasswordLabel', 'Auto-generated')}
                     />
                   </div>
                 </div>
@@ -6278,16 +6431,89 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
                       {t('ats.candidateCvUploadHint', 'PDF, DOC or DOCX — max 5 MB. Optional for internal entries; attach when available.')}
                     </p>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,application/pdf"
-                      onChange={(e) => setAddCvFile(e.target.files?.[0] ?? null)}
-                      style={{ fontSize: 13 }}
-                    />
-                    {addCvFile && (
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {addCvFile.name}
-                      </span>
+                    
+                    {!addCvFile ? (
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,application/pdf"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setAddCvFile(file);
+                          if (file) {
+                            if (cvPreviewUrl) {
+                              URL.revokeObjectURL(cvPreviewUrl);
+                            }
+                            const url = URL.createObjectURL(file);
+                            setCvPreviewUrl(url);
+                          }
+                        }}
+                        style={{ fontSize: 13 }}
+                      />
+                    ) : (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between', 
+                        padding: '10px 12px', 
+                        background: '#fff', 
+                        borderRadius: 8, 
+                        border: '1px solid var(--border)' 
+                      }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {addCvFile.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                            {(addCvFile.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginLeft: 12 }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowCvPreview(true)}
+                            style={{
+                              padding: '6px 10px',
+                              background: 'var(--surface)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: 'var(--text-secondary)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Eye size={13} /> {t('common.view', 'View')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddCvFile(null);
+                              if (cvPreviewUrl) {
+                                URL.revokeObjectURL(cvPreviewUrl);
+                                setCvPreviewUrl(null);
+                              }
+                            }}
+                            style={{
+                              padding: '6px 10px',
+                              background: 'rgba(220,38,38,0.08)',
+                              border: '1px solid rgba(220,38,38,0.2)',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#DC2626',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Trash2 size={13} /> {t('common.delete', 'Delete')}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
 
@@ -6349,6 +6575,15 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
             </div>
           </div>
         </ModalBackdrop>
+      )}
+
+      {/* CV Preview Modal */}
+      {showCvPreview && cvPreviewUrl && addCvFile && (
+        <DocumentPreviewModal
+          url={cvPreviewUrl}
+          filename={addCvFile.name}
+          onClose={() => setShowCvPreview(false)}
+        />
       )}
 
       {selected && (
@@ -6927,6 +7162,7 @@ export default function ATSPage() {
     ? [
         { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
         { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
+        { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
       ]
     : [
         ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
@@ -6938,7 +7174,7 @@ export default function ATSPage() {
 
   // Keep store managers on their allowed tabs only
   useEffect(() => {
-    if (isStoreManager && !['candidates', 'interviews'].includes(tab)) {
+    if (isStoreManager && !['candidates', 'interviews', 'calendar'].includes(tab)) {
       setTab('candidates');
     }
   }, [isStoreManager, tab]);

@@ -125,11 +125,29 @@ export interface Interview {
   candidateName?: string;
   candidateSurname?: string;
   candidateAvatarFilename?: string | null;
+  candidateEmail?: string;
+  candidatePhone?: string | null;
+  candidateLinkedinUrl?: string | null;
+  resumePath?: string | null;
+  cvPath?: string | null;
   positionTitle?: string;
   positionId?: number | null;
+  positionJobType?: string;
+  positionWeeklyHours?: number;
+  positionSalaryMin?: number;
+  positionSalaryMax?: number;
+  positionLocation?: string;
+  companyId?: number;
+  companyName?: string;
+  companyLogoFilename?: string | null;
+  companyGroupName?: string | null;
+  storeId?: number | null;
+  storeName?: string | null;
+  storeLogoFilename?: string | null;
   interviewerName?: string;
   interviewerSurname?: string;
   interviewerAvatarFilename?: string | null;
+  interviewerRole?: string;
 }
 
 export interface CandidateComment {

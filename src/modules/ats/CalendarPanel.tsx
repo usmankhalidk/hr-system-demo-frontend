@@ -10,6 +10,8 @@ import { Interview as APIInterview, JobPosting, getAllInterviews, updateIntervie
 import { Employee } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useSocket } from '../../context/SocketContext';
+import { useAuth } from '../../context/AuthContext';
+import { getAvatarUrl } from '../../api/client';
 import { Button } from '../../components/ui/Button';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import ATSWeeklyCalendar from './ATSWeeklyCalendar';
@@ -44,6 +46,7 @@ export default function CalendarPanel({
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { socket } = useSocket();
+  const { user } = useAuth();
 
   // State
   const [view, setView] = useState<CalendarView>('weekly');
@@ -55,7 +58,6 @@ export default function CalendarPanel({
   const [filters, setFilters] = useState<InterviewFilter>({
     positionId: null,
     interviewerId: null,
-    status: null,
   });
 
   // Calculate date range based on view
@@ -87,9 +89,6 @@ export default function CalendarPanel({
       }
       if (filters.interviewerId !== null) {
         params.interviewerId = filters.interviewerId;
-      }
-      if (filters.status !== null) {
-        params.status = filters.status;
       }
 
       const response = await getAllInterviews(params);
@@ -210,7 +209,6 @@ export default function CalendarPanel({
     setFilters({
       positionId: null,
       interviewerId: null,
-      status: null,
     });
   };
 
@@ -309,8 +307,15 @@ export default function CalendarPanel({
 
   // Apply filters to interviews
   const filteredInterviews = useMemo(() => {
-    return applyFilters(interviews, filters);
-  }, [interviews, filters]);
+    let result = applyFilters(interviews, filters);
+    
+    // Filter interviews based on user role - store managers only see their own interviews
+    if (user?.role === 'store_manager') {
+      result = result.filter((interview) => interview.interviewerId === user.id);
+    }
+    
+    return result;
+  }, [interviews, filters, user]);
 
   // Active filter count
   const activeFilterCount = getActiveFilterCount(filters);
@@ -350,25 +355,116 @@ export default function CalendarPanel({
   // Interviewer options for filter
   const interviewerOptions: SelectOption[] = useMemo(() => {
     const interviewers = employees.filter(
-      (emp) => emp.role === 'hr' || emp.role === 'area_manager' || emp.role === 'admin'
+      (emp) => emp.role === 'hr' || emp.role === 'area_manager' || emp.role === 'admin' || emp.role === 'store_manager'
     );
+    
+    // Count interviews per interviewer
+    const interviewCounts = new Map<number, number>();
+    interviews.forEach((interview) => {
+      if (interview.interviewerId) {
+        interviewCounts.set(
+          interview.interviewerId,
+          (interviewCounts.get(interview.interviewerId) || 0) + 1
+        );
+      }
+    });
+    
     return [
       { value: 'all', label: t('common.allInterviewers', 'All Interviewers') },
-      ...interviewers.map((emp) => ({
-        value: String(emp.id),
-        label: `${emp.name} ${emp.surname}`,
-      })),
+      ...interviewers.map((emp) => {
+        const avatarUrl = getAvatarUrl(emp.avatarFilename);
+        const fullName = `${emp.name} ${emp.surname}`;
+        const interviewCount = interviewCounts.get(emp.id) || 0;
+        
+        // Role label mapping
+        const roleLabels: Record<string, string> = {
+          admin: t('roles.admin', 'Admin'),
+          hr: t('roles.hr', 'HR'),
+          area_manager: t('roles.areaManager', 'Area Manager'),
+          store_manager: t('roles.storeManager', 'Store Manager'),
+        };
+        
+        // Role colors
+        const roleColors: Record<string, { bg: string; text: string }> = {
+          admin: { bg: '#dbeafe', text: '#1e40af' },
+          hr: { bg: '#fce7f3', text: '#9f1239' },
+          area_manager: { bg: '#e0e7ff', text: '#4338ca' },
+          store_manager: { bg: '#fef3c7', text: '#92400e' },
+        };
+        
+        const roleColor = roleColors[emp.role] || { bg: '#f3f4f6', text: '#374151' };
+        
+        return {
+          value: String(emp.id),
+          label: fullName,
+          render: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+              {/* Avatar */}
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={fullName}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '2px solid #e2e8f0',
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    color: '#fff',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    border: '2px solid #e2e8f0',
+                    flexShrink: 0,
+                  }}
+                >
+                  {fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                </div>
+              )}
+              
+              {/* Name and Interview Count */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {fullName}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
+                  {t('ats.interviewsCount', 'Interviews')}: {interviewCount}
+                </div>
+              </div>
+              
+              {/* Role Tag */}
+              <div
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  background: roleColor.bg,
+                  color: roleColor.text,
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {roleLabels[emp.role] || emp.role}
+              </div>
+            </div>
+          ),
+        };
+      }),
     ];
-  }, [employees, t]);
-
-  // Status options for filter
-  const statusOptions: SelectOption[] = [
-    { value: 'all', label: t('common.allStatuses', 'All Statuses') },
-    { value: 'scheduled', label: t('ats.interviewStatus.scheduled', 'Scheduled') },
-    { value: 'completed', label: t('ats.interviewStatus.completed', 'Completed') },
-    { value: 'cancelled', label: t('ats.interviewStatus.cancelled', 'Cancelled') },
-    { value: 'rescheduled', label: t('ats.interviewStatus.rescheduled', 'Rescheduled') },
-  ];
+  }, [employees, interviews, t]);
 
   return (
     <>
@@ -678,19 +774,6 @@ export default function CalendarPanel({
                 value={filters.interviewerId === null ? 'all' : String(filters.interviewerId)}
                 onChange={(value) => handleFilterChange('interviewerId', value === 'all' || value === null ? null : parseInt(value, 10))}
                 placeholder={t('ats.selectInterviewer', 'Select Interviewer')}
-              />
-            </div>
-
-            {/* Status filter */}
-            <div>
-              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                {t('common.status', 'Status')}
-              </label>
-              <CustomSelect
-                options={statusOptions}
-                value={filters.status === null ? 'all' : filters.status}
-                onChange={(value) => handleFilterChange('status', value === 'all' ? null : (value as Interview['status']))}
-                placeholder={t('ats.selectStatus', 'Select Status')}
               />
             </div>
           </div>
