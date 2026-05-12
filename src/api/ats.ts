@@ -125,8 +125,16 @@ export interface Interview {
   candidateName?: string;
   candidateSurname?: string;
   candidateAvatarFilename?: string | null;
+  candidateEmail?: string;
+  resumePath?: string | null;
+  cvPath?: string | null;
   positionTitle?: string;
   positionId?: number | null;
+  positionJobType?: string;
+  positionWeeklyHours?: number;
+  positionSalaryMin?: number;
+  positionSalaryMax?: number;
+  positionLocation?: string;
   interviewerName?: string;
   interviewerSurname?: string;
   interviewerAvatarFilename?: string | null;

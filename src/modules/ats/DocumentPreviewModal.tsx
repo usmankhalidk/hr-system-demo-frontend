@@ -63,10 +63,14 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
         objectUrl = URL.createObjectURL(blob);
         if (active) setPreviewUrl(objectUrl);
       })
-      .catch(() => {
+      .catch((err: any) => {
         if (active) {
           setPreviewUrl(null);
-          setLoadError('preview_failed');
+          const errMsg = err?.message || String(err || 'preview_failed');
+          setLoadError(errMsg);
+          // Log to console so developers can inspect network/cors/auth issues
+          // eslint-disable-next-line no-console
+          console.warn('Document preview failed:', resolvedUrl, errMsg);
         }
       })
       .finally(() => {
@@ -147,27 +151,48 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
             </div>
           )}
           {!loading && loadError && (
-            <div style={{ padding: 40, textAlign: 'center' }}>
+            <div style={{ padding: 28, textAlign: 'center', maxWidth: 720 }}>
               <div style={{ fontSize: 46, marginBottom: 12 }}>⚠️</div>
-              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.4 }}>
                 Unable to display this file in the preview.
               </div>
-              <a
-                href={resolvedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-block',
-                  padding: '10px 20px',
-                  background: 'var(--primary)',
-                  color: '#fff',
-                  borderRadius: 8,
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                }}
-              >
-                Open in New Tab
-              </a>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                Possible causes: the file is not accessible (401 / 403), the server returned HTML (authentication redirect), or the response was blocked by CORS. Technical detail: <strong style={{ color: '#374151' }}>{loadError}</strong>
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <a
+                  href={resolvedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-block',
+                    padding: '10px 20px',
+                    background: 'var(--primary)',
+                    color: '#fff',
+                    borderRadius: 8,
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  Open in New Tab
+                </a>
+                <a
+                  href={resolvedUrl}
+                  download={filename}
+                  style={{
+                    display: 'inline-block',
+                    padding: '10px 20px',
+                    background: 'var(--background)',
+                    color: 'var(--text-primary)',
+                    borderRadius: 8,
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                    border: '1px solid var(--border)'
+                  }}
+                >
+                  Download
+                </a>
+              </div>
             </div>
           )}
           {!loading && !loadError && shouldInlinePreview && previewUrl && isPDF && (

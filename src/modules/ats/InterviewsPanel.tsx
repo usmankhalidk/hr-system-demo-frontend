@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Phone, Users, User, Briefcase, Building2, Store as StoreIcon, Mail, Hash } from 'lucide-react';
+import { Calendar, Clock, Phone, Users, Briefcase, FileText } from 'lucide-react';
+import DocumentPreviewModal from './DocumentPreviewModal';
+import { getResumeUrl, getAvatarUrl } from '../../api/client';
 import { useTranslation } from 'react-i18next';
 import { getAllInterviews, Interview as APIInterview } from '../../api/ats';
 import { useAuth } from '../../context/AuthContext';
 import { Spinner } from '../../components/ui/Spinner';
-import { getAvatarUrl } from '../../api/client';
 
 export default function InterviewsPanel() {
   const { t } = useTranslation();
@@ -21,9 +22,11 @@ export default function InterviewsPanel() {
     try {
       setLoading(true);
       const { interviews: data } = await getAllInterviews();
+      console.log('✅ Interviews loaded successfully:', data.length, 'interviews');
+      console.log('📊 First interview sample:', data[0]);
       setInterviews(data);
     } catch (error) {
-      console.error('Failed to load interviews:', error);
+      console.error('❌ Failed to load interviews:', error);
     } finally {
       setLoading(false);
     }
@@ -36,6 +39,13 @@ export default function InterviewsPanel() {
     ? interviews.filter((interview) => interview.interviewerId === user.id)
     : interviews;
 
+  console.log('🔍 Filtering results:', {
+    totalInterviews: interviews.length,
+    userRole: user?.role,
+    filteredCount: filteredByRole.length,
+    userId: user?.id
+  });
+
   const upcomingInterviews = filteredByRole
     .filter((interview) => new Date(interview.scheduledAt) >= now)
     .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
@@ -44,7 +54,17 @@ export default function InterviewsPanel() {
     .filter((interview) => new Date(interview.scheduledAt) < now)
     .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
 
+  console.log('📅 Interview counts:', {
+    upcoming: upcomingInterviews.length,
+    past: pastInterviews.length,
+    activeTab
+  });
+
   const displayedInterviews = activeTab === 'upcoming' ? upcomingInterviews : pastInterviews;
+
+  const [resumePreviewUrl, setResumePreviewUrl] = useState<string | null>(null);
+  const [resumeFilename, setResumeFilename] = useState<string | null>(null);
+  const [showResumePreview, setShowResumePreview] = useState(false);
 
   if (loading) {
     return (
@@ -204,102 +224,177 @@ export default function InterviewsPanel() {
 
                 {/* Compact Content */}
                 <div style={{ padding: '12px 14px' }}>
-                  {/* Candidate & Position Row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0' }}>
-                    {candidateAvatarUrl ? (
-                      <img
-                        src={candidateAvatarUrl}
-                        alt={candidateFullName}
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: '50%',
-                          objectFit: 'cover',
-                          border: '2px solid #3b82f6',
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
-                          color: '#fff',
-                          fontSize: '0.85rem',
-                          fontWeight: 800,
-                          border: '2px solid #3b82f6',
-                        }}
-                      >
-                        {candidateFullName.charAt(0).toUpperCase()}
+                  {/* Second Row: Candidate Info, Job Details, Location & Salary */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                    {/* Candidate Avatar & Info Block */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 200 }}>
+                      {candidateAvatarUrl ? (
+                        <img
+                          src={candidateAvatarUrl}
+                          alt={candidateFullName}
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: '2px solid #3b82f6',
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'linear-gradient(135deg, #1e3a5f, #3a7bd5)',
+                            color: '#fff',
+                            fontSize: '0.85rem',
+                            fontWeight: 800,
+                            border: '2px solid #3b82f6',
+                          }}
+                        >
+                          {candidateFullName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>{candidateFullName}</div>
+                        {interview.candidateEmail && <div style={{ fontSize: '0.82rem', color: '#6b7280', marginTop: 2 }}>{interview.candidateEmail}</div>}
+                      </div>
+                    </div>
+
+                    {/* Job Position Block */}
+                    {interview.positionTitle && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 200, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0f172a', fontWeight: 700 }}>
+                          <Briefcase size={14} />
+                          <span style={{ fontSize: '0.9rem' }}>{interview.positionTitle}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {interview.positionWeeklyHours && (
+                            <span
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 4,
+                                background: '#dbeafe',
+                                color: '#1e40af',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {interview.positionWeeklyHours}h/week
+                            </span>
+                          )}
+                          {interview.positionJobType && (
+                            <span
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 4,
+                                background: '#e0e7ff',
+                                color: '#4338ca',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {interview.positionJobType === 'fulltime' ? t('ats.jobType_fulltime', 'Full-time') :
+                               interview.positionJobType === 'parttime' ? t('ats.jobType_parttime', 'Part-time') :
+                               interview.positionJobType === 'contract' ? t('ats.jobType_contract', 'Contract') :
+                               interview.positionJobType === 'internship' ? t('ats.jobType_internship', 'Internship') :
+                               interview.positionJobType}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
-                        {candidateFullName}
-                      </div>
-                      {interview.positionTitle && (
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Briefcase size={11} />
-                          {interview.positionTitle}
+
+                    {/* Location & Salary Block */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
+                      {interview.positionLocation && (
+                        <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+                          📍 {interview.positionLocation}
+                        </div>
+                      )}
+                      {(interview.positionSalaryMin || interview.positionSalaryMax) && (
+                        <div style={{ fontSize: '0.85rem', color: '#059669', fontWeight: 700 }}>
+                          💰 {interview.positionSalaryMin && interview.positionSalaryMax
+                            ? `€${interview.positionSalaryMin.toLocaleString()} - €${interview.positionSalaryMax.toLocaleString()}`
+                            : interview.positionSalaryMin
+                            ? `€${interview.positionSalaryMin.toLocaleString()}+`
+                            : interview.positionSalaryMax
+                            ? `Up to €${interview.positionSalaryMax.toLocaleString()}`
+                            : ''}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Details Grid - Compact */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-                    {/* Interviewer & Location Row */}
-                    {interviewerFullName && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        {interviewerAvatarUrl ? (
-                          <img
-                            src={interviewerAvatarUrl}
-                            alt={interviewerFullName}
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: '50%',
-                              objectFit: 'cover',
-                              border: '2px solid #7c3aed',
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: '50%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
-                              color: '#fff',
-                              fontSize: '0.7rem',
-                              fontWeight: 800,
-                              border: '2px solid #7c3aed',
-                            }}
-                          >
-                            {interviewerFullName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>
-                            {t('ats.interviewer', 'Interviewer')}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {interviewerFullName}
+                  {/* CV / Resume - Full Width Row */}
+                  {(() => {
+                    const candidateCvPath = interview.resumePath || interview.cvPath || null;
+                    if (!candidateCvPath) return null;
+                    const url = getResumeUrl(candidateCvPath);
+                    const filename = candidateCvPath.split('/').pop() ?? candidateCvPath;
+                    return (
+                      <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px dashed rgba(148,163,184,0.25)', background: 'rgba(241,245,249,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                          <FileText size={16} color="#64748b" />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#334155' }}>{filename}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{t('ats.cvAttached', 'CV attached')}</div>
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!url) return;
+                            setResumePreviewUrl(url);
+                            setResumeFilename(filename);
+                            setShowResumePreview(true);
+                          }}
+                          style={{ 
+                            padding: '5px 12px', 
+                            borderRadius: 6, 
+                            border: '1px solid rgba(13,33,55,0.15)', 
+                            background: '#fff', 
+                            fontSize: '0.75rem',
+                            fontWeight: 700, 
+                            cursor: 'pointer',
+                            color: '#0f172a',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f1f5f9';
+                            e.currentTarget.style.borderColor = '#3b82f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#fff';
+                            e.currentTarget.style.borderColor = 'rgba(13,33,55,0.15)';
+                          }}
+                        >
+                          {t('ats.viewCv', 'View')}
+                        </button>
                       </div>
-                    )}
+                    );
+                  })()}
 
-                    {/* Location */}
-                    {interview.location && interview.interviewType === 'in_person' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {/* Interviewer Details */}
+                  {interviewerFullName && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                      {interviewerAvatarUrl ? (
+                        <img
+                          src={interviewerAvatarUrl}
+                          alt={interviewerFullName}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: '2px solid #7c3aed',
+                          }}
+                        />
+                      ) : (
                         <div
                           style={{
                             width: 28,
@@ -308,23 +403,26 @@ export default function InterviewsPanel() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            background: 'rgba(34,197,94,0.15)',
-                            border: '2px solid rgba(34,197,94,0.3)',
+                            background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
+                            color: '#fff',
+                            fontSize: '0.7rem',
+                            fontWeight: 800,
+                            border: '2px solid #7c3aed',
                           }}
                         >
-                          <MapPin size={14} color="#15803d" />
+                          {interviewerFullName.charAt(0).toUpperCase()}
                         </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>
-                            {t('ats.location', 'Location')}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {interview.location}
-                          </div>
+                      )}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>
+                          {t('ats.interviewer', 'Interviewer')}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {interviewerFullName}
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Description */}
                   {interview.description && (
@@ -348,6 +446,10 @@ export default function InterviewsPanel() {
           })}
         </div>
       )}
+      {showResumePreview && resumePreviewUrl && resumeFilename && (
+        <DocumentPreviewModal url={resumePreviewUrl} filename={resumeFilename} onClose={() => setShowResumePreview(false)} />
+      )}
     </div>
   );
 }
+

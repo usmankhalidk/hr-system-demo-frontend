@@ -152,8 +152,10 @@ const JOB_TYPE_LABEL: Record<JobType, string> = {
 };
 
 function generateEmployeeUniqueId(): string {
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `EMP-${Date.now().toString().slice(-6)}-${suffix}`;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id = 'EMP-';
+  for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
 }
 
 function generateTempPassword(): string {
@@ -5011,6 +5013,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
+  const [addCompanyEmail, setAddCompanyEmail] = useState('');
+  const [addAvailableStartDate, setAddAvailableStartDate] = useState('');
+  const [addPostalCode, setAddPostalCode] = useState('');
+  const [addAddress, setAddAddress] = useState('');
   const [addProfile, setAddProfile] = useState<CandidateApplicationProfile>(() => ({
     availability: '',
     gender: '',
@@ -5038,6 +5044,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [addSaving, setAddSaving] = useState(false);
   const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
   const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
+  const [showCvPreview, setShowCvPreview] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [interviewInviteEnabled, setInterviewInviteEnabled] = useState<boolean | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
@@ -5325,6 +5333,9 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
           ...addProfile,
           availability: addProfile.availability,
           applicationDate,
+          availableStartDate: addAvailableStartDate.trim() || '',
+          postalCode: addPostalCode.trim() || '',
+          address: addAddress.trim() || '',
           applicationSource: 'ats',
           applicationChannel: 'internal',
         }),
@@ -5381,6 +5392,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     setAddEmail('');
     setAddPhone('');
     setAddLinkedinUrl('');
+    setAddCompanyEmail('');
+    setAddAvailableStartDate('');
+    setAddPostalCode('');
+    setAddAddress('');
     setAddProfile({
       availability: '',
       gender: '',
@@ -5405,7 +5420,12 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     setAddCvFile(null);
     setAddCoverLetter('');
     setAddGdprConsent(false);
-  }, []);
+    setShowCvPreview(false);
+    if (cvPreviewUrl) {
+      URL.revokeObjectURL(cvPreviewUrl);
+      setCvPreviewUrl(null);
+    }
+  }, [cvPreviewUrl]);
 
   const loadAddModalJobs = useCallback(async () => {
     setAddModalJobsLoading(true);
@@ -6058,30 +6078,39 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                  <span style={{ 
-                    fontSize: 11, 
-                    fontWeight: 700, 
-                    color: '#9A6808', 
-                    background: 'rgba(201,151,58,0.12)', 
-                    border: '1px solid rgba(201,151,58,0.35)', 
-                    borderRadius: 999, 
-                    padding: '4px 10px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                  }}>
-                    {addSelectedJob?.title ?? t('ats.position', 'Position')}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BriefcaseBusiness size={16} style={{ color: '#9A6808' }} />
+                    <span style={{ 
+                      fontSize: 13, 
+                      fontWeight: 700, 
+                      color: '#9A6808', 
+                    }}>
+                      {addSelectedJob?.title ?? t('ats.position', 'Position')}
+                    </span>
+                  </div>
+                  {addSelectedJob?.storeName && (
+                    <span style={{ 
+                      fontSize: 12, 
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}>
+                      <StoreIcon size={14} />
+                      {addSelectedJob.storeName}
+                    </span>
+                  )}
                 </div>
 
-                {/* Personal Information Section */}
+                {/* Section 1: Basic Information */}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.personalInformation', 'Personal Information')}
+                      {t('ats.basicInformation', 'Basic Information')}
                     </h4>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.personalInformationHint', 'Basic candidate details')}
+                      {t('ats.basicInformationHint', 'Required candidate contact details')}
                     </p>
                   </div>
 
@@ -6114,10 +6143,33 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       placeholder={t('ats.addCandidatePhonePh', '+39 345...')}
                     />
                     <Input
-                      label={t('employees.nationalityField', 'Nationality')}
-                      value={addProfile.nationality}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, nationality: e.target.value }))}
-                      placeholder={t('ats.nationalityPlaceholder', 'Italian')}
+                      label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
+                      type="url"
+                      value={addLinkedinUrl}
+                      onChange={(e) => setAddLinkedinUrl(e.target.value)}
+                      placeholder={t('ats.addCandidateLinkedinPh', 'https://linkedin.com/in/...')}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 2: Personal Details */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('ats.personalDetails', 'Personal Details')}
+                    </h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('ats.personalDetailsHint', 'Optional demographic and location information')}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <DatePicker
+                      label={t('employees.dateOfBirthField', 'Date of birth')}
+                      value={addProfile.dateOfBirth}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                      initialViewYear={new Date().getFullYear() - 30}
+                      placement="bottom"
                     />
                     <Select
                       label={t('employees.genderField', 'Gender')}
@@ -6129,13 +6181,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       <option value="F">{t('employees.genderFemale', 'Female')}</option>
                       <option value="other">{t('employees.genderOther', 'Other')}</option>
                     </Select>
-                    <DatePicker
-                      label={t('employees.dateOfBirthField', 'Date of birth')}
-                      value={addProfile.dateOfBirth}
-                      onChange={(value) => setAddProfile((prev) => ({ ...prev, dateOfBirth: value }))}
-                      initialViewYear={new Date().getFullYear() - 30}
-                      placement="bottom"
-                    />
                     <Select
                       label={t('employees.maritalStatusField', 'Marital status')}
                       value={addProfile.maritalStatus}
@@ -6147,6 +6192,24 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       <option value="divorced">{t('employees.maritalStatusDivorced', 'Divorced')}</option>
                       <option value="partnered">{t('employees.maritalStatusPartnered', 'Partnered')}</option>
                     </Select>
+                    <Input
+                      label={t('employees.nationalityField', 'Nationality')}
+                      value={addProfile.nationality}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, nationality: e.target.value }))}
+                      placeholder={t('ats.nationalityPlaceholder', 'Italian')}
+                    />
+                    <Input
+                      label={t('employees.addressField', 'Address')}
+                      value={addAddress}
+                      onChange={(e) => setAddAddress(e.target.value)}
+                      placeholder={t('employees.addressPlaceholder', 'Street address')}
+                    />
+                    <Input
+                      label={t('employees.postalCodeField', 'Postal code')}
+                      value={addPostalCode}
+                      onChange={(e) => setAddPostalCode(e.target.value)}
+                      placeholder={t('employees.postalCodePlaceholder', '00100')}
+                    />
                   </div>
 
                   <LocationFieldGroup
@@ -6172,81 +6235,84 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                   />
                 </div>
 
-                {/* Employment Information Section */}
+                {/* Section 3: Employment Details */}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.employmentInformation', 'Employment Information')}
+                      {t('ats.employmentDetails', 'Employment Details')}
                     </h4>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.employmentInformationHint', 'Current and future employment details')}
+                      {t('ats.employmentDetailsHint', 'Work-related information and dates')}
                     </p>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
-                      label={t('ats.currentEmployerLabel', 'Current employer')}
-                      value={addProfile.currentEmployer}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentEmployer: e.target.value }))}
-                      placeholder={t('ats.currentEmployerPlaceholder', 'Company name')}
-                    />
-                    <Input
-                      label={t('ats.currentRoleLabel', 'Current role')}
-                      value={addProfile.currentRole}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentRole: e.target.value }))}
-                      placeholder={t('ats.currentRolePlaceholder', 'Store assistant')}
+                      label={t('employees.companyEmailField', 'Company email')}
+                      type="email"
+                      value={addCompanyEmail}
+                      onChange={(e) => setAddCompanyEmail(e.target.value)}
+                      placeholder={t('employees.companyEmailPlaceholder', 'mario.rossi@company.com')}
                     />
                     <DatePicker
-                      label={t('employees.hireDateField', 'Hire date')}
-                      value={addProfile.hireDate}
-                      onChange={(value) => setAddProfile((prev) => ({ ...prev, hireDate: value }))}
+                      label={t('ats.candidateApplicationDate', 'Candidate application date')}
+                      value={addProfile.applicationDate}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, applicationDate: value }))}
                       placement="bottom"
                     />
-                    <Select
-                      label={t('employees.contractTypeField', 'Contract type')}
-                      value={addProfile.contractType}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, contractType: e.target.value }))}
-                    >
-                      <option value="">{t('ats.selectOption', 'Select option')}</option>
-                      <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
-                      <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
-                      <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
-                      <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* System Information Section */}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
-                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.systemInformation', 'System Information')}
-                    </h4>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.systemInformationHint', 'Credentials and identifiers')}
-                    </p>
+                    <DatePicker
+                      label={t('ats.availableStartDate', 'Available start date')}
+                      value={addAvailableStartDate}
+                      onChange={(value) => setAddAvailableStartDate(value)}
+                      placement="bottom"
+                    />
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
-                      label={t('employees.uniqueIdField', 'Unique ID')}
-                      value={addProfile.uniqueId}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, uniqueId: e.target.value }))}
-                      placeholder={t('employees.colUniqueId', 'Unique ID')}
+                      label={t('employees.jobTypeField', 'Job type')}
+                      value={addSelectedJob?.jobType === 'full_time' ? t('employees.workingTypeFull', 'Full time') : 
+                             addSelectedJob?.jobType === 'part_time' ? t('employees.workingTypePart', 'Part time') : ''}
+                      disabled
+                      style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }}
+                      placeholder={t('common.notSet', 'Not set')}
                     />
                     <Input
-                      label={t('employees.tempPasswordLabel', 'Temporary password')}
+                      label={t('employees.weeklyHoursField', 'Working hours (availability)')}
+                      value={addSelectedJob?.weeklyHours ? `${addSelectedJob.weeklyHours}` : ''}
+                      disabled
+                      style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }}
+                      placeholder={t('common.notSet', 'Not set')}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <div>
+                      <Input
+                        label={t('employees.uniqueIdField', 'Unique ID')}
+                        value={addProfile.uniqueId}
+                        onChange={(e) => setAddProfile((prev) => ({ ...prev, uniqueId: e.target.value }))}
+                        placeholder={t('employees.colUniqueId', 'EMP-XXXXXX')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAddProfile((prev) => ({ ...prev, uniqueId: generateEmployeeUniqueId() }))}
+                        style={{
+                          marginTop: '5px', background: 'none', border: 'none',
+                          cursor: 'pointer', fontSize: '11px', color: 'var(--accent)',
+                          fontFamily: 'var(--font-body)', fontWeight: 500,
+                          padding: '2px 0', display: 'flex', alignItems: 'center', gap: '4px',
+                        }}
+                      >
+                        <RotateCcw size={12} /> {t('employees.regenerateId', 'Regenerate ID')}
+                      </button>
+                    </div>
+                    <Input
+                      label={t('employees.tempPasswordLabel', 'Password')}
                       type="text"
                       value={addProfile.password}
                       onChange={(e) => setAddProfile((prev) => ({ ...prev, password: e.target.value }))}
-                      placeholder={t('employees.tempPasswordLabel', 'Temporary password')}
-                    />
-                    <Input
-                      label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
-                      type="url"
-                      value={addLinkedinUrl}
-                      onChange={(e) => setAddLinkedinUrl(e.target.value)}
-                      placeholder={t('ats.addCandidateLinkedinPh', 'https://linkedin.com/in/...')}
+                      placeholder={t('employees.tempPasswordLabel', 'Auto-generated')}
                     />
                   </div>
                 </div>
@@ -6278,16 +6344,89 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
                       {t('ats.candidateCvUploadHint', 'PDF, DOC or DOCX — max 5 MB. Optional for internal entries; attach when available.')}
                     </p>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,application/pdf"
-                      onChange={(e) => setAddCvFile(e.target.files?.[0] ?? null)}
-                      style={{ fontSize: 13 }}
-                    />
-                    {addCvFile && (
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {addCvFile.name}
-                      </span>
+                    
+                    {!addCvFile ? (
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,application/pdf"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setAddCvFile(file);
+                          if (file) {
+                            if (cvPreviewUrl) {
+                              URL.revokeObjectURL(cvPreviewUrl);
+                            }
+                            const url = URL.createObjectURL(file);
+                            setCvPreviewUrl(url);
+                          }
+                        }}
+                        style={{ fontSize: 13 }}
+                      />
+                    ) : (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between', 
+                        padding: '10px 12px', 
+                        background: '#fff', 
+                        borderRadius: 8, 
+                        border: '1px solid var(--border)' 
+                      }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {addCvFile.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                            {(addCvFile.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginLeft: 12 }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowCvPreview(true)}
+                            style={{
+                              padding: '6px 10px',
+                              background: 'var(--surface)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: 'var(--text-secondary)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Eye size={13} /> {t('common.view', 'View')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddCvFile(null);
+                              if (cvPreviewUrl) {
+                                URL.revokeObjectURL(cvPreviewUrl);
+                                setCvPreviewUrl(null);
+                              }
+                            }}
+                            style={{
+                              padding: '6px 10px',
+                              background: 'rgba(220,38,38,0.08)',
+                              border: '1px solid rgba(220,38,38,0.2)',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#DC2626',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Trash2 size={13} /> {t('common.delete', 'Delete')}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
 
@@ -6349,6 +6488,15 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
             </div>
           </div>
         </ModalBackdrop>
+      )}
+
+      {/* CV Preview Modal */}
+      {showCvPreview && cvPreviewUrl && addCvFile && (
+        <DocumentPreviewModal
+          url={cvPreviewUrl}
+          filename={addCvFile.name}
+          onClose={() => setShowCvPreview(false)}
+        />
       )}
 
       {selected && (
