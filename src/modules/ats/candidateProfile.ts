@@ -20,6 +20,7 @@ export interface CandidateApplicationProfile {
   availableStartDate: string;
   applicationSource: string;
   applicationChannel: string;
+  startDate: string;
 }
 
 export const EMPTY_CANDIDATE_PROFILE: CandidateApplicationProfile = {
@@ -44,6 +45,7 @@ export const EMPTY_CANDIDATE_PROFILE: CandidateApplicationProfile = {
   availableStartDate: '',
   applicationSource: '',
   applicationChannel: '',
+  startDate: '',
 };
 
 export function buildCandidateProfile(partial: Record<string, unknown>): CandidateApplicationProfile {
@@ -68,7 +70,8 @@ export function buildCandidateProfile(partial: Record<string, unknown>): Candida
     ['availableStartDate', ['available_start_date']],
     ['applicationSource', ['application_source']],
     ['applicationChannel', ['application_channel', 'channel', 'utm_source']],
-    ['postalCode', ['postal_code', 'cap', 'zip_code']],
+    ['startDate', ['start_date']],
+    ['postalCode', ['postal_code', 'postalcode', 'zip', 'zip_code', 'zipcode', 'cap']],
   ];
 
   for (const [targetKey, aliasKeys] of aliases) {

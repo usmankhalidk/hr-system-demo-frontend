@@ -524,6 +524,27 @@ export async function deleteInterviewFeedbackComment(id: number): Promise<void> 
   await apiClient.delete(`/ats/interviews/feedback/${id}`);
 }
 
+export interface AllInterviewFeedbackComment {
+  id: number;
+  interviewId: number;
+  candidateId: number;
+  candidateName: string;
+  positionTitle: string | null;
+  authorId: number;
+  authorName: string | null;
+  authorSurname: string | null;
+  authorAvatarFilename: string | null;
+  authorRole: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getAllInterviewFeedbackComments(): Promise<AllInterviewFeedbackComment[]> {
+  const { data } = await apiClient.get('/ats/interviews/feedback/all');
+  return (data.data.comments ?? []) as AllInterviewFeedbackComment[];
+}
+
 // ---------------------------------------------------------------------------
 // Interview Notification Logs
 // ---------------------------------------------------------------------------

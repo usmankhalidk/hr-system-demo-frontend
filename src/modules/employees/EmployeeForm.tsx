@@ -405,6 +405,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
         errs.companyId = t('employees.companyPermissionDenied', 'You do not have permission to create employees in this company.');
       }
     }
+    if (!formData.storeId) errs.storeId = t('employees.fieldRequired');
     if (!isEditMode && !formData.uniqueId.trim()) errs.uniqueId = t('employees.fieldRequired');
     setStep1Errors(errs);
     return Object.keys(errs).length === 0;
@@ -1110,7 +1111,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       color: 'var(--text-secondary)',
                       letterSpacing: '0.01em',
                     }}>
-                      {t('common.store')}
+                      {`${t('common.store')} *`}
                     </div>
                     <div ref={storePickerRef} style={{ position: 'relative' }}>
                       <button
@@ -1122,7 +1123,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                         disabled={canPickCompany && effectiveCompanyId == null}
                         style={{
                           width: '100%',
-                          border: '1px solid var(--border)',
+                          border: `1px solid ${step1Errors.storeId ? 'var(--danger)' : 'var(--border)'}`,
                           borderRadius: 'var(--radius-sm)',
                           background: 'var(--surface)',
                           minHeight: 42,
@@ -1192,6 +1193,12 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                         )}
                         <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
                       </button>
+
+                      {step1Errors.storeId && (
+                        <span style={{ marginTop: '4px', fontSize: '12px', color: 'var(--danger)', display: 'block' }}>
+                          {step1Errors.storeId}
+                        </span>
+                      )}
 
                       {storePickerOpen && !(canPickCompany && effectiveCompanyId == null) && (
                         <div style={{

@@ -437,6 +437,104 @@ function formatDate(value: string | null, uiLanguage: UiLanguage, fallback?: str
   });
 }
 
+const parseRichTextToHtml = (text: string): string => {
+  if (!text) return '';
+  
+  // If the text already contains HTML tags (from the rich text editor), return as-is
+  if (/<[a-zA-Z][^>]*>/.test(text)) {
+    return text;
+  }
+
+  // Legacy: parse Markdown-style plain text into HTML
+  // 1. Escape HTML first to prevent any broken tags or XSS
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  // 2. Inline elements (Bold, Underline, Italic)
+  // Bold: **text** or __text__
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Underline: ___text___ or __text__
+  escaped = escaped.replace(/__(.*?)__/g, '<u>$1</u>');
+  
+  // Italic: *text* or _text_
+  escaped = escaped.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  escaped = escaped.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+  // 3. Process line-by-line for blocks (headers, lists, and line breaks)
+  const lines = escaped.split('\n');
+  const result: string[] = [];
+  let inUl = false;
+  let inOl = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (line.startsWith('### ')) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push(`<h3 style="margin: 12px 0 6px; font-size: 15px; font-weight: 700; color: #0f172a;">${line.slice(4)}</h3>`);
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push(`<h2 style="margin: 14px 0 8px; font-size: 17px; font-weight: 700; color: #0f172a;">${line.slice(3)}</h2>`);
+      continue;
+    }
+    if (line.startsWith('# ')) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push(`<h1 style="margin: 16px 0 10px; font-size: 19px; font-weight: 800; color: #0f172a;">${line.slice(2)}</h1>`);
+      continue;
+    }
+
+    // Bullet list: check for -, *, •, + followed by space
+    const bulletMatch = line.match(/^([\-*•+])\s+(.*)$/);
+    if (bulletMatch) {
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      if (!inUl) {
+        result.push('<ul style="margin: 6px 0 6px 20px; padding: 0; list-style-type: disc;">');
+        inUl = true;
+      }
+      result.push(`<li style="margin-bottom: 4px; line-height: 1.6; color: inherit;">${bulletMatch[2]}</li>`);
+      continue;
+    }
+
+    // Numbered list: check for digits followed by dot/parenthesis
+    const numberMatch = line.match(/^(\d+)[.\)]\s+(.*)$/);
+    if (numberMatch) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (!inOl) {
+        result.push('<ol style="margin: 6px 0 6px 20px; padding: 0; list-style-type: decimal;">');
+        inOl = true;
+      }
+      result.push(`<li style="margin-bottom: 4px; line-height: 1.6; color: inherit;">${numberMatch[2]}</li>`);
+      continue;
+    }
+
+    // Close open lists if we hit a standard paragraph
+    if (inUl) { result.push('</ul>'); inUl = false; }
+    if (inOl) { result.push('</ol>'); inOl = false; }
+
+    if (line === '') {
+      result.push('<div style="height: 10px;"></div>');
+    } else {
+      result.push(`<div style="margin-bottom: 6px; line-height: 1.6; min-height: 1.2em;">${rawLine}</div>`);
+    }
+  }
+
+  if (inUl) result.push('</ul>');
+  if (inOl) result.push('</ol>');
+
+  return result.join('\n');
+};
+
 export default function PublicJobDetailPage() {
   const { i18n } = useTranslation();
   const uiLanguage: UiLanguage = i18n.language?.startsWith('it') ? 'it' : 'en';
@@ -738,6 +836,8 @@ export default function PublicJobDetailPage() {
         maritalStatus: appProfile.maritalStatus || undefined,
         hasCurrentEmployer: appProfile.hasCurrentEmployer || undefined,
         applicationDate: appProfile.applicationDate || undefined,
+        startDate: appProfile.startDate || undefined,
+        postalCode: appProfile.postalCode || undefined,
       });
 
       setSubmitMessage(browserLanguage === 'it'
@@ -768,6 +868,8 @@ export default function PublicJobDetailPage() {
         applicationDate: new Date().toISOString().slice(0, 10),
         applicationSource: 'public-careers',
         applicationChannel: 'public',
+        startDate: '',
+        postalCode: '',
       }));
       setCoverLetter('');
       setResume(null);
@@ -842,7 +944,7 @@ export default function PublicJobDetailPage() {
                   <strong className="careers-detail-company-name">
                     <span>{companyName}</span>
                     {companyCountryCode && (
-                      <ReactCountryFlag countryCode={companyCountryCode} svg style={{ width: '1.1em', height: '1.1em', borderRadius: 3 }} />
+                      <ReactCountryFlag countryCode={companyCountryCode} svg style={{ width: '1.1em', height: '1.1em', borderRadius: 3, marginLeft: 6 }} />
                     )}
                   </strong>
                   {companyGroupName ? <span className="careers-detail-company-group">{companyGroupName}</span> : null}
@@ -850,12 +952,6 @@ export default function PublicJobDetailPage() {
               </div>
 
               <h1 className="careers-detail-title">{job.title}</h1>
-              
-              {job.description && (
-                <p className="careers-detail-description">
-                  {job.description}
-                </p>
-              )}
 
               <div className="careers-detail-meta">
                 <span>{TYPE_LABEL[uiLanguage][job.jobType] ?? job.jobType}</span>
@@ -894,7 +990,13 @@ export default function PublicJobDetailPage() {
                   {copy.languageWarning}
                 </div>
               )}
-              <div className="careers-detail-body">{job.description ?? copy.noDescription}</div>
+              <div className="careers-detail-body">
+                {job.description ? (
+                  <div dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(job.description) }} />
+                ) : (
+                  copy.noDescription
+                )}
+              </div>
             </section>
 
             <section className="careers-detail-card">
@@ -1320,7 +1422,7 @@ export default function PublicJobDetailPage() {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 12, padding: '16px 16px 20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
                   <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 12, padding: 12, background: 'rgba(201,151,58,0.06)' }}>
                     <strong style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#8A5A07' }}>{copy.weeklyHours}</strong>
@@ -1409,7 +1511,7 @@ export default function PublicJobDetailPage() {
                       </p>
                     </div>
 
-                    <div className="careers-form-row">
+                    <div className="careers-form-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
                       <DatePicker
                         value={appProfile.dateOfBirth}
                         onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
@@ -1471,58 +1573,23 @@ export default function PublicJobDetailPage() {
                       onChange={(event) => setAppProfile((prev) => ({ ...prev, address: event.target.value }))}
                       placeholder={uiLanguage === 'it' ? 'Indirizzo' : 'Address'}
                     />
-                  </section>
 
-                  {/* Employment Details Section */}
-                  <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(201,151,58,0.28)', background: 'rgba(201,151,58,0.06)' }}>
-                    <div style={{ display: 'grid', gap: 4 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, color: '#6B4A06', fontWeight: 700 }}>{uiLanguage === 'it' ? 'Dettagli occupazionali' : 'Employment Details'}</h4>
-                      <p style={{ margin: 0, color: '#7C5A14', fontSize: 12.5, lineHeight: 1.5 }}>
-                        {uiLanguage === 'it'
-                          ? 'Informazioni sulla tua situazione lavorativa attuale.'
-                          : 'Information about your current employment situation.'}
-                      </p>
-                    </div>
-
-                    <div className="careers-form-row">
-                      <select
-                        className="careers-form-input"
-                        value={appProfile.hasCurrentEmployer}
-                        onChange={(event) => setAppProfile((prev) => ({ ...prev, hasCurrentEmployer: event.target.value }))}
-                      >
-                        <option value="no">{uiLanguage === 'it' ? 'Attualmente occupato: No' : 'Currently employed: No'}</option>
-                        <option value="yes">{uiLanguage === 'it' ? 'Attualmente occupato: Sì' : 'Currently employed: Yes'}</option>
-                      </select>
+                    <div className="careers-form-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
+                      <DatePicker
+                        value={appProfile.startDate}
+                        onChange={(value) => setAppProfile((prev) => ({ ...prev, startDate: value }))}
+                        label={uiLanguage === 'it' ? 'Data di inizio desiderata' : 'Start Date'}
+                        placement="bottom"
+                      />
                       <input
                         className="careers-form-input"
                         type="text"
-                        value={appProfile.availability}
-                        onChange={(event) => setAppProfile((prev) => ({ ...prev, availability: event.target.value }))}
-                        placeholder={uiLanguage === 'it' ? 'Disponibilità / ore settimanali' : 'Availability / weekly hours'}
+                        value={appProfile.postalCode || ''}
+                        onChange={(event) => setAppProfile((prev) => ({ ...prev, postalCode: event.target.value }))}
+                        placeholder={uiLanguage === 'it' ? 'Codice postale' : 'Postal code'}
                         required
                       />
                     </div>
-
-                    {appProfile.hasCurrentEmployer === 'yes' && (
-                      <div className="careers-form-row">
-                        <input
-                          className="careers-form-input"
-                          type="text"
-                          value={appProfile.currentEmployer}
-                          onChange={(event) => setAppProfile((prev) => ({ ...prev, currentEmployer: event.target.value }))}
-                          placeholder={uiLanguage === 'it' ? 'Azienda attuale' : 'Current employer'}
-                          required
-                        />
-                        <input
-                          className="careers-form-input"
-                          type="text"
-                          value={appProfile.currentRole}
-                          onChange={(event) => setAppProfile((prev) => ({ ...prev, currentRole: event.target.value }))}
-                          placeholder={uiLanguage === 'it' ? 'Ruolo attuale' : 'Current role'}
-                          required
-                        />
-                      </div>
-                    )}
                   </section>
 
                   {/* Other Information Section */}

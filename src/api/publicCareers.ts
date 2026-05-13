@@ -196,6 +196,8 @@ export async function applyToPublicJob(params: {
   maritalStatus?: string;
   hasCurrentEmployer?: string;
   applicationDate?: string;
+  startDate?: string;
+  postalCode?: string;
 }): Promise<void> {
   const formData = new FormData();
   formData.append('full_name', params.fullName);
@@ -217,6 +219,8 @@ export async function applyToPublicJob(params: {
   if (params.maritalStatus) formData.append('marital_status', params.maritalStatus);
   if (params.hasCurrentEmployer) formData.append('has_current_employer', params.hasCurrentEmployer);
   if (params.applicationDate) formData.append('application_date', params.applicationDate);
+  if (params.startDate) formData.append('start_date', params.startDate);
+  if (params.postalCode) formData.append('postal_code', params.postalCode);
   formData.append('gdpr_consent', params.gdprConsent ? 'true' : 'false');
   formData.append('resume', params.resume);
 

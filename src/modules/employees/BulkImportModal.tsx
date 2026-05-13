@@ -76,14 +76,14 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
     setPhase('processing'); setProgress(0); setResults([]);
     const allResults: ImportResult[] = [];
     for (let i = 0; i < rows.length; i++) {
-      const result = await processRow(rows[i], companies, stores, supervisors);
+      const result = await processRow(rows[i], companies, stores, supervisors, t);
       allResults.push(result);
       setProgress(i + 1);
       setResults([...allResults]);
     }
     setPhase('done');
     if (allResults.some(r => r.success)) onComplete();
-  }, [rows, companies, stores, supervisors, onComplete]);
+  }, [rows, companies, stores, supervisors, onComplete, t]);
 
   if (!open) return null;
 
@@ -199,8 +199,8 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
                           { col: t('employees.bulkImportGuideCols.surname', 'surname'), req: true, fmt: t('employees.bulkImportGuideFmt.text', 'Text'), ex: 'Doe' },
                           { col: t('employees.bulkImportGuideCols.email', 'email'), req: true, fmt: t('employees.bulkImportGuideFmt.email', 'Email'), ex: 'john.doe@example.com' },
                           { col: t('employees.bulkImportGuideCols.role', 'role'), req: true, fmt: t('employees.bulkImportGuideFmt.role', 'admin / hr / area_manager / store_manager / employee'), ex: 'employee' },
-                          { col: t('employees.bulkImportGuideCols.company', 'company'), req: false, fmt: t('employees.bulkImportGuideFmt.companyName', 'Company name'), ex: 'Acme Corp' },
-                          { col: t('employees.bulkImportGuideCols.store', 'store'), req: false, fmt: t('employees.bulkImportGuideFmt.storeName', 'Store name'), ex: 'Paris Store' },
+                          { col: t('employees.bulkImportGuideCols.company', 'company'), req: true, fmt: t('employees.bulkImportGuideFmt.companyName', 'Company name'), ex: 'Acme Corp' },
+                          { col: t('employees.bulkImportGuideCols.store', 'store'), req: true, fmt: t('employees.bulkImportGuideFmt.storeName', 'Store name'), ex: 'Paris Store' },
                           { col: t('employees.bulkImportGuideCols.supervisor', 'supervisor'), req: false, fmt: t('employees.bulkImportGuideFmt.supervisor', 'Full name or Email'), ex: 'Jane Smith' },
                           { col: t('employees.bulkImportGuideCols.department', 'department'), req: false, fmt: t('employees.bulkImportGuideFmt.text', 'Text'), ex: 'Sales' },
                           { col: t('employees.bulkImportGuideCols.hireDate', 'hire date'), req: false, fmt: t('employees.bulkImportGuideFmt.date', 'YYYY-MM-DD'), ex: '2026-05-01' },
@@ -226,7 +226,7 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
                   </div>
                   <div style={{ padding: '8px 14px', background: 'rgba(139,105,20,0.05)', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--accent)', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <span style={{ fontSize: 14 }}>💡</span>
-                    <span>{t('employees.bulkImportTemplateHint', 'Required fields: Name, Surname, Email, Role, Personal email. Dates should be YYYY-MM-DD.')}</span>
+                    <span>{t('employees.bulkImportTemplateHint', 'Required fields: Name, Surname, Email, Role, Personal email, Company, Store. Dates should be YYYY-MM-DD.')}</span>
                   </div>
                 </div>
               )}

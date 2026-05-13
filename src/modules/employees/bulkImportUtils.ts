@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { TFunction } from 'i18next';
 import { createEmployee } from '../../api/employees';
 import { Employee, Company, Store, UserRole } from '../../types';
 
@@ -219,6 +220,7 @@ export async function processRow(
   companies: Company[],
   stores: Store[],
   supervisors: Employee[],
+  t: TFunction
 ): Promise<ImportResult> {
   const { rowIndex, data } = row;
   // 1. Map columns
@@ -235,8 +237,8 @@ export async function processRow(
       rowIndex, 
       success: false, 
       error: hasHeader 
-        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'name' } }
-        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'name' } }
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: t('employees.bulkImportGuideCols.name', 'name') } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: t('employees.bulkImportGuideCols.name', 'name') } }
     };
   }
   if (!mapped.surname) {
@@ -245,8 +247,8 @@ export async function processRow(
       rowIndex, 
       success: false, 
       error: hasHeader 
-        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'surname' } }
-        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'surname' } }
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: t('employees.bulkImportGuideCols.surname', 'surname') } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: t('employees.bulkImportGuideCols.surname', 'surname') } }
     };
   }
   if (!mapped.email) {
@@ -255,8 +257,8 @@ export async function processRow(
       rowIndex, 
       success: false, 
       error: hasHeader 
-        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'email' } }
-        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'email' } }
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: t('employees.bulkImportGuideCols.email', 'email') } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: t('employees.bulkImportGuideCols.email', 'email') } }
     };
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mapped.email)) {
@@ -274,8 +276,8 @@ export async function processRow(
       rowIndex, 
       success: false, 
       error: hasHeader 
-        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: 'personal email' } }
-        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: 'personal email' } }
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: t('employees.bulkImportGuideCols.personalEmail', 'personal email') } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: t('employees.bulkImportGuideCols.personalEmail', 'personal email') } }
     };
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mapped.personalEmail)) {
@@ -283,6 +285,30 @@ export async function processRow(
       rowIndex, 
       success: false, 
       error: { key: 'employees.bulkImportErrorInvalidEmail', params: { email: mapped.personalEmail } } 
+    };
+  }
+
+  // Required company
+  if (!mapped.companyName) {
+    const hasHeader = Object.keys(data).some(h => COLUMN_MAP[h.trim().toLowerCase()] === 'companyName');
+    return { 
+      rowIndex, 
+      success: false, 
+      error: hasHeader 
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: t('employees.bulkImportGuideCols.company', 'company') } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: t('employees.bulkImportGuideCols.company', 'company') } }
+    };
+  }
+
+  // Required store
+  if (!mapped.storeName) {
+    const hasHeader = Object.keys(data).some(h => COLUMN_MAP[h.trim().toLowerCase()] === 'storeName');
+    return { 
+      rowIndex, 
+      success: false, 
+      error: hasHeader 
+        ? { key: 'employees.bulkImportErrorFieldEmpty', params: { field: t('employees.bulkImportGuideCols.store', 'store') } }
+        : { key: 'employees.bulkImportErrorColumnMissing', params: { field: t('employees.bulkImportGuideCols.store', 'store') } }
     };
   }
 
@@ -320,8 +346,13 @@ export async function processRow(
     if (store) {
       storeId = store.id;
       if (!companyId) inferredCompanyId = store.companyId;
+    } else {
+      return { 
+        rowIndex, 
+        success: false, 
+        error: { key: 'employees.bulkImportErrorStoreNotFound', params: { store: mapped.storeName } } 
+      };
     }
-    // skip silently if not found
   }
 
   // 6. Supervisor lookup by name
@@ -384,7 +415,17 @@ export async function processRow(
     return { rowIndex, success: true, employee: emp };
   } catch (err: unknown) {
     const data = (err as any)?.response?.data;
-    // Capture the exact reason from backend (might be under 'error' or 'message')
+    // 1. Check validation errors structure (status 422 / errors map)
+    if (data?.errors && typeof data.errors === 'object') {
+      const errorMessages = Object.entries(data.errors)
+        .flatMap(([_, msgs]) => (Array.isArray(msgs) ? msgs : [msgs]))
+        .filter(Boolean)
+        .join(' ');
+      if (errorMessages) {
+        return { rowIndex, success: false, error: errorMessages };
+      }
+    }
+    // 2. Capture the exact reason from backend (might be under 'error' or 'message')
     if (data?.code) {
       return { 
         rowIndex, 
