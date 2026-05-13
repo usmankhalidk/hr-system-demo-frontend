@@ -419,7 +419,7 @@ export function EmployeeList() {
     },
     {
       key: 'actions',
-      label: '',
+      label: t('employees.colActions', 'Action'),
       width: '80px',
       align: 'right',
       render: (row) => (
@@ -789,6 +789,9 @@ export function EmployeeList() {
         data={employees}
         loading={loading}
         emptyText={t('employees.noEmployees')}
+        headerBackground="var(--primary)"
+        headerTextColor="#ffffff"
+        headerBorderBottom="none"
       />
 
       <Pagination

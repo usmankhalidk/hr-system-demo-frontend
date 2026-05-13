@@ -309,6 +309,7 @@ const en = {
     colDept: 'Department',
     colStatus: 'Status',
     colCompany: 'Company',
+    colActions: 'Action',
     filterByCompany: 'Filter by company',
     allCompanies: 'All companies',
     errorLoad: 'Error loading employees',

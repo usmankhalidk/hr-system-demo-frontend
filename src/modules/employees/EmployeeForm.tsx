@@ -13,11 +13,11 @@ import apiClient, { getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../
 import { Company, Employee, Store, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { Select } from '../../components/ui/Select';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { LocationFieldGroup } from '../../components/location';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 
 interface EmployeeFormProps {
   open?: boolean;
@@ -785,7 +785,8 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
         )}
 
         {/* Scrollable body */}
-        {!createdCredentials && <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '24px' }}>
+        {!createdCredentials && (
+          <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '24px' }}>
           {loadingData ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '56px' }}>
               <Spinner size="md" />
@@ -1084,21 +1085,31 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                   )}
 
                   <div style={{ marginBottom: '14px' }}>
-                    <Select
-                      label={`${t('common.role')} *`}
-                      value={formData.role}
-                      onChange={(e) => set('role', e.target.value)}
+                    <div style={{
+                      display: 'block',
+                      marginBottom: '5px',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                      color: step1Errors.role ? 'var(--danger)' : 'var(--text-secondary)',
+                      letterSpacing: '0.01em',
+                    }}>
+                      {`${t('common.role')} *`}
+                    </div>
+                    <CustomSelect
+                      value={formData.role || null}
+                      onChange={(value) => set('role', value || '')}
+                      options={[
+                        ...((canAssignAdminRole || formData.role === 'admin') ? [{ value: 'admin', label: tRole('admin') }] : []),
+                        { value: 'hr', label: tRole('hr') },
+                        { value: 'area_manager', label: tRole('area_manager') },
+                        { value: 'store_manager', label: tRole('store_manager') },
+                        { value: 'employee', label: tRole('employee') },
+                      ]}
+                      placeholder={t('employees.selectRole')}
                       error={step1Errors.role}
-                    >
-                      <option value="">{t('employees.selectRole')}</option>
-                      {(canAssignAdminRole || formData.role === 'admin') && (
-                        <option value="admin">{tRole('admin')}</option>
-                      )}
-                      <option value="hr">{tRole('hr')}</option>
-                      <option value="area_manager">{tRole('area_manager')}</option>
-                      <option value="store_manager">{tRole('store_manager')}</option>
-                      <option value="employee">{tRole('employee')}</option>
-                    </Select>
+                      isClearable={false}
+                      searchable={false}
+                    />
                   </div>
 
                   <SectionDivider label={t('common.store')} />
@@ -1685,15 +1696,26 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                     />
                   </div>
                   <div style={row2}>
-                    <Select
-                      label={t('employees.workingTypeField')}
-                      value={formData.workingType}
-                      onChange={(e) => set('workingType', e.target.value)}
-                    >
-                      <option value="">{t('employees.selectOption')}</option>
-                      <option value="full_time">{t('employees.fullTime')}</option>
-                      <option value="part_time">{t('employees.partTime')}</option>
-                    </Select>
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                      <label style={{
+                        display: 'block', fontSize: '12px', fontWeight: 600,
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'var(--font-body)', marginBottom: '5px', letterSpacing: '0.01em',
+                      }}>
+                        {t('employees.workingTypeField')}
+                      </label>
+                      <CustomSelect
+                        value={formData.workingType || null}
+                        onChange={(value) => set('workingType', value || '')}
+                        options={[
+                          { value: 'full_time', label: t('employees.fullTime') },
+                          { value: 'part_time', label: t('employees.partTime') },
+                        ]}
+                        placeholder={t('employees.selectOption')}
+                        isClearable={true}
+                        searchable={false}
+                      />
+                    </div>
                     <Input
                       label={t('employees.weeklyHoursField')}
                       type="number"
@@ -1725,16 +1747,27 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       value={formData.nationality}
                       onChange={(e) => set('nationality', e.target.value)}
                     />
-                    <Select
-                      label={t('employees.genderField')}
-                      value={formData.gender}
-                      onChange={(e) => set('gender', e.target.value)}
-                    >
-                      <option value="">{t('employees.selectOption')}</option>
-                      <option value="M">{t('employees.genderMale')}</option>
-                      <option value="F">{t('employees.genderFemale')}</option>
-                      <option value="other">{t('employees.genderOther')}</option>
-                    </Select>
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                      <label style={{
+                        display: 'block', fontSize: '12px', fontWeight: 600,
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'var(--font-body)', marginBottom: '5px', letterSpacing: '0.01em',
+                      }}>
+                        {t('employees.genderField')}
+                      </label>
+                      <CustomSelect
+                        value={formData.gender || null}
+                        onChange={(value) => set('gender', value || '')}
+                        options={[
+                          { value: 'M', label: t('employees.genderMale') },
+                          { value: 'F', label: t('employees.genderFemale') },
+                          { value: 'other', label: t('employees.genderOther') },
+                        ]}
+                        placeholder={t('employees.selectOption')}
+                        isClearable={true}
+                        searchable={false}
+                      />
+                    </div>
                   </div>
                   <div style={{ marginBottom: '14px' }}>
                     <Input
@@ -1776,24 +1809,35 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                     }}
                   />
                   <div style={row2}>
-                    <Select
-                      label={t('employees.maritalStatusField')}
-                      value={formData.maritalStatus}
-                      onChange={(e) => set('maritalStatus', e.target.value)}
-                    >
-                      <option value="">{t('employees.selectOption')}</option>
-                      <option value="Celibe">{t('employees.marital_celibe')}</option>
-                      <option value="Nubile">{t('employees.marital_nubile')}</option>
-                      <option value="Coniugato">{t('employees.marital_coniugato')}</option>
-                      <option value="Coniugata">{t('employees.marital_coniugata')}</option>
-                      <option value="Divorziato">{t('employees.marital_divorziato')}</option>
-                      <option value="Divorziata">{t('employees.marital_divorziata')}</option>
-                      <option value="Vedovo">{t('employees.marital_vedovo')}</option>
-                      <option value="Vedova">{t('employees.marital_vedova')}</option>
-                      <option value="Separato">{t('employees.marital_separato')}</option>
-                      <option value="Separata">{t('employees.marital_separata')}</option>
-                      <option value="Unione Civile">{t('employees.marital_unione_civile')}</option>
-                    </Select>
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                      <label style={{
+                        display: 'block', fontSize: '12px', fontWeight: 600,
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'var(--font-body)', marginBottom: '5px', letterSpacing: '0.01em',
+                      }}>
+                        {t('employees.maritalStatusField')}
+                      </label>
+                      <CustomSelect
+                        value={formData.maritalStatus || null}
+                        onChange={(value) => set('maritalStatus', value || '')}
+                        options={[
+                          { value: 'Celibe', label: t('employees.marital_celibe') },
+                          { value: 'Nubile', label: t('employees.marital_nubile') },
+                          { value: 'Coniugato', label: t('employees.marital_coniugato') },
+                          { value: 'Coniugata', label: t('employees.marital_coniugata') },
+                          { value: 'Divorziato', label: t('employees.marital_divorziato') },
+                          { value: 'Divorziata', label: t('employees.marital_divorziata') },
+                          { value: 'Vedovo', label: t('employees.marital_vedovo') },
+                          { value: 'Vedova', label: t('employees.marital_vedova') },
+                          { value: 'Separato', label: t('employees.marital_separato') },
+                          { value: 'Separata', label: t('employees.marital_separata') },
+                          { value: 'Unione Civile', label: t('employees.marital_unione_civile') },
+                        ]}
+                        placeholder={t('employees.selectOption')}
+                        isClearable={true}
+                        searchable={true}
+                      />
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '9px', paddingTop: '22px' }}>
                       <input
                         id="firstAidFlag"
@@ -1815,19 +1859,30 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                     </div>
                   </div>
                   <div style={row2}>
-                    <Select
-                      label={t('employees.contractTypeField')}
-                      value={formData.contractType}
-                      onChange={(e) => set('contractType', e.target.value)}
-                    >
-                      <option value="">{t('employees.selectOption')}</option>
-                      <option value="Tempo Indeterminato">{t('employees.contractType_indeterminato')}</option>
-                      <option value="Tempo Determinato">{t('employees.contractType_determinato')}</option>
-                      <option value="Apprendistato">{t('employees.contractType_apprendistato')}</option>
-                      <option value="Stage / Tirocinio">{t('employees.contractType_stage')}</option>
-                      <option value="Partita IVA / Collaborazione">{t('employees.contractType_partita_iva')}</option>
-                      <option value="Altro">{t('employees.contractType_altro')}</option>
-                    </Select>
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                      <label style={{
+                        display: 'block', fontSize: '12px', fontWeight: 600,
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'var(--font-body)', marginBottom: '5px', letterSpacing: '0.01em',
+                      }}>
+                        {t('employees.contractTypeField')}
+                      </label>
+                      <CustomSelect
+                        value={formData.contractType || null}
+                        onChange={(value) => set('contractType', value || '')}
+                        options={[
+                          { value: 'Tempo Indeterminato', label: t('employees.contractType_indeterminato') },
+                          { value: 'Tempo Determinato', label: t('employees.contractType_determinato') },
+                          { value: 'Apprendistato', label: t('employees.contractType_apprendistato') },
+                          { value: 'Stage / Tirocinio', label: t('employees.contractType_stage') },
+                          { value: 'Partita IVA / Collaborazione', label: t('employees.contractType_partita_iva') },
+                          { value: 'Altro', label: t('employees.contractType_altro') },
+                        ]}
+                        placeholder={t('employees.selectOption')}
+                        isClearable={true}
+                        searchable={false}
+                      />
+                    </div>
                     <Input
                       label={t('employees.probationField')}
                       type="number"
@@ -1844,25 +1899,36 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       onChange={(v) => set('terminationDate', v)}
                       placement="top"
                     />
-                    <Select
-                      label={t('employees.terminationTypeField')}
-                      value={formData.terminationType}
-                      onChange={(e) => set('terminationType', e.target.value)}
-                    >
-                      <option value="">{t('employees.selectOption')}</option>
-                      <option value="Dimissioni volontarie">{t('employees.terminationType_dimissioni')}</option>
-                      <option value="Fine contratto">{t('employees.terminationType_fine_contratto')}</option>
-                      <option value="Licenziamento">{t('employees.terminationType_licenziamento')}</option>
-                      <option value="Pensionamento">{t('employees.terminationType_pensionamento')}</option>
-                      <option value="Risoluzione consensuale">{t('employees.terminationType_consensuale')}</option>
-                      <option value="Altro">{t('employees.terminationType_altro')}</option>
-                    </Select>
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                      <label style={{
+                        display: 'block', fontSize: '12px', fontWeight: 600,
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'var(--font-body)', marginBottom: '5px', letterSpacing: '0.01em',
+                      }}>
+                        {t('employees.terminationTypeField')}
+                      </label>
+                      <CustomSelect
+                        value={formData.terminationType || null}
+                        onChange={(value) => set('terminationType', value || '')}
+                        options={[
+                          { value: 'Dimissioni volontarie', label: t('employees.terminationType_dimissioni') },
+                          { value: 'Fine contratto', label: t('employees.terminationType_fine_contratto') },
+                          { value: 'Licenziamento', label: t('employees.terminationType_licenziamento') },
+                          { value: 'Pensionamento', label: t('employees.terminationType_pensionamento') },
+                          { value: 'Risoluzione consensuale', label: t('employees.terminationType_consensuale') },
+                          { value: 'Altro', label: t('employees.terminationType_altro') },
+                        ]}
+                        placeholder={t('employees.selectOption')}
+                        isClearable={true}
+                        searchable={false}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
             </>
           )}
-        </div>}
+        </div>)}
 
         {/* Footer (only shown when not on credentials card) */}
         {!createdCredentials && <div style={{
