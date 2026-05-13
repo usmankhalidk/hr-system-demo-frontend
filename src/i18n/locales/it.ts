@@ -303,6 +303,7 @@ const it = {
     colDept: 'Dipartimento',
     colStatus: 'Stato',
     colCompany: 'Azienda',
+    colActions: 'Azione',
     filterByCompany: 'Filtra per azienda',
     allCompanies: 'Tutte le aziende',
     errorLoad: 'Errore nel caricamento dei dipendenti',

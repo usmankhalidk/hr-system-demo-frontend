@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { DatePicker } from '../../components/ui/DatePicker';
+import CustomSelect from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
 import {
@@ -539,6 +540,19 @@ export default function PublicJobDetailPage() {
   const { i18n } = useTranslation();
   const uiLanguage: UiLanguage = i18n.language?.startsWith('it') ? 'it' : 'en';
   const copy = COPY[uiLanguage];
+
+  const genderOptions = useMemo(() => [
+    { value: 'M', label: uiLanguage === 'it' ? 'Maschio' : 'Male' },
+    { value: 'F', label: uiLanguage === 'it' ? 'Femmina' : 'Female' },
+    { value: 'other', label: uiLanguage === 'it' ? 'Altro' : 'Other' },
+  ], [uiLanguage]);
+
+  const maritalStatusOptions = useMemo(() => [
+    { value: 'single', label: uiLanguage === 'it' ? 'Single' : 'Single' },
+    { value: 'married', label: uiLanguage === 'it' ? 'Sposato/a' : 'Married' },
+    { value: 'divorced', label: uiLanguage === 'it' ? 'Divorziato/a' : 'Divorced' },
+    { value: 'partnered', label: uiLanguage === 'it' ? 'In coppia' : 'Partnered' },
+  ], [uiLanguage]);
 
   const { jobId, companySlug } = useParams<{ jobId?: string; companySlug?: string }>();
   const legacyCompanySlug = useMemo(() => {
@@ -1176,29 +1190,28 @@ export default function PublicJobDetailPage() {
                       placeholder={uiLanguage === 'it' ? 'Nazionalità' : 'Nationality'}
                       required
                     />
-                    <select
-                      className="careers-form-input"
-                      value={appProfile.gender}
-                      onChange={(event) => setAppProfile((prev) => ({ ...prev, gender: event.target.value }))}
-                      required
-                    >
-                      <option value="">{uiLanguage === 'it' ? 'Genere' : 'Gender'}</option>
-                      <option value="M">{uiLanguage === 'it' ? 'Maschio' : 'Male'}</option>
-                      <option value="F">{uiLanguage === 'it' ? 'Femmina' : 'Female'}</option>
-                      <option value="other">{uiLanguage === 'it' ? 'Altro' : 'Other'}</option>
-                    </select>
+                    <CustomSelect
+                      value={appProfile.gender || null}
+                      onChange={(value) => setAppProfile((prev) => ({ ...prev, gender: value || '' }))}
+                      options={genderOptions}
+                      placeholder={uiLanguage === 'it' ? 'Genere' : 'Gender'}
+                      isClearable={false}
+                      searchable={false}
+                    />
                     <DatePicker
                       value={appProfile.dateOfBirth}
                       onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
                       label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
                       initialViewYear={new Date().getFullYear() - 30}
                       placement="bottom"
+                      disablePortal
                     />
                     <DatePicker
                       value={appProfile.applicationDate}
                       onChange={(value) => setAppProfile((prev) => ({ ...prev, applicationDate: value }))}
                       label={uiLanguage === 'it' ? 'Data candidatura' : 'Application date'}
                       placement="bottom"
+                      disablePortal
                     />
                     <input
                       className="careers-form-input"
@@ -1518,6 +1531,7 @@ export default function PublicJobDetailPage() {
                         label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
                         initialViewYear={new Date().getFullYear() - 30}
                         placement="bottom"
+                        disablePortal
                       />
                       <input
                         className="careers-form-input"
@@ -1530,27 +1544,22 @@ export default function PublicJobDetailPage() {
                     </div>
 
                     <div className="careers-form-row">
-                      <select
-                        className="careers-form-input"
-                        value={appProfile.gender}
-                        onChange={(event) => setAppProfile((prev) => ({ ...prev, gender: event.target.value }))}
-                      >
-                        <option value="">{uiLanguage === 'it' ? 'Genere' : 'Gender'}</option>
-                        <option value="M">{uiLanguage === 'it' ? 'Maschio' : 'Male'}</option>
-                        <option value="F">{uiLanguage === 'it' ? 'Femmina' : 'Female'}</option>
-                        <option value="other">{uiLanguage === 'it' ? 'Altro' : 'Other'}</option>
-                      </select>
-                      <select
-                        className="careers-form-input"
-                        value={appProfile.maritalStatus}
-                        onChange={(event) => setAppProfile((prev) => ({ ...prev, maritalStatus: event.target.value }))}
-                      >
-                        <option value="">{uiLanguage === 'it' ? 'Stato civile' : 'Marital status'}</option>
-                        <option value="single">{uiLanguage === 'it' ? 'Single' : 'Single'}</option>
-                        <option value="married">{uiLanguage === 'it' ? 'Sposato/a' : 'Married'}</option>
-                        <option value="divorced">{uiLanguage === 'it' ? 'Divorziato/a' : 'Divorced'}</option>
-                        <option value="partnered">{uiLanguage === 'it' ? 'In coppia' : 'Partnered'}</option>
-                      </select>
+                      <CustomSelect
+                        value={appProfile.gender || null}
+                        onChange={(value) => setAppProfile((prev) => ({ ...prev, gender: value || '' }))}
+                        options={genderOptions}
+                        placeholder={uiLanguage === 'it' ? 'Genere' : 'Gender'}
+                        isClearable={false}
+                        searchable={false}
+                      />
+                      <CustomSelect
+                        value={appProfile.maritalStatus || null}
+                        onChange={(value) => setAppProfile((prev) => ({ ...prev, maritalStatus: value || '' }))}
+                        options={maritalStatusOptions}
+                        placeholder={uiLanguage === 'it' ? 'Stato civile' : 'Marital status'}
+                        isClearable={false}
+                        searchable={false}
+                      />
                     </div>
 
                     <LocationFieldGroup
@@ -1580,6 +1589,7 @@ export default function PublicJobDetailPage() {
                         onChange={(value) => setAppProfile((prev) => ({ ...prev, startDate: value }))}
                         label={uiLanguage === 'it' ? 'Data di inizio desiderata' : 'Start Date'}
                         placement="bottom"
+                        disablePortal
                       />
                       <input
                         className="careers-form-input"

@@ -74,11 +74,12 @@ interface DatePickerProps {
   initialViewYear?: number; // Override starting year when no value is set (e.g. for date-of-birth)
   placement?: 'top' | 'bottom';
   disableFlip?: boolean;
+  disablePortal?: boolean;
 }
 
 type PickerView = 'calendar' | 'month' | 'year';
 
-export function DatePicker({ label, value, onChange, error, placeholder, disabled, initialViewYear, placement, disableFlip }: DatePickerProps) {
+export function DatePicker({ label, value, onChange, error, placeholder, disabled, initialViewYear, placement, disableFlip, disablePortal }: DatePickerProps) {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('it') ? 'it' : 'en';
 
@@ -117,7 +118,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
   const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
 
   useEffect(() => {
-    if (!open || !containerRef.current) return;
+    if (!open || !containerRef.current || disablePortal) return;
 
     const updatePosition = () => {
       const rect = containerRef.current!.getBoundingClientRect();
@@ -138,14 +139,36 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
         left = 10;
       }
 
-      // Adjust top position to ensure popup appears below the input
-      // Add the input height (38px) plus a small gap (4px)
-      let top = rect.top + 62;
+      // Adjust top position to ensure popup appears below the input trigger
+      let top = rect.bottom + 4;
       
       // Check if popup would go off-screen at the bottom
       if (top + popupHeight > viewportHeight - 10) {
         // Position above the input instead
-        top = rect.top - popupHeight - 5;
+        top = rect.top - popupHeight - 4;
+      }
+      
+      // Ensure popup doesn't go off-screen at the top of the viewport
+      if (top < 10) {
+        top = 10;
+      }
+      
+      // If inside a scrollable modal body, clamp coordinates so that
+      // the popup doesn't escape the top or bottom edges of the modal.
+      const modalBody = containerRef.current!.closest('.modal-body');
+      if (modalBody) {
+        const modalRect = modalBody.getBoundingClientRect();
+        const minTop = modalRect.top + 4;
+        const maxTop = modalRect.bottom - popupHeight - 4;
+        
+        if (maxTop >= minTop) {
+          if (top < minTop) {
+            top = minTop;
+          }
+          if (top > maxTop) {
+            top = maxTop;
+          }
+        }
       }
       
       setCoords({
@@ -163,7 +186,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
     };
-  }, [open]);
+  }, [open, disablePortal]);
 
   // --- Direction logic ---
   // If absolute within a scrollable panel, we just respect the placement prop.
@@ -261,25 +284,9 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
     </button>
   );
 
-  // ── Calendar popup (Portaled to document.body) ─────────
-  const popup = open ? createPortal(
-    <div
-      ref={popupRef}
-      className="pop-in"
-      style={{
-        position: 'fixed',
-        zIndex: 99999,
-        top: coords.top,
-        left: coords.left,
-        minWidth: '272px',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)',
-        overflow: 'hidden',
-      }}
-      onClick={e => e.stopPropagation()}
-    >
+  // ── Calendar popup inner content ───────────────────────────
+  const popupContent = (
+    <>
       {/* ─ Header ─ */}
       <div style={{
         background: 'var(--primary)', padding: '8px 12px',
@@ -516,8 +523,54 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
           </button>
         </div>
       )}
-    </div>,
-    document.body
+    </>
+  );
+
+  // ── Calendar popup (Portaled or inline absolute) ─────────
+  const popup = open ? (
+    disablePortal ? (
+      <div
+        ref={popupRef}
+        className="pop-in"
+        style={{
+          position: 'absolute',
+          zIndex: 100,
+          top: finalPlacement === 'bottom' ? 'calc(100% + 4px)' : 'auto',
+          bottom: finalPlacement === 'top' ? 'calc(100% + 4px)' : 'auto',
+          left: 0,
+          minWidth: '272px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)',
+          overflow: 'hidden',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {popupContent}
+      </div>
+    ) : createPortal(
+      <div
+        ref={popupRef}
+        className="pop-in"
+        style={{
+          position: 'fixed',
+          zIndex: 99999,
+          top: coords.top,
+          left: coords.left,
+          minWidth: '272px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)',
+          overflow: 'hidden',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {popupContent}
+      </div>,
+      document.body
+    )
   ) : null;
 
   return (

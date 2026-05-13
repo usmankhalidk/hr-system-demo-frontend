@@ -911,6 +911,9 @@ export function StoreList() {
         data={stores}
         loading={loading}
         emptyText={t('stores.noStores')}
+        headerBackground="var(--primary)"
+        headerTextColor="#ffffff"
+        headerBorderBottom="none"
       />
 
       {/* Create / Edit Modal */}

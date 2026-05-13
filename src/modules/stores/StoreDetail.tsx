@@ -354,7 +354,7 @@ export default function StoreDetail() {
     try {
       const [storeData, employeesData, hoursData] = await Promise.all([
         getStore(storeId),
-        getEmployees({ storeId, status: 'active', limit: 250 }),
+        getEmployees({ storeId, status: 'active', limit: 250 }).catch(() => ({ employees: [] })),
         getStoreOperatingHours(storeId).catch(() => []),
       ]);
 
