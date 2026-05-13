@@ -5450,7 +5450,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     applicationSource: 'ats',
     applicationChannel: 'internal',
     startDate: '',
-    postalCode: '',
   }));
   const [addCvFile, setAddCvFile] = useState<File | null>(null);
   const [addCoverLetter, setAddCoverLetter] = useState('');
@@ -5833,7 +5832,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       applicationSource: 'ats',
       applicationChannel: 'internal',
       startDate: '',
-      postalCode: '',
     }));
     setAddCvFile(null);
     setAddCoverLetter('');
