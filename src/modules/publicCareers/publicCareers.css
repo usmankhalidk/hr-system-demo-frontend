@@ -306,7 +306,7 @@
   gap: 8px;
 }
 
-.careers-tags-wrap > span {
+.careers-tags-wrap>span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -731,6 +731,7 @@
   grid-template-rows: auto 1fr;
   scrollbar-width: thin;
   scrollbar-color: rgba(201, 151, 58, 0.4) rgba(201, 151, 58, 0.1);
+  padding: 0 !important;
 }
 
 .careers-apply-modal::-webkit-scrollbar {
@@ -753,9 +754,9 @@
 
 .careers-apply-modal .careers-filter-modal-header {
   background: linear-gradient(135deg, rgba(201, 151, 58, 0.08), rgba(255, 255, 255, 0.95));
-  padding: 18px 20px;
+  padding: 18px 20px 18px;
   border-bottom: 1px solid rgba(201, 151, 58, 0.18);
-  margin: -16px -16px 0;
+  margin: 0;
   border-radius: 16px 16px 0 0;
   position: sticky;
   top: 0;
@@ -897,7 +898,7 @@
     max-height: calc(100vh - 32px);
     overflow: auto;
   }
-  
+
   .careers-apply-modal {
     max-height: calc(100vh - 24px);
   }
@@ -950,12 +951,12 @@
   position: relative;
   border-radius: 22px;
   overflow: hidden;
-  min-height: 300px;
+  min-height: auto;
   border: 1px solid rgba(201, 151, 58, 0.2);
   box-shadow: 0 20px 58px rgba(83, 66, 29, 0.14);
 }
 
-.careers-detail-hero img {
+.careers-detail-hero>img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -981,11 +982,12 @@
 .careers-detail-hero-content {
   position: relative;
   z-index: 1;
-  min-height: 300px;
-  padding: 22px;
+  min-height: auto;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  gap: 20px;
   color: #ffffff;
 }
 
@@ -1127,9 +1129,94 @@
 
 .careers-detail-body {
   color: #374151;
-  line-height: 1.7;
-  white-space: pre-wrap;
+  line-height: 1.65;
   font-size: 14px;
+}
+
+/* Normalize paragraphs */
+.careers-detail-body p {
+  margin: 0 0 8px 0;
+}
+
+.careers-detail-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* Bullet and numbered lists */
+.careers-detail-body ul,
+.careers-detail-body ol {
+  margin: 4px 0 8px 0;
+  padding-left: 22px;
+}
+
+.careers-detail-body ul {
+  list-style-type: disc;
+}
+
+.careers-detail-body ol {
+  list-style-type: decimal;
+}
+
+.careers-detail-body li {
+  margin-bottom: 3px;
+  line-height: 1.6;
+}
+
+.careers-detail-body li:last-child {
+  margin-bottom: 0;
+}
+
+/* Strip extra paragraph margin inside list items (pasted from Word/Google Docs) */
+.careers-detail-body li>p {
+  margin: 0;
+  display: inline;
+}
+
+/* Headings */
+.careers-detail-body h1 {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 14px 0 8px;
+  color: #111827;
+}
+
+.careers-detail-body h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 12px 0 6px;
+  color: #111827;
+}
+
+.careers-detail-body h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+  margin: 10px 0 5px;
+  color: #111827;
+}
+
+/* Inline formatting */
+.careers-detail-body strong,
+.careers-detail-body b {
+  font-weight: 700;
+  color: #111827;
+}
+
+.careers-detail-body em,
+.careers-detail-body i {
+  font-style: italic;
+}
+
+.careers-detail-body u {
+  text-decoration: underline;
+}
+
+/* Divs used as paragraph spacers from legacy parser */
+.careers-detail-body>div {
+  margin-bottom: 4px;
+}
+
+.careers-detail-body>div:last-child {
+  margin-bottom: 0;
 }
 
 .careers-warning {
@@ -1521,7 +1608,7 @@
 
   .careers-detail-hero,
   .careers-detail-hero-content {
-    min-height: 260px;
+    min-height: auto;
   }
 
   .careers-detail-hero-content {

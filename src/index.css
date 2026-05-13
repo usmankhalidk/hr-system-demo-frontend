@@ -479,3 +479,60 @@ input, select, textarea {
     max-width: 900px !important;
   }
 }
+
+/* ── Rich text preview normalisation (used in ATS position preview + career detail body) ── */
+.rte-preview,
+.careers-detail-body {
+  /* Paragraphs: tight spacing */
+}
+.rte-preview p {
+  margin: 0 0 6px 0;
+  line-height: 1.6;
+}
+.rte-preview p:last-child {
+  margin-bottom: 0;
+}
+.rte-preview ul,
+.rte-preview ol {
+  margin: 3px 0 6px 0;
+  padding-left: 20px;
+}
+.rte-preview ul {
+  list-style-type: disc;
+}
+.rte-preview ol {
+  list-style-type: decimal;
+}
+.rte-preview li {
+  margin-bottom: 2px;
+  line-height: 1.6;
+}
+.rte-preview li:last-child {
+  margin-bottom: 0;
+}
+/* Strip extra paragraph margin inside list items pasted from Word/Google Docs */
+.rte-preview li > p {
+  margin: 0;
+  display: inline;
+}
+.rte-preview strong,
+.rte-preview b {
+  font-weight: 700;
+}
+.rte-preview em,
+.rte-preview i {
+  font-style: italic;
+}
+.rte-preview h1,
+.rte-preview h2,
+.rte-preview h3 {
+  margin: 10px 0 5px;
+  font-weight: 700;
+  color: inherit;
+}
+.rte-preview > div {
+  margin-bottom: 3px;
+}
+.rte-preview > div:last-child {
+  margin-bottom: 0;
+}

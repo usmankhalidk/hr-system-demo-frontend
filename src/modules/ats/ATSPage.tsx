@@ -56,13 +56,13 @@ import {
   getInterviews, createInterview, updateInterview, deleteInterview,
   getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
   getInterviewNotifications, sendInterviewEmail,
-  getAlerts, getRisks,
+  getAlerts, getRisks, getAllInterviewFeedbackComments,
   previewJobTranslation,
-  JobPosting, Candidate, Interview, HRAlert, JobRisk,
+  JobPosting, Candidate, Interview, HRAlert, JobRisk, AllInterviewFeedbackComment,
   InterviewFeedbackComment, InterviewNotificationLog,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
 } from '../../api/ats';
-import { parseCandidateProfile, serializeCandidateProfile, type CandidateApplicationProfile } from './candidateProfile';
+import { parseCandidateProfile, serializeCandidateProfile, buildCandidateProfile, type CandidateApplicationProfile } from './candidateProfile';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import InterviewsPanel from './InterviewsPanel';
 import CalendarPanel from './CalendarPanel';
@@ -393,6 +393,223 @@ const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; closeOnBack
     document.body
   );
 
+// ─── Rich text editor ──────────────────────────────────────────────────────────
+
+interface RichTextEditorProps {
+  value: string;
+  onChange: (html: string) => void;
+  placeholder?: string;
+  minHeight?: number;
+  hasError?: boolean;
+}
+
+const RTE_TOOLBAR_BTN: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 6,
+  border: '1px solid rgba(148,163,184,0.3)',
+  background: 'transparent',
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 12,
+  fontWeight: 700,
+  color: '#334155',
+  padding: 0,
+  transition: 'background 0.13s, border-color 0.13s',
+  flexShrink: 0,
+};
+
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, minHeight = 160, hasError }) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const isInternalUpdate = useRef(false);
+
+  // Sync external value → DOM (only on initial mount or when externally reset)
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
+      return;
+    }
+    // Only set if content actually differs to avoid cursor jump
+    if (el.innerHTML !== value) {
+      el.innerHTML = value;
+    }
+  }, [value]);
+
+  const execCmd = (command: string, val?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, val);
+    syncContent();
+  };
+
+  const syncContent = () => {
+    const el = editorRef.current;
+    if (!el) return;
+    isInternalUpdate.current = true;
+    onChange(el.innerHTML);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const plain = e.clipboardData.getData('text/plain');
+
+    if (html) {
+      // Sanitise pasted HTML: keep only allowed tags, strip scripts/iframes
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+
+      // Remove disallowed elements
+      ['script', 'iframe', 'style', 'head', 'meta', 'link', 'object', 'embed'].forEach((tag) => {
+        tmp.querySelectorAll(tag).forEach((el) => el.remove());
+      });
+
+      // Strip all attributes except href on <a>
+      tmp.querySelectorAll('*').forEach((el) => {
+        const tag = el.tagName.toLowerCase();
+        const allowedAttrs = tag === 'a' ? ['href'] : [];
+        Array.from(el.attributes).forEach((attr) => {
+          if (!allowedAttrs.includes(attr.name)) {
+            el.removeAttribute(attr.name);
+          }
+        });
+      });
+
+      // Map headings / divs / spans to clean block elements
+      tmp.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((el) => {
+        const p = document.createElement('p');
+        p.innerHTML = el.innerHTML;
+        el.replaceWith(p);
+      });
+
+      document.execCommand('insertHTML', false, tmp.innerHTML);
+    } else if (plain) {
+      // Convert plain text newlines to <br>
+      const safeHtml = plain
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .split('\n')
+        .join('<br>');
+      document.execCommand('insertHTML', false, safeHtml);
+    }
+
+    syncContent();
+  };
+
+  const isEmpty = !value || value === '<br>' || value === '<p><br></p>' || value.replace(/<[^>]*>/g, '').trim() === '';
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${hasError ? '#B91C1C' : 'var(--border)'}`,
+        borderRadius: 10,
+        background: '#fff',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          padding: '5px 8px',
+          borderBottom: '1px solid var(--border)',
+          background: '#f8fafc',
+          flexWrap: 'wrap',
+        }}
+      >
+        <button type="button" title="Bold (Ctrl+B)" style={{ ...RTE_TOOLBAR_BTN, fontWeight: 900 }} onMouseDown={(e) => { e.preventDefault(); execCmd('bold'); }}>B</button>
+        <button type="button" title="Italic (Ctrl+I)" style={{ ...RTE_TOOLBAR_BTN, fontStyle: 'italic' }} onMouseDown={(e) => { e.preventDefault(); execCmd('italic'); }}>I</button>
+        <button type="button" title="Underline (Ctrl+U)" style={{ ...RTE_TOOLBAR_BTN, textDecoration: 'underline' }} onMouseDown={(e) => { e.preventDefault(); execCmd('underline'); }}>U</button>
+        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 3px', flexShrink: 0 }} />
+        <button
+          type="button"
+          title="Bullet list"
+          style={RTE_TOOLBAR_BTN}
+          onMouseDown={(e) => { e.preventDefault(); execCmd('insertUnorderedList'); }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="1.5" cy="3.5" r="1.5" fill="#334155" />
+            <rect x="4" y="2.75" width="9" height="1.5" rx="0.75" fill="#334155" />
+            <circle cx="1.5" cy="7" r="1.5" fill="#334155" />
+            <rect x="4" y="6.25" width="9" height="1.5" rx="0.75" fill="#334155" />
+            <circle cx="1.5" cy="10.5" r="1.5" fill="#334155" />
+            <rect x="4" y="9.75" width="9" height="1.5" rx="0.75" fill="#334155" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          title="Numbered list"
+          style={RTE_TOOLBAR_BTN}
+          onMouseDown={(e) => { e.preventDefault(); execCmd('insertOrderedList'); }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="0" y="5" fontSize="5" fontWeight="700" fill="#334155">1.</text>
+            <rect x="4" y="2.75" width="9" height="1.5" rx="0.75" fill="#334155" />
+            <text x="0" y="9.5" fontSize="5" fontWeight="700" fill="#334155">2.</text>
+            <rect x="4" y="6.25" width="9" height="1.5" rx="0.75" fill="#334155" />
+            <text x="0" y="13.5" fontSize="5" fontWeight="700" fill="#334155">3.</text>
+            <rect x="4" y="9.75" width="9" height="1.5" rx="0.75" fill="#334155" />
+          </svg>
+        </button>
+        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 3px', flexShrink: 0 }} />
+        <button
+          type="button"
+          title="Clear formatting"
+          style={{ ...RTE_TOOLBAR_BTN, fontSize: 10 }}
+          onMouseDown={(e) => { e.preventDefault(); execCmd('removeFormat'); }}
+        >
+          Tx
+        </button>
+      </div>
+
+      {/* Editable area */}
+      <div style={{ position: 'relative' }}>
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={syncContent}
+          onPaste={handlePaste}
+          style={{
+            minHeight,
+            padding: '10px 12px',
+            fontSize: 13.5,
+            lineHeight: 1.6,
+            color: '#111827',
+            outline: 'none',
+            fontFamily: 'inherit',
+            wordBreak: 'break-word',
+          }}
+        />
+        {isEmpty && placeholder && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 10,
+              left: 12,
+              color: '#9ca3af',
+              fontSize: 13.5,
+              lineHeight: 1.6,
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          >
+            {placeholder}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── Job form modal ────────────────────────────────────────────────────────────
 
 interface JobModalProps {
@@ -448,11 +665,110 @@ type TeamContact = {
   avatarFilename?: string | null;
 };
 
+const parseRichTextToHtml = (text: string): string => {
+  if (!text) return '';
+  
+  // If the text already contains HTML tags (from RichTextEditor), return as-is
+  if (/<[a-zA-Z][^>]*>/.test(text)) {
+    return text;
+  }
+  
+  // Legacy: parse Markdown-style plain text into HTML
+  // 1. Escape HTML first to prevent any broken tags or XSS
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  // 2. Inline elements (Bold, Underline, Italic)
+  // Bold: **text** or __text__
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Underline: ___text___ or __text__
+  escaped = escaped.replace(/__(.*?)__/g, '<u>$1</u>');
+  
+  // Italic: *text* or _text_
+  escaped = escaped.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  escaped = escaped.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+  // 3. Process line-by-line for blocks (headers, lists, and line breaks)
+  const lines = escaped.split('\n');
+  const result: string[] = [];
+  let inUl = false;
+  let inOl = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (line.startsWith('### ')) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push(`<h3 style="margin: 12px 0 6px; font-size: 15px; font-weight: 700; color: #0f172a;">${line.slice(4)}</h3>`);
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push(`<h2 style="margin: 14px 0 8px; font-size: 17px; font-weight: 700; color: #0f172a;">${line.slice(3)}</h2>`);
+      continue;
+    }
+    if (line.startsWith('# ')) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push(`<h1 style="margin: 16px 0 10px; font-size: 19px; font-weight: 800; color: #0f172a;">${line.slice(2)}</h1>`);
+      continue;
+    }
+
+    // Bullet list: check for -, *, •, + followed by space
+    const bulletMatch = line.match(/^([\-*•+])\s+(.*)$/);
+    if (bulletMatch) {
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      if (!inUl) {
+        result.push('<ul style="margin: 6px 0 6px 20px; padding: 0; list-style-type: disc;">');
+        inUl = true;
+      }
+      result.push(`<li style="margin-bottom: 4px; line-height: 1.6; color: inherit;">${bulletMatch[2]}</li>`);
+      continue;
+    }
+
+    // Numbered list: check for digits followed by dot/parenthesis
+    const numberMatch = line.match(/^(\d+)[.\)]\s+(.*)$/);
+    if (numberMatch) {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (!inOl) {
+        result.push('<ol style="margin: 6px 0 6px 20px; padding: 0; list-style-type: decimal;">');
+        inOl = true;
+      }
+      result.push(`<li style="margin-bottom: 4px; line-height: 1.6; color: inherit;">${numberMatch[2]}</li>`);
+      continue;
+    }
+
+    // Close open lists if we hit a standard paragraph
+    if (inUl) { result.push('</ul>'); inUl = false; }
+    if (inOl) { result.push('</ol>'); inOl = false; }
+
+    if (line === '') {
+      result.push('<div style="height: 10px;"></div>');
+    } else {
+      result.push(`<div style="margin-bottom: 6px; line-height: 1.6; min-height: 1.2em;">${rawLine}</div>`);
+    }
+  }
+
+  if (inUl) result.push('</ul>');
+  if (inOl) result.push('</ol>');
+
+  return result.join('\n');
+};
+
 const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultCompanyId, onSave, onClose, saving }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isMobile, isTablet } = useBreakpoint();
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [title, setTitle] = useState(job?.title ?? '');
   const [description, setDescription] = useState(job?.description ?? '');
   const [tags, setTags] = useState<string[]>(job?.tags ?? []);
@@ -568,7 +884,8 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
     const nextErrors: JobModalErrors = {};
 
     if (!title.trim()) nextErrors.title = t('common.required', 'Required');
-    if (!description.trim()) nextErrors.description = t('common.required', 'Required');
+    const descriptionText = description.replace(/<[^>]*>/g, '').trim();
+    if (!descriptionText) nextErrors.description = t('common.required', 'Required');
     if (!jobType) nextErrors.jobType = t('common.required', 'Required');
     if (!remoteType) nextErrors.remoteType = t('common.required', 'Required');
 
@@ -635,7 +952,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
     await onSave({
       title: title.trim(),
-      description: description.trim(),
+      description: description,
       tags,
       language,
       jobType: jobType as JobType,
@@ -1460,16 +1777,15 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
                         {t('ats.jobDescription')} *
                       </label>
-                      <textarea
-                        className="field-input"
+                      <RichTextEditor
                         value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        rows={6}
+                        onChange={setDescription}
                         placeholder={t('ats.jobDescriptionPlaceholder')}
-                        style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
+                        hasError={Boolean(errors.description)}
+                        minHeight={160}
                       />
                     </div>
-                    {errors.description && <div style={{ marginTop: -8, color: '#B91C1C', fontSize: 12 }}>{errors.description}</div>}
+                    {errors.description && <div style={{ marginTop: 4, color: '#B91C1C', fontSize: 12 }}>{errors.description}</div>}
 
                     <div>
                       <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
@@ -1824,7 +2140,49 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                   </div>
 
                   <h4 style={{ margin: '0 0 8px 0', fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 22 }}>{title || '-'}</h4>
-                  <p style={{ margin: '0 0 12px 0', color: '#4b5563', fontSize: 13.5, lineHeight: 1.55 }}>{description.trim() || '-'}</p>
+                  {(() => {
+                    const isLongDescription = description.trim().split('\n').length > 5 || description.trim().length > 250;
+                    return (
+                      <div style={{ margin: '0 0 12px 0' }}>
+                        <div
+                          className="rte-preview"
+                          style={isExpanded ? {
+                            color: '#4b5563',
+                            fontSize: '13.5px',
+                            lineHeight: '1.55',
+                          } : {
+                            color: '#4b5563',
+                            fontSize: '13.5px',
+                            lineHeight: '1.55',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 6,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}
+                          dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(description.trim() || '-') }}
+                        />
+                        {isLongDescription && (
+                          <button
+                            type="button"
+                            onClick={() => setIsExpanded(!isExpanded)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#9A6808',
+                              fontWeight: 700,
+                              fontSize: '12.5px',
+                              cursor: 'pointer',
+                              padding: '4px 0 0',
+                              display: 'block',
+                              outline: 'none'
+                            }}
+                          >
+                            {isExpanded ? t('common.showLess', 'Show Less') : t('common.showMore', 'Show More')}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                     <span style={{ borderRadius: 999, background: 'rgba(15,23,42,0.06)', border: '1px solid rgba(15,23,42,0.09)', color: '#334155', fontSize: 11, fontWeight: 700, padding: '3px 8px' }}>
@@ -1922,7 +2280,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     variant="primary"
                     type="submit"
                     loading={saving}
-                    disabled={!title.trim() || !description.trim() || !jobType || !remoteType || !companyId}
+                    disabled={!title.trim() || !description.replace(/<[^>]*>/g, '').trim() || !jobType || !remoteType || !companyId}
                   >
                     {job ? t('ats.savePosition', 'Save position') : t('ats.createPosition', 'Create position')}
                   </Button>
@@ -5011,7 +5369,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
-  const [addProfile, setAddProfile] = useState<CandidateApplicationProfile>(() => ({
+  const [addProfile, setAddProfile] = useState<CandidateApplicationProfile>(() => buildCandidateProfile({
     availability: '',
     gender: '',
     nationality: '',
@@ -5031,6 +5389,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     applicationDate: new Date().toISOString().slice(0, 10),
     applicationSource: 'ats',
     applicationChannel: 'internal',
+    startDate: '',
+    postalCode: '',
   }));
   const [addCvFile, setAddCvFile] = useState<File | null>(null);
   const [addCoverLetter, setAddCoverLetter] = useState('');
@@ -5381,7 +5741,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     setAddEmail('');
     setAddPhone('');
     setAddLinkedinUrl('');
-    setAddProfile({
+    setAddProfile(buildCandidateProfile({
       availability: '',
       gender: '',
       nationality: '',
@@ -5401,7 +5761,9 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       applicationDate: new Date().toISOString().slice(0, 10),
       applicationSource: 'ats',
       applicationChannel: 'internal',
-    });
+      startDate: '',
+      postalCode: '',
+    }));
     setAddCvFile(null);
     setAddCoverLetter('');
     setAddGdprConsent(false);
@@ -6674,6 +7036,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
   const { t } = useTranslation();
   const [alerts, setAlerts] = useState<HRAlert[]>([]);
   const [risks, setRisks] = useState<JobRisk[]>([]);
+  const [feedbacks, setFeedbacks] = useState<AllInterviewFeedbackComment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -6682,8 +7045,9 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
     Promise.allSettled([
       getAlerts(),
       canViewRisks ? getRisks() : Promise.resolve([] as JobRisk[]),
+      getAllInterviewFeedbackComments(),
     ])
-      .then(([alertsResult, risksResult]) => {
+      .then(([alertsResult, risksResult, feedbacksResult]) => {
         if (!isMounted) return;
 
         if (alertsResult.status === 'fulfilled') {
@@ -6696,6 +7060,12 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
           setRisks(risksResult.value as JobRisk[]);
         } else {
           setRisks([]);
+        }
+
+        if (feedbacksResult.status === 'fulfilled') {
+          setFeedbacks(feedbacksResult.value as AllInterviewFeedbackComment[]);
+        } else {
+          setFeedbacks([]);
         }
       })
       .finally(() => {
@@ -6885,6 +7255,115 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
           </div>
         </div>
       )}
+
+      {/* Feedback Section */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+            💬 {t('ats.feedbackSection', 'Feedback')}
+          </h3>
+          {feedbacks.length > 0 && (
+            <span style={{
+              background: '#0284C7', color: '#fff', borderRadius: 99,
+              fontSize: 11, fontWeight: 700, padding: '1px 8px',
+            }}>
+              {feedbacks.length}
+            </span>
+          )}
+        </div>
+
+        {feedbacks.length === 0 ? (
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 14, padding: '36px 28px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
+            <div style={{ fontWeight: 700, fontSize: 15, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', marginBottom: 4 }}>
+              {t('ats.noFeedback', 'No candidate feedback recorded yet')}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            {feedbacks.map((fb) => {
+              const d = new Date(fb.createdAt);
+              const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+              const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              
+              return (
+                <div key={fb.id} style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  padding: '18px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                }}>
+                  {/* Author and Date/Time Row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <div style={{
+                        width: 36, height: 36, borderRadius: '50%',
+                        background: 'rgba(2, 132, 199, 0.1)',
+                        color: '#0284C7',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 14, textTransform: 'uppercase'
+                      }}>
+                        {fb.authorName ? fb.authorName.charAt(0) : 'U'}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                          {fb.authorName} {fb.authorSurname}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+                          {fb.authorRole ? fb.authorRole.replace('_', ' ') : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {time}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {date}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Feedback Body */}
+                  <div style={{
+                    fontSize: 13,
+                    color: 'var(--text-primary)',
+                    lineHeight: 1.5,
+                    background: 'var(--background)',
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {fb.body}
+                  </div>
+
+                  {/* Candidate metadata badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
+                    <span>👤</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {fb.candidateName}
+                    </span>
+                    {fb.positionTitle && (
+                      <>
+                        <span style={{ color: 'var(--border)' }}>|</span>
+                        <span style={{ fontStyle: 'italic' }}>{fb.positionTitle}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

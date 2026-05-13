@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -249,9 +249,13 @@ const COPY: Record<UiLanguage, {
 
 function summarize(text: string | null, max = 170): string {
   if (!text) return '';
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (normalized.length <= max) return normalized;
-  return `${normalized.slice(0, max).trim()}...`;
+  // 1. Strip HTML comments (e.g. <!--StartFragment-->)
+  const withoutComments = text.replace(/<!--[\s\S]*?-->/g, '');
+  // 2. Strip HTML tags, replacing them with spaces to prevent merging adjacent text
+  const cleanText = withoutComments.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+  if (cleanText.length <= max) return cleanText;
+  return `${cleanText.slice(0, max).trim()}...`;
 }
 
 function initials(value: string): string {
