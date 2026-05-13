@@ -4,6 +4,7 @@ import { X, Phone, Users, MapPin, Calendar, Clock, User, Briefcase, Trash2, Save
 import { useTranslation } from 'react-i18next';
 import { Interview } from '../../api/ats';
 import { getAvatarUrl } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { DatePicker } from '../../components/ui/DatePicker';
@@ -29,10 +30,14 @@ export default function InterviewDetailsModal({
   onDelete,
 }: InterviewDetailsModalProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Check if user is store manager
+  const isStoreManager = user?.role === 'store_manager';
 
   // Form state - parse scheduledAt into date and time
   const scheduledAtDate = new Date(interview.scheduledAt);
@@ -608,7 +613,7 @@ export default function InterviewDetailsModal({
           }}
         >
           <div>
-            {!isEditing && (
+            {!isEditing && !isStoreManager && (
               <Button
                 variant="danger"
                 onClick={() => setShowDeleteConfirm(true)}
@@ -637,9 +642,11 @@ export default function InterviewDetailsModal({
                 </Button>
               </>
             ) : (
-              <Button variant="primary" onClick={() => setIsEditing(true)}>
-                {t('common.edit', 'Edit')}
-              </Button>
+              !isStoreManager && (
+                <Button variant="primary" onClick={() => setIsEditing(true)}>
+                  {t('common.edit', 'Edit')}
+                </Button>
+              )
             )}
           </div>
         </div>

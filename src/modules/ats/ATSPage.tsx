@@ -69,6 +69,18 @@ import CalendarPanel from './CalendarPanel';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Country flag helper
+const getCountryFlag = (countryCode: string | null | undefined): string => {
+  if (!countryCode) return '';
+  const code = countryCode.toUpperCase();
+  const flags: Record<string, string> = {
+    'IT': '🇮🇹', 'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪',
+    'ES': '🇪🇸', 'PT': '🇵🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭',
+    'AT': '🇦🇹', 'PL': '🇵🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰',
+  };
+  return flags[code] || '🌍';
+};
+
 const STAGES: CandidateStatus[] = ['received', 'review', 'phone_interview', 'interview', 'hired', 'rejected'];
 
 const NEXT_STAGE: Partial<Record<CandidateStatus, CandidateStatus>> = {
@@ -152,8 +164,10 @@ const JOB_TYPE_LABEL: Record<JobType, string> = {
 };
 
 function generateEmployeeUniqueId(): string {
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `EMP-${Date.now().toString().slice(-6)}-${suffix}`;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id = 'EMP-';
+  for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
 }
 
 function generateTempPassword(): string {
@@ -667,12 +681,12 @@ type TeamContact = {
 
 const parseRichTextToHtml = (text: string): string => {
   if (!text) return '';
-  
+
   // If the text already contains HTML tags (from RichTextEditor), return as-is
   if (/<[a-zA-Z][^>]*>/.test(text)) {
     return text;
   }
-  
+
   // Legacy: parse Markdown-style plain text into HTML
   // 1. Escape HTML first to prevent any broken tags or XSS
   let escaped = text
@@ -685,10 +699,10 @@ const parseRichTextToHtml = (text: string): string => {
   // 2. Inline elements (Bold, Underline, Italic)
   // Bold: **text** or __text__
   escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  
+
   // Underline: ___text___ or __text__
   escaped = escaped.replace(/__(.*?)__/g, '<u>$1</u>');
-  
+
   // Italic: *text* or _text_
   escaped = escaped.replace(/\*(.*?)\*/g, '<em>$1</em>');
   escaped = escaped.replace(/_([^_]+)_/g, '<em>$1</em>');
@@ -2362,16 +2376,16 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         return { id, logs: [] };
       }
     });
-    
+
     const results = await Promise.allSettled(promises);
     const newNotifications: Record<number, InterviewNotificationLog[]> = {};
-    
+
     results.forEach((result) => {
       if (result.status === 'fulfilled') {
         newNotifications[result.value.id] = result.value.logs;
       }
     });
-    
+
     setInterviewNotifications(prev => ({ ...prev, ...newNotifications }));
   }, []);
 
@@ -2393,14 +2407,14 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       const result = await sendInterviewEmail(interviewId, logId, channel, recipientType);
       // Reload notification logs for this interview
       await loadInterviewNotifications([interviewId]);
-      
+
       // Show success message with recipient info
       const channelLabel = channel === 'email' ? t('ats.email', 'Email') : t('ats.notification', 'Notification');
       const actionLabel = logId ? t('common.resent', 'resent') : t('common.sent', 'sent');
-      const recipientInfo = result.recipientName 
+      const recipientInfo = result.recipientName
         ? ` to ${result.recipientName}${result.recipientEmail ? ` (${result.recipientEmail})` : ''}`
         : '';
-      
+
       showToast(`${channelLabel} ${actionLabel}${recipientInfo}`, 'success');
     } catch (err) {
       const channelLabel = channel === 'email' ? t('ats.email', 'Email') : t('ats.notification', 'Notification');
@@ -2410,14 +2424,14 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [deletingInterviewId, setDeletingInterviewId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; filename: string } | null>(null);
-  
+
   // Tags editing
   const [editingTags, setEditingTags] = useState(false);
   const [tagsDraft, setTagsDraft] = useState<string[]>(() => splitCandidateTags(candidate.tags).userTags);
   const [tagInput, setTagInput] = useState('');
   const [savingTags, setSavingTags] = useState(false);
   const { systemTags } = useMemo(() => splitCandidateTags(candidate.tags), [candidate.tags]);
-  
+
   // Rejection reason
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -2430,10 +2444,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const appliedTimeSource = candidate.appliedAt ?? candidate.createdAt;
   const appliedAgoLabel = fmtRelativeTime(appliedTimeSource);
   const appliedAtLabel = fmtDateTime(appliedTimeSource);
-  const appliedDateOnly = new Date(appliedTimeSource).toLocaleDateString(i18n.language === 'it' ? 'it-IT' : 'en-GB', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const appliedDateOnly = new Date(appliedTimeSource).toLocaleDateString(i18n.language === 'it' ? 'it-IT' : 'en-GB', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
   const appliedJobLocation = appliedJob
     ? [appliedJob.jobCity ?? appliedJob.city, appliedJob.jobState ?? appliedJob.state, appliedJob.jobCountry ?? appliedJob.country]
@@ -2444,6 +2458,16 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const stageColor = STAGE_COLOR[candidate.status];
   const stageBg = STAGE_BG[candidate.status];
   const next = NEXT_STAGE[candidate.status];
+
+  // Parse candidate profile to get available start date
+  const candidateProfile = parseCandidateProfile(candidate.sourceRef);
+  const availableStartDate = candidateProfile.availableStartDate
+    ? new Date(candidateProfile.availableStartDate).toLocaleDateString(i18n.language === 'it' ? 'it-IT' : 'en-GB', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+    : null;
 
   const interviewerOptions = useMemo<SelectOption[]>(() => {
     return interviewerUsers
@@ -2511,12 +2535,12 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const defaultInterviewType = candidate.status === 'phone_interview' ? 'phone' : 'in_person';
 
   // Extract only the relative path from cvs/ or public-cv/ onwards
-  const displayResumePath = resumePath 
-    ? resumePath.includes('cvs/') 
+  const displayResumePath = resumePath
+    ? resumePath.includes('cvs/')
       ? resumePath.substring(resumePath.indexOf('cvs/'))
       : resumePath.includes('public-cv/')
-      ? resumePath.substring(resumePath.indexOf('public-cv/'))
-      : resumePath
+        ? resumePath.substring(resumePath.indexOf('public-cv/'))
+        : resumePath
     : null;
 
   // Country flag helper
@@ -2524,7 +2548,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     if (!countryCode) return '';
     const code = countryCode.toUpperCase();
     const flags: Record<string, string> = {
-      'IT': '🇮🇹', 'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪', 
+      'IT': '🇮🇹', 'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪',
       'ES': '🇪🇸', 'PT': '🇵🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭',
       'AT': '🇦🇹', 'PL': '🇵🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰',
     };
@@ -2746,7 +2770,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       // Ensure time has a value, default to 09:00 if empty
       const timeValue = intTime || '09:00';
       const scheduledAt = new Date(`${intDate}T${timeValue}:00`).toISOString();
-      
+
       const parsedInterviewerId = intInterviewerId ? Number(intInterviewerId) : undefined;
 
       if (editingInterviewId) {
@@ -2774,7 +2798,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         });
         setInterviews((prev) => [...prev, iv]);
         showToast(t('ats.interviewCreated'), 'success');
-        
+
         // Load notification logs for the new interview
         try {
           const logs = await getInterviewNotifications(iv.id);
@@ -2783,7 +2807,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           // Ignore notification log loading errors
         }
       }
-      
+
       setShowInterviewForm(false);
       setEditingInterviewId(null);
       setIntDate(''); setIntTime('09:00'); setIntLocation('');
@@ -2918,9 +2942,9 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     📌 {jobTitle}
                   </span>
                 )}
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
-                      · {appliedAgoLabel}
-                    </span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+                  · {appliedAgoLabel}
+                </span>
               </div>
             </div>
           </div>
@@ -2950,14 +2974,25 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 {candidate.source}
               </span>
             </div>
-            
-            {/* Full Name */}
+
+            {/* Full Name with Avatar */}
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
                 {t('common.fullName', 'Full Name')}
               </div>
-              <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                {candidate.fullName}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                  background: stageColor, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 10,
+                  boxShadow: `0 2px 8px ${stageColor}30`,
+                }}>
+                  {initials(candidate.fullName)}
+                </div>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  {candidate.fullName}
+                </div>
               </div>
             </div>
 
@@ -3000,6 +3035,19 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                 </div>
               </div>
+              {availableStartDate && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>📅</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                      {t('ats.availableStartDate', 'Available Start Date')}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>
+                      {availableStartDate}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {candidate.coverLetter && (
@@ -3110,7 +3158,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     </span>
                   )}
                 </div>
-                
+
                 {/* Title Row with Status Tag */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
                   <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1, minWidth: 0 }}>
@@ -3151,10 +3199,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         </div>
                         <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                           {(appliedJob.jobCountry || appliedJob.country) && (
-                            <ReactCountryFlag 
-                              countryCode={appliedJob.jobCountry || appliedJob.country || ''} 
-                              svg 
-                              style={{ width: '0.95em', height: '0.95em' }} 
+                            <ReactCountryFlag
+                              countryCode={appliedJob.jobCountry || appliedJob.country || ''}
+                              svg
+                              style={{ width: '0.95em', height: '0.95em' }}
                             />
                           )}
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -3232,11 +3280,11 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         {t('ats.salaryRange', 'Salary Range')}
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: '#15803D' }}>
-                        {appliedJob.salaryMin && appliedJob.salaryMax 
+                        {appliedJob.salaryMin && appliedJob.salaryMax
                           ? `€${appliedJob.salaryMin.toLocaleString()} - €${appliedJob.salaryMax.toLocaleString()}`
-                          : appliedJob.salaryMin 
-                          ? `€${appliedJob.salaryMin.toLocaleString()}+`
-                          : `€${appliedJob.salaryMax?.toLocaleString()}`}
+                          : appliedJob.salaryMin
+                            ? `€${appliedJob.salaryMin.toLocaleString()}+`
+                            : `€${appliedJob.salaryMax?.toLocaleString()}`}
                         {appliedJob.salaryPeriod && (
                           <span style={{ fontSize: 10, fontWeight: 500, color: '#16A34A', marginLeft: 4 }}>
                             / {appliedJob.salaryPeriod}
@@ -3246,7 +3294,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     </div>
                   </div>
                 )}
-                
+
                 {/* Job Tags */}
                 {appliedJob.tags && appliedJob.tags.length > 0 && (
                   <div style={{ marginTop: 12 }}>
@@ -3282,12 +3330,12 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
                   👨‍💼 {t('ats.jobPostCreator', 'Job Post Creator')}
                 </div>
-                
+
                 {/* Creator Info */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
                   {appliedJob.createdByAvatarFilename && getAvatarUrl(appliedJob.createdByAvatarFilename) ? (
-                    <img 
-                      src={getAvatarUrl(appliedJob.createdByAvatarFilename) || ''} 
+                    <img
+                      src={getAvatarUrl(appliedJob.createdByAvatarFilename) || ''}
                       alt={appliedJob.createdByName || 'User'}
                       style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
                     />
@@ -3301,15 +3349,15 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       {appliedJob.createdByName ? appliedJob.createdByName[0].toUpperCase() : '?'}
                     </div>
                   )}
-                  
+
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
                       {appliedJob.createdByName} {appliedJob.createdBySurname}
                       {appliedJob.createdByRole && (
-                        <span style={{ 
-                          marginLeft: 8, 
-                          fontSize: 11, 
-                          fontWeight: 500, 
+                        <span style={{
+                          marginLeft: 8,
+                          fontSize: 11,
+                          fontWeight: 500,
                           color: 'var(--text-muted)',
                           textTransform: 'capitalize'
                         }}>
@@ -3335,8 +3383,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
                     {appliedJob.companyLogoFilename && getCompanyLogoUrl(appliedJob.companyLogoFilename) ? (
-                      <img 
-                        src={getCompanyLogoUrl(appliedJob.companyLogoFilename) || ''} 
+                      <img
+                        src={getCompanyLogoUrl(appliedJob.companyLogoFilename) || ''}
                         alt={appliedJob.companyName || 'Company'}
                         style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
                       />
@@ -3356,10 +3404,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                           {appliedJob.companyName || 'N/A'}
                         </span>
                         {appliedJob.companyCountry && (
-                          <ReactCountryFlag 
-                            countryCode={appliedJob.companyCountry} 
-                            svg 
-                            style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }} 
+                          <ReactCountryFlag
+                            countryCode={appliedJob.companyCountry}
+                            svg
+                            style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }}
                           />
                         )}
                       </div>
@@ -3382,8 +3430,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         {(appliedJob.companyOwnerName || appliedJob.companyOwnerSurname) && (
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                             {appliedJob.companyOwnerAvatarFilename && getAvatarUrl(appliedJob.companyOwnerAvatarFilename) ? (
-                              <img 
-                                src={getAvatarUrl(appliedJob.companyOwnerAvatarFilename) || ''} 
+                              <img
+                                src={getAvatarUrl(appliedJob.companyOwnerAvatarFilename) || ''}
                                 alt={`${appliedJob.companyOwnerName} ${appliedJob.companyOwnerSurname}`}
                                 style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }}
                               />
@@ -3420,8 +3468,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
                       {appliedJob.storeLogoFilename && getStoreLogoUrl(appliedJob.storeLogoFilename) ? (
-                        <img 
-                          src={getStoreLogoUrl(appliedJob.storeLogoFilename) || ''} 
+                        <img
+                          src={getStoreLogoUrl(appliedJob.storeLogoFilename) || ''}
                           alt={appliedJob.storeName}
                           style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
                         />
@@ -3441,10 +3489,10 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             {appliedJob.storeName}
                           </span>
                           {appliedJob.storeCountry && (
-                            <ReactCountryFlag 
-                              countryCode={appliedJob.storeCountry} 
-                              svg 
-                              style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }} 
+                            <ReactCountryFlag
+                              countryCode={appliedJob.storeCountry}
+                              svg
+                              style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }}
                             />
                           )}
                         </div>
@@ -3453,8 +3501,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>HR:</span>
                               {appliedJob.storeHrAvatarFilename && getAvatarUrl(appliedJob.storeHrAvatarFilename) ? (
-                                <img 
-                                  src={getAvatarUrl(appliedJob.storeHrAvatarFilename) || ''} 
+                                <img
+                                  src={getAvatarUrl(appliedJob.storeHrAvatarFilename) || ''}
                                   alt={`${appliedJob.storeHrName} ${appliedJob.storeHrSurname}`}
                                   style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
                                 />
@@ -3477,8 +3525,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Area Manager:</span>
                               {appliedJob.storeAreaManagerAvatarFilename && getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) ? (
-                                <img 
-                                  src={getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) || ''} 
+                                <img
+                                  src={getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) || ''}
                                   alt={`${appliedJob.storeAreaManagerName} ${appliedJob.storeAreaManagerSurname}`}
                                   style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
                                 />
@@ -3501,8 +3549,8 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{t('common.manager', 'Manager')}:</span>
                               {appliedJob.storeManagerAvatarFilename && getAvatarUrl(appliedJob.storeManagerAvatarFilename) ? (
-                                <img 
-                                  src={getAvatarUrl(appliedJob.storeManagerAvatarFilename) || ''} 
+                                <img
+                                  src={getAvatarUrl(appliedJob.storeManagerAvatarFilename) || ''}
                                   alt={`${appliedJob.storeManagerName} ${appliedJob.storeManagerSurname}`}
                                   style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
                                 />
@@ -3554,7 +3602,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 </button>
               )}
             </div>
-            
+
             {editingTags ? (
               <div style={{ background: 'var(--background)', borderRadius: 10, padding: '12px', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -3691,15 +3739,15 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
               {(() => {
                 const allStages: CandidateStatus[] = ['received', 'review', 'phone_interview', 'interview', 'hired'];
-                
+
                 // For rejected candidates, show only stages up to their last stage before rejection
                 let stagesToShow: CandidateStatus[] = allStages;
-                
+
                 if (candidate.status === 'rejected') {
                   // Determine which stage they were rejected from based on lastStageChange or interviews
                   // Default to 'received' if we can't determine
                   let lastStageBeforeRejection: CandidateStatus = 'received';
-                  
+
                   // Check if there are interviews to determine the stage
                   if (interviews.length > 0) {
                     // If they had interviews, they at least reached interview stage
@@ -3712,12 +3760,12 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       lastStageBeforeRejection = 'review';
                     }
                   }
-                  
+
                   // Show stages up to and including the last stage before rejection
                   const lastStageIndex = allStages.indexOf(lastStageBeforeRejection);
                   stagesToShow = allStages.slice(0, lastStageIndex + 1);
                 }
-                
+
                 return stagesToShow.map((s, idx, stages) => {
                   const stageIdx = [...stages, 'rejected'].indexOf(candidate.status);
                   const isDone = candidate.status !== 'rejected' && stageIdx >= idx;
@@ -3751,7 +3799,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   );
                 });
               })()}
-              
+
               {/* Show rejected stage at the end for rejected candidates */}
               {candidate.status === 'rejected' && (
                 <>
@@ -3833,52 +3881,52 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       onChange={setIntTime}
                     />
                   </div>
-                  
+
                   {/* Interview Type and Duration */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
                         {t('ats.interviewType')}
                       </label>
-                      <select 
-                        value={intType} 
+                      <select
+                        value={intType}
                         onChange={(e) => setIntType(e.target.value as 'phone' | 'in_person')}
-                        style={{ 
-                          width: '100%', 
-                          boxSizing: 'border-box', 
-                          padding: '7px 10px', 
-                          fontSize: 13, 
-                          borderRadius: 'var(--radius)', 
-                          border: '1px solid var(--border)', 
-                          outline: 'none', 
-                          background: 'var(--background)' 
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '7px 10px',
+                          fontSize: 13,
+                          borderRadius: 'var(--radius)',
+                          border: '1px solid var(--border)',
+                          outline: 'none',
+                          background: 'var(--background)'
                         }}
                       >
                         <option value="phone">📞 {t('ats.phoneInterview')}</option>
                         <option value="in_person">🤝 {t('ats.inPersonInterview')}</option>
                       </select>
                     </div>
-                    
+
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
                         {t('ats.duration')} (min)
                       </label>
-                      <input 
-                        type="number" 
-                        value={intDuration} 
+                      <input
+                        type="number"
+                        value={intDuration}
                         onChange={(e) => setIntDuration(e.target.value ? Number(e.target.value) : '')}
                         placeholder="60"
                         min="1"
                         max="480"
-                        style={{ 
-                          width: '100%', 
-                          boxSizing: 'border-box', 
-                          padding: '7px 10px', 
-                          fontSize: 13, 
-                          borderRadius: 'var(--radius)', 
-                          border: '1px solid var(--border)', 
-                          outline: 'none' 
-                        }} 
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '7px 10px',
+                          fontSize: 13,
+                          borderRadius: 'var(--radius)',
+                          border: '1px solid var(--border)',
+                          outline: 'none'
+                        }}
                       />
                     </div>
                   </div>
@@ -3911,23 +3959,23 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
                       {t('ats.interviewDescription')}
                     </label>
-                    <textarea 
-                      value={intDescription} 
-                      onChange={(e) => setIntDescription(e.target.value)} 
+                    <textarea
+                      value={intDescription}
+                      onChange={(e) => setIntDescription(e.target.value)}
                       rows={2}
                       placeholder={t('ats.interviewDescriptionPlaceholder')}
-                      style={{ 
-                        width: '100%', 
-                        boxSizing: 'border-box', 
-                        resize: 'none', 
-                        fontFamily: 'inherit', 
-                        padding: '7px 10px', 
-                        fontSize: 13, 
-                        borderRadius: 'var(--radius)', 
-                        border: '1px solid var(--border)', 
-                        outline: 'none', 
-                        display: 'block' 
-                      }} 
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        resize: 'none',
+                        fontFamily: 'inherit',
+                        padding: '7px 10px',
+                        fontSize: 13,
+                        borderRadius: 'var(--radius)',
+                        border: '1px solid var(--border)',
+                        outline: 'none',
+                        display: 'block'
+                      }}
                     />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3978,344 +4026,31 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 const emailLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'interviewer' && log.channel === 'email') ?? null;
                 const notificationLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'interviewer' && log.channel !== 'email') ?? null;
                 const candidateEmailLog = interviewNotifications[iv.id]?.find((log) => log.recipientType === 'candidate' && log.channel === 'email') ?? null;
-                
+
                 return (
                   <div key={iv.id} style={{
                     background: 'var(--background)', borderRadius: 10, padding: '12px 16px',
                     marginBottom: 8, borderLeft: `3px solid ${STAGE_COLOR.interview}`,
                     position: 'relative',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
-                            🕐 {fmtDateTime(iv.scheduledAt)}
-                          </div>
-                          <span style={{
-                            background: statusBg,
-                            color: statusColor,
-                            borderRadius: 99,
-                            padding: '2px 8px',
-                            fontSize: 10,
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.03em',
-                          }}>
-                            {statusLabel}
-                          </span>
+                    {/* Top Row: Date/Time/Status and Edit/Delete buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+                          🕐 {fmtDateTime(iv.scheduledAt)}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                          {iv.location && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                              📍 {iv.location}
-                            </span>
-                          )}
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                            {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
-                          </span>
-                          {iv.durationMinutes && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
-                              ⏱ {iv.durationMinutes}min
-                            </span>
-                          )}
-                        </div>
-
-                        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
-                          {interviewer && (
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', background: interviewerAvatar ? 'transparent' : 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                                  {interviewerAvatar ? (
-                                    <img src={interviewerAvatar} alt={interviewerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  ) : initials(interviewerName)}
-                                </div>
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{interviewerName}</div>
-                                  {interviewerRole && (
-                                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{interviewerRole}</div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Candidate, Email and Notification status columns side-by-side */}
-                              <div style={{ display: 'flex', gap: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                {/* Candidate Email Status */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
-                                      <User2 size={11} /> {t('ats.candidateEmail', 'Candidate')}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                                      <span 
-                                        style={{
-                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
-                                          background: smtpConfigured === false
-                                            ? 'rgba(107,114,128,0.08)'
-                                            : !candidateEmailLog
-                                              ? 'rgba(107,114,128,0.08)'
-                                              : candidateEmailLog.status === 'done'
-                                                ? 'rgba(21,128,61,0.1)'
-                                                : candidateEmailLog.status === 'error'
-                                                  ? 'rgba(220,38,38,0.1)'
-                                                  : candidateEmailLog.status === 'sending'
-                                                    ? 'rgba(59,130,246,0.1)'
-                                                    : 'rgba(107,114,128,0.1)',
-                                          color: smtpConfigured === false
-                                            ? '#9ca3af'
-                                            : !candidateEmailLog
-                                              ? '#6b7280'
-                                              : candidateEmailLog.status === 'done'
-                                                ? '#15803d'
-                                                : candidateEmailLog.status === 'error'
-                                                  ? '#dc2626'
-                                                  : candidateEmailLog.status === 'sending'
-                                                    ? '#2563eb'
-                                                    : '#6b7280',
-                                          fontWeight: 600,
-                                          cursor: smtpConfigured === false ? 'help' : 'default',
-                                          position: 'relative',
-                                        }}
-                                        title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : candidateEmailLog?.errorMessage || ''}
-                                        onMouseEnter={(e) => {
-                                          if (smtpConfigured === false) {
-                                            const tooltip = document.createElement('div');
-                                            tooltip.id = 'smtp-tooltip-candidate';
-                                            tooltip.style.cssText = `
-                                              position: absolute;
-                                              bottom: calc(100% + 8px);
-                                              left: 50%;
-                                              transform: translateX(-50%);
-                                              background: #1f2937;
-                                              color: white;
-                                              padding: 8px 12px;
-                                              border-radius: 6px;
-                                              font-size: 11px;
-                                              white-space: nowrap;
-                                              z-index: 1000;
-                                              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                                              pointer-events: none;
-                                            `;
-                                            tooltip.textContent = 'SMTP not configured for this company';
-                                            e.currentTarget.appendChild(tooltip);
-                                          }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          const tooltip = e.currentTarget.querySelector('#smtp-tooltip-candidate');
-                                          if (tooltip) tooltip.remove();
-                                        }}
-                                      >
-                                        {smtpConfigured === false
-                                          ? '⊗ Disabled'
-                                          : !candidateEmailLog
-                                            ? '• Not sent'
-                                            : candidateEmailLog.status === 'done'
-                                              ? '✓ Sent'
-                                              : candidateEmailLog.status === 'error'
-                                                ? '✗ Error'
-                                                : candidateEmailLog.status === 'sending'
-                                                  ? '⟳ Sending...'
-                                                  : '⏳ Pending'}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleRetryNotification(iv.id, candidateEmailLog?.id, 'email', 'candidate')}
-                                        disabled={smtpConfigured === false}
-                                        title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : candidateEmailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
-                                        style={{
-                                          background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
-                                          color: smtpConfigured === false
-                                            ? '#9ca3af'
-                                            : !candidateEmailLog
-                                              ? '#6b7280'
-                                              : candidateEmailLog.status === 'done'
-                                                ? '#15803d'
-                                                : candidateEmailLog.status === 'error'
-                                                  ? '#dc2626'
-                                                  : '#6b7280',
-                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
-                                        }}
-                                      >
-                                        <RotateCcw size={10} />
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                {/* Interviewer Email Status */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
-                                      📧 {t('ats.interviewerEmail', 'Interviewer')}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                                      <span 
-                                        style={{
-                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
-                                          background: smtpConfigured === false
-                                            ? 'rgba(107,114,128,0.08)'
-                                            : !emailLog
-                                              ? 'rgba(107,114,128,0.08)'
-                                              : emailLog.status === 'done'
-                                                ? 'rgba(21,128,61,0.1)'
-                                                : emailLog.status === 'error'
-                                                  ? 'rgba(220,38,38,0.1)'
-                                                  : emailLog.status === 'sending'
-                                                    ? 'rgba(59,130,246,0.1)'
-                                                    : 'rgba(107,114,128,0.1)',
-                                          color: smtpConfigured === false
-                                            ? '#9ca3af'
-                                            : !emailLog
-                                              ? '#6b7280'
-                                              : emailLog.status === 'done'
-                                                ? '#15803d'
-                                                : emailLog.status === 'error'
-                                                  ? '#dc2626'
-                                                  : emailLog.status === 'sending'
-                                                    ? '#2563eb'
-                                                    : '#6b7280',
-                                          fontWeight: 600,
-                                          cursor: smtpConfigured === false ? 'help' : 'default',
-                                          position: 'relative',
-                                        }}
-                                        title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : emailLog?.errorMessage || ''}
-                                        onMouseEnter={(e) => {
-                                          if (smtpConfigured === false) {
-                                            const tooltip = document.createElement('div');
-                                            tooltip.id = 'smtp-tooltip';
-                                            tooltip.style.cssText = `
-                                              position: absolute;
-                                              bottom: calc(100% + 8px);
-                                              left: 50%;
-                                              transform: translateX(-50%);
-                                              background: #1f2937;
-                                              color: white;
-                                              padding: 8px 12px;
-                                              border-radius: 6px;
-                                              font-size: 11px;
-                                              white-space: nowrap;
-                                              z-index: 1000;
-                                              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                                              pointer-events: none;
-                                            `;
-                                            tooltip.textContent = 'SMTP not configured for this company';
-                                            e.currentTarget.appendChild(tooltip);
-                                          }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          const tooltip = e.currentTarget.querySelector('#smtp-tooltip');
-                                          if (tooltip) tooltip.remove();
-                                        }}
-                                      >
-                                        {smtpConfigured === false
-                                          ? '⊗ Disabled'
-                                          : !emailLog
-                                            ? '• Not sent'
-                                            : emailLog.status === 'done'
-                                              ? '✓ Sent'
-                                              : emailLog.status === 'error'
-                                                ? '✗ Error'
-                                                : emailLog.status === 'sending'
-                                                  ? '⟳ Sending...'
-                                                  : '⏳ Pending'}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleRetryNotification(iv.id, emailLog?.id, 'email', 'interviewer')}
-                                        disabled={smtpConfigured === false}
-                                        title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : emailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
-                                        style={{
-                                          background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
-                                          color: smtpConfigured === false
-                                            ? '#9ca3af'
-                                            : !emailLog
-                                              ? '#6b7280'
-                                              : emailLog.status === 'done'
-                                                ? '#15803d'
-                                                : emailLog.status === 'error'
-                                                  ? '#dc2626'
-                                                  : '#6b7280',
-                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
-                                        }}
-                                      >
-                                        <RotateCcw size={10} />
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                {/* Notification Status */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
-                                      🔔 {t('ats.notification', 'Notification')}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                                      <span 
-                                        style={{
-                                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
-                                          background: interviewInviteEnabled === false
-                                            ? 'rgba(107,114,128,0.08)'
-                                            : !notificationLog
-                                              ? 'rgba(107,114,128,0.08)'
-                                              : notificationLog.status === 'done'
-                                                ? 'rgba(21,128,61,0.1)'
-                                                : notificationLog.status === 'error'
-                                                  ? 'rgba(220,38,38,0.1)'
-                                                  : 'rgba(107,114,128,0.1)',
-                                          color: interviewInviteEnabled === false
-                                            ? '#9ca3af'
-                                            : !notificationLog
-                                              ? '#6b7280'
-                                              : notificationLog.status === 'done'
-                                                ? '#15803d'
-                                                : notificationLog.status === 'error'
-                                                  ? '#dc2626'
-                                                  : '#6b7280',
-                                          fontWeight: 600,
-                                          cursor: interviewInviteEnabled === false ? 'help' : 'default',
-                                        }}
-                                        title={interviewInviteEnabled === false ? 'Notification functionality is disabled. Please enable "Interview Invite" notification in Company Settings → Notifications to send in-app notifications.' : notificationLog?.errorMessage || ''}
-                                      >
-                                        {interviewInviteEnabled === false
-                                          ? '⊗ Disabled'
-                                          : !notificationLog
-                                            ? '• Not sent'
-                                            : notificationLog.status === 'done'
-                                              ? '✓ Sent'
-                                              : notificationLog.status === 'error'
-                                                ? '✗ Error'
-                                                : notificationLog.status === 'sending'
-                                                  ? '⟳ Sending'
-                                                  : '⏳ Pending'}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleRetryNotification(iv.id, notificationLog?.id, 'in_app', 'interviewer')}
-                                        disabled={interviewInviteEnabled === false}
-                                        title={interviewInviteEnabled === false ? 'Notifications are disabled. Enable in Settings to send.' : notificationLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
-                                        style={{
-                                          background: 'none', border: 'none', padding: '2px 4px', cursor: interviewInviteEnabled === false ? 'not-allowed' : 'pointer',
-                                          color: interviewInviteEnabled === false
-                                            ? '#9ca3af'
-                                            : !notificationLog
-                                              ? '#6b7280'
-                                              : notificationLog.status === 'done'
-                                                ? '#15803d'
-                                                : notificationLog.status === 'error'
-                                                  ? '#dc2626'
-                                                  : '#6b7280',
-                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: interviewInviteEnabled === false ? 0.4 : 0.7, fontSize: 10,
-                                        }}
-                                      >
-                                        <RotateCcw size={10} />
-                                      </button>
-                                    </div>
-                                  </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {iv.description && (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                              {iv.description}
-                            </div>
-                          )}
-                        </div>
+                        <span style={{
+                          background: statusBg,
+                          color: statusColor,
+                          borderRadius: 99,
+                          padding: '2px 8px',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.03em',
+                        }}>
+                          {statusLabel}
+                        </span>
                       </div>
                       {canEdit && (
                         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -4373,7 +4108,326 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         </div>
                       )}
                     </div>
-                    
+
+                    {/* Second Row: Location, Type, Duration tags */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      {iv.location && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                          📍 {iv.location}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                        {iv.interviewType === 'phone' ? '📞 Phone' : '🤝 In-person'}
+                      </span>
+                      {iv.durationMinutes && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 7px', borderRadius: 999 }}>
+                          ⏱ {iv.durationMinutes}min
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Full Width Interviewer Row and Notification Status */}
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {interviewer && (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                            <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', background: interviewerAvatar ? 'transparent' : 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                              {interviewerAvatar ? (
+                                <img src={interviewerAvatar} alt={interviewerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : initials(interviewerName)}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{interviewerName}</div>
+                              {interviewerRole && (
+                                <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{interviewerRole}</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Candidate, Email and Notification status columns side-by-side */}
+                          <div style={{ display: 'flex', gap: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            {/* Candidate Email Status */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                <User2 size={11} /> {t('ats.candidateEmail', 'Candidate')}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                                <span
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                    background: smtpConfigured === false
+                                      ? 'rgba(107,114,128,0.08)'
+                                      : !candidateEmailLog
+                                        ? 'rgba(107,114,128,0.08)'
+                                        : candidateEmailLog.status === 'done'
+                                          ? 'rgba(21,128,61,0.1)'
+                                          : candidateEmailLog.status === 'error'
+                                            ? 'rgba(220,38,38,0.1)'
+                                            : candidateEmailLog.status === 'sending'
+                                              ? 'rgba(59,130,246,0.1)'
+                                              : 'rgba(107,114,128,0.1)',
+                                    color: smtpConfigured === false
+                                      ? '#9ca3af'
+                                      : !candidateEmailLog
+                                        ? '#6b7280'
+                                        : candidateEmailLog.status === 'done'
+                                          ? '#15803d'
+                                          : candidateEmailLog.status === 'error'
+                                            ? '#dc2626'
+                                            : candidateEmailLog.status === 'sending'
+                                              ? '#2563eb'
+                                              : '#6b7280',
+                                    fontWeight: 600,
+                                    cursor: smtpConfigured === false ? 'help' : 'default',
+                                    position: 'relative',
+                                  }}
+                                  title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : candidateEmailLog?.errorMessage || ''}
+                                  onMouseEnter={(e) => {
+                                    if (smtpConfigured === false) {
+                                      const tooltip = document.createElement('div');
+                                      tooltip.id = 'smtp-tooltip-candidate';
+                                      tooltip.style.cssText = `
+                                              position: absolute;
+                                              bottom: calc(100% + 8px);
+                                              left: 50%;
+                                              transform: translateX(-50%);
+                                              background: #1f2937;
+                                              color: white;
+                                              padding: 8px 12px;
+                                              border-radius: 6px;
+                                              font-size: 11px;
+                                              white-space: nowrap;
+                                              z-index: 1000;
+                                              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                              pointer-events: none;
+                                            `;
+                                      tooltip.textContent = 'SMTP not configured for this company';
+                                      e.currentTarget.appendChild(tooltip);
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    const tooltip = e.currentTarget.querySelector('#smtp-tooltip-candidate');
+                                    if (tooltip) tooltip.remove();
+                                  }}
+                                >
+                                  {smtpConfigured === false
+                                    ? '⊗ Disabled'
+                                    : !candidateEmailLog
+                                      ? '• Not sent'
+                                      : candidateEmailLog.status === 'done'
+                                        ? '✓ Sent'
+                                        : candidateEmailLog.status === 'error'
+                                          ? '✗ Error'
+                                          : candidateEmailLog.status === 'sending'
+                                            ? '⟳ Sending...'
+                                            : '⏳ Pending'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRetryNotification(iv.id, candidateEmailLog?.id, 'email', 'candidate')}
+                                  disabled={smtpConfigured === false}
+                                  title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : candidateEmailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                  style={{
+                                    background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
+                                    color: smtpConfigured === false
+                                      ? '#9ca3af'
+                                      : !candidateEmailLog
+                                        ? '#6b7280'
+                                        : candidateEmailLog.status === 'done'
+                                          ? '#15803d'
+                                          : candidateEmailLog.status === 'error'
+                                            ? '#dc2626'
+                                            : '#6b7280',
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
+                                  }}
+                                >
+                                  <RotateCcw size={10} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Interviewer Email Status - Hidden for store managers */}
+                            {user?.role !== 'store_manager' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                  📧 {t('ats.interviewerEmail', 'Interviewer')}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                      background: smtpConfigured === false
+                                        ? 'rgba(107,114,128,0.08)'
+                                        : !emailLog
+                                          ? 'rgba(107,114,128,0.08)'
+                                          : emailLog.status === 'done'
+                                            ? 'rgba(21,128,61,0.1)'
+                                            : emailLog.status === 'error'
+                                              ? 'rgba(220,38,38,0.1)'
+                                              : emailLog.status === 'sending'
+                                                ? 'rgba(59,130,246,0.1)'
+                                                : 'rgba(107,114,128,0.1)',
+                                      color: smtpConfigured === false
+                                        ? '#9ca3af'
+                                        : !emailLog
+                                          ? '#6b7280'
+                                          : emailLog.status === 'done'
+                                            ? '#15803d'
+                                            : emailLog.status === 'error'
+                                              ? '#dc2626'
+                                              : emailLog.status === 'sending'
+                                                ? '#2563eb'
+                                                : '#6b7280',
+                                      fontWeight: 600,
+                                      cursor: smtpConfigured === false ? 'help' : 'default',
+                                      position: 'relative',
+                                    }}
+                                    title={smtpConfigured === false ? 'Email functionality is disabled. Please configure SMTP settings in Company Settings → Email Configuration to enable email notifications.' : emailLog?.errorMessage || ''}
+                                    onMouseEnter={(e) => {
+                                      if (smtpConfigured === false) {
+                                        const tooltip = document.createElement('div');
+                                        tooltip.id = 'smtp-tooltip';
+                                        tooltip.style.cssText = `
+                                              position: absolute;
+                                              bottom: calc(100% + 8px);
+                                              left: 50%;
+                                              transform: translateX(-50%);
+                                              background: #1f2937;
+                                              color: white;
+                                              padding: 8px 12px;
+                                              border-radius: 6px;
+                                              font-size: 11px;
+                                              white-space: nowrap;
+                                              z-index: 1000;
+                                              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                              pointer-events: none;
+                                            `;
+                                        tooltip.textContent = 'SMTP not configured for this company';
+                                        e.currentTarget.appendChild(tooltip);
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      const tooltip = e.currentTarget.querySelector('#smtp-tooltip');
+                                      if (tooltip) tooltip.remove();
+                                    }}
+                                  >
+                                    {smtpConfigured === false
+                                      ? '⊗ Disabled'
+                                      : !emailLog
+                                        ? '• Not sent'
+                                        : emailLog.status === 'done'
+                                          ? '✓ Sent'
+                                          : emailLog.status === 'error'
+                                            ? '✗ Error'
+                                            : emailLog.status === 'sending'
+                                              ? '⟳ Sending...'
+                                              : '⏳ Pending'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleRetryNotification(iv.id, emailLog?.id, 'email', 'interviewer')}
+                                    disabled={smtpConfigured === false}
+                                    title={smtpConfigured === false ? 'Email is disabled. Configure SMTP in Settings to enable.' : emailLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                    style={{
+                                      background: 'none', border: 'none', padding: '2px 4px', cursor: smtpConfigured === false ? 'not-allowed' : 'pointer',
+                                      color: smtpConfigured === false
+                                        ? '#9ca3af'
+                                        : !emailLog
+                                          ? '#6b7280'
+                                          : emailLog.status === 'done'
+                                            ? '#15803d'
+                                            : emailLog.status === 'error'
+                                              ? '#dc2626'
+                                              : '#6b7280',
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: smtpConfigured === false ? 0.4 : 0.7, fontSize: 10,
+                                    }}
+                                  >
+                                    <RotateCcw size={10} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Notification Status - Hidden for store managers */}
+                            {user?.role !== 'store_manager' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: interviewInviteEnabled === false ? 0.5 : 1, position: 'relative' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                  🔔 {t('ats.notification', 'Notification')}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 6,
+                                      background: interviewInviteEnabled === false
+                                        ? 'rgba(107,114,128,0.08)'
+                                        : !notificationLog
+                                          ? 'rgba(107,114,128,0.08)'
+                                          : notificationLog.status === 'done'
+                                            ? 'rgba(21,128,61,0.1)'
+                                            : notificationLog.status === 'error'
+                                              ? 'rgba(220,38,38,0.1)'
+                                              : 'rgba(107,114,128,0.1)',
+                                      color: interviewInviteEnabled === false
+                                        ? '#9ca3af'
+                                        : !notificationLog
+                                          ? '#6b7280'
+                                          : notificationLog.status === 'done'
+                                            ? '#15803d'
+                                            : notificationLog.status === 'error'
+                                              ? '#dc2626'
+                                              : '#6b7280',
+                                      fontWeight: 600,
+                                      cursor: interviewInviteEnabled === false ? 'help' : 'default',
+                                    }}
+                                    title={interviewInviteEnabled === false ? 'Notification functionality is disabled. Please enable "Interview Invite" notification in Company Settings → Notifications to send in-app notifications.' : notificationLog?.errorMessage || ''}
+                                  >
+                                    {interviewInviteEnabled === false
+                                      ? '⊗ Disabled'
+                                      : !notificationLog
+                                        ? '• Not sent'
+                                        : notificationLog.status === 'done'
+                                          ? '✓ Sent'
+                                          : notificationLog.status === 'error'
+                                            ? '✗ Error'
+                                            : notificationLog.status === 'sending'
+                                              ? '⟳ Sending'
+                                              : '⏳ Pending'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleRetryNotification(iv.id, notificationLog?.id, 'in_app', 'interviewer')}
+                                    disabled={interviewInviteEnabled === false}
+                                    title={interviewInviteEnabled === false ? 'Notifications are disabled. Enable in Settings to send.' : notificationLog ? t('common.resend', 'Resend') : t('common.send', 'Send')}
+                                    style={{
+                                      background: 'none', border: 'none', padding: '2px 4px', cursor: interviewInviteEnabled === false ? 'not-allowed' : 'pointer',
+                                      color: interviewInviteEnabled === false
+                                        ? '#9ca3af'
+                                        : !notificationLog
+                                          ? '#6b7280'
+                                          : notificationLog.status === 'done'
+                                            ? '#15803d'
+                                            : notificationLog.status === 'error'
+                                              ? '#dc2626'
+                                              : '#6b7280',
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: interviewInviteEnabled === false ? 0.4 : 0.7, fontSize: 10,
+                                    }}
+                                  >
+                                    <RotateCcw size={10} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {iv.description && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                          {iv.description}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Feedback Comments List */}
                     {interviewFeedback[iv.id] && interviewFeedback[iv.id].length > 0 && (
                       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -4384,7 +4438,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                           const authorName = [comment.authorName, comment.authorSurname].filter(Boolean).join(' ').trim() || t('common.notSet', 'Not set');
                           const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
                           const canDelete = canEdit || comment.authorId === user?.id;
-                          
+
                           return (
                             <div key={comment.id} style={{
                               background: 'var(--background)',
@@ -4461,7 +4515,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                         })}
                       </div>
                     )}
-                    
+
                     {canFeedback && (
                       <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
                         <textarea
@@ -5369,6 +5423,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addLinkedinUrl, setAddLinkedinUrl] = useState('');
+  const [addCompanyEmail, setAddCompanyEmail] = useState('');
+  const [addAvailableStartDate, setAddAvailableStartDate] = useState('');
+  const [addPostalCode, setAddPostalCode] = useState('');
+  const [addAddress, setAddAddress] = useState('');
   const [addProfile, setAddProfile] = useState<CandidateApplicationProfile>(() => buildCandidateProfile({
     availability: '',
     gender: '',
@@ -5377,6 +5435,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     state: '',
     city: '',
     address: '',
+    postalCode: '',
     dateOfBirth: '',
     currentEmployer: '',
     currentRole: '',
@@ -5387,6 +5446,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     hireDate: new Date().toISOString().slice(0, 10),
     contractType: '',
     applicationDate: new Date().toISOString().slice(0, 10),
+    availableStartDate: '',
     applicationSource: 'ats',
     applicationChannel: 'internal',
     startDate: '',
@@ -5398,6 +5458,8 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [addSaving, setAddSaving] = useState(false);
   const [addModalJobs, setAddModalJobs] = useState<JobPosting[]>([]);
   const [addModalJobsLoading, setAddModalJobsLoading] = useState(false);
+  const [showCvPreview, setShowCvPreview] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [interviewInviteEnabled, setInterviewInviteEnabled] = useState<boolean | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
@@ -5422,7 +5484,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
         effectiveCompanyId ? getEmployees({ targetCompanyId: effectiveCompanyId, status: 'active', includeStoreTerminals: false, limit: 500 }) : Promise.resolve({ employees: [] }),
       ]);
       setCandidates(cands); setJobs(js); setEmployees(emps.employees || []);
-      
+
       // Load notification settings and SMTP config
       if (effectiveCompanyId) {
         const [notifResult, emailResult] = await Promise.allSettled([
@@ -5540,7 +5602,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const handleAdvance = async (status: CandidateStatus) => {
     if (!canEdit) return;
     if (!selected) return;
-    
+
     // If moving to hired, prepare employee creation
     if (status === 'hired') {
       // Prepare employee data
@@ -5549,7 +5611,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       setShowEmployeeModal(true);
       return; // Don't update stage yet, wait for employee creation
     }
-    
+
     setSaving(true);
     try {
       const updated = await updateCandidateStage(selected.id, status);
@@ -5685,6 +5747,9 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
           ...addProfile,
           availability: addProfile.availability,
           applicationDate,
+          availableStartDate: addAvailableStartDate.trim() || '',
+          postalCode: addPostalCode.trim() || '',
+          address: addAddress.trim() || '',
           applicationSource: 'ats',
           applicationChannel: 'internal',
         }),
@@ -5741,6 +5806,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     setAddEmail('');
     setAddPhone('');
     setAddLinkedinUrl('');
+    setAddCompanyEmail('');
+    setAddAvailableStartDate('');
+    setAddPostalCode('');
+    setAddAddress('');
     setAddProfile(buildCandidateProfile({
       availability: '',
       gender: '',
@@ -5749,6 +5818,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       state: '',
       city: '',
       address: '',
+      postalCode: '',
       dateOfBirth: '',
       currentEmployer: '',
       currentRole: '',
@@ -5759,6 +5829,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       hireDate: new Date().toISOString().slice(0, 10),
       contractType: '',
       applicationDate: new Date().toISOString().slice(0, 10),
+      availableStartDate: '',
       applicationSource: 'ats',
       applicationChannel: 'internal',
       startDate: '',
@@ -5767,7 +5838,12 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
     setAddCvFile(null);
     setAddCoverLetter('');
     setAddGdprConsent(false);
-  }, []);
+    setShowCvPreview(false);
+    if (cvPreviewUrl) {
+      URL.revokeObjectURL(cvPreviewUrl);
+      setCvPreviewUrl(null);
+    }
+  }, [cvPreviewUrl]);
 
   const loadAddModalJobs = useCallback(async () => {
     setAddModalJobsLoading(true);
@@ -6091,8 +6167,35 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                             <div style={{
                               fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)',
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              display: 'flex', alignItems: 'center', gap: 6,
                             }}>
-                              {c.fullName}
+                              <span>{c.fullName}</span>
+                              {(() => {
+                                const profile = parseCandidateProfile(c.sourceRef);
+                                if (!profile.country) return null;
+
+                                // Try to get country code - either directly or from country name
+                                let countryCode = profile.country.toUpperCase();
+                                if (countryCode.length > 2) {
+                                  // It's a country name, convert to code
+                                  countryCode = COUNTRY_NAME_TO_CODE[profile.country] || '';
+                                }
+
+                                if (!countryCode || countryCode.length !== 2) return null;
+
+                                return (
+                                  <ReactCountryFlag
+                                    countryCode={countryCode}
+                                    svg
+                                    style={{
+                                      width: '14px',
+                                      height: '14px',
+                                      borderRadius: '4px',
+                                    }}
+                                    title={profile.country}
+                                  />
+                                );
+                              })()}
                             </div>
                             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }} title={fmtDateTime(c.appliedAt ?? c.createdAt)}>
                               {fmtRelativeTime(c.appliedAt ?? c.createdAt)}
@@ -6135,7 +6238,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                         {(() => {
                           const { userTags } = splitCandidateTags(c.tags || []);
                           if (userTags.length === 0) return null;
-                          
+
                           return (
                             <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                               {userTags.slice(0, 4).map((tag) => (
@@ -6420,30 +6523,39 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                  <span style={{ 
-                    fontSize: 11, 
-                    fontWeight: 700, 
-                    color: '#9A6808', 
-                    background: 'rgba(201,151,58,0.12)', 
-                    border: '1px solid rgba(201,151,58,0.35)', 
-                    borderRadius: 999, 
-                    padding: '4px 10px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                  }}>
-                    {addSelectedJob?.title ?? t('ats.position', 'Position')}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BriefcaseBusiness size={16} style={{ color: '#9A6808' }} />
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#9A6808',
+                    }}>
+                      {addSelectedJob?.title ?? t('ats.position', 'Position')}
+                    </span>
+                  </div>
+                  {addSelectedJob?.storeName && (
+                    <span style={{
+                      fontSize: 12,
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}>
+                      <StoreIcon size={14} />
+                      {addSelectedJob.storeName}
+                    </span>
+                  )}
                 </div>
 
-                {/* Personal Information Section */}
+                {/* Section 1: Basic Information */}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.personalInformation', 'Personal Information')}
+                      {t('ats.basicInformation', 'Basic Information')}
                     </h4>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.personalInformationHint', 'Basic candidate details')}
+                      {t('ats.basicInformationHint', 'Required candidate contact details')}
                     </p>
                   </div>
 
@@ -6476,10 +6588,33 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       placeholder={t('ats.addCandidatePhonePh', '+39 345...')}
                     />
                     <Input
-                      label={t('employees.nationalityField', 'Nationality')}
-                      value={addProfile.nationality}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, nationality: e.target.value }))}
-                      placeholder={t('ats.nationalityPlaceholder', 'Italian')}
+                      label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
+                      type="url"
+                      value={addLinkedinUrl}
+                      onChange={(e) => setAddLinkedinUrl(e.target.value)}
+                      placeholder={t('ats.addCandidateLinkedinPh', 'https://linkedin.com/in/...')}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 2: Personal Details */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('ats.personalDetails', 'Personal Details')}
+                    </h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('ats.personalDetailsHint', 'Optional demographic and location information')}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <DatePicker
+                      label={t('employees.dateOfBirthField', 'Date of birth')}
+                      value={addProfile.dateOfBirth}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                      initialViewYear={new Date().getFullYear() - 30}
+                      placement="bottom"
                     />
                     <Select
                       label={t('employees.genderField', 'Gender')}
@@ -6491,13 +6626,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       <option value="F">{t('employees.genderFemale', 'Female')}</option>
                       <option value="other">{t('employees.genderOther', 'Other')}</option>
                     </Select>
-                    <DatePicker
-                      label={t('employees.dateOfBirthField', 'Date of birth')}
-                      value={addProfile.dateOfBirth}
-                      onChange={(value) => setAddProfile((prev) => ({ ...prev, dateOfBirth: value }))}
-                      initialViewYear={new Date().getFullYear() - 30}
-                      placement="bottom"
-                    />
                     <Select
                       label={t('employees.maritalStatusField', 'Marital status')}
                       value={addProfile.maritalStatus}
@@ -6509,6 +6637,24 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       <option value="divorced">{t('employees.maritalStatusDivorced', 'Divorced')}</option>
                       <option value="partnered">{t('employees.maritalStatusPartnered', 'Partnered')}</option>
                     </Select>
+                    <Input
+                      label={t('employees.nationalityField', 'Nationality')}
+                      value={addProfile.nationality}
+                      onChange={(e) => setAddProfile((prev) => ({ ...prev, nationality: e.target.value }))}
+                      placeholder={t('ats.nationalityPlaceholder', 'Italian')}
+                    />
+                    <Input
+                      label={t('employees.addressField', 'Address')}
+                      value={addAddress}
+                      onChange={(e) => setAddAddress(e.target.value)}
+                      placeholder={t('employees.addressPlaceholder', 'Street address')}
+                    />
+                    <Input
+                      label={t('employees.postalCodeField', 'Postal code')}
+                      value={addPostalCode}
+                      onChange={(e) => setAddPostalCode(e.target.value)}
+                      placeholder={t('employees.postalCodePlaceholder', '00100')}
+                    />
                   </div>
 
                   <LocationFieldGroup
@@ -6534,81 +6680,58 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                   />
                 </div>
 
-                {/* Employment Information Section */}
+                {/* Section 3: Employment Details */}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.employmentInformation', 'Employment Information')}
+                      {t('ats.employmentDetails', 'Employment Details')}
                     </h4>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.employmentInformationHint', 'Current and future employment details')}
+                      {t('ats.employmentDetailsHint', 'Work-related information and dates')}
                     </p>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
-                      label={t('ats.currentEmployerLabel', 'Current employer')}
-                      value={addProfile.currentEmployer}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentEmployer: e.target.value }))}
-                      placeholder={t('ats.currentEmployerPlaceholder', 'Company name')}
-                    />
-                    <Input
-                      label={t('ats.currentRoleLabel', 'Current role')}
-                      value={addProfile.currentRole}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, currentRole: e.target.value }))}
-                      placeholder={t('ats.currentRolePlaceholder', 'Store assistant')}
+                      label={t('employees.companyEmailField', 'Company email')}
+                      type="email"
+                      value={addCompanyEmail}
+                      onChange={(e) => setAddCompanyEmail(e.target.value)}
+                      placeholder={t('employees.companyEmailPlaceholder', 'mario.rossi@company.com')}
                     />
                     <DatePicker
-                      label={t('employees.hireDateField', 'Hire date')}
-                      value={addProfile.hireDate}
-                      onChange={(value) => setAddProfile((prev) => ({ ...prev, hireDate: value }))}
+                      label={t('ats.candidateApplicationDate', 'Candidate application date')}
+                      value={addProfile.applicationDate}
+                      onChange={(value) => setAddProfile((prev) => ({ ...prev, applicationDate: value }))}
                       placement="bottom"
                     />
-                    <Select
-                      label={t('employees.contractTypeField', 'Contract type')}
-                      value={addProfile.contractType}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, contractType: e.target.value }))}
-                    >
-                      <option value="">{t('ats.selectOption', 'Select option')}</option>
-                      <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
-                      <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
-                      <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
-                      <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* System Information Section */}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
-                  <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('ats.systemInformation', 'System Information')}
-                    </h4>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('ats.systemInformationHint', 'Credentials and identifiers')}
-                    </p>
+                    <DatePicker
+                      label={t('ats.availableStartDate', 'Available start date')}
+                      value={addAvailableStartDate}
+                      onChange={(value) => setAddAvailableStartDate(value)}
+                      placement="bottom"
+                    />
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
-                      label={t('employees.uniqueIdField', 'Unique ID')}
-                      value={addProfile.uniqueId}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, uniqueId: e.target.value }))}
-                      placeholder={t('employees.colUniqueId', 'Unique ID')}
+                      label={t('employees.jobTypeField', 'Job type')}
+                      value={
+                        addSelectedJob?.jobType === 'fulltime' ? t('employees.workingTypeFull', 'Full time') :
+                          addSelectedJob?.jobType === 'parttime' ? t('employees.workingTypePart', 'Part time') :
+                            addSelectedJob?.jobType === 'contract' ? t('employees.contractTypeContract', 'Contract') :
+                              addSelectedJob?.jobType === 'internship' ? t('employees.contractInternship', 'Internship') : ''
+                      }
+                      disabled
+                      style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }}
+                      placeholder={t('common.notSet', 'Not set')}
                     />
                     <Input
-                      label={t('employees.tempPasswordLabel', 'Temporary password')}
-                      type="text"
-                      value={addProfile.password}
-                      onChange={(e) => setAddProfile((prev) => ({ ...prev, password: e.target.value }))}
-                      placeholder={t('employees.tempPasswordLabel', 'Temporary password')}
-                    />
-                    <Input
-                      label={t('publicCareers.linkedinLabel', 'LinkedIn URL')}
-                      type="url"
-                      value={addLinkedinUrl}
-                      onChange={(e) => setAddLinkedinUrl(e.target.value)}
-                      placeholder={t('ats.addCandidateLinkedinPh', 'https://linkedin.com/in/...')}
+                      label={t('employees.weeklyHoursField', 'Working hours (availability)')}
+                      value={addSelectedJob?.weeklyHours ? `${addSelectedJob.weeklyHours}` : ''}
+                      disabled
+                      style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }}
+                      placeholder={t('common.notSet', 'Not set')}
                     />
                   </div>
                 </div>
@@ -6640,16 +6763,89 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
                       {t('ats.candidateCvUploadHint', 'PDF, DOC or DOCX — max 5 MB. Optional for internal entries; attach when available.')}
                     </p>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,application/pdf"
-                      onChange={(e) => setAddCvFile(e.target.files?.[0] ?? null)}
-                      style={{ fontSize: 13 }}
-                    />
-                    {addCvFile && (
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {addCvFile.name}
-                      </span>
+
+                    {!addCvFile ? (
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,application/pdf"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setAddCvFile(file);
+                          if (file) {
+                            if (cvPreviewUrl) {
+                              URL.revokeObjectURL(cvPreviewUrl);
+                            }
+                            const url = URL.createObjectURL(file);
+                            setCvPreviewUrl(url);
+                          }
+                        }}
+                        style={{ fontSize: 13 }}
+                      />
+                    ) : (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        background: '#fff',
+                        borderRadius: 8,
+                        border: '1px solid var(--border)'
+                      }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {addCvFile.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                            {(addCvFile.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginLeft: 12 }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowCvPreview(true)}
+                            style={{
+                              padding: '6px 10px',
+                              background: 'var(--surface)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: 'var(--text-secondary)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Eye size={13} /> {t('common.view', 'View')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddCvFile(null);
+                              if (cvPreviewUrl) {
+                                URL.revokeObjectURL(cvPreviewUrl);
+                                setCvPreviewUrl(null);
+                              }
+                            }}
+                            style={{
+                              padding: '6px 10px',
+                              background: 'rgba(220,38,38,0.08)',
+                              border: '1px solid rgba(220,38,38,0.2)',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#DC2626',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Trash2 size={13} /> {t('common.delete', 'Delete')}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
 
@@ -6711,6 +6907,15 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
             </div>
           </div>
         </ModalBackdrop>
+      )}
+
+      {/* CV Preview Modal */}
+      {showCvPreview && cvPreviewUrl && addCvFile && (
+        <DocumentPreviewModal
+          url={cvPreviewUrl}
+          filename={addCvFile.name}
+          onClose={() => setShowCvPreview(false)}
+        />
       )}
 
       {selected && (
@@ -6794,58 +6999,98 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
             </div>
 
             <div style={{ padding: '18px 22px 22px', display: 'grid', gap: 16, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
-              
-              {/* Employee Setup Section */}
-              <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: 'rgba(201,151,58,0.04)', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#8A5A07', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('ats.employeeSetup', 'Employee setup')}
+
+              {/* Section 1: Basic Information */}
+              <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 14, background: '#fff', padding: '16px 16px 12px', display: 'grid', gap: 12 }}>
+                <div style={{ paddingBottom: 8, borderBottom: '1px solid rgba(201,151,58,0.18)' }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#8A5A07' }}>
+                    {t('ats.basicInformation', 'Basic Information')}
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.basicInformationHint', 'Required candidate contact details')}
+                  </p>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                  <Input 
-                    type="email" 
-                    label={t('common.companyEmail', 'Company Email')} 
-                    value={employeeEmail} 
-                    onChange={(e) => setEmployeeEmail(e.target.value)} 
-                    placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')} 
-                    disabled={creatingEmployee} 
-                    autoFocus 
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <Input
+                    label={t('common.firstName', 'First name')}
+                    value={employeeData.name}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                    disabled={creatingEmployee}
                   />
-                  <Input 
-                    label={t('employees.uniqueIdField', 'Unique ID')} 
-                    value={employeeData.uniqueId} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
+                  <Input
+                    label={t('common.lastName', 'Last name')}
+                    value={employeeData.surname}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, surname: e.target.value } : prev))}
+                    disabled={creatingEmployee}
                   />
-                  <Input 
-                    label={t('employees.tempPasswordLabel', 'Temporary password')} 
-                    type="text" 
-                    value={employeeData.password} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, password: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
+                  <Input
+                    type="email"
+                    label={t('common.companyEmail', 'Company Email')}
+                    value={employeeEmail}
+                    onChange={(e) => setEmployeeEmail(e.target.value)}
+                    placeholder={t('ats.companyEmailPlaceholder', 'e.g., john.doe@company.com')}
+                    disabled={creatingEmployee}
+                    autoFocus
                   />
-                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                    <Button 
-                      type="button" 
-                      variant="secondary" 
-                      onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId(), password: generateTempPassword() } : prev))} 
-                      disabled={creatingEmployee}
-                      style={{ width: '100%' }}
-                    >
-                      {t('employees.regeneratePassword', 'Regenerate access')}
-                    </Button>
-                  </div>
+                  <Input
+                    label={t('common.personalEmail', 'Personal Email')}
+                    type="email"
+                    value={employeeData.personalEmail}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, personalEmail: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  />
+                  <Input
+                    label={t('ats.phone', 'Phone')}
+                    value={employeeData.phone}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, phone: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  />
                 </div>
               </div>
 
-              {/* Employee Details Section */}
-              <div style={{ border: '1px solid rgba(13,33,55,0.12)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2137', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('ats.employeeDetails', 'Employee details')}
+              {/* Section 2: Employee Details */}
+              <div style={{ border: '1px solid rgba(13,33,55,0.15)', borderRadius: 14, background: '#fff', padding: '16px 16px 12px', display: 'grid', gap: 12 }}>
+                <div style={{ paddingBottom: 8, borderBottom: '1px solid rgba(13,33,55,0.12)' }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0D2137' }}>
+                    {t('ats.employeeDetails', 'Employee Details')}
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.personalDetailsHint', 'Optional demographic and location information')}
+                  </p>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                  <Select 
-                    label={t('common.role', 'Role')} 
-                    value={employeeData.role} 
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <DatePicker
+                    label={t('employees.dateOfBirthField', 'Date of birth')}
+                    value={employeeData.dateOfBirth}
+                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, dateOfBirth: value } : prev))}
+                    placement="bottom"
+                  />
+                  <Select
+                    label={t('employees.genderField', 'Gender')}
+                    value={employeeData.gender}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, gender: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
+                    <option value="">{t('common.notProvided', 'Not provided')}</option>
+                    <option value="M">{t('employees.genderMale', 'Male')}</option>
+                    <option value="F">{t('employees.genderFemale', 'Female')}</option>
+                    <option value="other">{t('employees.genderOther', 'Other')}</option>
+                  </Select>
+                  <Input
+                    label={t('employees.maritalStatusField', 'Marital status')}
+                    value={employeeData.maritalStatus}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, maritalStatus: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  />
+                  <Input
+                    label={t('employees.nationalityField', 'Nationality')}
+                    value={employeeData.nationality}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, nationality: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  />
+                  <Select
+                    label={t('common.role', 'Role')}
+                    value={employeeData.role}
                     onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, role: e.target.value } : prev))}
                     disabled={creatingEmployee}
                   >
@@ -6855,118 +7100,6 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     <option value="hr">{t('roles.hr', 'HR')}</option>
                     <option value="admin">{t('roles.admin', 'Admin')}</option>
                   </Select>
-                  <Select 
-                    label={t('employees.workingTypeField', 'Working type')} 
-                    value={employeeData.workingType} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, workingType: e.target.value } : prev))}
-                    disabled={creatingEmployee}
-                  >
-                    <option value="full_time">{t('employees.fullTime', 'Full time')}</option>
-                    <option value="part_time">{t('employees.partTime', 'Part time')}</option>
-                  </Select>
-                  <Select 
-                    label={t('employees.contractTypeField', 'Contract type')} 
-                    value={employeeData.contractType} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, contractType: e.target.value } : prev))}
-                    disabled={creatingEmployee}
-                  >
-                    <option value="">{t('common.notProvided', 'Not provided')}</option>
-                    <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
-                    <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
-                    <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
-                    <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
-                  </Select>
-                  <DatePicker 
-                    label={t('employees.hireDateField', 'Hire date')} 
-                    value={employeeData.hireDate} 
-                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, hireDate: value } : prev))} 
-                    placement="bottom" 
-                  />
-                  <Input 
-                    label={t('employees.maritalStatusField', 'Marital status')} 
-                    value={employeeData.maritalStatus} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, maritalStatus: e.target.value } : prev))} 
-                    disabled={creatingEmployee}
-                  />
-                  <Input 
-                    label={`${t('employees.weeklyHoursField', 'Weekly hours')} (${t('ats.availabilityLabel', 'Availability')})`}
-                    value={employeeData.weeklyHours || employeeData.availability || ''} 
-                    disabled={true}
-                    style={{ background: 'rgba(0,0,0,0.02)', cursor: 'not-allowed' }}
-                  />
-                </div>
-              </div>
-
-              {/* Contact Information Section */}
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('common.contact', 'Contact information')}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                  <Input 
-                    label={t('common.firstName', 'First name')} 
-                    value={employeeData.name} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, name: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                  <Input 
-                    label={t('common.lastName', 'Last name')} 
-                    value={employeeData.surname} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, surname: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                  <Input 
-                    label={t('common.personalEmail', 'Personal Email')} 
-                    type="email" 
-                    value={employeeData.personalEmail} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, personalEmail: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                  <Input 
-                    label={t('ats.phone', 'Phone')} 
-                    value={employeeData.phone} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, phone: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                </div>
-              </div>
-
-              {/* Personal Details Section */}
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('ats.personalDetails', 'Personal details')}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                  <DatePicker 
-                    label={t('employees.dateOfBirthField', 'Date of birth')} 
-                    value={employeeData.dateOfBirth} 
-                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, dateOfBirth: value } : prev))} 
-                    placement="bottom" 
-                  />
-                  <Select 
-                    label={t('employees.genderField', 'Gender')} 
-                    value={employeeData.gender} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, gender: e.target.value } : prev))}
-                    disabled={creatingEmployee}
-                  >
-                    <option value="">{t('common.notProvided', 'Not provided')}</option>
-                    <option value="M">{t('employees.genderMale', 'Male')}</option>
-                    <option value="F">{t('employees.genderFemale', 'Female')}</option>
-                    <option value="other">{t('employees.genderOther', 'Other')}</option>
-                  </Select>
-                  <Input 
-                    label={t('employees.nationalityField', 'Nationality')} 
-                    value={employeeData.nationality} 
-                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, nationality: e.target.value } : prev))} 
-                    disabled={creatingEmployee} 
-                  />
-                </div>
-              </div>
-
-              {/* Location Section */}
-              <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: '#fff', padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  {t('employees.addressField', 'Location')}
                 </div>
                 <LocationFieldGroup
                   value={{ country: employeeData.country, state: employeeData.state, city: employeeData.city }}
@@ -6987,6 +7120,93 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                 />
               </div>
 
+              {/* Section 3: Job Position Details */}
+              <div style={{ border: '1px solid rgba(59,130,246,0.18)', borderRadius: 14, background: 'rgba(59,130,246,0.04)', padding: '16px 16px 12px', display: 'grid', gap: 12 }}>
+                <div style={{ paddingBottom: 8, borderBottom: '1px solid rgba(59,130,246,0.15)' }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e40af' }}>
+                    {t('ats.employmentDetails', 'Job Position Details')}
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('ats.employmentDetailsHint', 'Work-related information and dates')}
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <Select
+                    label={t('employees.workingTypeField', 'Working type')}
+                    value={employeeData.workingType}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, workingType: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
+                    <option value="full_time">{t('employees.fullTime', 'Full time')}</option>
+                    <option value="part_time">{t('employees.partTime', 'Part time')}</option>
+                  </Select>
+                  <Select
+                    label={t('employees.contractTypeField', 'Contract type')}
+                    value={employeeData.contractType}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, contractType: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  >
+                    <option value="">{t('common.notProvided', 'Not provided')}</option>
+                    <option value="fixed_term">{t('employees.contractFixedTerm', 'Fixed term')}</option>
+                    <option value="open_ended">{t('employees.contractOpenEnded', 'Open ended')}</option>
+                    <option value="internship">{t('employees.contractInternship', 'Internship')}</option>
+                    <option value="consulting">{t('employees.contractConsulting', 'Consulting')}</option>
+                  </Select>
+                  <DatePicker
+                    label={t('employees.hireDateField', 'Hire date')}
+                    value={employeeData.hireDate}
+                    onChange={(value) => setEmployeeData((prev) => (prev ? { ...prev, hireDate: value } : prev))}
+                    placement="bottom"
+                  />
+                  <Input
+                    label={`${t('employees.weeklyHoursField', 'Weekly hours')} (${t('ats.availabilityLabel', 'Availability')})`}
+                    value={employeeData.weeklyHours || employeeData.availability || ''}
+                    disabled={true}
+                    style={{ background: 'rgba(0,0,0,0.02)', cursor: 'not-allowed' }}
+                  />
+                  <div>
+                    <Input
+                      label={t('employees.uniqueIdField', 'Unique ID')}
+                      value={employeeData.uniqueId}
+                      onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: e.target.value } : prev))}
+                      disabled={creatingEmployee}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId() } : prev))}
+                      disabled={creatingEmployee}
+                      style={{
+                        marginTop: '5px', background: 'none', border: 'none',
+                        cursor: creatingEmployee ? 'not-allowed' : 'pointer', fontSize: '11px', color: 'var(--accent)',
+                        fontFamily: 'var(--font-body)', fontWeight: 500,
+                        padding: '2px 0', display: 'flex', alignItems: 'center', gap: '4px',
+                        opacity: creatingEmployee ? 0.5 : 1,
+                      }}
+                    >
+                      <RotateCcw size={12} /> {t('employees.regenerateId', 'Regenerate ID')}
+                    </button>
+                  </div>
+                  <Input
+                    label={t('employees.tempPasswordLabel', 'Temporary password')}
+                    type="text"
+                    value={employeeData.password}
+                    onChange={(e) => setEmployeeData((prev) => (prev ? { ...prev, password: e.target.value } : prev))}
+                    disabled={creatingEmployee}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setEmployeeData((prev) => (prev ? { ...prev, uniqueId: generateEmployeeUniqueId(), password: generateTempPassword() } : prev))}
+                    disabled={creatingEmployee}
+                    style={{ width: '100%', maxWidth: 280 }}
+                  >
+                    {t('employees.regeneratePassword', 'Regenerate access credentials')}
+                  </Button>
+                </div>
+              </div>
+
               {/* Application Info Section (Read-only) */}
               <div style={{ border: '1px solid rgba(201,151,58,0.18)', borderRadius: 14, padding: 14, background: 'rgba(201,151,58,0.04)' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#8A5A07', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
@@ -7001,27 +7221,27 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                 </div>
               </div>
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid var(--border)', marginTop: 4 }}>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setShowEmployeeModal(false);
-                  setEmployeeData(null);
-                  setEmployeeEmail('');
-                }}
-                disabled={creatingEmployee}
-              >
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleCreateEmployeeFromCandidate}
-                loading={creatingEmployee}
-                disabled={!employeeEmail.trim()}
-              >
-                {t('ats.createAndHire', 'Create Employee & Hire')}
-              </Button>
-            </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowEmployeeModal(false);
+                    setEmployeeData(null);
+                    setEmployeeEmail('');
+                  }}
+                  disabled={creatingEmployee}
+                >
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleCreateEmployeeFromCandidate}
+                  loading={creatingEmployee}
+                  disabled={!employeeEmail.trim()}
+                >
+                  {t('ats.createAndHire', 'Create Employee & Hire')}
+                </Button>
+              </div>
             </div>
           </div>
         </ModalBackdrop>
@@ -7288,7 +7508,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
               const d = new Date(fb.createdAt);
               const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
               const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              
+
               return (
                 <div key={fb.id} style={{
                   background: 'var(--surface)',
@@ -7404,20 +7624,21 @@ export default function ATSPage() {
 
   const tabs = isStoreManager
     ? [
-        { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
-        { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
-      ]
+      { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
+      { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
+      { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
+    ]
     : [
-        ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
-        { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
-        { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
-        { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
-        { key: 'alerts', label: t('ats.tabAlerts'), icon: '🔔' },
-      ];
+      ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
+      { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
+      { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
+      { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
+      { key: 'alerts', label: t('ats.tabAlerts'), icon: '🔔' },
+    ];
 
   // Keep store managers on their allowed tabs only
   useEffect(() => {
-    if (isStoreManager && !['candidates', 'interviews'].includes(tab)) {
+    if (isStoreManager && !['candidates', 'interviews', 'calendar'].includes(tab)) {
       setTab('candidates');
     }
   }, [isStoreManager, tab]);

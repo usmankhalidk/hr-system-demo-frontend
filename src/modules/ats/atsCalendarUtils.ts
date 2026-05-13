@@ -189,7 +189,6 @@ export function hasConflict(interviewId: number, conflicts: InterviewConflict[])
 export interface InterviewFilter {
   positionId: number | null;
   interviewerId: number | null;
-  status: Interview['status'] | null;
 }
 
 export function applyFilters(interviews: Interview[], filters: InterviewFilter): Interview[] {
@@ -203,10 +202,6 @@ export function applyFilters(interviews: Interview[], filters: InterviewFilter):
     filtered = filtered.filter((i) => i.interviewerId === filters.interviewerId);
   }
 
-  if (filters.status !== null) {
-    filtered = filtered.filter((i) => i.status === filters.status);
-  }
-
   return filtered;
 }
 
@@ -214,7 +209,6 @@ export function getActiveFilterCount(filters: InterviewFilter): number {
   let count = 0;
   if (filters.positionId !== null) count++;
   if (filters.interviewerId !== null) count++;
-  if (filters.status !== null) count++;
   return count;
 }
 
