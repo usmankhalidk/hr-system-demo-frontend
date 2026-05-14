@@ -35,6 +35,7 @@ import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { getCompanyLogoUrl } from "../../api/client";
 import {
   getNotifications,
@@ -44,6 +45,7 @@ import {
   getRecentRecipients,
   updateNotificationRoles,
   RecentRecipient,
+  bulkDeleteNotifications,
 } from "../../api/notifications";
 import {
   getNotificationSettings,
@@ -211,6 +213,10 @@ function typeVisual(type: string): {
 export default function NotificationsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { showToast } = useToast();
+
+  // Hover state for notifications (moved outside map)
+  const [hoveredNotificationId, setHoveredNotificationId] = useState<number | null>(null);
 
   const canViewCompanyFeed = user ? MANAGEMENT_ROLES.has(user.role) : false;
   const canManageSettings = user?.role === "admin";
@@ -247,6 +253,11 @@ export default function NotificationsPage() {
   const [recentRecipients, setRecentRecipients] = useState<
     Map<string, RecentRecipient[]>
   >(new Map());
+
+  // Delete mode state
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [selectedNotificationIds, setSelectedNotificationIds] = useState<Set<number>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   // Company selector state
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -454,6 +465,104 @@ export default function NotificationsPage() {
     } finally {
       setMarkingAll(false);
     }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedNotificationIds.size === 0) return;
+    setDeleting(true);
+    try {
+      const idsArray = Array.from(selectedNotificationIds);
+      const deletedCount = await bulkDeleteNotifications(idsArray);
+      
+      // Remove deleted notifications from the list
+      setNotifications((prev) => prev.filter((item) => !selectedNotificationIds.has(item.id)));
+      setTotal((prev) => Math.max(0, prev - deletedCount));
+      
+      // Update unread count
+      const deletedUnreadCount = notifications.filter(
+        (item) => selectedNotificationIds.has(item.id) && !item.isRead
+      ).length;
+      setUnreadCount((prev) => Math.max(0, prev - deletedUnreadCount));
+      
+      // Clear selection and exit delete mode
+      setSelectedNotificationIds(new Set());
+      setDeleteMode(false);
+      
+      showToast?.(
+        t("notifications.deleteSuccess", `${deletedCount} notification(s) deleted`),
+        "success"
+      );
+    } catch {
+      setError(
+        t(
+          "notifications.deleteError",
+          "Unable to delete notifications",
+        ),
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const toggleNotificationSelection = (id: number) => {
+    setSelectedNotificationIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedNotificationIds.size === filteredNotifications.length) {
+      setSelectedNotificationIds(new Set());
+    } else {
+      setSelectedNotificationIds(new Set(filteredNotifications.map((n) => n.id)));
+    }
+  };
+
+  const getNotificationNavigationUrl = (notification: Notification): string | null => {
+    const type = notification.type;
+    
+    // ATS notifications
+    if (type.startsWith('ats.')) {
+      return '/ats';
+    }
+    
+    // Employee notifications
+    if (type.startsWith('employee.')) {
+      return '/employees';
+    }
+    
+    // Shift notifications
+    if (type.startsWith('shift.')) {
+      return '/shifts';
+    }
+    
+    // Attendance notifications
+    if (type.startsWith('attendance.')) {
+      return '/attendance';
+    }
+    
+    // Leave notifications
+    if (type.startsWith('leave.')) {
+      return '/leave';
+    }
+    
+    // Document notifications
+    if (type.startsWith('document.')) {
+      return '/documents';
+    }
+    
+    // Onboarding notifications
+    if (type.startsWith('onboarding.')) {
+      return '/onboarding';
+    }
+    
+    return null;
   };
 
   const settingByKey = useMemo(() => {
@@ -1349,6 +1458,30 @@ export default function NotificationsPage() {
                   </div>
                 )}
 
+              {/* Delete Mode Button */}
+              {scope === "mine" && notifications.length > 0 && (
+                <Button
+                  variant={deleteMode ? "danger" : "secondary"}
+                  size="sm"
+                  onClick={() => {
+                    setDeleteMode(!deleteMode);
+                    setSelectedNotificationIds(new Set());
+                  }}
+                >
+                  {deleteMode ? (
+                    <>
+                      <X size={14} style={{ marginRight: 5 }} />
+                      {t("common.cancel", "Cancel")}
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} style={{ marginRight: 5 }} />
+                      {t("notifications.delete", "Delete")}
+                    </>
+                  )}
+                </Button>
+              )}
+
               <div style={{ display: "flex", gap: 4 }}>
                 <button
                   onClick={() => setUnreadOnly(false)}
@@ -1427,6 +1560,50 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <>
+              {/* Delete Mode Actions Bar */}
+              {deleteMode && (
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    background: "var(--surface-warm)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedNotificationIds.size === filteredNotifications.length && filteredNotifications.length > 0}
+                      onChange={toggleSelectAll}
+                      style={{ width: 16, height: 16, cursor: "pointer" }}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                      {selectedNotificationIds.size > 0
+                        ? t("notifications.selectedCount", `${selectedNotificationIds.size} selected`)
+                        : t("notifications.selectAll", "Select all")}
+                    </span>
+                  </div>
+                  {selectedNotificationIds.size > 0 && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={handleBulkDelete}
+                      disabled={deleting}
+                    >
+                      <Trash2 size={14} style={{ marginRight: 5 }} />
+                      {deleting
+                        ? t("common.deleting", "Deleting...")
+                        : t("notifications.deleteSelected", `Delete (${selectedNotificationIds.size})`)}
+                    </Button>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: "grid" }}>
                 {filteredNotifications.map((item) => {
                   const priority = PRIORITY_COLORS[item.priority];
@@ -1436,34 +1613,48 @@ export default function NotificationsPage() {
                   const recipientName = item.recipientName
                     ? `${item.recipientName}${item.recipientSurname ? ` ${item.recipientSurname}` : ""}`
                     : null;
+                  const navigationUrl = getNotificationNavigationUrl(item);
+                  const isHovered = hoveredNotificationId === item.id;
 
                   return (
-                    <button
+                    <div
                       key={item.id}
-                      type="button"
-                      onClick={() => {
-                        if (canMark) {
-                          void handleMarkRead(item);
-                        }
-                      }}
+                      onMouseEnter={() => setHoveredNotificationId(item.id)}
+                      onMouseLeave={() => setHoveredNotificationId(null)}
                       style={{
+                        position: "relative",
                         border: "none",
                         borderBottom: "1px solid var(--border-light)",
                         background: item.isRead
                           ? "rgba(22,163,74,0.05)"
                           : "rgba(201,151,58,0.08)",
-                        textAlign: "left",
-                        cursor: canMark ? "pointer" : "default",
-                        padding: 0,
                       }}
                     >
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "5px minmax(0,1fr)",
+                          gridTemplateColumns: deleteMode ? "40px 5px minmax(0,1fr)" : "5px minmax(0,1fr)",
                           gap: 0,
                         }}
                       >
+                        {deleteMode && (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "12px 0",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedNotificationIds.has(item.id)}
+                              onChange={() => toggleNotificationSelection(item.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: 16, height: 16, cursor: "pointer" }}
+                            />
+                          </div>
+                        )}
                         <span
                           style={{
                             background: item.isRead
@@ -1472,7 +1663,22 @@ export default function NotificationsPage() {
                             opacity: item.isRead ? 0.6 : 1,
                           }}
                         />
-                        <div style={{ padding: "12px 14px 11px" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (canMark && !deleteMode) {
+                              void handleMarkRead(item);
+                            }
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            textAlign: "left",
+                            cursor: canMark && !deleteMode ? "pointer" : "default",
+                            padding: "12px 14px 11px",
+                            width: "100%",
+                          }}
+                        >
                           <div
                             style={{
                               display: "grid",
@@ -1644,9 +1850,42 @@ export default function NotificationsPage() {
                               </div>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       </div>
-                    </button>
+
+                      {/* View/Navigate Button on Hover */}
+                      {isHovered && navigationUrl && !deleteMode && (
+                        <a
+                          href={navigationUrl}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            window.location.href = navigationUrl;
+                          }}
+                          style={{
+                            position: "absolute",
+                            top: 12,
+                            right: 12,
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            background: "var(--primary)",
+                            color: "#fff",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            textDecoration: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                            cursor: "pointer",
+                            zIndex: 10,
+                          }}
+                          title={t("notifications.viewSource", "Go to source")}
+                        >
+                          <ExternalLink size={12} />
+                          {t("notifications.view", "View")}
+                        </a>
+                      )}
+                    </div>
                   );
                 })}
               </div>

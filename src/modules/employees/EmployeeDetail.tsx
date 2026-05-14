@@ -1286,6 +1286,14 @@ export function EmployeeDetail() {
               color: '#FFFFFF', margin: '0 0 8px', letterSpacing: '-0.02em',
             }}>
               {fullName}
+              {employee.country && (
+                <ReactCountryFlag
+                  countryCode={employee.country}
+                  svg
+                  style={{ marginLeft: '12px', marginBottom: '2px', width: '20px', height: '16px', verticalAlign: 'middle', borderRadius: '2px' }}
+                  title={employee.country}
+                />
+              )}
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>

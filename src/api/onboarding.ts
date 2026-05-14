@@ -76,6 +76,7 @@ export interface EmployeeOnboardingOverview {
   name: string;
   surname: string;
   email: string;
+  role: 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee';
   storeId: number | null;
   storeName: string | null;
   avatarFilename: string | null;

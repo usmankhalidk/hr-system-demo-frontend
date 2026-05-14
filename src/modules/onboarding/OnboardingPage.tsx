@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Building2, CheckCircle2, ChevronDown, ChevronUp, Pencil, Power, Trash2, UserPlus, Users } from 'lucide-react';
+import { Building2, CheckCircle2, ChevronDown, ChevronUp, Pencil, Power, Store as StoreIcon, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { translateApiError } from '../../utils/apiErrors';
@@ -28,6 +28,15 @@ import {
 type Phase = 'day1' | 'week1' | 'month1' | 'ongoing';
 
 const PHASE_ORDER: Phase[] = ['day1', 'week1', 'month1', 'ongoing'];
+
+const ROLE_BADGE_VARIANT: Record<string, { bg: string; color: string; border: string }> = {
+  admin: { bg: 'rgba(201,151,58,0.10)', color: 'var(--accent)', border: 'rgba(201,151,58,0.20)' },
+  hr: { bg: 'var(--info-bg)', color: 'var(--info)', border: 'var(--info-border)' },
+  area_manager: { bg: 'var(--success-bg)', color: 'var(--success)', border: 'var(--success-border)' },
+  store_manager: { bg: 'var(--warning-bg)', color: 'var(--warning)', border: 'var(--warning-border)' },
+  employee: { bg: 'var(--background)', color: 'var(--text-muted)', border: 'var(--border)' },
+  store_terminal: { bg: 'var(--background)', color: 'var(--text-muted)', border: 'var(--border)' },
+};
 
 function getPhase(sortOrder: number): Phase {
   if (sortOrder <= 3)  return 'day1';
@@ -476,10 +485,24 @@ const TemplatesPanel: React.FC = () => {
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {company.name}
+                {company.country && (
+                  <span style={{ marginLeft: 6, display: 'inline-flex', verticalAlign: 'middle' }}>
+                    <img src={`https://flagcdn.com/w20/${company.country.toLowerCase()}.png`} alt={company.country} style={{ height: 9, borderRadius: 1 }} />
+                  </span>
+                )}
               </span>
-              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {(company.groupName || t('common.none', 'None'))} • {ownerLabel} • {(company.storeCount ?? 0)} {t('employees.storesLabel', 'Stores')}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 1 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: company.groupName ? '#9A6808' : 'var(--text-muted)', fontWeight: company.groupName ? 600 : 400 }}>
+                    {company.groupName || t('common.independent', 'Independent')}
+                  </span>
+                  <span style={{ opacity: 0.45 }}>•</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ownerLabel}</span>
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: 10.5, flexShrink: 0 }}>
+                  {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                </span>
+              </div>
             </span>
           </div>
         ),
@@ -505,13 +528,26 @@ const TemplatesPanel: React.FC = () => {
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {company.name}
+                {company.country && (
+                  <span style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center' }}>
+                    <img src={`https://flagcdn.com/w20/${company.country.toLowerCase()}.png`} alt={company.country} style={{ height: 9, borderRadius: 1 }} />
+                  </span>
+                )}
               </span>
-              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {company.groupName || t('common.none', 'None')}
-              </span>
-              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')} • ${company.employeeCount ?? 0} ${t('employees.title', 'Employees')}`}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 1 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: company.groupName ? '#9A6808' : 'var(--text-muted)', fontWeight: company.groupName ? 600 : 400 }}>
+                    {company.groupName || t('common.independent', 'Independent')}
+                  </span>
+                  <span style={{ opacity: 0.45 }}>•</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                  </span>
+                </span>
+                <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                  {company.employeeCount ?? 0} {t('employees.title', 'Employees')}
+                </span>
+              </div>
             </span>
           </div>
         ),
@@ -620,11 +656,11 @@ const TemplatesPanel: React.FC = () => {
 
     setAssignLoading(true);
     Promise.all([
-      getEmployees({ targetCompanyId: companyId, role: 'employee', status: 'active', limit: 500 }),
+      getEmployees({ targetCompanyId: companyId, excludeAdmins: true, status: 'active', limit: 500 }),
       getTemplates(false, companyId),
     ])
       .then(([employeesResponse, templatesResponse]) => {
-        const employeeRows = employeesResponse.employees.filter((employee) => employee.role === 'employee');
+        const employeeRows = employeesResponse.employees.filter((employee) => !['admin', 'store_terminal'].includes(employee.role));
         setAssignEmployees(employeeRows);
         setAssignTemplates(templatesResponse);
         setAssignSelected(new Set());
@@ -894,7 +930,6 @@ const TemplatesPanel: React.FC = () => {
               searchPlaceholder={t('common.search', 'Search...')}
               noOptionsMessage={t('common.noData', 'No options found')}
               menuMaxHeight={280}
-              controlMinHeight={40}
             />
           </div>
         </div>
@@ -1154,8 +1189,7 @@ const TemplatesPanel: React.FC = () => {
                 searchPlaceholder={t('common.search', 'Search...')}
                 noOptionsMessage={t('common.noData', 'No options found')}
                 menuMaxHeight={260}
-                controlMinHeight={40}
-              />
+                />
             </div>
             <Input
               label={`${t('onboarding.templateName', 'Task name')} *`}
@@ -1206,8 +1240,7 @@ const TemplatesPanel: React.FC = () => {
                 searchPlaceholder={t('common.search', 'Search...')}
                 noOptionsMessage={t('common.noData', 'No options found')}
                 menuMaxHeight={260}
-                controlMinHeight={40}
-              />
+                />
             </div>
 
             {/* Priority */}
@@ -1337,20 +1370,33 @@ const TemplatesPanel: React.FC = () => {
                     <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
                       <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {selectedAssignCompany.name}
+                        {selectedAssignCompany.country && (
+                          <span style={{ marginLeft: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
+                            <img
+                              src={`https://flagcdn.com/w20/${selectedAssignCompany.country.toLowerCase()}.png`}
+                              alt={selectedAssignCompany.country}
+                              style={{ height: 12, borderRadius: 2 }}
+                              onError={(e) => (e.currentTarget.style.display = 'none')}
+                            />
+                          </span>
+                        )}
                       </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedAssignCompany.groupName || t('common.none', 'None')}</span>
-                        <span style={{ opacity: 0.45 }}>•</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {selectedAssignCompany.ownerName
-                            ? `${selectedAssignCompany.ownerName}${selectedAssignCompany.ownerSurname ? ` ${selectedAssignCompany.ownerSurname}` : ''}`
-                            : t('companies.ownerMissing', 'No owner assigned')}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 1 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: selectedAssignCompany.groupName ? '#9A6808' : 'var(--text-muted)', fontWeight: selectedAssignCompany.groupName ? 600 : 400 }}>
+                            {selectedAssignCompany.groupName || t('common.independent', 'Independent')}
+                          </span>
+                          <span style={{ opacity: 0.45 }}>•</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {selectedAssignCompany.ownerName
+                              ? `${selectedAssignCompany.ownerName}${selectedAssignCompany.ownerSurname ? ` ${selectedAssignCompany.ownerSurname}` : ''}`
+                              : t('companies.ownerMissing', 'No owner assigned')}
+                          </span>
                         </span>
-                        <span style={{ opacity: 0.45 }}>•</span>
-                        <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>
+                        <span style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: 10.5, flexShrink: 0 }}>
                           {`${selectedAssignCompany.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
                         </span>
-                      </span>
+                      </div>
                     </span>
                   </span>
                 ) : (
@@ -1415,20 +1461,33 @@ const TemplatesPanel: React.FC = () => {
                           <span style={{ minWidth: 0, flex: 1 }}>
                             <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {company.name}
+                              {company.country && (
+                                <span style={{ marginLeft: 6, display: 'inline-flex', verticalAlign: 'middle' }}>
+                                  <img
+                                    src={`https://flagcdn.com/w20/${company.country.toLowerCase()}.png`}
+                                    alt={company.country}
+                                    style={{ height: 9, borderRadius: 1 }}
+                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                  />
+                                </span>
+                              )}
                             </span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{company.groupName || t('common.none', 'None')}</span>
-                              <span style={{ opacity: 0.45 }}>•</span>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {company.ownerName
-                                  ? `${company.ownerName}${company.ownerSurname ? ` ${company.ownerSurname}` : ''}`
-                                  : t('companies.ownerMissing', 'No owner assigned')}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 1 }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: company.groupName ? '#9A6808' : 'var(--text-muted)', fontWeight: company.groupName ? 600 : 400 }}>
+                                  {company.groupName || t('common.independent', 'Independent')}
+                                </span>
+                                <span style={{ opacity: 0.45 }}>•</span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {company.ownerName
+                                    ? `${company.ownerName}${company.ownerSurname ? ` ${company.ownerSurname}` : ''}`
+                                    : t('companies.ownerMissing', 'No owner assigned')}
+                                </span>
                               </span>
-                              <span style={{ opacity: 0.45 }}>•</span>
-                              <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: 10.5, flexShrink: 0 }}>
                                 {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
                               </span>
-                            </span>
+                            </div>
                           </span>
                         </button>
                       ))
@@ -1474,15 +1533,35 @@ const TemplatesPanel: React.FC = () => {
                         <img src={getAvatarUrl(selectedAssignEmployee.avatarFilename) ?? ''} alt={`${selectedAssignEmployee.name} ${selectedAssignEmployee.surname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : initials(selectedAssignEmployee.name, selectedAssignEmployee.surname)}
                     </span>
-                    <span style={{ minWidth: 0, textAlign: 'left' }}>
-                      <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {selectedAssignEmployee.name} {selectedAssignEmployee.surname}
-                      </span>
-                      <span style={{ display: 'block', fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {t(`roles.${selectedAssignEmployee.role}`, selectedAssignEmployee.role)}
-                        {selectedAssignEmployee.storeName ? ` · ${selectedAssignEmployee.storeName}` : ''}
+                      </div>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                        <StoreIcon size={10} style={{ opacity: 0.7 }} />
+                        {selectedAssignEmployee.storeName || t('common.noStore', 'No store')}
                       </span>
                     </span>
+
+                    {/* Role Badge - Taller and Centered on the Right */}
+                    <div style={{
+                      fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
+                      padding: '0 8px', borderRadius: 8,
+                      background: ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.bg || 'rgba(13,33,55,0.06)',
+                      color: ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.color || 'var(--text-muted)',
+                      border: `1px solid ${ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.border || 'var(--border)'}`,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: 32,
+                      minWidth: 70,
+                      textAlign: 'center',
+                      alignSelf: 'center',
+                      marginLeft: 10
+                    }}>
+                      {t(`roles.${selectedAssignEmployee.role}`, selectedAssignEmployee.role)}
+                    </div>
                   </span>
                 ) : (
                   <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -1545,15 +1624,35 @@ const TemplatesPanel: React.FC = () => {
                               <img src={getAvatarUrl(employee.avatarFilename) ?? ''} alt={`${employee.name} ${employee.surname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : initials(employee.name, employee.surname)}
                           </span>
-                          <span style={{ minWidth: 0 }}>
-                            <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {employee.name} {employee.surname}
-                            </span>
-                            <span style={{ display: 'block', fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {t(`roles.${employee.role}`, employee.role)}
-                              {employee.storeName ? ` · ${employee.storeName}` : ''}
+                            </div>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                              <StoreIcon size={10} style={{ opacity: 0.7 }} />
+                              {employee.storeName || t('common.noStore', 'No store')}
                             </span>
                           </span>
+
+                          {/* Role Badge - Taller and Centered on the Right */}
+                          <div style={{
+                            fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
+                            padding: '0 8px', borderRadius: 8,
+                            background: ROLE_BADGE_VARIANT[employee.role]?.bg || 'rgba(13,33,55,0.06)',
+                            color: ROLE_BADGE_VARIANT[employee.role]?.color || 'var(--text-muted)',
+                            border: `1px solid ${ROLE_BADGE_VARIANT[employee.role]?.border || 'var(--border)'}`,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: 32,
+                            minWidth: 70,
+                            textAlign: 'center',
+                            alignSelf: 'center',
+                            marginLeft: 10
+                          }}>
+                            {t(`roles.${employee.role}`, employee.role)}
+                          </div>
                         </button>
                       ))
                     )}
@@ -1806,22 +1905,35 @@ const EmployeeDrawer: React.FC<{
           {/* Header */}
           <div style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #1a3a5c 100%)', padding: '20px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.3)' }} />
                 ) : (
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#fff', border: '2px solid rgba(255,255,255,0.3)' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#fff', border: '2px solid rgba(255,255,255,0.3)', flexShrink: 0 }}>
                     {initials(employee.name, employee.surname)}
                   </div>
                 )}
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-display)' }}>
-                    {employee.name} {employee.surname}
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%' }}>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-display)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {employee.name} {employee.surname}
+                      </div>
+                      <div style={{
+                        fontSize: 9, fontWeight: 800, textTransform: 'uppercase',
+                        padding: '3px 9px', borderRadius: 6,
+                        background: ROLE_BADGE_VARIANT[employee.role]?.bg || 'rgba(255,255,255,0.15)',
+                        color: ROLE_BADGE_VARIANT[employee.role]?.color || '#fff',
+                        border: `1px solid ${ROLE_BADGE_VARIANT[employee.role]?.border || 'rgba(255,255,255,0.3)'}`,
+                        flexShrink: 0
+                      }}>
+                        {t(`roles.${employee.role}`, employee.role)}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)', fontWeight: 500, marginTop: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <StoreIcon size={12} style={{ opacity: 0.8 }} />
+                      {employee.storeName || t('common.noStore', 'No store')}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>
-                    {employee.storeName ?? employee.email}
-                  </div>
-                </div>
               </div>
               <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
@@ -2095,20 +2207,28 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     const companyId = parseInt(bulkCompanyId, 10);
     if (Number.isNaN(companyId)) return;
     setBulkLoading(true);
-    Promise.all([
-      getEmployees({ targetCompanyId: companyId, role: 'employee', status: 'active', limit: 500 }),
-      getTemplates(false, companyId),
-    ]).then(([employeesRes, templatesRes]) => {
-      const unassignedIds = new Set(
-        overview
-          .filter((row) => row.companyId === companyId && !row.hasTasksAssigned)
-          .map((row) => row.employeeId),
-      );
-      const unassignedEmployees = employeesRes.employees.filter((emp) => unassignedIds.has(emp.id));
-      setBulkEmployees(unassignedEmployees);
-      setBulkTemplates(templatesRes);
-      setBulkSelectedEmployeeIds(new Set(unassignedEmployees.map((emp) => emp.id)));
-      setBulkSelectedTemplateIds(new Set());
+    getTemplates(false, companyId)
+      .then((templatesRes) => {
+        // Filter overview for the selected company and exclude admins
+        const companyEmployees = overview.filter(
+          (row) => row.companyId === companyId && !['admin', 'store_terminal'].includes(row.role) && !row.hasTasksAssigned
+        );
+
+        // Map overview objects to match the Employee interface expected by the UI
+        const mappedEmployees: any[] = companyEmployees.map((row) => ({
+          id: row.employeeId,
+          name: row.name,
+          surname: row.surname,
+          role: row.role,
+          avatarFilename: row.avatarFilename,
+          storeName: row.storeName,
+          companyName: row.companyName,
+        }));
+
+        setBulkEmployees(mappedEmployees);
+        setBulkTemplates(templatesRes);
+        setBulkSelectedEmployeeIds(new Set(mappedEmployees.map((emp) => emp.id)));
+        setBulkSelectedTemplateIds(new Set());
     }).catch(() => {
       setBulkEmployees([]);
       setBulkTemplates([]);
@@ -2149,10 +2269,26 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {company.name}
+                {company.country && (
+                  <span style={{ marginLeft: 6, display: 'inline-flex', verticalAlign: 'middle' }}>
+                    <img src={`https://flagcdn.com/w20/${company.country.toLowerCase()}.png`} alt={company.country} style={{ height: 10, borderRadius: 1 }} />
+                  </span>
+                )}
               </span>
-              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)' }}>
-                {(company.groupName || t('common.none', 'None'))} • {(company.employeeCount ?? 0)} {t('employees.title', 'Employees')}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 1 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: company.groupName ? '#9A6808' : 'var(--text-muted)', fontWeight: company.groupName ? 600 : 400 }}>
+                    {company.groupName || t('common.independent', 'Independent')}
+                  </span>
+                  <span style={{ opacity: 0.45 }}>•</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {company.employeeCount ?? 0} {t('employees.title', 'Employees')}
+                  </span>
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: 10.5, flexShrink: 0 }}>
+                  {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                </span>
+              </div>
             </span>
           </div>
         ),
@@ -2206,10 +2342,24 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {company.name}
+                {company.country && (
+                  <span style={{ marginLeft: 6, display: 'inline-flex', verticalAlign: 'middle' }}>
+                    <img src={`https://flagcdn.com/w20/${company.country.toLowerCase()}.png`} alt={company.country} style={{ height: 10, borderRadius: 1 }} />
+                  </span>
+                )}
               </span>
-              <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {(company.groupName || t('common.none', 'None'))} • {ownerLabel} • {(company.storeCount ?? 0)} {t('employees.storesLabel', 'Stores')}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 1 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: company.groupName ? '#9A6808' : 'var(--text-muted)', fontWeight: company.groupName ? 600 : 400 }}>
+                    {company.groupName || t('common.independent', 'Independent')}
+                  </span>
+                  <span style={{ opacity: 0.45 }}>•</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ownerLabel}</span>
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: 10.5, flexShrink: 0 }}>
+                  {`${company.storeCount ?? 0} ${t('employees.storesLabel', 'Stores')}`}
+                </span>
+              </div>
             </span>
           </div>
         ),
@@ -2273,7 +2423,6 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
               searchPlaceholder={t('common.search', 'Search...')}
               noOptionsMessage={t('common.noData', 'No options found')}
               menuMaxHeight={280}
-              controlMinHeight={40}
             />
           </div>
           {stores.length > 0 && (
@@ -2291,8 +2440,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                 searchPlaceholder={t('common.search', 'Search...')}
                 noOptionsMessage={t('common.noData', 'No options found')}
                 menuMaxHeight={280}
-                controlMinHeight={40}
-              />
+                />
             </div>
           )}
         </div>
@@ -2411,21 +2559,14 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     </div>
                   )}
 
-                  {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {emp.name} {emp.surname}
                     </div>
-                    {emp.companyName && (
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        🏢 {emp.companyName}
-                      </div>
-                    )}
-                    {emp.storeName && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        🏪 {emp.storeName}
-                      </div>
-                    )}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      🏪 {emp.storeName}
+                    </div>
+
                     {/* Progress bar */}
                     <div style={{ marginTop: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -2438,6 +2579,26 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                         <div style={{ height: '100%', width: `${pct}%`, background: ac, borderRadius: 99, transition: 'width 0.4s ease' }} />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Role Badge - Taller and Centered on the Right */}
+                  <div style={{
+                    fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
+                    padding: '0 8px', borderRadius: 8,
+                    background: ROLE_BADGE_VARIANT[emp.role]?.bg || 'rgba(13,33,55,0.06)',
+                    color: ROLE_BADGE_VARIANT[emp.role]?.color || 'var(--text-muted)',
+                    border: `1px solid ${ROLE_BADGE_VARIANT[emp.role]?.border || 'var(--border)'}`,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 44,
+                    minWidth: 70,
+                    textAlign: 'center',
+                    alignSelf: 'center',
+                    marginLeft: 10
+                  }}>
+                    {t(`roles.${emp.role}`, emp.role)}
                   </div>
 
                   {/* Ring */}
@@ -2488,7 +2649,6 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
               searchPlaceholder={t('common.search', 'Search...')}
               noOptionsMessage={t('common.noData', 'No options found')}
               menuMaxHeight={280}
-              controlMinHeight={40}
             />
           </div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
@@ -2512,7 +2672,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                       cursor: 'pointer',
                     }}
                   >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
                       <input
                         type="checkbox"
                         checked={bulkSelectedEmployeeIds.has(emp.id)}
@@ -2534,12 +2694,33 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                           {(emp.name?.[0] ?? '')}{(emp.surname?.[0] ?? '')}
                         </span>
                       )}
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {emp.name} {emp.surname}
-                      </span>
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', maxWidth: '42%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {emp.storeName || '—'}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12.5, display: 'block' }}>
+                          {emp.name} {emp.surname}
+                        </span>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                          <StoreIcon size={10} style={{ opacity: 0.8 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {emp.storeName || '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Role Badge - Taller and Centered on the Right */}
+                      <div style={{
+                        fontSize: 9, fontWeight: 800, textTransform: 'uppercase',
+                        padding: '4px 8px', borderRadius: 8,
+                        background: ROLE_BADGE_VARIANT[emp.role]?.bg || 'rgba(13,33,55,0.06)',
+                        color: ROLE_BADGE_VARIANT[emp.role]?.color || 'var(--text-muted)',
+                        border: `1px solid ${ROLE_BADGE_VARIANT[emp.role]?.border || 'var(--border)'}`,
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                      }}>
+                        {t(`roles.${emp.role}`, emp.role)}
+                      </div>
                     </span>
                   </label>
                 );

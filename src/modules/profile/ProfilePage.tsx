@@ -229,24 +229,7 @@ export function ProfilePage() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '640px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Card title={t('profile.title')}>
-        <div>
-          <div style={{ ...infoRowStyle, borderTop: '1px solid var(--border)' }}>
-            <span style={infoLabelStyle}>{t('profile.fullName')}</span>
-            <span style={infoValueStyle}>{fullName}</span>
-          </div>
-          <div style={infoRowStyle}>
-            <span style={infoLabelStyle}>{t('profile.email')}</span>
-            <span style={infoValueStyle}>{user.email}</span>
-          </div>
-          <div style={{ ...infoRowStyle, borderBottom: 'none' }}>
-            <span style={infoLabelStyle}>{t('profile.role')}</span>
-            <span style={infoValueStyle}>{tRole(user.role)}</span>
-          </div>
-        </div>
-      </Card>
-
-      {/* Avatar upload */}
+      {/* Avatar upload - MOVED TO TOP */}
       {canEditAvatar && (
         <Card title={t('employees.changeAvatar')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '12px 0' }}>
@@ -368,6 +351,50 @@ export function ProfilePage() {
           </div>
         </Card>
       )}
+
+      {/* My Profile - with company, store, and supervisor info */}
+      <Card title={t('profile.title')}>
+        <div>
+          <div style={{ ...infoRowStyle, borderTop: '1px solid var(--border)' }}>
+            <span style={infoLabelStyle}>{t('profile.fullName')}</span>
+            <span style={infoValueStyle}>{fullName}</span>
+          </div>
+          <div style={infoRowStyle}>
+            <span style={infoLabelStyle}>{t('profile.email')}</span>
+            <span style={infoValueStyle}>{user.email}</span>
+          </div>
+          <div style={infoRowStyle}>
+            <span style={infoLabelStyle}>{t('profile.role')}</span>
+            <span style={infoValueStyle}>{tRole(user.role)}</span>
+          </div>
+          {employee?.companyName && (
+            <div style={infoRowStyle}>
+              <span style={infoLabelStyle}>{t('profile.company', 'Company')}</span>
+              <span style={infoValueStyle}>{employee.companyName}</span>
+            </div>
+          )}
+          {employee?.storeName && (
+            <div style={infoRowStyle}>
+              <span style={infoLabelStyle}>{t('profile.store', 'Store')}</span>
+              <span style={infoValueStyle}>{employee.storeName}</span>
+            </div>
+          )}
+          {employee?.supervisorName && (
+            <div style={{ ...infoRowStyle, borderBottom: 'none' }}>
+              <span style={infoLabelStyle}>{t('profile.supervisor', 'Supervisor')}</span>
+              <span style={infoValueStyle}>
+                {employee.supervisorName}
+              </span>
+            </div>
+          )}
+          {!employee?.supervisorName && (
+            <div style={{ ...infoRowStyle, borderBottom: 'none' }}>
+              <span style={infoLabelStyle}></span>
+              <span style={infoValueStyle}></span>
+            </div>
+          )}
+        </div>
+      </Card>
 
       <Card title={t('profile.accountSettings')}>
         <div style={{ padding: '12px 0' }}>
