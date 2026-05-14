@@ -27,6 +27,15 @@ interface EmployeeFormProps {
   onCreated?: (employee: Employee) => void;
 }
 
+const ROLE_BADGE_VARIANT: Record<string, { bg: string; color: string; border: string }> = {
+  admin: { bg: 'rgba(201,151,58,0.10)', color: 'var(--accent)', border: 'rgba(201,151,58,0.20)' },
+  hr: { bg: 'var(--info-bg)', color: 'var(--info)', border: 'var(--info-border)' },
+  area_manager: { bg: 'var(--success-bg)', color: 'var(--success)', border: 'var(--success-border)' },
+  store_manager: { bg: 'var(--warning-bg)', color: 'var(--warning)', border: 'var(--warning-border)' },
+  employee: { bg: 'var(--background)', color: 'var(--text-muted)', border: 'var(--border)' },
+  store_terminal: { bg: 'var(--background)', color: 'var(--text-muted)', border: 'var(--border)' },
+};
+
 interface FormData {
   name: string;
   surname: string;
@@ -162,12 +171,14 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
   const isSuperAdmin = user?.isSuperAdmin === true;
 
-  const canPickCompany = !isEditMode && (user?.role === 'admin' || user?.role === 'hr' || isSuperAdmin);
+  const isPrivilegedCompanyUser = user?.role === 'admin' || user?.role === 'hr' || isSuperAdmin;
+  const canPickCompany = true;
+  const isCompanyEditable = isPrivilegedCompanyUser;
   const canAssignAdminRole = user?.isSuperAdmin === true || user?.role === 'admin';
 
   const selectedCompanyId = formData.companyId ? parseInt(formData.companyId, 10) : NaN;
   const effectiveCompanyId = Number.isNaN(selectedCompanyId)
-    ? (canPickCompany ? null : (user?.companyId ?? null))
+    ? (isCompanyEditable ? null : (user?.companyId ?? null))
     : selectedCompanyId;
 
   const selectedCompany = companies.find((company) => company.id === selectedCompanyId) ?? null;
@@ -863,6 +874,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       <div ref={companyPickerRef} style={{ position: 'relative' }}>
                         <button
                           type="button"
+                          disabled={!isCompanyEditable}
                           onClick={() => setCompanyPickerOpen((prev) => !prev)}
                           style={{
                             width: '100%',
@@ -875,7 +887,8 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             gap: 10,
-                            cursor: 'pointer',
+                            cursor: isCompanyEditable ? 'pointer' : 'not-allowed',
+                            opacity: isCompanyEditable ? 1 : 0.8,
                           }}
                         >
                           {selectedCompany ? (
@@ -1516,10 +1529,23 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
                                     }}>
-                                      {tRole(sup.role)}
-                                      {(sup.companyName ?? selectedCompany?.name) ? ` · ${sup.companyName ?? selectedCompany?.name}` : ''}
+                                      {(sup.companyName ?? selectedCompany?.name) ? `${sup.companyName ?? selectedCompany?.name}` : ''}
                                     </span>
                                   </span>
+                                  <div style={{
+                                    fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
+                                    padding: '4px 8px', borderRadius: 8,
+                                    background: ROLE_BADGE_VARIANT[sup.role]?.bg || 'rgba(13,33,55,0.06)',
+                                    color: ROLE_BADGE_VARIANT[sup.role]?.color || 'var(--text-muted)',
+                                    border: `1px solid ${ROLE_BADGE_VARIANT[sup.role]?.border || 'var(--border)'}`,
+                                    flexShrink: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    textAlign: 'center',
+                                  }}>
+                                    {tRole(sup.role)}
+                                  </div>
                                 </button>
                               );
                             })}
@@ -1610,7 +1636,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                         </div>
                       </div>
                     </>
-                  ) : (
+                  ) : user?.role === 'admin' ? (
                     <>
                       <SectionDivider label={t('employees.sectionSystemAccess')} />
                       <div style={{ marginBottom: '14px' }}>
@@ -1662,7 +1688,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                         </div>
                       </div>
                     </>
-                  )}
+                  ) : null}
                 </div>
               )}
 
