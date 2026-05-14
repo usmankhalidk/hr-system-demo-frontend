@@ -536,3 +536,12 @@ input, select, textarea {
 .rte-preview > div:last-child {
   margin-bottom: 0;
 }
+
+/* Custom Utility to hide scrollbars while preserving scrolling functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}

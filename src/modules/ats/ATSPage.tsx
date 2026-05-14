@@ -2344,6 +2344,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { isMobile } = useBreakpoint();
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [showInterviewForm, setShowInterviewForm] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<number | null>(null);
@@ -2890,12 +2891,15 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       <ModalBackdrop onClose={onClose} width={680}>
         {/* Gradient header */}
         <div style={{
-          background: `linear-gradient(135deg, ${stageColor}18 0%, ${stageColor}08 100%)`,
+          backgroundColor: 'var(--surface)',
+          backgroundImage: `linear-gradient(135deg, ${stageColor}18 0%, ${stageColor}08 100%)`,
           borderBottom: `3px solid ${stageColor}`,
-          padding: '16px 24px 16px',
+          padding: isMobile ? '16px 16px' : '16px 24px',
           position: 'sticky',
           top: 0,
-          zIndex: 2,
+          zIndex: 10,
+          boxSizing: 'border-box',
+          maxWidth: '100%',
         }}>
           <button onClick={onClose} style={{
             position: 'absolute', top: 16, right: 16,
@@ -2905,18 +2909,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>×</button>
 
-          {/* Stage tag in top right */}
-          <div style={{ position: 'absolute', top: 20, right: 56 }}>
-            <span style={{
-              background: stageColor, color: '#fff',
-              borderRadius: 99, padding: '2px 12px', fontSize: 11, fontWeight: 700,
-              letterSpacing: '0.04em', textTransform: 'uppercase',
-            }}>
-              {t(`ats.stage_${candidate.status}`)}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingRight: 36 }}>
             {/* Avatar */}
             <div style={{
               width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
@@ -2928,11 +2921,18 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               {initials(candidate.fullName)}
             </div>
 
-            <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: 'var(--text-primary)', marginBottom: 4 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: 'var(--text-primary)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                 {candidate.fullName}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{
+                  background: stageColor, color: '#fff',
+                  borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 700,
+                  letterSpacing: '0.04em', textTransform: 'uppercase',
+                }}>
+                  {t(`ats.stage_${candidate.status}`)}
+                </span>
                 {jobTitle && (
                   <span style={{
                     background: 'var(--surface)', color: 'var(--text-secondary)',
@@ -2951,20 +2951,17 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         </div>
 
         {/* Body */}
-        <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ padding: isMobile ? '16px 14px' : '20px 22px', display: 'flex', flexDirection: 'column', gap: 16, boxSizing: 'border-box', maxWidth: '100%', overflowX: 'hidden' }}>
 
           {/* Candidate Information */}
           <div style={{
             background: 'var(--background)', borderRadius: 12, padding: '14px 16px',
             border: '1px solid var(--border)',
-            position: 'relative',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
-              👤 {t('ats.candidateInfo', 'Candidate Information')}
-            </div>
-
-            {/* Source tag in top right */}
-            <div style={{ position: 'absolute', top: 14, right: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                👤 {t('ats.candidateInfo', 'Candidate Information')}
+              </div>
               <span style={{
                 background: 'var(--accent-light, rgba(201,151,58,0.10))',
                 color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
@@ -3005,7 +3002,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
                       Email
                     </div>
-                    <a href={`mailto:${candidate.email}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                    <a href={`mailto:${candidate.email}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal', wordBreak: 'break-all', display: 'block' }}>
                       {candidate.email}
                     </a>
                   </div>
@@ -3018,7 +3015,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
                       {t('ats.phone', 'Phone')}
                     </div>
-                    <a href={`tel:${candidate.phone}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                    <a href={`tel:${candidate.phone}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal', wordBreak: 'break-all', display: 'block' }}>
                       {candidate.phone}
                     </a>
                   </div>
@@ -3183,7 +3180,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                 {/* Description Row */}
                 {appliedJob.description && (
                   <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, margin: '0 0 10px 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                    {appliedJob.description}
+                    {appliedJob.description.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
                   </p>
                 )}
 
@@ -3869,7 +3866,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   border: '1px solid var(--border)',
                   marginBottom: 12,
                 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
                     <DatePicker
                       label={`${t('ats.interviewDate')} *`}
                       value={intDate}
@@ -3883,7 +3880,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
 
                   {/* Interview Type and Duration */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 160px', gap: 10 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
                         {t('ats.interviewType')}
@@ -4145,7 +4142,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                           </div>
 
                           {/* Candidate, Email and Notification status columns side-by-side */}
-                          <div style={{ display: 'flex', gap: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                             {/* Candidate Email Status */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: '120px', opacity: smtpConfigured === false ? 0.5 : 1, position: 'relative' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
@@ -4694,6 +4691,21 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
 
 // ─── Jobs Panel ────────────────────────────────────────────────────────────────
 
+const stripHtml = (html: string) => {
+  if (!html) return '';
+  let text = html.replace(/<!--[\s\S]*?-->/g, ''); // strip HTML comments
+  text = text.replace(/<[^>]*>/g, ''); // strip HTML tags
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&apos;/gi, "'");
+  return text.trim();
+};
+
 const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
@@ -5156,7 +5168,7 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                     overflow: 'hidden', display: '-webkit-box',
                     WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                   }}>
-                    {job.description}
+                    {stripHtml(job.description)}
                   </div>
                 )}
 
@@ -5897,7 +5909,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
 
     return (
       <>
-        <strong style={{ fontSize: 13.5, color: toneColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <strong style={{ fontSize: 13.5, color: toneColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal', wordBreak: 'break-word', display: 'block' }}>
           {jobOption.title}
         </strong>
 
@@ -5999,24 +6011,19 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
         flexWrap: 'wrap',
         flexDirection: isMobile ? 'column' : 'row'
       }}>
-        <div style={{ position: 'relative', width: isMobile ? '100%' : 'auto' }}>
-          <select
-            className="field-select"
+        <div style={{ position: 'relative', width: isMobile ? '100%' : 260 }}>
+          <CustomSelect
             value={filterJob}
-            onChange={(e) => setFilterJob(e.target.value)}
-            style={{
-              width: isMobile ? '100%' : 'auto',
-              minWidth: isMobile ? '0' : 200,
-              padding: '8px 32px 8px 12px', fontSize: 13,
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 10, color: 'var(--text-primary)', cursor: 'pointer',
-              appearance: 'none',
-            }}
-          >
-            <option value="">{t('ats.allJobs')}</option>
-            {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
-          </select>
-          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)', fontSize: 11 }}>▼</span>
+            onChange={(val) => setFilterJob(val || '')}
+            options={[
+              { value: '', label: t('ats.allJobs') },
+              ...jobs.map((j) => ({ value: String(j.id), label: j.title }))
+            ]}
+            placeholder={t('ats.allJobs')}
+            searchable
+            isClearable={false}
+            highlightSelected
+          />
         </div>
 
         {/* Pipeline summary */}
@@ -6291,7 +6298,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       {/* Add Candidate Modal */}
       {showAddModal && (
         <ModalBackdrop onClose={closeAddCandidateModal} width={760}>
-          <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: isMobile ? '16px 14px' : '20px 28px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', maxWidth: '100%' }}>
             <div>
               <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
                 {t('ats.addCandidate')}
@@ -6306,11 +6313,13 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
           </div>
 
           <div style={{
-            padding: '14px 28px 12px',
+            padding: isMobile ? '12px 14px' : '14px 28px 12px',
             borderBottom: '1px solid var(--border)',
             background: 'var(--surface-warm)',
             display: 'flex',
             alignItems: 'center',
+            boxSizing: 'border-box',
+            maxWidth: '100%',
           }}>
             {[1, 2].map((currentStep, index) => (
               <React.Fragment key={currentStep}>
@@ -6355,10 +6364,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
             ))}
           </div>
 
-          <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ padding: isMobile ? '16px 14px' : '20px 28px', display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box', maxWidth: '100%', overflowX: 'hidden' }}>
             {addStep === 1 ? (
               <>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: '#fff', display: 'grid', gap: 10 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: isMobile ? 10 : 12, background: '#fff', display: 'grid', gap: 10, boxSizing: 'border-box', maxWidth: '100%', overflowX: 'hidden' }}>
                   <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                     {t('ats.selectPositionStepBody', 'Select the role for this candidate. You can add profile details in the next step.')}
                   </div>
@@ -6547,7 +6556,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                 </div>
 
                 {/* Section 1: Basic Information */}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: isMobile ? '14px 12px' : '16px 16px 12px', background: '#fff', display: 'grid', gap: 12, boxSizing: 'border-box', maxWidth: '100%', overflowX: 'hidden' }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       {t('ats.basicInformation', 'Basic Information')}
@@ -6557,7 +6566,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     </p>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
                       label={t('employees.firstName', 'First name')}
                       value={addFirstName}
@@ -6596,7 +6605,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                 </div>
 
                 {/* Section 2: Personal Details */}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: isMobile ? '14px 12px' : '16px 16px 12px', background: '#fff', display: 'grid', gap: 12, boxSizing: 'border-box', maxWidth: '100%', overflowX: 'hidden' }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       {t('ats.personalDetails', 'Personal Details')}
@@ -6606,7 +6615,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     </p>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <DatePicker
                       label={t('employees.dateOfBirthField', 'Date of birth')}
                       value={addProfile.dateOfBirth}
@@ -6679,7 +6688,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                 </div>
 
                 {/* Section 3: Employment Details */}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: isMobile ? '14px 12px' : '16px 16px 12px', background: '#fff', display: 'grid', gap: 12, boxSizing: 'border-box', maxWidth: '100%', overflowX: 'hidden' }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       {t('ats.employmentDetails', 'Employment Details')}
@@ -6689,7 +6698,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     </p>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
                       label={t('employees.companyEmailField', 'Company email')}
                       type="email"
@@ -6711,7 +6720,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                     <Input
                       label={t('employees.jobTypeField', 'Job type')}
                       value={
@@ -6735,7 +6744,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                 </div>
 
                 {/* Documents Section */}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '16px 16px 12px', background: '#fff', display: 'grid', gap: 12 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: isMobile ? '14px 12px' : '16px 16px 12px', background: '#fff', display: 'grid', gap: 12, boxSizing: 'border-box', maxWidth: '100%', overflowX: 'hidden' }}>
                   <div style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
                     <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       {t('ats.documents', 'Documents')}
@@ -6753,6 +6762,9 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       background: 'rgba(201,151,58,0.06)',
                       display: 'grid',
                       gap: 8,
+                      boxSizing: 'border-box',
+                      maxWidth: '100%',
+                      overflowX: 'hidden',
                     }}
                   >
                     <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -6777,7 +6789,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                             setCvPreviewUrl(url);
                           }
                         }}
-                        style={{ fontSize: 13 }}
+                        style={{ fontSize: 13, maxWidth: '100%' }}
                       />
                     ) : (
                       <div style={{
@@ -6787,7 +6799,9 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                         padding: '10px 12px',
                         background: '#fff',
                         borderRadius: 8,
-                        border: '1px solid var(--border)'
+                        border: '1px solid var(--border)',
+                        boxSizing: 'border-box',
+                        maxWidth: '100%',
                       }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -6858,7 +6872,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
                       rows={4}
                       maxLength={1000}
                       placeholder={t('publicCareers.coverLetterPlaceholder', 'Tell us a bit about this candidate profile')}
-                      style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff' }}
+                      style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '10px 12px', fontSize: 13.5, borderRadius: 10, border: '1px solid var(--border)', outline: 'none', display: 'block', background: '#fff', maxWidth: '100%' }}
                     />
                     <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{addCoverLetter.length}/1000</div>
                   </div>
@@ -7252,6 +7266,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
 
 const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
   const [alerts, setAlerts] = useState<HRAlert[]>([]);
   const [risks, setRisks] = useState<JobRisk[]>([]);
   const [feedbacks, setFeedbacks] = useState<AllInterviewFeedbackComment[]>([]);
@@ -7365,7 +7380,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
         ) : (
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {alerts.map((alert, i) => {
-              const ac = ALERT_COLOR[alert.type] ?? '#6B7280';
+               const ac = ALERT_COLOR[alert.type] ?? '#6B7280';
               return (
                 <div key={i} style={{
                   background: 'var(--surface)',
@@ -7434,15 +7449,17 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
               return (
                 <div key={risk.jobPostingId} style={{
                   background: 'var(--surface)', border: `1px solid ${rc}25`,
-                  borderRadius: 14, padding: '14px 20px',
-                  display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+                  borderRadius: 14, padding: isMobile ? '12px 14px' : '14px 20px',
+                  display: 'flex', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 12 : 16, flexWrap: 'wrap',
+                  flexDirection: isMobile ? 'column' : 'row',
                 }}>
                   <div style={{
                     width: 10, height: 10, borderRadius: '50%',
                     background: rc, flexShrink: 0,
                     boxShadow: `0 0 0 4px ${rc}20`,
+                    display: isMobile ? 'none' : 'block'
                   }} />
-                  <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ flex: 1, minWidth: isMobile ? '100%' : 160 }}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
                       {risk.jobTitle}
                     </div>
@@ -7464,6 +7481,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
                     borderRadius: 99, padding: '4px 14px', fontSize: 12, fontWeight: 700,
                     textTransform: 'uppercase', letterSpacing: '0.04em',
                     flexShrink: 0,
+                    alignSelf: isMobile ? 'flex-start' : 'center'
                   }}>
                     {t(`ats.risk_${risk.riskLevel}`)}
                   </span>
@@ -7501,7 +7519,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {feedbacks.map((fb) => {
               const d = new Date(fb.createdAt);
               const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -7591,6 +7609,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
 export default function ATSPage() {
   const { user } = useAuth();
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
 
   const isStoreManager = user?.role === 'store_manager';
   const canEdit = !!user && ['admin', 'hr'].includes(user.role);
@@ -7642,34 +7661,35 @@ export default function ATSPage() {
   }, [isStoreManager, tab]);
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto' }} className="page-enter">
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '0 0 20px' : '0 0 28px' }} className="page-enter">
 
       {/* Hero header */}
       <div style={{
         background: 'linear-gradient(135deg, var(--primary) 0%, #163352 100%)',
-        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderRadius: 16, padding: isMobile ? '18px 20px' : '28px 32px', marginBottom: isMobile ? 18 : 28,
+        display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between',
         flexWrap: 'wrap', gap: 16,
+        flexDirection: isMobile ? 'column' : 'row',
         boxShadow: '0 8px 32px rgba(13,33,55,0.14)',
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12, marginBottom: 6 }}>
             <div style={{
-              width: 42, height: 42, borderRadius: 12,
+              width: isMobile ? 36 : 42, height: isMobile ? 36 : 42, borderRadius: 10,
               background: 'rgba(201,151,58,0.18)',
               border: '1px solid rgba(201,151,58,0.3)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isMobile ? 18 : 20,
             }}>
               🎯
             </div>
             <h1 style={{
-              fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800,
+              fontFamily: 'var(--font-display)', fontSize: isMobile ? 21 : 26, fontWeight: 800,
               color: '#fff', margin: 0, letterSpacing: '-0.02em',
             }}>
               {t('nav.ats')}
             </h1>
           </div>
-          <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.65)', maxWidth: 480 }}>
+          <p style={{ margin: 0, fontSize: isMobile ? 12.5 : 14, color: 'rgba(255,255,255,0.65)', maxWidth: 480 }}>
             {t('ats.subtitle')}
           </p>
         </div>
@@ -7685,11 +7705,11 @@ export default function ATSPage() {
             <div key={stage} style={{
               background: 'rgba(255,255,255,0.06)',
               border: `1px solid ${color}50`,
-              borderRadius: 8, padding: '6px 12px',
+              borderRadius: 8, padding: isMobile ? '4px 10px' : '6px 12px',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>
+              <span style={{ fontSize: isMobile ? 10 : 11, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>
                 {t(`ats.stage_${stage}`)}
               </span>
             </div>
@@ -7698,11 +7718,16 @@ export default function ATSPage() {
       </div>
 
       {/* Pill tab switcher */}
-      <div style={{
-        display: 'flex', gap: 4, marginBottom: 28,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 12, padding: 4, width: 'fit-content',
-      }}>
+      <div 
+        className="no-scrollbar"
+        style={{
+          display: 'flex', gap: 4, marginBottom: isMobile ? 18 : 28,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 12, padding: 4, width: '100%', maxWidth: 'fit-content',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
         {tabs.map((tb) => {
           const isActive = tab === tb.key;
           return (
@@ -7710,19 +7735,20 @@ export default function ATSPage() {
               key={tb.key}
               onClick={() => setTab(tb.key as typeof tab)}
               style={{
-                padding: '8px 20px',
+                padding: isMobile ? '8px 12px' : '8px 20px',
                 background: isActive ? 'var(--primary)' : 'transparent',
                 border: 'none', borderRadius: 9,
                 color: isActive ? '#fff' : 'var(--text-secondary)',
                 fontWeight: isActive ? 600 : 400,
-                fontSize: 14, cursor: 'pointer',
+                fontSize: isMobile ? 12.5 : 14, cursor: 'pointer',
                 transition: 'all 0.18s ease',
                 display: 'flex', alignItems: 'center', gap: 7,
                 fontFamily: 'var(--font-body)',
                 boxShadow: isActive ? '0 2px 8px rgba(13,33,55,0.18)' : 'none',
+                whiteSpace: 'nowrap',
               }}
             >
-              <span style={{ fontSize: 15 }}>{tb.icon}</span>
+              <span style={{ fontSize: isMobile ? 13 : 15 }}>{tb.icon}</span>
               {tb.label}
             </button>
           );
