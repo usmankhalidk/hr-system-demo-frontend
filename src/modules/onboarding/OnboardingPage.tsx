@@ -533,6 +533,19 @@ const TemplatesPanel: React.FC = () => {
       }))
   ), []);
 
+  const taskTypeOptions = useMemo<SelectOption[]>(() => (
+    PHASE_ORDER.map((phase) => ({
+      value: phase,
+      label: `${PHASE_META[phase].icon} ${t(PHASE_META[phase].labelKey)}`,
+    }))
+  ), [t]);
+
+  const priorityOptions = useMemo<SelectOption[]>(() => [
+    { value: 'high', label: t('onboarding.priorityHigh', 'High') },
+    { value: 'medium', label: t('onboarding.priorityMedium', 'Medium') },
+    { value: 'low', label: t('onboarding.priorityLow', 'Low') },
+  ], [t]);
+
   const loadCompanies = useCallback(async () => {
     try {
       const rows = await getCompanies();
@@ -1000,96 +1013,108 @@ const TemplatesPanel: React.FC = () => {
                         style={{
                           background: 'var(--surface)', border: `1px solid ${tmpl.isActive ? meta.border : 'var(--border)'}`,
                           borderLeft: `4px solid ${tmpl.isActive ? meta.color : '#D1D5DB'}`,
-                          borderRadius: 12, padding: '14px 16px',
-                          display: 'flex', alignItems: 'center', gap: 14,
+                          borderRadius: 12, padding: isMobile ? '12px 14px' : '14px 16px',
+                          display: 'flex',
+                          flexDirection: isMobile ? 'column' : 'row',
+                          alignItems: isMobile ? 'stretch' : 'center',
+                          justifyContent: 'space-between',
+                          gap: isMobile ? 12 : 14,
                           opacity: tmpl.isActive ? 1 : 0.55,
                           transition: 'all 0.15s',
                         }}
                       >
-                      {/* Sort order badge */}
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                        background: tmpl.isActive ? meta.bg : 'var(--background)',
-                        border: `1px solid ${meta.border}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 800, color: meta.color,
-                        fontFamily: 'var(--font-display)',
-                      }}>
-                        {tmpl.sortOrder}
-                      </div>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1, minWidth: 0 }}>
+                          {/* Sort order badge */}
+                          <div style={{
+                            width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                            background: tmpl.isActive ? meta.bg : 'var(--background)',
+                            border: `1px solid ${meta.border}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 11, fontWeight: 800, color: meta.color,
+                            fontFamily: 'var(--font-display)',
+                          }}>
+                            {tmpl.sortOrder}
+                          </div>
 
-                      {/* Info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', textDecoration: tmpl.isActive ? 'none' : 'line-through' }}>{tmpl.name}</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[tmpl.priority] ?? 'var(--text-muted)', textTransform: 'uppercase' }}>
-                            {t(`onboarding.priority${tmpl.priority === 'high' ? 'High' : tmpl.priority === 'medium' ? 'Medium' : 'Low'}`)}
-                          </span>
-                          {!tmpl.isActive && (
-                            <span style={{ fontSize: 10, background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 99, padding: '1px 6px', fontWeight: 600 }}>INACTIVE</span>
-                          )}
-                        </div>
-                        {tmpl.description && (
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tmpl.description}</div>
-                        )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', color: 'var(--text-secondary)', background: 'var(--background)' }}>
-                            {companyMap.get(tmpl.companyId) ?? `#${tmpl.companyId}`}
-                          </span>
-                          <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', color: 'var(--text-secondary)', background: 'var(--background)' }}>
-                            {getCategoryMeta(tmpl.category).icon} {getCategoryMeta(tmpl.category).label}
-                          </span>
-                          {tmpl.createdByName && (
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <span>{t('common.createdBy', 'Created by')}:</span>
-                              <span style={{ width: 16, height: 16, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 700 }}>
-                                {tmpl.createdByAvatarFilename
-                                  ? <img src={getAvatarUrl(tmpl.createdByAvatarFilename) ?? ''} alt={tmpl.createdByName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  : tmpl.createdByName.slice(0, 1).toUpperCase()}
+                          {/* Info */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', textDecoration: tmpl.isActive ? 'none' : 'line-through' }}>{tmpl.name}</span>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[tmpl.priority] ?? 'var(--text-muted)', textTransform: 'uppercase' }}>
+                                {t(`onboarding.priority${tmpl.priority === 'high' ? 'High' : tmpl.priority === 'medium' ? 'Medium' : 'Low'}`)}
                               </span>
-                              <span>{tmpl.createdByName}</span>
-                            </span>
-                          )}
+                              {!tmpl.isActive && (
+                                <span style={{ fontSize: 10, background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 99, padding: '1px 6px', fontWeight: 600 }}>INACTIVE</span>
+                              )}
+                            </div>
+                            {tmpl.description && (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', display: '-webkit-box' }}>{tmpl.description}</div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', color: 'var(--text-secondary)', background: 'var(--background)' }}>
+                                {companyMap.get(tmpl.companyId) ?? `#${tmpl.companyId}`}
+                              </span>
+                              <span style={{ fontSize: 10, border: '1px solid var(--border)', borderRadius: 99, padding: '1px 7px', color: 'var(--text-secondary)', background: 'var(--background)' }}>
+                                {getCategoryMeta(tmpl.category).icon} {getCategoryMeta(tmpl.category).label}
+                              </span>
+                              {tmpl.createdByName && (
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <span>{t('common.createdBy', 'Created by')}:</span>
+                                  <span style={{ width: 16, height: 16, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.12)', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 700 }}>
+                                    {tmpl.createdByAvatarFilename
+                                      ? <img src={getAvatarUrl(tmpl.createdByAvatarFilename) ?? ''} alt={tmpl.createdByName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      : tmpl.createdByName.slice(0, 1).toUpperCase()}
+                                  </span>
+                                  <span>{tmpl.createdByName}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{
+                          display: 'flex', gap: 4, alignItems: 'center',
+                          justifyContent: isMobile ? 'flex-end' : 'flex-start',
+                          flexShrink: 0,
+                          borderTop: isMobile ? '1px solid var(--border)' : 'none',
+                          paddingTop: isMobile ? 8 : 0,
+                        }}>
+                          {/* Move up/down */}
+                          <button
+                            onClick={() => handleMove(tmpl, 'up')} disabled={isCompanyFirst}
+                            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: isCompanyFirst ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', opacity: isCompanyFirst ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Move up"
+                          ><ChevronUp size={14} /></button>
+                          <button
+                            onClick={() => handleMove(tmpl, 'down')} disabled={isCompanyLast}
+                            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: isCompanyLast ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', opacity: isCompanyLast ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Move down"
+                          ><ChevronDown size={14} /></button>
+                          <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 2px' }} />
+                          <button
+                            onClick={() => handleToggle(tmpl)} disabled={togglingId === tmpl.id}
+                            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: tmpl.isActive ? '#15803D' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title={tmpl.isActive ? 'Deactivate' : 'Activate'}
+                          >
+                            {togglingId === tmpl.id ? '…' : <Power size={13} />}
+                          </button>
+                          <button
+                            onClick={() => openEdit(tmpl)}
+                            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title={t('common.edit')}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(tmpl)} disabled={deletingId === tmpl.id}
+                            style={{ background: 'none', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title={t('common.delete')}
+                          >
+                            {deletingId === tmpl.id ? '…' : <Trash2 size={13} />}
+                          </button>
                         </div>
                       </div>
-
-                      {/* Actions */}
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-                        {/* Move up/down */}
-                        <button
-                          onClick={() => handleMove(tmpl, 'up')} disabled={isCompanyFirst}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: isCompanyFirst ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', opacity: isCompanyFirst ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          title="Move up"
-                        ><ChevronUp size={14} /></button>
-                        <button
-                          onClick={() => handleMove(tmpl, 'down')} disabled={isCompanyLast}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: isCompanyLast ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', opacity: isCompanyLast ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          title="Move down"
-                        ><ChevronDown size={14} /></button>
-                        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 2px' }} />
-                        <button
-                          onClick={() => handleToggle(tmpl)} disabled={togglingId === tmpl.id}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: tmpl.isActive ? '#15803D' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          title={tmpl.isActive ? 'Deactivate' : 'Activate'}
-                        >
-                          {togglingId === tmpl.id ? '…' : <Power size={13} />}
-                        </button>
-                        <button
-                          onClick={() => openEdit(tmpl)}
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          title={t('common.edit')}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(tmpl)} disabled={deletingId === tmpl.id}
-                          style={{ background: 'none', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          title={t('common.delete')}
-                        >
-                          {deletingId === tmpl.id ? '…' : <Trash2 size={13} />}
-                        </button>
-                      </div>
-                    </div>
                     );
                   })}
                 </div>
@@ -1151,20 +1176,19 @@ const TemplatesPanel: React.FC = () => {
                 style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', padding: '8px 12px', fontSize: 13.5, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', color: 'var(--text-primary)', background: 'var(--surface)' }}
               />
             </div>
-            {/* Category */}
+            {/* Task Type */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
                 {t('onboarding.taskType', 'Task type')}
               </label>
-              <select
+              <CustomSelect
                 value={form.taskType}
-                onChange={(e) => setForm((f) => ({ ...f, taskType: e.target.value as Phase }))}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}
-              >
-                {PHASE_ORDER.map((phase) => (
-                  <option key={phase} value={phase}>{PHASE_META[phase].icon} {t(PHASE_META[phase].labelKey)}</option>
-                ))}
-              </select>
+                onChange={(value) => setForm((f) => ({ ...f, taskType: (value as Phase) ?? 'day1' }))}
+                options={taskTypeOptions}
+                isClearable={false}
+                menuMaxHeight={260}
+                controlMinHeight={40}
+              />
             </div>
 
             {/* Category */}
@@ -1191,15 +1215,14 @@ const TemplatesPanel: React.FC = () => {
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
                 Priority
               </label>
-              <select
+              <CustomSelect
                 value={form.priority}
-                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as OnboardingTemplate['priority'] }))}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}
-              >
-                <option value="high">{t('onboarding.priorityHigh', 'High')}</option>
-                <option value="medium">{t('onboarding.priorityMedium', 'Medium')}</option>
-                <option value="low">{t('onboarding.priorityLow', 'Low')}</option>
-              </select>
+                onChange={(value) => setForm((f) => ({ ...f, priority: (value as OnboardingTemplate['priority']) ?? 'medium' }))}
+                options={priorityOptions}
+                isClearable={false}
+                menuMaxHeight={260}
+                controlMinHeight={40}
+              />
             </div>
 
             {/* Due Days */}
@@ -2983,15 +3006,15 @@ export default function OnboardingPage() {
       `}</style>
 
       {/* Hero header */}
-      <div style={{ padding: isMobile ? '10px 10px 0' : '18px 16px 0' }}>
+      <div style={{ padding: isMobile ? '0' : '18px 16px 0' }}>
         <div style={{
-          maxWidth: 1200,
+          maxWidth: 1400,
           margin: '0 auto',
           background: 'linear-gradient(135deg, var(--primary) 0%, #1a3a5c 60%, #0f2030 100%)',
           padding: isMobile ? '20px 16px 18px' : '32px 32px 28px',
           borderRadius: 22,
-          border: '1px solid rgba(255,255,255,0.14)',
-          boxShadow: '0 12px 30px rgba(10,26,43,0.25)'
+          border: isMobile ? 'none' : '1px solid rgba(255,255,255,0.14)',
+          boxShadow: isMobile ? 'none' : '0 12px 30px rgba(10,26,43,0.25)'
         }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
@@ -3060,7 +3083,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '12px 10px 24px' : '22px 32px 28px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '16px 6px 24px' : '22px 32px 28px' }}>
         {tab === 'templates' && isAdmin    && <TemplatesPanel />}
         {tab === 'overview'  && canOverview && <OverviewPanel isAdmin={isAdmin} />}
         {tab === 'mytasks'                  && <MyTasksPanel />}

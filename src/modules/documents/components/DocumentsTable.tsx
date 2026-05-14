@@ -180,32 +180,32 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   return (
     <>
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--background)' }}>
-            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <tr style={{ background: 'var(--primary)', color: '#fff' }}>
+            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', borderTopLeftRadius: 12 }}>
               {t('documents.fileName')}
             </th>
             {(!isEmployee) && (
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t('documents.assigned')}
               </th>
             )}
-            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {t('documents.category')}
             </th>
-            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {t('documents.uploadedOn')}
             </th>
-            <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {isTrash ? t('documents.deletedOn') : t('documents.expiresOn')}
             </th>
             {!isTrash && (
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t('documents.signature')}
               </th>
             )}
-            <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', borderTopRightRadius: 12 }}>
               {t('common.actions')}
             </th>
           </tr>
