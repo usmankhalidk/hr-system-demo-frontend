@@ -150,16 +150,16 @@ export default function HrDeviceResetPage() {
         }}
       />
 
-      <div className="table-scroll" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 930 }}>
+      <div className="table-scroll" style={{ border: '1px solid var(--border-light)', background: 'var(--surface)', borderRadius: 24, overflowX: 'auto', boxShadow: '0 12px 32px rgba(0,0,0,0.05)' }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 930 }}>
           <thead>
-            <tr style={{ background: 'var(--surface-warm)' }}>
-              <th style={thCell}>{t('deviceReset.colName')}</th>
+            <tr style={{ background: 'var(--primary)', color: '#fff' }}>
+              <th style={{ ...thCell, borderTopLeftRadius: 12 }}>{t('deviceReset.colName')}</th>
               <th style={thCell}>{t('deviceReset.colUniqueId')}</th>
               <th style={thCell}>{t('deviceReset.colRole')}</th>
               <th style={thCell}>{t('deviceReset.colCompanyStore')}</th>
               <th style={thCell}>{t('deviceReset.colDeviceStatus')}</th>
-              <th style={{ ...thCell, textAlign: 'right' }}>{t('deviceReset.colAction')}</th>
+              <th style={{ ...thCell, textAlign: 'right', borderTopRightRadius: 12 }}>{t('deviceReset.colAction')}</th>
             </tr>
           </thead>
           <tbody>
@@ -171,10 +171,15 @@ export default function HrDeviceResetPage() {
               </tr>
             )}
             {filteredEmployees.map((emp) => (
-              <tr key={emp.id} style={{ borderTop: '1px solid var(--border-light)' }}>
+              <tr key={emp.id} style={{ transition: 'background 0.12s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
                 <td style={tdCell}>
                   <div style={{ fontWeight: 700 }}>{emp.surname} {emp.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emp.email}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }} title={emp.email}>
+                    {emp.email.length > 15 ? `${emp.email.slice(0, 15)}...` : emp.email}
+                  </div>
                 </td>
                 <td style={tdCell}>{emp.uniqueId ?? '-'}</td>
                 <td style={tdCell}>{t(`roles.${emp.role}`)}</td>
@@ -232,32 +237,36 @@ export default function HrDeviceResetPage() {
 }
 
 const thCell: CSSProperties = {
-  padding: '12px 14px',
+  padding: '14px 16px',
   textAlign: 'left',
   fontSize: 11,
   fontWeight: 700,
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-  color: 'var(--text-muted)',
+  color: '#fff',
 };
 
 const tdCell: CSSProperties = {
-  padding: '12px 14px',
+  padding: '14px 16px',
   verticalAlign: 'middle',
   color: 'var(--text-primary)',
   fontSize: 13,
+  borderBottom: '1px solid var(--border-light)',
 };
 
 function statusChip(color: string, bg: string): CSSProperties {
   return {
     display: 'inline-flex',
     alignItems: 'center',
-    padding: '4px 9px',
+    justifyContent: 'center',
+    padding: '5px 12px',
     borderRadius: 999,
     border: `1px solid ${color}44`,
     background: bg,
     color,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: 700,
+    whiteSpace: 'nowrap',
+    lineHeight: 1.2,
   };
 }
