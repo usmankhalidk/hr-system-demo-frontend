@@ -21,6 +21,7 @@ import ReactCountryFlag from 'react-country-flag';
 import { getCompanyLogoUrl } from '../../api/client';
 import { getPublicJobsCatalog, PublicCompany, PublicJob, PublicStoreOption } from '../../api/publicCareers';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import './publicCareers.css';
 
 type UiLanguage = 'it' | 'en';
@@ -444,6 +445,62 @@ export default function PublicCareersPage() {
     }, 0);
   }, [filters]);
 
+  const sortOptions = useMemo<SelectOption[]>(() => [
+    { value: 'latest', label: copy.latestJobs },
+    { value: 'oldest', label: copy.oldestJobs },
+    { value: 'salary_high', label: copy.salaryHigh },
+    { value: 'salary_low', label: copy.salaryLow },
+  ], [copy]);
+
+  const companyOptions = useMemo<SelectOption[]>(() => [
+    { value: 'all', label: copy.allCompanies },
+    ...companies.map((company) => ({
+      value: String(company.id),
+      label: company.name,
+    })),
+  ], [copy, companies]);
+
+  const storeOptions = useMemo<SelectOption[]>(() => {
+    const list = stores.filter(
+      (store) => draftFilters.companyId === 'all' || String(store.companyId) === draftFilters.companyId
+    );
+    return [
+      { value: 'all', label: copy.allStores },
+      ...list.map((store) => ({
+        value: String(store.id),
+        label: store.name,
+      })),
+    ];
+  }, [copy, stores, draftFilters.companyId]);
+
+  const statusOptions = useMemo<SelectOption[]>(() => [
+    { value: 'all', label: copy.allStatuses },
+    { value: 'published', label: copy.statusPublished },
+    { value: 'closed', label: copy.statusClosed },
+  ], [copy]);
+
+  const jobTypeOptions = useMemo<SelectOption[]>(() => [
+    { value: 'all', label: copy.allStatuses },
+    { value: 'fulltime', label: JOB_TYPE_LABEL[uiLanguage].fulltime },
+    { value: 'parttime', label: JOB_TYPE_LABEL[uiLanguage].parttime },
+    { value: 'contract', label: JOB_TYPE_LABEL[uiLanguage].contract },
+    { value: 'internship', label: JOB_TYPE_LABEL[uiLanguage].internship },
+  ], [copy, uiLanguage]);
+
+  const remoteTypeOptions = useMemo<SelectOption[]>(() => [
+    { value: 'all', label: copy.allStatuses },
+    { value: 'onsite', label: REMOTE_TYPE_LABEL[uiLanguage].onsite },
+    { value: 'hybrid', label: REMOTE_TYPE_LABEL[uiLanguage].hybrid },
+    { value: 'remote', label: REMOTE_TYPE_LABEL[uiLanguage].remote },
+  ], [copy, uiLanguage]);
+
+  const languageOptions = useMemo<SelectOption[]>(() => [
+    { value: 'all', label: copy.allStatuses },
+    { value: 'it', label: copy.italian },
+    { value: 'en', label: copy.english },
+    { value: 'both', label: 'IT + EN' },
+  ], [copy]);
+
   const resetDraftFilters = () => {
     setDraftFilters(DEFAULT_FILTERS);
   };
@@ -643,98 +700,88 @@ export default function PublicCareersPage() {
                 />
               </label>
 
-              <label className="careers-filter-field">
+              <div className="careers-filter-field">
                 <span>{copy.sortLabel}</span>
-                <select
+                <CustomSelect
                   value={draftFilters.sort}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, sort: event.target.value as SortMode }))}
-                >
-                  <option value="latest">{copy.latestJobs}</option>
-                  <option value="oldest">{copy.oldestJobs}</option>
-                  <option value="salary_high">{copy.salaryHigh}</option>
-                  <option value="salary_low">{copy.salaryLow}</option>
-                </select>
-              </label>
+                  onChange={(value) => setDraftFilters((prev) => ({ ...prev, sort: (value || 'latest') as SortMode }))}
+                  options={sortOptions}
+                  isClearable={false}
+                  searchable={false}
+                />
+              </div>
 
-              <label className="careers-filter-field">
+              <div className="careers-filter-field">
                 <span>{copy.companyLabel}</span>
-                <select
+                <CustomSelect
                   value={draftFilters.companyId}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, companyId: event.target.value }))}
-                >
-                  <option value="all">{copy.allCompanies}</option>
-                  {companies.map((company) => (
-                    <option key={company.id} value={String(company.id)}>{company.name}</option>
-                  ))}
-                </select>
-              </label>
+                  onChange={(value) => {
+                    setDraftFilters((prev) => ({ 
+                      ...prev, 
+                      companyId: value || 'all',
+                      storeId: 'all' // Reset store when company changes to prevent mismatched states
+                    }));
+                  }}
+                  options={companyOptions}
+                  isClearable={false}
+                  searchable={companies.length > 5}
+                />
+              </div>
 
-              <label className="careers-filter-field">
+              <div className="careers-filter-field">
                 <span>{copy.storeLabel}</span>
-                <select
+                <CustomSelect
                   value={draftFilters.storeId}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, storeId: event.target.value }))}
-                >
-                  <option value="all">{copy.allStores}</option>
-                  {stores
-                    .filter((store) => draftFilters.companyId === 'all' || String(store.companyId) === draftFilters.companyId)
-                    .map((store) => (
-                      <option key={store.id} value={String(store.id)}>{store.name}</option>
-                    ))}
-                </select>
-              </label>
+                  onChange={(value) => setDraftFilters((prev) => ({ ...prev, storeId: value || 'all' }))}
+                  options={storeOptions}
+                  isClearable={false}
+                  searchable={storeOptions.length > 5}
+                />
+              </div>
 
-              <label className="careers-filter-field">
+              <div className="careers-filter-field">
                 <span>{copy.statusLabel}</span>
-                <select
+                <CustomSelect
                   value={draftFilters.status}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, status: event.target.value }))}
-                >
-                  <option value="all">{copy.allStatuses}</option>
-                  <option value="published">{copy.statusPublished}</option>
-                  <option value="closed">{copy.statusClosed}</option>
-                </select>
-              </label>
+                  onChange={(value) => setDraftFilters((prev) => ({ ...prev, status: value || 'all' }))}
+                  options={statusOptions}
+                  isClearable={false}
+                  searchable={false}
+                />
+              </div>
 
-              <label className="careers-filter-field">
+              <div className="careers-filter-field">
                 <span>{copy.jobType}</span>
-                <select
+                <CustomSelect
                   value={draftFilters.jobType}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, jobType: event.target.value }))}
-                >
-                  <option value="all">{copy.allStatuses}</option>
-                  <option value="fulltime">{JOB_TYPE_LABEL[uiLanguage].fulltime}</option>
-                  <option value="parttime">{JOB_TYPE_LABEL[uiLanguage].parttime}</option>
-                  <option value="contract">{JOB_TYPE_LABEL[uiLanguage].contract}</option>
-                  <option value="internship">{JOB_TYPE_LABEL[uiLanguage].internship}</option>
-                </select>
-              </label>
+                  onChange={(value) => setDraftFilters((prev) => ({ ...prev, jobType: value || 'all' }))}
+                  options={jobTypeOptions}
+                  isClearable={false}
+                  searchable={false}
+                />
+              </div>
 
-              <label className="careers-filter-field">
+              <div className="careers-filter-field">
                 <span>{copy.remoteType}</span>
-                <select
+                <CustomSelect
                   value={draftFilters.remoteType}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, remoteType: event.target.value }))}
-                >
-                  <option value="all">{copy.allStatuses}</option>
-                  <option value="onsite">{REMOTE_TYPE_LABEL[uiLanguage].onsite}</option>
-                  <option value="hybrid">{REMOTE_TYPE_LABEL[uiLanguage].hybrid}</option>
-                  <option value="remote">{REMOTE_TYPE_LABEL[uiLanguage].remote}</option>
-                </select>
-              </label>
+                  onChange={(value) => setDraftFilters((prev) => ({ ...prev, remoteType: value || 'all' }))}
+                  options={remoteTypeOptions}
+                  isClearable={false}
+                  searchable={false}
+                />
+              </div>
 
-              <label className="careers-filter-field">
+              <div className="careers-filter-field">
                 <span>{copy.language}</span>
-                <select
+                <CustomSelect
                   value={draftFilters.language}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, language: event.target.value }))}
-                >
-                  <option value="all">{copy.allStatuses}</option>
-                  <option value="it">{copy.italian}</option>
-                  <option value="en">{copy.english}</option>
-                  <option value="both">IT + EN</option>
-                </select>
-              </label>
+                  onChange={(value) => setDraftFilters((prev) => ({ ...prev, language: value || 'all' }))}
+                  options={languageOptions}
+                  isClearable={false}
+                  searchable={false}
+                />
+              </div>
 
               <label className="careers-filter-field">
                 <span>{copy.salaryMinLabel}</span>

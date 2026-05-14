@@ -161,6 +161,24 @@ function typeLabel(
   return label === key ? type : label;
 }
 
+function notificationTitle(
+  item: Notification,
+  t: (k: string, opts?: Record<string, unknown>) => string,
+): string {
+  const key = `notifications.${item.type.replace(/\./g, "_")}_title`;
+  const translated = t(key);
+  return translated === key ? item.title : translated;
+}
+
+function notificationMessage(
+  item: Notification,
+  t: (k: string, opts?: Record<string, unknown>) => string,
+): string {
+  const key = `notifications.${item.type.replace(/\./g, "_")}_message`;
+  const translated = t(key);
+  return translated === key ? item.message : translated;
+}
+
 function timeAgo(
   iso: string,
   t: (k: string, opts?: Record<string, unknown>) => string,
@@ -1495,7 +1513,7 @@ export default function NotificationsPage() {
                                     color: "var(--text-primary)",
                                   }}
                                 >
-                                  {item.title}
+                                  {notificationTitle(item, t)}
                                 </span>
                                 <span
                                   style={{
@@ -1521,7 +1539,7 @@ export default function NotificationsPage() {
                                   lineHeight: 1.45,
                                 }}
                               >
-                                {item.message}
+                                {notificationMessage(item, t)}
                               </div>
 
                               <div

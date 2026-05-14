@@ -32,6 +32,8 @@ import {
   Interview,
 } from './atsCalendarUtils';
 
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+
 interface CalendarPanelProps {
   positions: JobPosting[];
   employees: Employee[];
@@ -44,6 +46,7 @@ export default function CalendarPanel({
   employees,
 }: CalendarPanelProps) {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
   const { showToast } = useToast();
   const { socket } = useSocket();
   const { user } = useAuth();
@@ -479,189 +482,362 @@ export default function CalendarPanel({
         }}
       >
         {/* Single row header - matching shifts module */}
+        {/* Single row header - matching shifts module */}
         <div
           style={{
-            padding: '10px 16px',
+            padding: isMobile ? '12px 14px' : '10px 16px',
             borderBottom: '1px solid var(--border)',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: isMobile ? 'stretch' : 'center',
             justifyContent: 'space-between',
-            gap: 8,
-            minHeight: 52,
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: isMobile ? 12 : 8,
+            minHeight: isMobile ? 'auto' : 52,
           }}
         >
-          {/* LEFT: view toggle + navigation + today */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {/* View toggle pill */}
-            <div
-              style={{
-                display: 'flex',
-                background: 'var(--background)',
-                border: '1.5px solid var(--border)',
-                borderRadius: 8,
-                padding: 2,
-                gap: 2,
-                flexShrink: 0,
-              }}
-            >
-              {(['weekly', 'monthly'] as CalendarView[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => handleViewChange(mode)}
-                  style={{
-                    padding: '5px 14px',
-                    background: view === mode ? 'var(--primary)' : 'transparent',
-                    color: view === mode ? '#fff' : 'var(--text-secondary)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    borderRadius: 6,
-                    fontFamily: 'var(--font-body)',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    transition: 'background 0.15s, color 0.15s',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {mode === 'weekly' ? t('ats.weeklyView', 'Weekly') : t('ats.monthlyView', 'Monthly')}
-                </button>
-              ))}
-            </div>
-
-            {/* Divider */}
-            <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0, margin: '0 2px' }} />
-
-            {/* Navigation */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-              <button
-                onClick={handlePrevious}
-                aria-label="Previous"
-                style={{
-                  padding: '5px 8px',
-                  color: 'var(--text-primary)',
-                  borderRadius: 6,
-                  lineHeight: 1,
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <ChevronLeft size={16} />
-              </button>
-
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  minWidth: 130,
-                  textAlign: 'center',
-                  userSelect: 'none',
-                  padding: '0 4px',
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 700,
-                    fontSize: 14,
-                    color: 'var(--primary)',
-                    lineHeight: 1.1,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {dateRangeLabel}
-                </span>
-              </div>
-
-              <button
-                onClick={handleNext}
-                aria-label="Next"
-                style={{
-                  padding: '5px 8px',
-                  color: 'var(--text-primary)',
-                  borderRadius: 6,
-                  lineHeight: 1,
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-
-            {/* Today button */}
-            <Button variant="secondary" onClick={handleToday} style={{ fontSize: 12, padding: '5px 14px', fontWeight: 600, flexShrink: 0 }}>
-              {t('common.today', 'Today')}
-            </Button>
-          </div>
-
-          {/* RIGHT: filter button + loading */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            {/* Filter button */}
-            <button
-              onClick={() => setShowFilterModal(true)}
-              style={{
-                padding: '6px 12px',
-                border: '1.5px solid var(--border)',
-                borderRadius: 7,
-                background: activeFilterCount > 0 ? 'var(--primary)' : 'var(--surface)',
-                color: activeFilterCount > 0 ? '#fff' : 'var(--text-primary)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12,
-                fontWeight: 600,
-                transition: 'all 0.15s',
-              }}
-            >
-              <Filter size={14} />
-              {t('common.filters', 'Filters')}
-              {activeFilterCount > 0 && (
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: 18,
-                    height: 18,
-                    borderRadius: 999,
-                    background: activeFilterCount > 0 ? 'rgba(255,255,255,0.25)' : 'var(--accent)',
-                    color: '#fff',
-                    fontSize: 10,
-                    fontWeight: 800,
-                    padding: '0 5px',
-                  }}
-                >
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-
-            {loading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {isMobile ? (
+            <>
+              {/* Row 1: View toggle & Today */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <div
                   style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: '50%',
+                    display: 'flex',
+                    background: 'var(--background)',
+                    border: '1.5px solid var(--border)',
+                    borderRadius: 8,
+                    padding: 2,
+                    gap: 2,
                     flexShrink: 0,
-                    border: '2px solid var(--border)',
-                    borderTopColor: 'var(--primary)',
-                    animation: 'spin 0.7s linear infinite',
                   }}
-                />
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {t('common.loading', 'Loading...')}
-                </span>
+                >
+                  {(['weekly', 'monthly'] as CalendarView[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => handleViewChange(mode)}
+                      style={{
+                        padding: '5px 14px',
+                        background: view === mode ? 'var(--primary)' : 'transparent',
+                        color: view === mode ? '#fff' : 'var(--text-secondary)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        borderRadius: 6,
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        transition: 'background 0.15s, color 0.15s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {mode === 'weekly' ? t('ats.weeklyView', 'Weekly') : t('ats.monthlyView', 'Monthly')}
+                    </button>
+                  ))}
+                </div>
+
+                <Button variant="secondary" onClick={handleToday} style={{ fontSize: 12, padding: '5px 14px', fontWeight: 600, flexShrink: 0 }}>
+                  {t('common.today', 'Today')}
+                </Button>
               </div>
-            )}
-          </div>
+
+              {/* Row 2: Navigation & Filters */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                  <button
+                    onClick={handlePrevious}
+                    aria-label="Previous"
+                    style={{
+                      padding: '5px 8px',
+                      color: 'var(--text-primary)',
+                      borderRadius: 6,
+                      lineHeight: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      minWidth: 110,
+                      textAlign: 'center',
+                      userSelect: 'none',
+                      padding: '0 4px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        color: 'var(--primary)',
+                        lineHeight: 1.1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {dateRangeLabel}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={handleNext}
+                    aria-label="Next"
+                    style={{
+                      padding: '5px 8px',
+                      color: 'var(--text-primary)',
+                      borderRadius: 6,
+                      lineHeight: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <button
+                    onClick={() => setShowFilterModal(true)}
+                    style={{
+                      padding: '6px 12px',
+                      border: '1.5px solid var(--border)',
+                      borderRadius: 7,
+                      background: activeFilterCount > 0 ? 'var(--primary)' : 'var(--surface)',
+                      color: activeFilterCount > 0 ? '#fff' : 'var(--text-primary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <Filter size={14} />
+                    {t('common.filters', 'Filters')}
+                    {activeFilterCount > 0 && (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minWidth: 18,
+                          height: 18,
+                          borderRadius: 999,
+                          background: 'rgba(255,255,255,0.25)',
+                          color: '#fff',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          padding: '0 5px',
+                        }}
+                      >
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {loading && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div
+                        style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          flexShrink: 0,
+                          border: '2px solid var(--border)',
+                          borderTopColor: 'var(--primary)',
+                          animation: 'spin 0.7s linear infinite',
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* LEFT: view toggle + navigation + today */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {/* View toggle pill */}
+                <div
+                  style={{
+                    display: 'flex',
+                    background: 'var(--background)',
+                    border: '1.5px solid var(--border)',
+                    borderRadius: 8,
+                    padding: 2,
+                    gap: 2,
+                    flexShrink: 0,
+                  }}
+                >
+                  {(['weekly', 'monthly'] as CalendarView[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => handleViewChange(mode)}
+                      style={{
+                        padding: '5px 14px',
+                        background: view === mode ? 'var(--primary)' : 'transparent',
+                        color: view === mode ? '#fff' : 'var(--text-secondary)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        borderRadius: 6,
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        transition: 'background 0.15s, color 0.15s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {mode === 'weekly' ? t('ats.weeklyView', 'Weekly') : t('ats.monthlyView', 'Monthly')}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0, margin: '0 2px' }} />
+
+                {/* Navigation */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                  <button
+                    onClick={handlePrevious}
+                    aria-label="Previous"
+                    style={{
+                      padding: '5px 8px',
+                      color: 'var(--text-primary)',
+                      borderRadius: 6,
+                      lineHeight: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      minWidth: 130,
+                      textAlign: 'center',
+                      userSelect: 'none',
+                      padding: '0 4px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 700,
+                        fontSize: 14,
+                        color: 'var(--primary)',
+                        lineHeight: 1.1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {dateRangeLabel}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={handleNext}
+                    aria-label="Next"
+                    style={{
+                      padding: '5px 8px',
+                      color: 'var(--text-primary)',
+                      borderRadius: 6,
+                      lineHeight: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+
+                {/* Today button */}
+                <Button variant="secondary" onClick={handleToday} style={{ fontSize: 12, padding: '5px 14px', fontWeight: 600, flexShrink: 0 }}>
+                  {t('common.today', 'Today')}
+                </Button>
+              </div>
+
+              {/* RIGHT: filter button + loading */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                {/* Filter button */}
+                <button
+                  onClick={() => setShowFilterModal(true)}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1.5px solid var(--border)',
+                    borderRadius: 7,
+                    background: activeFilterCount > 0 ? 'var(--primary)' : 'var(--surface)',
+                    color: activeFilterCount > 0 ? '#fff' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <Filter size={14} />
+                  {t('common.filters', 'Filters')}
+                  {activeFilterCount > 0 && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 999,
+                        background: activeFilterCount > 0 ? 'rgba(255,255,255,0.25)' : 'var(--accent)',
+                        color: '#fff',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        padding: '0 5px',
+                      }}
+                    >
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+
+                {loading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        border: '2px solid var(--border)',
+                        borderTopColor: 'var(--primary)',
+                        animation: 'spin 0.7s linear infinite',
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {t('common.loading', 'Loading...')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Calendar Content */}

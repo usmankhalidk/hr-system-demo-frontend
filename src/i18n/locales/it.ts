@@ -2362,6 +2362,8 @@ const it = {
     type_leave_rejected: 'Permesso rifiutato',
     type_document_uploaded: 'Documento caricato',
     type_document_signature_required: 'Firma richiesta',
+    document_signature_required_title: 'Firma documento richiesta',
+    document_signature_required_message: 'Devi firmare il tuo documento. Per favore, firma prima il tuo documento.',
     type_document_signed: 'Documento firmato',
     type_document_expiring: 'Documento in scadenza',
     type_ats_candidate_received: 'Nuovo candidato',
@@ -2667,6 +2669,7 @@ const it = {
       employees: 'Dipendenti',
       shifts: 'Turni',
       leave: 'Ferie & Permessi',
+      documents: 'Documenti',
     },
     items: {
       benvenuto_email: {
@@ -2723,6 +2726,11 @@ const it = {
         label: 'Notifica esito ferie al dipendente',
         desc: 'Informa il dipendente via in-app e email quando la richiesta è approvata o rifiutata.',
         trigger: 'Cambio stato richiesta',
+      },
+      document_signature: {
+        label: 'Automazione email firma',
+        desc: 'Invia automaticamente una notifica email all\'utente assegnato quando un documento richiede la firma.',
+        trigger: 'Assegnazione documento con firma richiesta',
       },
     },
     last_run: 'Ultima esecuzione',

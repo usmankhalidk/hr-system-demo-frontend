@@ -9,9 +9,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Spinner } from '../../components/ui/Spinner';
 import { Button } from '../../components/ui/Button';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 export default function InterviewsPanel() {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
   const { user } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -230,93 +232,102 @@ export default function InterviewsPanel() {
                 <div
                   style={{
                     background: 'linear-gradient(135deg, #0D2137 0%, #1e3a5f 100%)',
-                    padding: '10px 14px',
+                    padding: isMobile ? '12px 14px' : '10px 14px',
                     display: 'flex',
-                    alignItems: 'center',
+                    alignItems: isMobile ? 'stretch' : 'center',
                     justifyContent: 'space-between',
-                    gap: 10,
+                    flexDirection: isMobile ? 'column' : 'row',
+                    gap: isMobile ? 12 : 10,
                   }}
                 >
-                  {/* Date Badge */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 6,
-                      minWidth: 50,
-                      alignItems: 'center',
-                      textAlign: 'center',
-                      padding: '4px 8px',
-                      background: 'rgba(255,255,255,0.15)',
-                      borderRadius: 7,
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, lineHeight: 1 }}>
-                      {scheduledDate.getDate()}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', width: isMobile ? '100%' : 'auto' }}>
+                    {/* Date Badge */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        minWidth: 50,
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        padding: '4px 8px',
+                        background: 'rgba(255,255,255,0.15)',
+                        borderRadius: 7,
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                      }}
+                    >
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, lineHeight: 1 }}>
+                        {scheduledDate.getDate()}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
+                        {scheduledDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: 2, opacity: 0.9 }}>
-                      {scheduledDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
+
+                    {/* Time & Duration */}
+                    <div style={{ flex: 1, marginLeft: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#fff', fontSize: '0.9rem', fontWeight: 700 }}>
+                        <Clock size={15} />
+                        {scheduledDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                        {interview.durationMinutes && <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>({interview.durationMinutes}min)</span>}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Time & Duration */}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#fff', fontSize: '0.9rem', fontWeight: 700 }}>
-                      <Clock size={15} />
-                      {scheduledDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                      {interview.durationMinutes && <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>({interview.durationMinutes}min)</span>}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-end', width: isMobile ? '100%' : 'auto' }}>
+                    {/* Feedback Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFeedbackClick(interview);
+                      }}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 5,
+                        background: 'rgba(124,58,237,0.25)',
+                        border: '1px solid rgba(124,58,237,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        flex: isMobile ? 1 : 'none',
+                        justifyContent: 'center',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(124,58,237,0.35)';
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(124,58,237,0.25)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                    >
+                      <MessageSquare size={13} color="#fff" />
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
+                        {t('ats.feedback', 'Feedback')}
+                      </span>
+                    </button>
+
+                    {/* Interview Type Badge */}
+                    <div
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 5,
+                        background: interview.interviewType === 'phone' ? 'rgba(234,88,12,0.25)' : 'rgba(34,197,94,0.25)',
+                        border: `1px solid ${interview.interviewType === 'phone' ? 'rgba(234,88,12,0.5)' : 'rgba(34,197,94,0.5)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        flex: isMobile ? 1 : 'none',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {interview.interviewType === 'phone' ? <Phone size={13} color="#fff" /> : <Users size={13} color="#fff" />}
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
+                        {interview.interviewType === 'phone' ? t('ats.phone', 'Phone') : t('ats.inPerson', 'In-Person')}
+                      </span>
                     </div>
-                  </div>
-
-                  {/* Feedback Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFeedbackClick(interview);
-                    }}
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: 5,
-                      background: 'rgba(124,58,237,0.25)',
-                      border: '1px solid rgba(124,58,237,0.5)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(124,58,237,0.35)';
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(124,58,237,0.25)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                  >
-                    <MessageSquare size={13} color="#fff" />
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
-                      {t('ats.feedback', 'Feedback')}
-                    </span>
-                  </button>
-
-                  {/* Interview Type Badge */}
-                  <div
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: 5,
-                      background: interview.interviewType === 'phone' ? 'rgba(234,88,12,0.25)' : 'rgba(34,197,94,0.25)',
-                      border: `1px solid ${interview.interviewType === 'phone' ? 'rgba(234,88,12,0.5)' : 'rgba(34,197,94,0.5)'}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                    }}
-                  >
-                    {interview.interviewType === 'phone' ? <Phone size={13} color="#fff" /> : <Users size={13} color="#fff" />}
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
-                      {interview.interviewType === 'phone' ? t('ats.phone', 'Phone') : t('ats.inPerson', 'In-Person')}
-                    </span>
                   </div>
                 </div>
 

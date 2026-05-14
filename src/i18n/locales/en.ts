@@ -2358,6 +2358,8 @@ const en = {
     type_leave_rejected: 'Leave rejected',
     type_document_uploaded: 'Document uploaded',
     type_document_signature_required: 'Signature required',
+    document_signature_required_title: 'Document signature required',
+    document_signature_required_message: 'You need to sign your document. Please sign your document first.',
     type_document_signed: 'Document signed',
     type_document_expiring: 'Document expiring',
     type_ats_candidate_received: 'New candidate',
@@ -2666,6 +2668,7 @@ const en = {
       employees: 'Employees',
       shifts: 'Shifts',
       leave: 'Leaves & Holidays',
+      documents: 'Documents',
     },
     items: {
       benvenuto_email: {
@@ -2722,6 +2725,11 @@ const en = {
         label: 'Leave result notification',
         desc: 'Inform the employee via in-app and email when the request is approved or rejected.',
         trigger: 'Request status change',
+      },
+      document_signature: {
+        label: 'Signature email automation',
+        desc: 'Automatically send an email notification to the assigned user when a document requires signature.',
+        trigger: 'Document assigned with signature required',
       },
     },
     last_run: 'Last run',
