@@ -1523,7 +1523,7 @@ const TemplatesPanel: React.FC = () => {
                     {/* Role Badge - Taller and Centered on the Right */}
                     <div style={{
                       fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
-                      padding: '4px 8px', borderRadius: 8,
+                      padding: '0 8px', borderRadius: 8,
                       background: ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.bg || 'rgba(13,33,55,0.06)',
                       color: ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.color || 'var(--text-muted)',
                       border: `1px solid ${ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.border || 'var(--border)'}`,
@@ -1531,6 +1531,7 @@ const TemplatesPanel: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      height: 32,
                       minWidth: 70,
                       textAlign: 'center',
                       alignSelf: 'center',
@@ -1613,7 +1614,7 @@ const TemplatesPanel: React.FC = () => {
                           {/* Role Badge - Taller and Centered on the Right */}
                           <div style={{
                             fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
-                            padding: '4px 8px', borderRadius: 8,
+                            padding: '0 8px', borderRadius: 8,
                             background: ROLE_BADGE_VARIANT[employee.role]?.bg || 'rgba(13,33,55,0.06)',
                             color: ROLE_BADGE_VARIANT[employee.role]?.color || 'var(--text-muted)',
                             border: `1px solid ${ROLE_BADGE_VARIANT[employee.role]?.border || 'var(--border)'}`,
@@ -1621,7 +1622,11 @@ const TemplatesPanel: React.FC = () => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            height: 32,
+                            minWidth: 70,
                             textAlign: 'center',
+                            alignSelf: 'center',
+                            marginLeft: 10
                           }}>
                             {t(`roles.${employee.role}`, employee.role)}
                           </div>
@@ -1877,17 +1882,17 @@ const EmployeeDrawer: React.FC<{
           {/* Header */}
           <div style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #1a3a5c 100%)', padding: '20px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.3)' }} />
                 ) : (
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#fff', border: '2px solid rgba(255,255,255,0.3)' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#fff', border: '2px solid rgba(255,255,255,0.3)', flexShrink: 0 }}>
                     {initials(employee.name, employee.surname)}
                   </div>
                 )}
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                      <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-display)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%' }}>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-display)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {employee.name} {employee.surname}
                       </div>
                       <div style={{
@@ -2531,33 +2536,13 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     </div>
                   )}
 
-                  {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {emp.name} {emp.surname}
-                      </div>
-                      <div style={{
-                        fontSize: 9, fontWeight: 800, textTransform: 'uppercase',
-                        padding: '1px 7px', borderRadius: 6,
-                        background: ROLE_BADGE_VARIANT[emp.role]?.bg || 'rgba(13,33,55,0.08)',
-                        color: ROLE_BADGE_VARIANT[emp.role]?.color || 'var(--text-secondary)',
-                        border: `1px solid ${ROLE_BADGE_VARIANT[emp.role]?.border || 'var(--border)'}`,
-                        flexShrink: 0
-                      }}>
-                        {t(`roles.${emp.role}`, emp.role)}
-                      </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {emp.name} {emp.surname}
                     </div>
-                    {emp.companyName && (
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        🏢 {emp.companyName}
-                      </div>
-                    )}
-                    {emp.storeName && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        🏪 {emp.storeName}
-                      </div>
-                    )}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      🏪 {emp.storeName}
+                    </div>
 
                     {/* Progress bar */}
                     <div style={{ marginTop: 8 }}>
@@ -2571,6 +2556,26 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                         <div style={{ height: '100%', width: `${pct}%`, background: ac, borderRadius: 99, transition: 'width 0.4s ease' }} />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Role Badge - Taller and Centered on the Right */}
+                  <div style={{
+                    fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
+                    padding: '0 8px', borderRadius: 8,
+                    background: ROLE_BADGE_VARIANT[emp.role]?.bg || 'rgba(13,33,55,0.06)',
+                    color: ROLE_BADGE_VARIANT[emp.role]?.color || 'var(--text-muted)',
+                    border: `1px solid ${ROLE_BADGE_VARIANT[emp.role]?.border || 'var(--border)'}`,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 44,
+                    minWidth: 70,
+                    textAlign: 'center',
+                    alignSelf: 'center',
+                    marginLeft: 10
+                  }}>
+                    {t(`roles.${emp.role}`, emp.role)}
                   </div>
 
                   {/* Ring */}

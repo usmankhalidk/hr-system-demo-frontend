@@ -199,7 +199,7 @@ export default function RoleEditModal({
             )}
           </p>
 
-          <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {AVAILABLE_ROLES.map((role) => {
               const isSelected = selectedRoles.includes(role.value);
               return (
@@ -210,8 +210,8 @@ export default function RoleEditModal({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 12px",
+                    gap: 8,
+                    padding: "8px 12px",
                     border: `2px solid ${isSelected ? role.color : "var(--border)"}`,
                     borderRadius: 8,
                     background: isSelected
@@ -219,38 +219,32 @@ export default function RoleEditModal({
                       : "var(--surface)",
                     cursor: "pointer",
                     transition: "all 0.2s ease",
+                    fontSize: 13,
+                    fontWeight: isSelected ? 600 : 500,
+                    color: isSelected ? role.color : "var(--text-primary)",
                   }}
                 >
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 4,
+                      border: `2px solid ${isSelected ? role.color : "var(--border)"}`,
+                      background: isSelected ? role.color : "transparent",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.2s ease",
+                      flexShrink: 0,
+                    }}
                   >
-                    <div
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 4,
-                        border: `2px solid ${isSelected ? role.color : "var(--border)"}`,
-                        background: isSelected ? role.color : "transparent",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "all 0.2s ease",
-                      }}
-                    >
-                      {isSelected && (
-                        <Check size={14} color="#fff" strokeWidth={3} />
-                      )}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: isSelected ? 600 : 500,
-                        color: isSelected ? role.color : "var(--text-primary)",
-                      }}
-                    >
-                      {t(`roles.${role.value}`, role.label)}
-                    </span>
+                    {isSelected && (
+                      <Check size={12} color="#fff" strokeWidth={3} />
+                    )}
                   </div>
+                  <span>
+                    {t(`roles.${role.value}`, role.label)}
+                  </span>
                 </button>
               );
             })}
@@ -301,13 +295,7 @@ export default function RoleEditModal({
             )}
           </p>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 8,
-            }}
-          >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {PRIORITY_OPTIONS.map((priority) => {
               const isSelected = selectedPriority === priority.value;
               return (
@@ -316,7 +304,7 @@ export default function RoleEditModal({
                   type="button"
                   onClick={() => setSelectedPriority(priority.value)}
                   style={{
-                    padding: "10px 12px",
+                    padding: "10px 16px",
                     border: `2px solid ${isSelected ? priority.color : "var(--border)"}`,
                     borderRadius: 8,
                     background: isSelected

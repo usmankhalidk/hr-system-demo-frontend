@@ -101,3 +101,12 @@ export async function updateNotificationRoles(
   const params = companyId ? { company_id: companyId } : {};
   await apiClient.patch(`/notifications/settings/${eventKey}`, { roles, priority }, { params });
 }
+
+/**
+ * Deletes multiple notifications by their IDs.
+ * Only deletes notifications that belong to the authenticated user.
+ */
+export async function bulkDeleteNotifications(ids: number[]): Promise<number> {
+  const { data } = await apiClient.delete('/notifications/bulk-delete', { data: { ids } });
+  return data.data.deletedCount as number;
+}
