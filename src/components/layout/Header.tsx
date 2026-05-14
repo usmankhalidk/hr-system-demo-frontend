@@ -87,6 +87,18 @@ function typeLabel(type: string, t: (k: string) => string): string {
   return label === key ? type : label;
 }
 
+function notificationTitle(n: Notification, t: (k: string) => string): string {
+  const key = `notifications.${n.type.replace(/\./g, '_')}_title`;
+  const translated = t(key);
+  return translated === key ? n.title : translated;
+}
+
+function notificationMessage(n: Notification, t: (k: string) => string): string {
+  const key = `notifications.${n.type.replace(/\./g, '_')}_message`;
+  const translated = t(key);
+  return translated === key ? n.message : translated;
+}
+
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
@@ -422,10 +434,10 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
                           </span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: n.isRead ? 500 : 700, color: 'var(--text-primary)', marginBottom: 2 }}>
-                              {n.title}
+                              {notificationTitle(n, t)}
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>
-                              {n.message}
+                              {notificationMessage(n, t)}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>

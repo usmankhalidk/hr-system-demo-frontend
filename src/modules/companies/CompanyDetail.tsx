@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import {
   activateCompany,
   deactivateCompany,
@@ -180,6 +181,7 @@ export default function CompanyDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
   const { slug } = useParams<{ slug: string }>();
   const companyId = useMemo(() => parseCompanyIdFromSlug(slug), [slug]);
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
@@ -290,6 +292,19 @@ export default function CompanyDetail() {
       };
     });
   }, [ownerOptions, t]);
+
+  const companyGroupOptions = useMemo<SelectOption[]>(() => {
+    return [
+      {
+        value: 'standalone',
+        label: t('companies.optionStandalone', 'Standalone'),
+      },
+      ...companyGroups.map((group) => ({
+        value: String(group.id),
+        label: group.name,
+      })),
+    ];
+  }, [companyGroups, t]);
 
   const loadData = useCallback(async () => {
     if (!companyId) {
@@ -895,9 +910,9 @@ export default function CompanyDetail() {
         };
         const rowStyle: React.CSSProperties = {
           display: 'grid',
-          gridTemplateColumns: '1fr auto auto',
-          gap: 12,
-          alignItems: 'center',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr auto auto',
+          gap: isMobile ? 16 : 12,
+          alignItems: isMobile ? 'stretch' : 'center',
           padding: '14px 18px',
         };
         const subtotalBadge = (val: number): React.ReactNode => (
@@ -934,11 +949,11 @@ export default function CompanyDetail() {
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>employees</span>
                   </div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
+                <div style={{ textAlign: isMobile ? 'left' : 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>UNIT PRICE</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>€{pricePerEmp.toFixed(2)} / employee / month</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>SUBTOTAL</div>
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
                     €{empSubtotal.toFixed(2)}
@@ -966,11 +981,11 @@ export default function CompanyDetail() {
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>devices</span>
                   </div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
+                <div style={{ textAlign: isMobile ? 'left' : 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>UNIT PRICE</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>€{pricePerDev.toFixed(2)} / device / month</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>SUBTOTAL</div>
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
                     €{devSubtotal.toFixed(2)}
@@ -1012,11 +1027,11 @@ export default function CompanyDetail() {
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>GB</span>
                   </div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
+                <div style={{ textAlign: isMobile ? 'left' : 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>OVERAGE PRICE</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>€{pricePerGb.toFixed(2)} / GB extra</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>SUBTOTAL</div>
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary)', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
                     €{storageSubtotal.toFixed(2)}
@@ -1030,22 +1045,22 @@ export default function CompanyDetail() {
               <div style={{ padding: '16px 20px' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>LIVE REFERENCE TOTAL</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
                     <span>Employees ({activeEmpCount} × €{pricePerEmp.toFixed(2)})</span>
                     <span style={{ fontWeight: 700 }}>€{empSubtotal.toFixed(2)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
                     <span>Devices ({activeDevCount} × €{pricePerDev.toFixed(2)})</span>
                     <span style={{ fontWeight: 700 }}>€{devSubtotal.toFixed(2)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
                     <span>Storage overage ({storageOverageGb.toFixed(2)} GB extra)</span>
                     <span style={{ fontWeight: 700 }}>€{storageSubtotal.toFixed(2)}</span>
                   </div>
                 </div>
                 {discountActive && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(201,151,58,0.14)', border: '1px solid rgba(201,151,58,0.3)', borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: 'rgba(201,151,58,0.14)', border: '1px solid rgba(201,151,58,0.3)', borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
                       <Tag size={13} />
                       Discount {company.discountPercent}%
                       {(company.discountValidFrom || company.discountValidTo) && (
@@ -1059,7 +1074,7 @@ export default function CompanyDetail() {
                 )}
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>GRAND TOTAL (REFERENCE)</div>
-                  <div style={{ fontSize: 38, fontWeight: 900, fontFamily: 'var(--font-display)', color: '#fff', lineHeight: 1 }}>€{finalTotal.toFixed(2)}</div>
+                  <div style={{ fontSize: isMobile ? 30 : 38, fontWeight: 900, fontFamily: 'var(--font-display)', color: '#fff', lineHeight: 1 }}>€{finalTotal.toFixed(2)}</div>
                   <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>€{(finalTotal * 12).toFixed(2)} / year estimated</div>
                 </div>
                 {(company.accessValidFrom || company.accessValidTo) && (
@@ -1099,32 +1114,36 @@ export default function CompanyDetail() {
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-            <Select
-              label={t('companies.fieldGroup', 'Business group')}
-              value={editGroupId != null ? String(editGroupId) : ''}
-              onChange={(event) => {
-                const value = event.target.value;
-                setEditGroupId(value ? parseInt(value, 10) : null);
-              }}
-              disabled={editSaving}
-            >
-              <option value="">{t('companies.optionStandalone', 'Standalone')}</option>
-              {companyGroups.map((group) => (
-                <option key={group.id} value={String(group.id)}>{group.name}</option>
-              ))}
-            </Select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                {t('companies.fieldGroup', 'Business group')}
+              </label>
+              <CustomSelect
+                value={editGroupId != null ? String(editGroupId) : 'standalone'}
+                onChange={(value) => setEditGroupId(value === 'standalone' || !value ? null : parseInt(value, 10))}
+                options={companyGroupOptions}
+                placeholder={t('companies.optionStandalone', 'Standalone')}
+                disabled={editSaving}
+                isClearable
+              />
+            </div>
 
-            <CustomSelect
-              value={editOwnerUserId || null}
-              onChange={(value) => setEditOwnerUserId(value ?? '')}
-              options={ownerSelectOptions}
-              placeholder={t('companies.currentOwner', 'Current owner')}
-              disabled={editSaving || ownerCandidatesLoading}
-              searchable
-              isClearable
-              searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
-              noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                {t('companies.ownerField', 'Owner')}
+              </label>
+              <CustomSelect
+                value={editOwnerUserId || null}
+                onChange={(value) => setEditOwnerUserId(value ?? '')}
+                options={ownerSelectOptions}
+                placeholder={t('companies.currentOwner', 'Current owner')}
+                disabled={editSaving || ownerCandidatesLoading}
+                searchable
+                isClearable
+                searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
+                noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
+              />
+            </div>
           </div>
 
           <Input

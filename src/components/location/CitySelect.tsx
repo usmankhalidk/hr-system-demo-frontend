@@ -28,7 +28,7 @@ export function CitySelect({
   highlightSelected = false,
 }: CitySelectProps) {
   const [cities, setCities] = useState<CityOption[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(countryCode));
 
   // Load cities from backend API when countryCode or stateCode changes
   useEffect(() => {

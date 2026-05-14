@@ -22,6 +22,14 @@ interface TableProps<T> {
   flush?: boolean;
   /** Custom minimum width for the table. Defaults to '560px' */
   minWidth?: string;
+  /** Custom header background color */
+  headerBackground?: string;
+  /** Custom header text color */
+  headerTextColor?: string;
+  /** Custom header text transform */
+  headerTextTransform?: 'none' | 'capitalize' | 'uppercase' | 'lowercase';
+  /** Custom header border bottom style */
+  headerBorderBottom?: string;
 }
 
 export function Table<T extends object>({
@@ -34,6 +42,10 @@ export function Table<T extends object>({
   onRowClick,
   flush = false,
   minWidth = '560px',
+  headerBackground,
+  headerTextColor,
+  headerTextTransform,
+  headerBorderBottom,
 }: TableProps<T>): React.ReactElement {
   const SortIcon = () => (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4, opacity: 0.4 }}>
@@ -67,20 +79,20 @@ export function Table<T extends object>({
         minWidth: minWidth,
       }}>
         <thead>
-          <tr style={{ background: 'var(--background)' }}>
+          <tr style={{ background: headerBackground ?? 'var(--background)' }}>
             {columns.map((col) => (
               <th
                 key={col.key}
                 style={{
                   textAlign: col.align ?? 'left',
-                  padding: '10px 16px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  background: 'var(--background)',
-                  borderBottom: '1px solid var(--border)',
+                  padding: '12px 16px',
+                  fontSize: '11.5px',
+                  fontWeight: headerTextColor ? 600 : 600,
+                  color: headerTextColor ?? 'var(--text-muted)',
+                  textTransform: headerTextTransform ?? 'uppercase',
+                  letterSpacing: headerTextTransform === 'none' ? '0.04em' : '0.06em',
+                  background: headerBackground ?? 'var(--background)',
+                  borderBottom: headerBorderBottom ?? '1px solid var(--border)',
                   whiteSpace: 'nowrap',
                   width: col.width,
                   cursor: col.sortable ? 'pointer' : 'default',

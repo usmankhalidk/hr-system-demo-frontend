@@ -11,7 +11,8 @@ import {
   Calendar, 
   CheckCircle,
   Search,
-  Zap
+  Zap,
+  FileText
 } from 'lucide-react';
 import { Card, Toggle, Button, Input, Spinner, Select } from '../../components/ui';
 import { automationsApi } from '../../api/automations';
@@ -32,7 +33,7 @@ interface AutomationItem {
 }
 
 interface AutomationCategory {
-  id: 'employees' | 'shifts' | 'leave';
+  id: 'employees' | 'shifts' | 'leave' | 'documents';
   labelKey: string;
   accent: string;
   items: AutomationItem[];
@@ -74,6 +75,14 @@ const INITIAL_DATA: AutomationCategory[] = [
     items: [
       { id: 'ferie_approvazione', icon: <CalendarOff size={18} />, labelKey: 'automations.items.ferie_approvazione.label', descKey: 'automations.items.ferie_approvazione.desc', roles: ['store_manager', 'area_manager', 'hr'], triggerKey: 'automations.items.ferie_approvazione.trigger', enabled: true },
       { id: 'ferie_esito', icon: <CalendarOff size={18} />, labelKey: 'automations.items.ferie_esito.label', descKey: 'automations.items.ferie_esito.desc', roles: ['employee'], triggerKey: 'automations.items.ferie_esito.trigger', enabled: true },
+    ],
+  },
+  {
+    id: 'documents',
+    labelKey: 'automations.categories.documents',
+    accent: '#0D9488',
+    items: [
+      { id: 'document_signature', icon: <FileText size={18} />, labelKey: 'automations.items.document_signature.label', descKey: 'automations.items.document_signature.desc', roles: ['admin', 'hr', 'employee'], triggerKey: 'automations.items.document_signature.trigger', enabled: true },
     ],
   },
 ];

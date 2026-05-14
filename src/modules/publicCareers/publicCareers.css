@@ -869,10 +869,8 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  position: sticky;
-  bottom: 0;
   padding: 12px 0 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.98) 55%);
+  background: transparent;
   z-index: 1;
 }
 
@@ -900,7 +898,8 @@
   }
 
   .careers-apply-modal {
-    max-height: calc(100vh - 24px);
+    max-height: calc(100vh - 48px);
+    margin: 24px 0;
   }
 
   .careers-apply-modal .careers-form-row {
@@ -908,7 +907,7 @@
   }
 
   .careers-apply-modal .careers-form-grid {
-    padding: 12px 16px 8px;
+    padding: 12px 0px 8px;
   }
 
   .careers-apply-footer {

@@ -26,7 +26,7 @@ export function StateSelect({
   highlightSelected = false,
 }: StateSelectProps) {
   const [states, setStates] = useState<StateOption[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(countryCode));
 
   // Load states from backend API when countryCode changes
   useEffect(() => {

@@ -599,10 +599,10 @@ export function EmployeeList() {
       ),
     },
     {
-      key: "actions",
-      label: "",
-      width: "80px",
-      align: "right",
+      key: 'actions',
+      label: t('employees.colActions', 'Action'),
+      width: '80px',
+      align: 'right',
       render: (row) => (
         <button
           onClick={() => navigate(`/dipendenti/${row.id}`)}
@@ -1136,7 +1136,10 @@ export function EmployeeList() {
         columns={columns}
         data={employees}
         loading={loading}
-        emptyText={t("employees.noEmployees")}
+        emptyText={t('employees.noEmployees')}
+        headerBackground="var(--primary)"
+        headerTextColor="#ffffff"
+        headerBorderBottom="none"
       />
 
       <Pagination

@@ -238,6 +238,12 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
     }));
   }, []);
 
+  const priorityOptions = React.useMemo(() => [
+    { value: 'high', label: t('onboarding.priorityHigh', 'High') },
+    { value: 'medium', label: t('onboarding.priorityMedium', 'Medium') },
+    { value: 'low', label: t('onboarding.priorityLow', 'Low') },
+  ], [t]);
+
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
@@ -720,11 +726,14 @@ function OnboardingSection({ employeeId, employeeCompanyId, employeeCompanyName,
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
               {t('onboarding.taskPriority')}
             </label>
-            <select value={createForm.priority} onChange={(e) => setCreateForm((prev) => ({ ...prev, priority: e.target.value as OnboardingTemplate['priority'] }))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14 }}>
-              <option value="high">{t('onboarding.priorityHigh', 'High')}</option>
-              <option value="medium">{t('onboarding.priorityMedium', 'Medium')}</option>
-              <option value="low">{t('onboarding.priorityLow', 'Low')}</option>
-            </select>
+            <CustomSelect
+              value={createForm.priority}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, priority: ((value as OnboardingTemplate['priority']) ?? 'medium') }))}
+              options={priorityOptions}
+              isClearable={false}
+              menuMaxHeight={220}
+              controlMinHeight={40}
+            />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <Input
