@@ -1546,7 +1546,7 @@ const TemplatesPanel: React.FC = () => {
                     {/* Role Badge - Taller and Centered on the Right */}
                     <div style={{
                       fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
-                      padding: '0 8px', borderRadius: 8,
+                      padding: '4px 8px', borderRadius: 8,
                       background: ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.bg || 'rgba(13,33,55,0.06)',
                       color: ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.color || 'var(--text-muted)',
                       border: `1px solid ${ROLE_BADGE_VARIANT[selectedAssignEmployee.role]?.border || 'var(--border)'}`,
@@ -1554,11 +1554,7 @@ const TemplatesPanel: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      height: 32,
-                      minWidth: 70,
                       textAlign: 'center',
-                      alignSelf: 'center',
-                      marginLeft: 10
                     }}>
                       {t(`roles.${selectedAssignEmployee.role}`, selectedAssignEmployee.role)}
                     </div>
@@ -1637,7 +1633,7 @@ const TemplatesPanel: React.FC = () => {
                           {/* Role Badge - Taller and Centered on the Right */}
                           <div style={{
                             fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
-                            padding: '0 8px', borderRadius: 8,
+                            padding: '4px 8px', borderRadius: 8,
                             background: ROLE_BADGE_VARIANT[employee.role]?.bg || 'rgba(13,33,55,0.06)',
                             color: ROLE_BADGE_VARIANT[employee.role]?.color || 'var(--text-muted)',
                             border: `1px solid ${ROLE_BADGE_VARIANT[employee.role]?.border || 'var(--border)'}`,
@@ -1645,11 +1641,7 @@ const TemplatesPanel: React.FC = () => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            height: 32,
-                            minWidth: 70,
                             textAlign: 'center',
-                            alignSelf: 'center',
-                            marginLeft: 10
                           }}>
                             {t(`roles.${employee.role}`, employee.role)}
                           </div>
@@ -2503,7 +2495,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
       </div>
 
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18, display: 'flex', gap: 12, alignItems: 'center' }}>
               <Skel w={44} h={44} r={22} />
@@ -2522,7 +2514,7 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
           <div style={{ fontSize: 13 }}>{t('onboarding.noEmployeesHint')}</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {filtered.map((emp) => {
             const pct = emp.percentage;
             const ac  = avatarColor(pct);
@@ -2560,9 +2552,33 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                   )}
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {emp.name} {emp.surname}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {emp.name} {emp.surname}
+                      </div>
+                      {/* Role Badge - Inline with Name */}
+                      <div style={{
+                        fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
+                        padding: '2px 8px', borderRadius: 6,
+                        background: ROLE_BADGE_VARIANT[emp.role]?.bg || 'rgba(13,33,55,0.06)',
+                        color: ROLE_BADGE_VARIANT[emp.role]?.color || 'var(--text-muted)',
+                        border: `1px solid ${ROLE_BADGE_VARIANT[emp.role]?.border || 'var(--border)'}`,
+                        flexShrink: 0,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: 20,
+                        minWidth: 60,
+                        textAlign: 'center',
+                      }}>
+                        {t(`roles.${emp.role}`, emp.role)}
+                      </div>
                     </div>
+                    {emp.companyName && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        🏢 {emp.companyName}
+                      </div>
+                    )}
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       🏪 {emp.storeName}
                     </div>
@@ -2579,26 +2595,6 @@ const OverviewPanel: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                         <div style={{ height: '100%', width: `${pct}%`, background: ac, borderRadius: 99, transition: 'width 0.4s ease' }} />
                       </div>
                     </div>
-                  </div>
-
-                  {/* Role Badge - Taller and Centered on the Right */}
-                  <div style={{
-                    fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase',
-                    padding: '0 8px', borderRadius: 8,
-                    background: ROLE_BADGE_VARIANT[emp.role]?.bg || 'rgba(13,33,55,0.06)',
-                    color: ROLE_BADGE_VARIANT[emp.role]?.color || 'var(--text-muted)',
-                    border: `1px solid ${ROLE_BADGE_VARIANT[emp.role]?.border || 'var(--border)'}`,
-                    flexShrink: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: 44,
-                    minWidth: 70,
-                    textAlign: 'center',
-                    alignSelf: 'center',
-                    marginLeft: 10
-                  }}>
-                    {t(`roles.${emp.role}`, emp.role)}
                   </div>
 
                   {/* Ring */}
