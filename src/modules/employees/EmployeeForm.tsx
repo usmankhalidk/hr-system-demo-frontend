@@ -427,27 +427,49 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
     if (step1Errors[field]) setStep1Errors((prev) => ({ ...prev, [field]: undefined }));
   };
 
-  const validateStep1 = (): boolean => {
+  const validateStep1 = (silent = false): { valid: boolean; missingFields: string[] } => {
     const errs: Partial<Record<keyof FormData, string>> = {};
-    if (!formData.name.trim()) errs.name = t('employees.fieldRequired');
-    if (!formData.surname.trim()) errs.surname = t('employees.fieldRequired');
+    const missingFields: string[] = [];
+
+    if (!formData.name.trim()) {
+      errs.name = t('employees.fieldRequired');
+      missingFields.push(t('common.name'));
+    }
+    if (!formData.surname.trim()) {
+      errs.surname = t('employees.fieldRequired');
+      missingFields.push(t('common.surname'));
+    }
     if (!formData.email.trim()) {
       errs.email = t('employees.fieldRequired');
+      missingFields.push(t('employees.emailField'));
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errs.email = t('employees.emailInvalid');
     }
-    if (!formData.role) errs.role = t('employees.fieldRequired');
-    if (canPickCompany && !formData.companyId) errs.companyId = t('employees.fieldRequired');
+    if (!formData.role) {
+      errs.role = t('employees.fieldRequired');
+      missingFields.push(t('common.role'));
+    }
+    if (canPickCompany && !formData.companyId) {
+      errs.companyId = t('employees.fieldRequired');
+      missingFields.push(t('employees.companyField'));
+    }
     if (canPickCompany && formData.companyId) {
       const requestedCompanyId = parseInt(formData.companyId, 10);
       if (!Number.isNaN(requestedCompanyId) && !canCreateInCompany(requestedCompanyId)) {
         errs.companyId = t('employees.companyPermissionDenied', 'You do not have permission to create employees in this company.');
       }
     }
-    if (!formData.storeId) errs.storeId = t('employees.fieldRequired');
-    if (!isEditMode && !formData.uniqueId.trim()) errs.uniqueId = t('employees.fieldRequired');
-    setStep1Errors(errs);
-    return Object.keys(errs).length === 0;
+    
+    // Store is now optional
+    // if (!formData.storeId) errs.storeId = t('employees.fieldRequired');
+
+    if (!isEditMode && !formData.uniqueId.trim()) {
+      errs.uniqueId = t('employees.fieldRequired');
+      missingFields.push(t('employees.colUniqueId'));
+    }
+
+    if (!silent) setStep1Errors(errs);
+    return { valid: Object.keys(errs).length === 0, missingFields };
   };
 
   const handleNext = () => {
@@ -460,7 +482,8 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
       setEditPasswordError(t('employees.passwordTooShort'));
       return;
     }
-    if (validateStep1()) {
+    const step1 = validateStep1();
+    if (step1.valid) {
       // Check store capacity if a store is selected
       if (formData.storeId) {
         const store = stores.find(s => String(s.id) === formData.storeId);
@@ -474,49 +497,64 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   };
   const handleBack = () => setStep(1);
 
-  const validateStep2 = (): string | null => {
+  const validateStep2 = (): { valid: boolean; error?: string; missingFields: string[] } => {
+    const missingFields: string[] = [];
+
     // Weekly hours
     if (formData.weeklyHours) {
       const hours = parseFloat(formData.weeklyHours);
-      if (isNaN(hours) || hours < 0 || hours > 80) return t('employees.weeklyHoursInvalid');
+      if (isNaN(hours) || hours < 0 || hours > 80) return { valid: false, error: t('employees.weeklyHoursInvalid'), missingFields: [] };
     }
     // Probation months max
     if (formData.probationMonths) {
       const months = parseInt(formData.probationMonths, 10);
-      if (isNaN(months) || months < 0 || months > 60) return t('employees.probationInvalid');
+      if (isNaN(months) || months < 0 || months > 60) return { valid: false, error: t('employees.probationInvalid'), missingFields: [] };
     }
     // Personal email required and format
     if (!formData.personalEmail.trim()) {
-      return t('employees.fieldRequired');
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.personalEmail)) {
-      return t('employees.emailInvalid');
+      missingFields.push(t('employees.personalEmailField'));
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.personalEmail)) {
+      return { valid: false, error: t('employees.emailInvalid'), missingFields: [] };
     }
     // Italian CAP: exactly 5 digits
     if (formData.cap && !/^\d{5}$/.test(formData.cap.trim())) {
-      return t('employees.capInvalid');
+      return { valid: false, error: t('employees.capInvalid'), missingFields: [] };
     }
     // IBAN basic check: 15–34 alphanumeric chars
     if (formData.iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(formData.iban.trim().toUpperCase())) {
-      return t('employees.ibanInvalid');
+      return { valid: false, error: t('employees.ibanInvalid'), missingFields: [] };
     }
     // contractEndDate must be after hireDate
     if (formData.hireDate && formData.contractEndDate && formData.contractEndDate < formData.hireDate) {
-      return t('employees.contractEndBeforeHire');
+      return { valid: false, error: t('employees.contractEndBeforeHire'), missingFields: [] };
     }
     // Termination date/type must both be set or neither
-    if (formData.terminationDate && !formData.terminationType) return t('employees.terminationTypeMissing');
-    if (formData.terminationType && !formData.terminationDate) return t('employees.terminationDateMissing');
+    if (formData.terminationDate && !formData.terminationType) return { valid: false, error: t('employees.terminationTypeMissing'), missingFields: [] };
+    if (formData.terminationType && !formData.terminationDate) return { valid: false, error: t('employees.terminationDateMissing'), missingFields: [] };
     // Termination date must not be before hire date
     if (formData.hireDate && formData.terminationDate && formData.terminationDate < formData.hireDate) {
-      return t('employees.terminationBeforeHire');
+      return { valid: false, error: t('employees.terminationBeforeHire'), missingFields: [] };
     }
-    return null;
+
+    if (missingFields.length > 0) return { valid: false, missingFields };
+    return { valid: true, missingFields: [] };
   };
 
   const handleSubmit = async () => {
-    const step2Error = validateStep2();
-    if (step2Error) { setError(step2Error); return; }
+    const step1 = validateStep1();
+    const step2 = validateStep2();
+
+    const allMissingFields = [...step1.missingFields, ...step2.missingFields];
+    if (allMissingFields.length > 0) {
+      setError(`${t('employees.fieldRequired')}: ${allMissingFields.join(', ')}`);
+      if (!step1.valid && step === 2) setStep(1);
+      return;
+    }
+
+    if (!step2.valid) {
+      setError(step2.error || t('employees.errorSave'));
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -1164,7 +1202,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                       color: 'var(--text-secondary)',
                       letterSpacing: '0.01em',
                     }}>
-                      {`${t('common.store')} *`}
+                      {t('common.store')}
                     </div>
                     <div ref={storePickerRef} style={{ position: 'relative' }}>
                       <button
