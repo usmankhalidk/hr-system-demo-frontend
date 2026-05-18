@@ -20,8 +20,6 @@ import {
 } from '../../api/externalAffluence';
 import { listShifts, Shift } from '../../api/shifts';
 import { useAuth } from '../../context/AuthContext';
-import AffluenceAdminModal from './AffluenceAdminModal';
-import AffluencePanel from './AffluencePanel';
 import ExternalAffluenceLiveConfigModal from './ExternalAffluenceLiveConfigModal';
 
 const WEEK_DAYS = [
@@ -45,8 +43,6 @@ interface Props {
   storeId: number;
   week: string;
 }
-
-type PanelDataMode = 'live' | 'dummy';
 
 interface ScheduledStaffAvatar {
   userId: number;
@@ -198,14 +194,12 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
 
   const canConfigure = user ? ['admin', 'hr', 'area_manager'].includes(user.role) : false;
 
-  const [dataMode, setDataMode] = useState<PanelDataMode>('live');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [integrationMissing, setIntegrationMissing] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [payload, setPayload] = useState<ExternalAffluenceWeekResponse | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [showDummyManager, setShowDummyManager] = useState(false);
   const [hoveredInfoKey, setHoveredInfoKey] = useState<string | null>(null);
   const [scheduledBySlot, setScheduledBySlot] = useState<ScheduledAvatarMap>({});
 
@@ -238,10 +232,8 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
   }, [storeId, t, week]);
 
   useEffect(() => {
-    if (dataMode === 'live') {
-      void loadLiveData();
-    }
-  }, [dataMode, loadLiveData]);
+    void loadLiveData();
+  }, [loadLiveData]);
 
   const recommendations = payload?.recommendations ?? [];
 
@@ -468,37 +460,12 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
               {t('shifts.affluence_heading')}
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.03rem' }}>
-              {dataMode === 'live'
-                ? t('shifts.affluence_external_live_title', 'External Affluence (Live Week)')
-                : t('shifts.affluence_dummy_mode_title', 'Dummy Affluence (Manual Table)')}
+              {t('shifts.affluence_external_live_title', 'External Affluence (Live Week)')}
             </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn"
-            style={{
-              ...headerActionButtonStyle,
-              background: dataMode === 'live' ? 'rgba(255,255,255,0.26)' : 'rgba(255,255,255,0.12)',
-            }}
-            onClick={() => setDataMode('live')}
-          >
-            {t('shifts.affluence_data_mode_live', 'Live external')}
-          </button>
-          <button
-            type="button"
-            className="btn"
-            style={{
-              ...headerActionButtonStyle,
-              background: dataMode === 'dummy' ? 'rgba(255,255,255,0.26)' : 'rgba(255,255,255,0.12)',
-            }}
-            onClick={() => setDataMode('dummy')}
-          >
-            {t('shifts.affluence_data_mode_dummy', 'Dummy local')}
-          </button>
-
           {canConfigure ? (
             <button className="btn" style={headerActionButtonStyle} onClick={() => setShowConfig(true)}>
               <Cog size={14} style={{ marginRight: 6 }} />
@@ -506,117 +473,99 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
             </button>
           ) : null}
 
-          {dataMode === 'live' ? (
-            <button className="btn" style={headerActionButtonStyle} onClick={() => { void loadLiveData(); }} disabled={loading}>
-              {t('common.refresh', 'Refresh')}
-            </button>
-          ) : null}
+          <button className="btn" style={headerActionButtonStyle} onClick={() => { void loadLiveData(); }} disabled={loading}>
+            {t('common.refresh', 'Refresh')}
+          </button>
         </div>
       </div>
 
       <div style={{ padding: '14px 16px 16px', display: 'grid', gap: 12 }}>
-        {dataMode === 'dummy' ? (
-          <>
+        <>
+          {error && (
             <div style={{
-              border: '1px solid rgba(122,91,46,0.24)',
-              borderRadius: 10,
-              background: 'linear-gradient(150deg, rgba(122,91,46,0.10), rgba(46,86,122,0.08))',
-              color: 'var(--text-secondary)',
+              margin: '0 0 2px',
               padding: '10px 12px',
-              fontSize: 12,
+              borderRadius: 10,
+              border: '1px solid var(--danger-border)',
+              background: 'var(--danger-bg)',
+              color: 'var(--danger)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              fontSize: 13,
             }}>
-              <strong style={{ color: '#5f3e2f' }}>{t('shifts.affluence_dummy_notice_title', 'Manual dummy table enabled.')}</strong>{' '}
-              {t('shifts.affluence_dummy_notice_desc', 'You can edit dummy values from Configure, or from the table manager below.')}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <AlertCircle size={14} />
+                {error}
+              </span>
+              <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => { void loadLiveData(); }}>
+                {t('common.retry', 'Retry')}
+              </button>
             </div>
-            <AffluencePanel storeId={storeId} week={week} />
-          </>
-        ) : (
-          <>
-            {error && (
-              <div style={{
-                margin: '0 0 2px',
-                padding: '10px 12px',
-                borderRadius: 10,
-                border: '1px solid var(--danger-border)',
-                background: 'var(--danger-bg)',
-                color: 'var(--danger)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 8,
-                fontSize: 13,
-              }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <AlertCircle size={14} />
-                  {error}
-                </span>
-                <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => { void loadLiveData(); }}>
-                  {t('common.retry', 'Retry')}
+          )}
+
+          {!integrationMissing && (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              border: '1px solid #d6e4ef',
+              borderRadius: 10,
+              background: 'linear-gradient(90deg, #f9f5ef 0%, #f3f9ff 100%)',
+              padding: 10,
+            }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '6px 10px',
+                    background: selectedDay === null ? '#2e567a' : '#fff',
+                    color: selectedDay === null ? '#fff' : 'var(--text-secondary)',
+                    borderColor: selectedDay === null ? '#2e567a' : '#d1d5db',
+                  }}
+                  onClick={() => setSelectedDay(null)}
+                >
+                  {t('common.all', 'All')}
                 </button>
+                {WEEK_DAYS.map((day) => {
+                  const active = selectedDay === day.key;
+                  return (
+                    <button
+                      key={day.key}
+                      className="btn btn-secondary"
+                      style={{
+                        padding: '6px 10px',
+                        background: active ? '#2e567a' : '#fff',
+                        color: active ? '#fff' : 'var(--text-secondary)',
+                        borderColor: active ? '#2e567a' : '#d1d5db',
+                        fontWeight: active ? 700 : 600,
+                      }}
+                      onClick={() => setSelectedDay(day.key)}
+                    >
+                      {t(`shifts.${day.shortKey}`, day.shortFallback)}
+                    </button>
+                  );
+                })}
               </div>
-            )}
 
-            {!integrationMissing && (
-              <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                border: '1px solid #d6e4ef',
-                borderRadius: 10,
-                background: 'linear-gradient(90deg, #f9f5ef 0%, #f3f9ff 100%)',
-                padding: 10,
-              }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  <button
-                    className="btn btn-secondary"
-                    style={{
-                      padding: '6px 10px',
-                      background: selectedDay === null ? '#2e567a' : '#fff',
-                      color: selectedDay === null ? '#fff' : 'var(--text-secondary)',
-                      borderColor: selectedDay === null ? '#2e567a' : '#d1d5db',
-                    }}
-                    onClick={() => setSelectedDay(null)}
-                  >
-                    {t('common.all', 'All')}
-                  </button>
-                  {WEEK_DAYS.map((day) => {
-                    const active = selectedDay === day.key;
-                    return (
-                      <button
-                        key={day.key}
-                        className="btn btn-secondary"
-                        style={{
-                          padding: '6px 10px',
-                          background: active ? '#2e567a' : '#fff',
-                          color: active ? '#fff' : 'var(--text-secondary)',
-                          borderColor: active ? '#2e567a' : '#d1d5db',
-                          fontWeight: active ? 700 : 600,
-                        }}
-                        onClick={() => setSelectedDay(day.key)}
-                      >
-                        {t(`shifts.${day.shortKey}`, day.shortFallback)}
-                      </button>
-                    );
-                  })}
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
+                <div style={{ fontWeight: 700, color: '#5f3e2f' }}>
+                  {t('shifts.affluence_date_range', 'Date range')}: {formatDateRange(payload?.fromDate ?? null, payload?.toDate ?? null)}
                 </div>
-
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700, color: '#5f3e2f' }}>
-                    {t('shifts.affluence_date_range', 'Date range')}: {formatDateRange(payload?.fromDate ?? null, payload?.toDate ?? null)}
-                  </div>
-                  <div style={{ opacity: 0.9 }}>
-                    {t('shifts.affluence_external_store', 'External store')}: {sourceStoreTitle}
-                  </div>
+                <div style={{ opacity: 0.9 }}>
+                  {t('shifts.affluence_external_store', 'External store')}: {sourceStoreTitle}
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
-            ) : integrationMissing ? (
-              <div style={{
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+          ) : integrationMissing ? (
+            <div style={{
                 border: '1px dashed rgba(95,62,47,0.35)',
                 borderRadius: 14,
                 background: 'linear-gradient(150deg, rgba(46,86,122,0.06), rgba(201,151,58,0.12))',
@@ -682,14 +631,14 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
                     <ArrowRight size={13} />
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div style={{
+            </div>
+          ) : (
+            <div style={{
                 border: '1px solid #d4e2ef',
                 borderRadius: 10,
                 overflow: 'hidden',
                 background: '#fff',
-              }}>
+            }}>
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: tableColumns,
@@ -875,33 +824,16 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
                     });
                   })}
                 </div>
-              </div>
-            )}
-          </>
-        )}
+            </div>
+          )}
+        </>
       </div>
 
       {showConfig ? (
         <ExternalAffluenceLiveConfigModal
           storeId={storeId}
-          week={week}
-          initialMode={dataMode}
-          onOpenDummyManager={() => setShowDummyManager(true)}
           onClose={() => setShowConfig(false)}
-          onSaved={() => {
-            if (dataMode === 'live') {
-              void loadLiveData();
-            }
-          }}
-        />
-      ) : null}
-
-      {showDummyManager ? (
-        <AffluenceAdminModal
-          storeId={storeId}
-          onClose={() => {
-            setShowDummyManager(false);
-          }}
+          onSaved={() => { void loadLiveData(); }}
         />
       ) : null}
     </div>
