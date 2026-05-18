@@ -64,6 +64,7 @@ import UserAvatar from "./UserAvatar";
 import FlagIcon from "./FlagIcon";
 import { getCompanies } from "../../api/companies";
 import type { Company } from "../../types";
+import { getNotificationNavigationUrl } from "../../utils/notificationNavigation";
 
 type NotificationScope = "mine" | "company";
 type ViewMode = "inbox" | "settings";
@@ -522,47 +523,6 @@ export default function NotificationsPage() {
     } else {
       setSelectedNotificationIds(new Set(filteredNotifications.map((n) => n.id)));
     }
-  };
-
-  const getNotificationNavigationUrl = (notification: Notification): string | null => {
-    const type = notification.type;
-    
-    // ATS notifications
-    if (type.startsWith('ats.')) {
-      return '/ats';
-    }
-    
-    // Employee notifications
-    if (type.startsWith('employee.')) {
-      return '/employees';
-    }
-    
-    // Shift notifications
-    if (type.startsWith('shift.')) {
-      return '/shifts';
-    }
-    
-    // Attendance notifications
-    if (type.startsWith('attendance.')) {
-      return '/attendance';
-    }
-    
-    // Leave notifications
-    if (type.startsWith('leave.')) {
-      return '/leave';
-    }
-    
-    // Document notifications
-    if (type.startsWith('document.')) {
-      return '/documents';
-    }
-    
-    // Onboarding notifications
-    if (type.startsWith('onboarding.')) {
-      return '/onboarding';
-    }
-    
-    return null;
   };
 
   const settingByKey = useMemo(() => {

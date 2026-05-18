@@ -1293,7 +1293,7 @@ export default function PublicJobDetailPage() {
                 </div>
 
                 <label className="careers-checkbox">
-                  <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
+                  <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} required />
                   {copy.privacyConsent}
                 </label>
 
@@ -1660,7 +1660,7 @@ export default function PublicJobDetailPage() {
                   </section>
 
                   <label className="careers-checkbox">
-                    <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
+                    <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} required />
                     {copy.privacyConsent}
                   </label>
 
