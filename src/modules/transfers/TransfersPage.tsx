@@ -1329,6 +1329,8 @@ export default function TransfersPage() {
                       label={t('transfers.form.startDate', 'Data inizio')}
                       value={form.start_date}
                       onChange={(value) => setForm((p) => ({ ...p, start_date: value }))}
+                      disablePortal={true}
+                      align="left"
                     />
                   </div>
                   <div style={fieldRowStyle}>
@@ -1336,6 +1338,8 @@ export default function TransfersPage() {
                       label={t('transfers.form.endDate', 'Data fine')}
                       value={form.end_date}
                       onChange={(value) => setForm((p) => ({ ...p, end_date: value }))}
+                      disablePortal={true}
+                      align="right"
                     />
                   </div>
                 </div>

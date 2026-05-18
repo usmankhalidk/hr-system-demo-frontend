@@ -11,7 +11,7 @@ import { Spinner } from '../../components/ui/Spinner';
 import { Button } from '../../components/ui/Button';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 
-export default function InterviewsPanel() {
+export default function InterviewsPanel({ companyId }: { companyId?: number }) {
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
   const { user } = useAuth();
@@ -29,14 +29,13 @@ export default function InterviewsPanel() {
 
   useEffect(() => {
     loadInterviews();
-  }, []);
+  }, [companyId]);
 
   const loadInterviews = async () => {
     try {
       setLoading(true);
-      const { interviews: data } = await getAllInterviews();
+      const { interviews: data } = await getAllInterviews({ companyId });
       console.log('✅ Interviews loaded successfully:', data.length, 'interviews');
-      console.log('📊 First interview sample:', data[0]);
       setInterviews(data);
     } catch (error) {
       console.error('❌ Failed to load interviews:', error);

@@ -138,6 +138,7 @@ export default function ShiftDrawer({
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const employeePickerRef = useRef<HTMLDivElement | null>(null);
   const storePickerRef = useRef<HTMLDivElement | null>(null);
+  const isStoreManager = user?.role === 'store_manager';
 
   const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
   const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.surname}`.trim() : '';
@@ -153,14 +154,14 @@ export default function ShiftDrawer({
   const normalizedEmployeeQuery = employeeQuery.trim().toLowerCase();
   const filteredEmployees = normalizedEmployeeQuery
     ? employees.filter((emp) => {
-        const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
-        return (
-          fullName.includes(normalizedEmployeeQuery)
-          || `${emp.surname} ${emp.name}`.toLowerCase().includes(normalizedEmployeeQuery)
-          || emp.email.toLowerCase().includes(normalizedEmployeeQuery)
-          || emp.role.toLowerCase().includes(normalizedEmployeeQuery)
-        );
-      })
+      const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
+      return (
+        fullName.includes(normalizedEmployeeQuery)
+        || `${emp.surname} ${emp.name}`.toLowerCase().includes(normalizedEmployeeQuery)
+        || emp.email.toLowerCase().includes(normalizedEmployeeQuery)
+        || emp.role.toLowerCase().includes(normalizedEmployeeQuery)
+      );
+    })
     : employees;
 
   async function loadEmployeesByPages(baseParams: Omit<EmployeeListParams, 'page' | 'limit'>): Promise<Employee[]> {
@@ -217,7 +218,7 @@ export default function ShiftDrawer({
 
     // Required time fields
     if (!f.start_time) errs.start_time = t('shifts.validation.startRequired');
-    if (!f.end_time)   errs.end_time   = t('shifts.validation.endRequired');
+    if (!f.end_time) errs.end_time = t('shifts.validation.endRequired');
 
     // end > start
     if (f.start_time && f.end_time && toMins(f.end_time) <= toMins(f.start_time)) {
@@ -233,16 +234,16 @@ export default function ShiftDrawer({
     } else if (f.break_type === 'fixed') {
       // Fixed break: both or neither
       const hasBS = f.break_start.length > 0;
-      const hasBE = f.break_end.length   > 0;
-      if (hasBS && !hasBE) errs.break_end   = t('shifts.validation.breakBothRequired');
+      const hasBE = f.break_end.length > 0;
+      if (hasBS && !hasBE) errs.break_end = t('shifts.validation.breakBothRequired');
       if (!hasBS && hasBE) errs.break_start = t('shifts.validation.breakBothRequired');
 
       if (hasBS && hasBE) {
         if (toMins(f.break_end) <= toMins(f.break_start)) {
           errs.break_end = t('shifts.validation.breakEndAfterStart');
         } else if (f.start_time && f.end_time) {
-          const sM  = toMins(f.start_time);
-          const eM  = toMins(f.end_time);
+          const sM = toMins(f.start_time);
+          const eM = toMins(f.end_time);
           const bsM = toMins(f.break_start);
           const beM = toMins(f.break_end);
           if (bsM < sM || beM > eM) {
@@ -255,9 +256,9 @@ export default function ShiftDrawer({
     // split shift
     if (f.is_split) {
       const hasSS2 = f.split_start2.length > 0;
-      const hasSE2 = f.split_end2.length   > 0;
+      const hasSE2 = f.split_end2.length > 0;
       if (!hasSS2) errs.split_start2 = t('shifts.validation.splitBothRequired');
-      if (!hasSE2) errs.split_end2   = t('shifts.validation.splitBothRequired');
+      if (!hasSE2) errs.split_end2 = t('shifts.validation.splitBothRequired');
       if (hasSS2 && hasSE2) {
         const ss2M = toMins(f.split_start2);
         const se2M = toMins(f.split_end2);
@@ -588,872 +589,896 @@ export default function ShiftDrawer({
 
         {/* Form — flex column so the footer stays fixed while only the fields scroll */}
         <form onSubmit={handleSave} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-          {overlapConflict && (
-            <div style={{
-              background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.35)',
-              borderRadius: 'var(--radius-sm)', padding: '12px 14px', marginBottom: 16,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#b45309' }}>
-                  {t('errors.OVERLAP_CONFLICT')}
-                </span>
-              </div>
-              <p style={{ fontSize: 12, color: '#92400e', margin: 0, lineHeight: 1.5 }}>
-                {t('shifts.overlapHint')}
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <div style={{
-              background: 'var(--danger-bg)', border: '1px solid var(--danger-border)',
-              borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginBottom: 16,
-              color: 'var(--danger)', fontSize: 13,
-            }}>
-              {error}
-            </div>
-          )}
-
-          {/* ─── Employee ───────────────────── */}
-          <div style={fieldRow}>
-            <label style={fLabel}>{t('shifts.form.employee')}</label>
-            <div ref={employeePickerRef} style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => setEmployeePickerOpen((openState) => !openState)}
-                style={{
-                  ...fInput,
-                  minHeight: 42,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                {selectedEmployee ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-                    <div style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      overflow: 'hidden',
-                      background: selectedEmployee.avatarFilename ? 'transparent' : getAvatarColor(selectedEmployeeFullName),
-                      color: '#fff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      flexShrink: 0,
-                    }}>
-                      {selectedEmployee.avatarFilename ? (
-                        <img
-                          src={getAvatarUrl(selectedEmployee.avatarFilename) ?? ''}
-                          alt={selectedEmployeeFullName}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      ) : getInitials(selectedEmployeeFullName)}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{
-                        fontSize: 13,
-                        color: 'var(--text-primary)',
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
-                        {selectedEmployeeFullName}
-                      </div>
-                      <div style={{
-                        fontSize: 11,
-                        color: 'var(--text-muted)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
-                        {selectedEmployee.email}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.selectEmployee')}</span>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  {selectedEmployee && (
-                    <Badge variant={ROLE_BADGE_VARIANT[selectedEmployee.role]}>{t(`roles.${selectedEmployee.role}`)}</Badge>
-                  )}
-                  <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{employeePickerOpen ? '▲' : '▼'}</span>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+            {overlapConflict && (
+              <div style={{
+                background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.35)',
+                borderRadius: 'var(--radius-sm)', padding: '12px 14px', marginBottom: 16,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#b45309' }}>
+                    {t('errors.OVERLAP_CONFLICT')}
+                  </span>
                 </div>
-              </button>
+                <p style={{ fontSize: 12, color: '#92400e', margin: 0, lineHeight: 1.5 }}>
+                  {t('shifts.overlapHint')}
+                </p>
+              </div>
+            )}
 
-              {employeePickerOpen && (
-                <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 6px)',
-                  left: 0,
-                  right: 0,
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--surface)',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.14)',
-                  zIndex: 20,
-                  overflow: 'hidden',
-                }}>
-                  <div style={{ padding: 8, borderBottom: '1px solid var(--border-light)' }}>
-                    <input
-                      type="text"
-                      value={employeeQuery}
-                      onChange={(e) => setEmployeeQuery(e.target.value)}
-                      placeholder={t('shifts.form.searchEmployee')}
-                      style={{
-                        ...fInput,
-                        padding: '7px 10px',
-                        fontSize: 12,
-                        minHeight: 'auto',
-                      }}
-                    />
-                  </div>
-                  <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-                    {filteredEmployees.length === 0 ? (
-                      <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-                        {t('shifts.form.noEmployeeResults')}
+            {error && (
+              <div style={{
+                background: 'var(--danger-bg)', border: '1px solid var(--danger-border)',
+                borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginBottom: 16,
+                color: 'var(--danger)', fontSize: 13,
+              }}>
+                {error}
+              </div>
+            )}
+
+            {/* ─── Employee ───────────────────── */}
+            <div style={fieldRow}>
+              <label style={fLabel}>{t('shifts.form.employee')}</label>
+              <div ref={employeePickerRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => !isStoreManager && setEmployeePickerOpen((openState) => !openState)}
+                  style={{
+                    ...fInput,
+                    minHeight: 42,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    cursor: isStoreManager ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    background: isStoreManager ? 'var(--surface-warm)' : 'var(--surface)',
+                    opacity: isStoreManager ? 0.8 : 1,
+                  }}
+                  disabled={isStoreManager}
+                >
+                  {selectedEmployee ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        overflow: 'hidden',
+                        background: selectedEmployee.avatarFilename ? 'transparent' : getAvatarColor(selectedEmployeeFullName),
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        {selectedEmployee.avatarFilename ? (
+                          <img
+                            src={getAvatarUrl(selectedEmployee.avatarFilename) ?? ''}
+                            alt={selectedEmployeeFullName}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : getInitials(selectedEmployeeFullName)}
                       </div>
-                    ) : filteredEmployees.map((emp) => {
-                      const fullName = `${emp.name} ${emp.surname}`.trim();
-                      const isSelected = String(emp.id) === form.user_id;
-                      const avatarUrl = getAvatarUrl(emp.avatarFilename);
-                      return (
-                        <button
-                          key={emp.id}
-                          type="button"
-                          onClick={() => selectEmployee(String(emp.id))}
-                          style={{
-                            width: '100%',
-                            border: 'none',
-                            borderBottom: '1px solid var(--border-light)',
-                            background: isSelected ? 'var(--accent-light)' : 'transparent',
-                            padding: '8px 10px',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 10,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                            <div style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: '50%',
-                              overflow: 'hidden',
-                              background: avatarUrl ? 'transparent' : getAvatarColor(fullName),
-                              color: '#fff',
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 13,
+                          color: 'var(--text-primary)',
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {selectedEmployeeFullName}
+                        </div>
+                        <div style={{
+                          fontSize: 11,
+                          color: 'var(--text-muted)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {selectedEmployee.email}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.selectEmployee')}</span>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {selectedEmployee && (
+                      <Badge variant={ROLE_BADGE_VARIANT[selectedEmployee.role]}>{t(`roles.${selectedEmployee.role}`)}</Badge>
+                    )}
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{employeePickerOpen ? '▲' : '▼'}</span>
+                  </div>
+                </button>
+
+                {employeePickerOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: 0,
+                    right: 0,
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--surface)',
+                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.14)',
+                    zIndex: 20,
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{ padding: 8, borderBottom: '1px solid var(--border-light)' }}>
+                      <input
+                        type="text"
+                        value={employeeQuery}
+                        onChange={(e) => setEmployeeQuery(e.target.value)}
+                        placeholder={t('shifts.form.searchEmployee')}
+                        style={{
+                          ...fInput,
+                          padding: '7px 10px',
+                          fontSize: 12,
+                          minHeight: 'auto',
+                        }}
+                      />
+                    </div>
+                    <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                      {filteredEmployees.length === 0 ? (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                          {t('shifts.form.noEmployeeResults')}
+                        </div>
+                      ) : filteredEmployees.map((emp) => {
+                        const fullName = `${emp.name} ${emp.surname}`.trim();
+                        const isSelected = String(emp.id) === form.user_id;
+                        const avatarUrl = getAvatarUrl(emp.avatarFilename);
+                        return (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => selectEmployee(String(emp.id))}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderBottom: '1px solid var(--border-light)',
+                              background: isSelected ? 'var(--accent-light)' : 'transparent',
+                              padding: '8px 10px',
+                              cursor: 'pointer',
+                              textAlign: 'left',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 10,
-                              fontWeight: 700,
-                              flexShrink: 0,
-                            }}>
-                              {avatarUrl ? (
-                                <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : getInitials(fullName)}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
+                              justifyContent: 'space-between',
+                              gap: 10,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                               <div style={{
-                                fontSize: 13,
-                                color: 'var(--text-primary)',
-                                fontWeight: 600,
+                                width: 28,
+                                height: 28,
+                                borderRadius: '50%',
                                 overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
+                                background: avatarUrl ? 'transparent' : getAvatarColor(fullName),
+                                color: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                flexShrink: 0,
                               }}>
-                                {fullName}
+                                {avatarUrl ? (
+                                  <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : getInitials(fullName)}
                               </div>
-                              <div style={{
-                                fontSize: 11,
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{
+                                  fontSize: 13,
+                                  color: 'var(--text-primary)',
+                                  fontWeight: 600,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {fullName}
+                                </div>
+                                <div style={{
+                                  fontSize: 11,
+                                  color: 'var(--text-muted)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {emp.email}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                              <Badge variant={ROLE_BADGE_VARIANT[emp.role]}>{t(`roles.${emp.role}`)}</Badge>
+                              {isSelected && <span style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 700 }}>✓</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {formErrors.user_id && (
+                <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.user_id}</div>
+              )}
+            </div>
+
+            {/* ─── Store ──────────────────────── */}
+            <div style={fieldRow}>
+              <label style={fLabel}>{t('shifts.form.store')}</label>
+              <div ref={storePickerRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isStoreManager) return;
+                    setEmployeePickerOpen(false);
+                    setStorePickerOpen((prev) => !prev);
+                  }}
+                  style={{
+                    ...fInput,
+                    minHeight: 42,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    padding: selectedStore ? '6px 10px' : '0 12px',
+                    textAlign: 'left',
+                    cursor: (stores.length === 0 || isStoreManager) ? 'not-allowed' : 'pointer',
+                    background: isStoreManager ? 'var(--surface-warm)' : 'var(--surface)',
+                    opacity: (stores.length === 0 || isStoreManager) ? 0.68 : 1,
+                  }}
+                  disabled={stores.length === 0 || isStoreManager}
+                >
+                  {selectedStore ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                      <span style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        overflow: 'hidden',
+                        background: 'var(--surface-elevated)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: 'var(--text-muted)',
+                      }}>
+                        {getStoreLogoUrl(selectedStore.logoFilename ?? selectedStore.companyLogoFilename) ? (
+                          <img
+                            src={getStoreLogoUrl(selectedStore.logoFilename ?? selectedStore.companyLogoFilename) ?? ''}
+                            alt={selectedStore.name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <StoreIcon size={14} />
+                        )}
+                      </span>
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{
+                          display: 'block',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: 'var(--text-primary)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {selectedStore.name}
+                        </span>
+                        <span style={{
+                          display: 'block',
+                          fontSize: 10.5,
+                          color: 'var(--text-muted)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          <span>{selectedStore.companyName ?? selectedStore.code}</span>
+                          <span style={{ color: '#0f766e', fontWeight: 700 }}>
+                            {` · ${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                          </span>
+                        </span>
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.selectStore')}</span>
+                  )}
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>▼</span>
+                </button>
+
+                {storePickerOpen && stores.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: 'calc(100% + 6px)',
+                    zIndex: 30,
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: 'var(--surface)',
+                    boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{ maxHeight: 270, overflowY: 'auto' }}>
+                      {stores.map((store) => {
+                        const selected = form.store_id === String(store.id);
+                        const logoUrl = getStoreLogoUrl(store.logoFilename ?? store.companyLogoFilename);
+                        return (
+                          <button
+                            key={store.id}
+                            type="button"
+                            onClick={() => selectStore(String(store.id))}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              borderBottom: '1px solid var(--border-light)',
+                              background: selected ? 'var(--surface-warm)' : 'var(--surface)',
+                              padding: '9px 10px',
+                              textAlign: 'left',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <span style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 8,
+                              border: '1px solid var(--border)',
+                              overflow: 'hidden',
+                              background: 'var(--surface-elevated)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              color: 'var(--text-muted)',
+                            }}>
+                              {logoUrl ? (
+                                <img src={logoUrl} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <StoreIcon size={13} />
+                              )}
+                            </span>
+                            <span style={{ minWidth: 0, flex: 1 }}>
+                              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                {store.name}
+                              </span>
+                              <span style={{
+                                display: 'block',
+                                fontSize: 10.5,
                                 color: 'var(--text-muted)',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                               }}>
-                                {emp.email}
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                            <Badge variant={ROLE_BADGE_VARIANT[emp.role]}>{t(`roles.${emp.role}`)}</Badge>
-                            {isSelected && <span style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 700 }}>✓</span>}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-            {formErrors.user_id && (
-              <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.user_id}</div>
-            )}
-          </div>
-
-          {/* ─── Store ──────────────────────── */}
-          <div style={fieldRow}>
-            <label style={fLabel}>{t('shifts.form.store')}</label>
-            <div ref={storePickerRef} style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmployeePickerOpen(false);
-                  setStorePickerOpen((prev) => !prev);
-                }}
-                style={{
-                  ...fInput,
-                  minHeight: 42,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                  padding: selectedStore ? '6px 10px' : '0 12px',
-                  textAlign: 'left',
-                  cursor: stores.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: stores.length === 0 ? 0.68 : 1,
-                }}
-                disabled={stores.length === 0}
-              >
-                {selectedStore ? (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-                    <span style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 8,
-                      border: '1px solid var(--border)',
-                      overflow: 'hidden',
-                      background: 'var(--surface-elevated)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      color: 'var(--text-muted)',
-                    }}>
-                      {getStoreLogoUrl(selectedStore.logoFilename ?? selectedStore.companyLogoFilename) ? (
-                        <img
-                          src={getStoreLogoUrl(selectedStore.logoFilename ?? selectedStore.companyLogoFilename) ?? ''}
-                          alt={selectedStore.name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      ) : (
-                        <StoreIcon size={14} />
-                      )}
-                    </span>
-                    <span style={{ minWidth: 0, flex: 1 }}>
-                      <span style={{
-                        display: 'block',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {selectedStore.name}
-                      </span>
-                      <span style={{
-                        display: 'block',
-                        fontSize: 10.5,
-                        color: 'var(--text-muted)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        <span>{selectedStore.companyName ?? selectedStore.code}</span>
-                        <span style={{ color: '#0f766e', fontWeight: 700 }}>
-                          {` · ${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
-                        </span>
-                      </span>
-                    </span>
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.selectStore')}</span>
-                )}
-                <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>▼</span>
-              </button>
-
-              {storePickerOpen && stores.length > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  top: 'calc(100% + 6px)',
-                  zIndex: 30,
-                  border: '1px solid var(--border)',
-                  borderRadius: 10,
-                  background: 'var(--surface)',
-                  boxShadow: '0 16px 30px rgba(0,0,0,0.15)',
-                  overflow: 'hidden',
-                }}>
-                  <div style={{ maxHeight: 270, overflowY: 'auto' }}>
-                    {stores.map((store) => {
-                      const selected = form.store_id === String(store.id);
-                      const logoUrl = getStoreLogoUrl(store.logoFilename ?? store.companyLogoFilename);
-                      return (
-                        <button
-                          key={store.id}
-                          type="button"
-                          onClick={() => selectStore(String(store.id))}
-                          style={{
-                            width: '100%',
-                            border: 'none',
-                            borderBottom: '1px solid var(--border-light)',
-                            background: selected ? 'var(--surface-warm)' : 'var(--surface)',
-                            padding: '9px 10px',
-                            textAlign: 'left',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <span style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 8,
-                            border: '1px solid var(--border)',
-                            overflow: 'hidden',
-                            background: 'var(--surface-elevated)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                            color: 'var(--text-muted)',
-                          }}>
-                            {logoUrl ? (
-                              <img src={logoUrl} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            ) : (
-                              <StoreIcon size={13} />
-                            )}
-                          </span>
-                          <span style={{ minWidth: 0, flex: 1 }}>
-                            <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
-                              {store.name}
-                            </span>
-                            <span style={{
-                              display: 'block',
-                              fontSize: 10.5,
-                              color: 'var(--text-muted)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              <span>{store.companyName ?? store.code}</span>
-                              <span style={{ color: '#0f766e', fontWeight: 700 }}>
-                                {` · ${store.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                                <span>{store.companyName ?? store.code}</span>
+                                <span style={{ color: '#0f766e', fontWeight: 700 }}>
+                                  {` · ${store.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
+                                </span>
                               </span>
                             </span>
-                          </span>
-                        </button>
-                      );
-                    })}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            {form.user_id && expectedStoreId != null && expectedStoreName && !storeSelectionMismatch && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>
-                {activeTransferForDate
-                  ? t('shifts.storeGuidanceTransfer', {
+                )}
+              </div>
+              {form.user_id && expectedStoreId != null && expectedStoreName && !storeSelectionMismatch && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>
+                  {activeTransferForDate
+                    ? t('shifts.storeGuidanceTransfer', {
                       store: expectedStoreName,
                       startDate: activeTransferForDate.startDate,
                       endDate: activeTransferForDate.endDate,
                       defaultValue: 'Default store from active transfer: {{store}} ({{startDate}} - {{endDate}}).',
                     })
-                  : t('shifts.storeGuidanceHome', {
+                    : t('shifts.storeGuidanceHome', {
                       store: expectedStoreName,
                       defaultValue: 'Default home store: {{store}}.',
                     })}
-              </div>
-            )}
-            {form.user_id && selectedEmployee && selectedEmployee.storeId == null && !activeTransferForDate && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>
-                {t('shifts.storeGuidanceNoHome', 'This employee has no home store assigned, you can select any store.')}
-              </div>
-            )}
-            {storeSelectionMismatch && expectedStoreName && (
-              <div style={{
-                marginTop: 6,
-                fontSize: 11,
-                color: '#b45309',
-                background: 'rgba(217,119,6,0.08)',
-                border: '1px solid rgba(217,119,6,0.26)',
-                borderRadius: 6,
-                padding: '6px 8px',
-                lineHeight: 1.45,
-              }}>
-                {activeTransferForDate
-                  ? t('shifts.storeGuidanceTransferMismatch', {
+                </div>
+              )}
+              {form.user_id && selectedEmployee && selectedEmployee.storeId == null && !activeTransferForDate && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>
+                  {t('shifts.storeGuidanceNoHome', 'This employee has no home store assigned, you can select any store.')}
+                </div>
+              )}
+              {storeSelectionMismatch && expectedStoreName && (
+                <div style={{
+                  marginTop: 6,
+                  fontSize: 11,
+                  color: '#b45309',
+                  background: 'rgba(217,119,6,0.08)',
+                  border: '1px solid rgba(217,119,6,0.26)',
+                  borderRadius: 6,
+                  padding: '6px 8px',
+                  lineHeight: 1.45,
+                }}>
+                  {activeTransferForDate
+                    ? t('shifts.storeGuidanceTransferMismatch', {
                       store: expectedStoreName,
                       defaultValue: 'For this date the employee is transferred to {{store}}. If you save on another store, the backend will reject the shift.',
                     })
-                  : t('shifts.storeGuidanceHomeMismatch', {
+                    : t('shifts.storeGuidanceHomeMismatch', {
                       store: expectedStoreName,
                       defaultValue: 'This employee belongs to {{store}}. If you save on another store, an active transfer is required.',
                     })}
-              </div>
-            )}
-          </div>
-
-          {/* ─── Date ───────────────────────── */}
-          <div style={{ ...fieldRow, marginBottom: 20 }}>
-            <DatePicker
-              label={t('shifts.form.date')}
-              value={form.date}
-              onChange={(v) => {
-                setStoreTouchedManually(false);
-                setForm((p) => ({ ...p, date: v }));
-              }}
-            />
-          </div>
-
-          <div style={{ ...fieldRow, marginBottom: 20 }}>
-            <label style={fLabel}>{t('shifts.form.dayType', 'Day type')}</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setForm((prev) => {
-                    const revertingFromOffDay = prev.is_off_day;
-                    const resetPlaceholderTimes = revertingFromOffDay && prev.start_time === '00:00' && prev.end_time === '00:01';
-                    return {
-                      ...prev,
-                      is_off_day: false,
-                      start_time: resetPlaceholderTimes ? '' : prev.start_time,
-                      end_time: resetPlaceholderTimes ? '' : prev.end_time,
-                      status: prev.status === 'cancelled' ? 'scheduled' : prev.status,
-                    };
-                  });
-                }}
-                style={{
-                  padding: '9px 10px',
-                  borderRadius: 10,
-                  border: `1.5px solid ${!form.is_off_day ? 'var(--accent)' : 'var(--border)'}`,
-                  background: !form.is_off_day ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
-                  color: !form.is_off_day ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-              >
-                {t('shifts.form.workingDay', 'Working day')}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setForm((prev) => ({
-                    ...prev,
-                    is_off_day: true,
-                    status: 'cancelled',
-                    break_type: 'none',
-                    break_start: '',
-                    break_end: '',
-                    break_minutes: '',
-                    is_split: false,
-                    split_start2: '',
-                    split_end2: '',
-                  }));
-                  setFormErrors((fe) => {
-                    const next = { ...fe };
-                    delete next.start_time;
-                    delete next.end_time;
-                    delete next.break_start;
-                    delete next.break_end;
-                    delete next.break_minutes;
-                    delete next.split_start2;
-                    delete next.split_end2;
-                    return next;
-                  });
-                }}
-                style={{
-                  padding: '9px 10px',
-                  borderRadius: 10,
-                  border: `1.5px solid ${form.is_off_day ? 'rgba(185,28,28,0.5)' : 'var(--border)'}`,
-                  background: form.is_off_day ? 'rgba(239,68,68,0.1)' : 'var(--surface)',
-                  color: form.is_off_day ? '#b91c1c' : 'var(--text-secondary)',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-              >
-                {t('shifts.form.offDay', 'Off day')}
-              </button>
-            </div>
-            <div style={{ marginTop: 7, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-              {form.is_off_day
-                ? t('shifts.offDayAutoCancelHint', 'This date will be marked as off-day and any existing working shift for this user/date will be cancelled.')
-                : t('shifts.workingDayHint', 'Configure full shift details for this working day.')}
-            </div>
-          </div>
-
-          {form.is_off_day && (
-            <div style={{
-              marginBottom: 20,
-              borderRadius: 10,
-              border: '1px solid rgba(185,28,28,0.25)',
-              background: 'rgba(254,242,242,0.8)',
-              padding: '10px 12px',
-              color: '#991b1b',
-              fontSize: 12,
-              lineHeight: 1.55,
-            }}>
-              <strong style={{ display: 'block', marginBottom: 4 }}>
-                {t('shifts.form.offDay', 'Off day')}
-              </strong>
-              <span>
-                {t('shifts.offDayExplain', 'A dedicated off-day tag will be shown in the calendar. Switch back to Working day to restore normal shift controls.')}
-              </span>
-            </div>
-          )}
-
-          {!form.is_off_day && (
-            <div style={{ marginTop: 20 }}>
-              {/* ─── Section: Orario ────────────── */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 12 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {t('shifts.sectionOrario')}
-                </span>
-                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-                <TimePicker
-                  label={t('shifts.form.startTime')}
-                  value={form.start_time}
-                  onChange={(v) => {
-                    setForm((p) => ({ ...p, start_time: v }));
-                    setFormErrors((fe) => { const n = { ...fe }; delete n.start_time; return n; });
-                  }}
-                  error={formErrors.start_time}
-                  required
-                />
-                <TimePicker
-                  label={t('shifts.form.endTime')}
-                  value={form.end_time}
-                  onChange={(v) => {
-                    setForm((p) => ({ ...p, end_time: v }));
-                    setFormErrors((fe) => { const n = { ...fe }; delete n.end_time; return n; });
-                  }}
-                  error={formErrors.end_time}
-                  required
-                />
-              </div>
-
-              {/* ─── Section: Pausa ─────────────── */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                marginTop: 18, marginBottom: 12,
-              }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-                  color: 'var(--text-muted)', whiteSpace: 'nowrap',
-                }}>
-                  {t('shifts.sectionBreak')}
-                </span>
-                <span style={{
-                  fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
-                  background: 'var(--surface-warm)', border: '1px solid var(--border)',
-                  borderRadius: 4, padding: '1px 5px', fontWeight: 500,
-                }}>
-                  {t('common.optionalAbbr', 'Opz.')}
-                </span>
-                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
-                {(['none', 'fixed', 'flexible'] as const).map((bt) => {
-                  const active = form.break_type === bt;
-                  const breakTypeLabel = bt === 'none'
-                    ? t('shifts.form.breakType_none', 'No break')
-                    : t(`shifts.form.breakType_${bt}`);
-                  return (
-                    <button
-                      key={bt}
-                      type="button"
-                      onClick={() => {
-                        setForm((p) => ({
-                          ...p,
-                          break_type: bt,
-                          break_start: bt === 'fixed' ? p.break_start : '',
-                          break_end: bt === 'fixed' ? p.break_end : '',
-                          break_minutes: bt === 'flexible' ? p.break_minutes : '',
-                        }));
-                        setFormErrors((fe) => {
-                          const n = { ...fe };
-                          delete n.break_start;
-                          delete n.break_end;
-                          delete n.break_minutes;
-                          return n;
-                        });
-                      }}
-                      style={{
-                        borderRadius: 10,
-                        border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                        background: active ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
-                        color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                        padding: '8px 6px',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        lineHeight: 1.25,
-                      }}
-                    >
-                      {breakTypeLabel}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {form.break_type === 'flexible' ? (
-                <div style={{ marginBottom: 4 }}>
-                  <label style={fLabel}>
-                    {t('shifts.form.breakMinutes')}
-                    <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="number"
-                      min={1}
-                      max={480}
-                      placeholder="30"
-                      value={form.break_minutes}
-                      onChange={(e) => {
-                        setForm((p) => ({ ...p, break_minutes: e.target.value }));
-                        setFormErrors((fe) => { const n = { ...fe }; delete n.break_minutes; return n; });
-                      }}
-                      onFocus={focusHandler}
-                      onBlur={blurHandler}
-                      style={{ ...fInput, width: 100 }}
-                    />
-                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.breakMinutesUnit')}</span>
-                  </div>
-                  {formErrors.break_minutes && (
-                    <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.break_minutes}</div>
-                  )}
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                    {t('shifts.form.breakFlexHint')}
-                  </div>
-                </div>
-              ) : form.break_type === 'fixed' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-                  <TimePicker
-                    label={t('shifts.form.breakStart')}
-                    value={form.break_start}
-                    onChange={(v) => {
-                      setForm((p) => ({ ...p, break_start: v }));
-                      setFormErrors((fe) => { const n = { ...fe }; delete n.break_start; return n; });
-                    }}
-                    error={formErrors.break_start}
-                  />
-                  <TimePicker
-                    label={t('shifts.form.breakEnd')}
-                    value={form.break_end}
-                    onChange={(v) => {
-                      setForm((p) => ({ ...p, break_end: v }));
-                      setFormErrors((fe) => { const n = { ...fe }; delete n.break_end; return n; });
-                    }}
-                    error={formErrors.break_end}
-                  />
-                </div>
-              ) : (
-                <div style={{ marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                  {t('shifts.form.breakNoneHint', 'No break will be assigned to this shift.')}
                 </div>
               )}
+            </div>
 
-              {/* ─── Section: Turno spezzato ─────── */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                marginTop: 18, marginBottom: 12,
-              }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-                  color: 'var(--text-muted)', whiteSpace: 'nowrap',
-                }}>
-                  {t('shifts.sectionSplit')}
-                </span>
-                <span style={{
-                  fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
-                  background: 'var(--surface-warm)', border: '1px solid var(--border)',
-                  borderRadius: 4, padding: '1px 5px', fontWeight: 500,
-                }}>
-                  {t('common.optionalAbbr', 'Opz.')}
-                </span>
-                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              </div>
-
-              <div
-                role="switch"
-                aria-checked={form.is_split}
-                tabIndex={0}
-                onClick={() => {
-                  const next = !form.is_split;
-                  setForm((prev) => ({ ...prev, is_split: next }));
-                  if (!next) {
-                    setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
-                  }
+            {/* ─── Date ───────────────────────── */}
+            <div style={{ ...fieldRow, marginBottom: 20 }}>
+              <DatePicker
+                label={t('shifts.form.date')}
+                value={form.date}
+                onChange={(v) => {
+                  setStoreTouchedManually(false);
+                  setForm((p) => ({ ...p, date: v }));
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === ' ' || e.key === 'Enter') {
-                    e.preventDefault();
+                disablePortal={true}
+                disabled={isStoreManager}
+              />
+            </div>
+
+            <div style={{ ...fieldRow, marginBottom: 20 }}>
+              <label style={fLabel}>{t('shifts.form.dayType', 'Day type')}</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((prev) => {
+                      const revertingFromOffDay = prev.is_off_day;
+                      const resetPlaceholderTimes = revertingFromOffDay && prev.start_time === '00:00' && prev.end_time === '00:01';
+                      return {
+                        ...prev,
+                        is_off_day: false,
+                        start_time: resetPlaceholderTimes ? '' : prev.start_time,
+                        end_time: resetPlaceholderTimes ? '' : prev.end_time,
+                        status: prev.status === 'cancelled' ? 'scheduled' : prev.status,
+                      };
+                    });
+                  }}
+                  style={{
+                    padding: '9px 10px',
+                    borderRadius: 10,
+                    border: `1.5px solid ${!form.is_off_day ? 'var(--accent)' : 'var(--border)'}`,
+                    background: !form.is_off_day ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
+                    color: !form.is_off_day ? 'var(--accent)' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('shifts.form.workingDay', 'Working day')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((prev) => ({
+                      ...prev,
+                      is_off_day: true,
+                      status: 'cancelled',
+                      break_type: 'none',
+                      break_start: '',
+                      break_end: '',
+                      break_minutes: '',
+                      is_split: false,
+                      split_start2: '',
+                      split_end2: '',
+                    }));
+                    setFormErrors((fe) => {
+                      const next = { ...fe };
+                      delete next.start_time;
+                      delete next.end_time;
+                      delete next.break_start;
+                      delete next.break_end;
+                      delete next.break_minutes;
+                      delete next.split_start2;
+                      delete next.split_end2;
+                      return next;
+                    });
+                  }}
+                  style={{
+                    padding: '9px 10px',
+                    borderRadius: 10,
+                    border: `1.5px solid ${form.is_off_day ? 'rgba(185,28,28,0.5)' : 'var(--border)'}`,
+                    background: form.is_off_day ? 'rgba(239,68,68,0.1)' : 'var(--surface)',
+                    color: form.is_off_day ? '#b91c1c' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('shifts.form.offDay', 'Off day')}
+                </button>
+              </div>
+              <div style={{ marginTop: 7, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                {form.is_off_day
+                  ? t('shifts.offDayAutoCancelHint', 'This date will be marked as off-day and any existing working shift for this user/date will be cancelled.')
+                  : t('shifts.workingDayHint', 'Configure full shift details for this working day.')}
+              </div>
+            </div>
+
+            {form.is_off_day && (
+              <div style={{
+                marginBottom: 20,
+                borderRadius: 10,
+                border: '1px solid rgba(185,28,28,0.25)',
+                background: 'rgba(254,242,242,0.8)',
+                padding: '10px 12px',
+                color: '#991b1b',
+                fontSize: 12,
+                lineHeight: 1.55,
+              }}>
+                <strong style={{ display: 'block', marginBottom: 4 }}>
+                  {t('shifts.form.offDay', 'Off day')}
+                </strong>
+                <span>
+                  {t('shifts.offDayExplain', 'A dedicated off-day tag will be shown in the calendar. Switch back to Working day to restore normal shift controls.')}
+                </span>
+              </div>
+            )}
+
+            {!form.is_off_day && (
+              <div style={{ marginTop: 20 }}>
+                {/* ─── Section: Orario ────────────── */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 12 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {t('shifts.sectionOrario')}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                  <TimePicker
+                    label={t('shifts.form.startTime')}
+                    value={form.start_time}
+                    onChange={(v) => {
+                      setForm((p) => ({ ...p, start_time: v }));
+                      setFormErrors((fe) => { const n = { ...fe }; delete n.start_time; return n; });
+                    }}
+                    error={formErrors.start_time}
+                    required
+                    disabled={isStoreManager}
+                  />
+                  <TimePicker
+                    label={t('shifts.form.endTime')}
+                    value={form.end_time}
+                    onChange={(v) => {
+                      setForm((p) => ({ ...p, end_time: v }));
+                      setFormErrors((fe) => { const n = { ...fe }; delete n.end_time; return n; });
+                    }}
+                    error={formErrors.end_time}
+                    required
+                    disabled={isStoreManager}
+                  />
+                </div>
+
+                {/* ─── Section: Pausa ─────────────── */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  marginTop: 18, marginBottom: 12,
+                }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                    color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                  }}>
+                    {t('shifts.sectionBreak')}
+                  </span>
+                  <span style={{
+                    fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
+                    background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                    borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                  }}>
+                    {t('common.optionalAbbr', 'Opz.')}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+                  {(['none', 'fixed', 'flexible'] as const).map((bt) => {
+                    const active = form.break_type === bt;
+                    const breakTypeLabel = bt === 'none'
+                      ? t('shifts.form.breakType_none', 'No break')
+                      : t(`shifts.form.breakType_${bt}`);
+                    return (
+                      <button
+                        key={bt}
+                        type="button"
+                        onClick={() => {
+                          if (isStoreManager) return;
+                          setForm((p) => ({
+                            ...p,
+                            break_type: bt,
+                            break_start: bt === 'fixed' ? p.break_start : '',
+                            break_end: bt === 'fixed' ? p.break_end : '',
+                            break_minutes: bt === 'flexible' ? p.break_minutes : '',
+                          }));
+                          setFormErrors((fe) => {
+                            const n = { ...fe };
+                            delete n.break_start;
+                            delete n.break_end;
+                            delete n.break_minutes;
+                            return n;
+                          });
+                        }}
+                        style={{
+                          borderRadius: 10,
+                          border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                          background: active ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
+                          color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                          padding: '8px 6px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: isStoreManager ? 'not-allowed' : 'pointer',
+                          lineHeight: 1.25,
+                        }}
+                        disabled={isStoreManager}
+                      >
+                        {breakTypeLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {form.break_type === 'flexible' ? (
+                  <div style={{ marginBottom: 4 }}>
+                    <label style={fLabel}>
+                      {t('shifts.form.breakMinutes')}
+                      <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="number"
+                        min={1}
+                        max={480}
+                        placeholder="30"
+                        value={form.break_minutes}
+                        onChange={(e) => {
+                          setForm((p) => ({ ...p, break_minutes: e.target.value }));
+                          setFormErrors((fe) => { const n = { ...fe }; delete n.break_minutes; return n; });
+                        }}
+                        onFocus={focusHandler}
+                        onBlur={blurHandler}
+                        style={{ ...fInput, width: 100 }}
+                        disabled={isStoreManager}
+                      />
+                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.breakMinutesUnit')}</span>
+                    </div>
+                    {formErrors.break_minutes && (
+                      <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.break_minutes}</div>
+                    )}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                      {t('shifts.form.breakFlexHint')}
+                    </div>
+                  </div>
+                ) : form.break_type === 'fixed' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                    <TimePicker
+                      label={t('shifts.form.breakStart')}
+                      value={form.break_start}
+                      onChange={(v) => {
+                        setForm((p) => ({ ...p, break_start: v }));
+                        setFormErrors((fe) => { const n = { ...fe }; delete n.break_start; return n; });
+                      }}
+                      error={formErrors.break_start}
+                      disabled={isStoreManager}
+                    />
+                    <TimePicker
+                      label={t('shifts.form.breakEnd')}
+                      value={form.break_end}
+                      onChange={(v) => {
+                        setForm((p) => ({ ...p, break_end: v }));
+                        setFormErrors((fe) => { const n = { ...fe }; delete n.break_end; return n; });
+                      }}
+                      error={formErrors.break_end}
+                      disabled={isStoreManager}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                    {t('shifts.form.breakNoneHint', 'No break will be assigned to this shift.')}
+                  </div>
+                )}
+
+                {/* ─── Section: Turno spezzato ─────── */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  marginTop: 18, marginBottom: 12,
+                }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                    color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                  }}>
+                    {t('shifts.sectionSplit')}
+                  </span>
+                  <span style={{
+                    fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
+                    background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                    borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                  }}>
+                    {t('common.optionalAbbr', 'Opz.')}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+
+                <div
+                  role="switch"
+                  aria-checked={form.is_split}
+                  tabIndex={0}
+                  onClick={() => {
+                    if (isStoreManager) return;
                     const next = !form.is_split;
                     setForm((prev) => ({ ...prev, is_split: next }));
                     if (!next) {
                       setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
                     }
-                  }
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: form.is_split ? 12 : 20, outline: 'none', userSelect: 'none' }}
-              >
-                <div
-                  style={{
-                    position: 'relative', width: 38, height: 22,
-                    background: form.is_split ? 'var(--accent)' : 'var(--border)',
-                    borderRadius: 11, transition: 'background 0.2s', flexShrink: 0,
                   }}
+                  onKeyDown={(e) => {
+                    if (isStoreManager) return;
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      const next = !form.is_split;
+                      setForm((prev) => ({ ...prev, is_split: next }));
+                      if (!next) {
+                        setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
+                      }
+                    }
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: isStoreManager ? 'not-allowed' : 'pointer', marginBottom: form.is_split ? 12 : 20, outline: 'none', userSelect: 'none', opacity: isStoreManager ? 0.7 : 1 }}
                 >
-                  <div style={{
-                    position: 'absolute', top: 3, left: form.is_split ? 19 : 3,
-                    width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }} />
-                </div>
-                <div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: form.is_split ? 'var(--primary)' : 'var(--text-secondary)' }}>
-                    {form.is_split ? t('shifts.form.splitEnabled') : t('shifts.form.splitDisabled')}
-                  </span>
-                  {!form.is_split && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                      {t('shifts.form.splitHint')}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {form.is_split && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-                  <TimePicker
-                    label={t('shifts.form.splitStart2')}
-                    value={form.split_start2}
-                    onChange={(v) => {
-                      setForm((p) => ({ ...p, split_start2: v }));
-                      setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
+                  <div
+                    style={{
+                      position: 'relative', width: 38, height: 22,
+                      background: form.is_split ? 'var(--accent)' : 'var(--border)',
+                      borderRadius: 11, transition: 'background 0.2s', flexShrink: 0,
                     }}
-                    error={formErrors.split_start2}
-                  />
-                  <TimePicker
-                    label={t('shifts.form.splitEnd2')}
-                    value={form.split_end2}
-                    onChange={(v) => {
-                      setForm((p) => ({ ...p, split_end2: v }));
-                      setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
-                    }}
-                    error={formErrors.split_end2}
-                  />
+                  >
+                    <div style={{
+                      position: 'absolute', top: 3, left: form.is_split ? 19 : 3,
+                      width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: form.is_split ? 'var(--primary)' : 'var(--text-secondary)' }}>
+                      {form.is_split ? t('shifts.form.splitEnabled') : t('shifts.form.splitDisabled')}
+                    </span>
+                    {!form.is_split && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                        {t('shifts.form.splitHint')}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
 
-              {/* ─── Section: Stato ─────────────── */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                marginTop: 18, marginBottom: 12,
-              }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-                  color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                {form.is_split && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                    <TimePicker
+                      label={t('shifts.form.splitStart2')}
+                      value={form.split_start2}
+                      onChange={(v) => {
+                        setForm((p) => ({ ...p, split_start2: v }));
+                        setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
+                      }}
+                      error={formErrors.split_start2}
+                      disabled={isStoreManager}
+                    />
+                    <TimePicker
+                      label={t('shifts.form.splitEnd2')}
+                      value={form.split_end2}
+                      onChange={(v) => {
+                        setForm((p) => ({ ...p, split_end2: v }));
+                        setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
+                      }}
+                      error={formErrors.split_end2}
+                      disabled={isStoreManager}
+                    />
+                  </div>
+                )}
+
+                {/* ─── Section: Stato ─────────────── */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  marginTop: 18, marginBottom: 12,
                 }}>
-                  {t('shifts.form.status')}
-                </span>
-                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              </div>
-              {user?.role === 'store_manager' && shift?.status === 'confirmed' ? (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.45 }}>
-                  <strong style={{ color: 'var(--primary)' }}>{t('shifts.status.confirmed')}</strong>
-                  <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                    {t('shifts.storeManagerConfirmedHint')}
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                    color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                  }}>
+                    {t('shifts.form.status')}
                   </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
-              ) : user?.role === 'store_manager' ? (
-                <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-                  {(['scheduled', 'cancelled'] as const).map((s) => {
-                    const active = form.status === s;
-                    const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
-                    const bg = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setForm((p) => ({ ...p, status: s }))}
-                        style={{
-                          flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                          fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                          border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                          background: active ? bg : 'transparent',
-                          color: active ? color : 'var(--text-muted)',
-                          fontFamily: 'var(--font-body)',
-                        }}
-                      >
-                        {t(`shifts.status.${s}`)}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-                  {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
-                    const active = form.status === s;
-                    const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
-                    const bg = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setForm((p) => ({ ...p, status: s }))}
-                        style={{
-                          flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                          fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                          border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                          background: active ? bg : 'transparent',
-                          color: active ? color : 'var(--text-muted)',
-                          fontFamily: 'var(--font-body)',
-                        }}
-                      >
-                        {t(`shifts.status.${s}`)}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+                {user?.role === 'store_manager' && shift?.status === 'confirmed' ? (
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.45 }}>
+                    <strong style={{ color: 'var(--primary)' }}>{t('shifts.status.confirmed')}</strong>
+                    <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                      {t('shifts.storeManagerConfirmedHint')}
+                    </span>
+                  </div>
+                ) : user?.role === 'store_manager' ? (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+                    {(['scheduled', 'cancelled'] as const).map((s) => {
+                      const active = form.status === s;
+                      const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
+                      const bg = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            if (isStoreManager) return;
+                            setForm((p) => ({ ...p, status: s }));
+                          }}
+                          disabled={isStoreManager}
+                          style={{
+                            flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
+                            fontWeight: 600, cursor: isStoreManager ? 'not-allowed' : 'pointer', transition: 'all 0.12s',
+                            border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                            background: active ? bg : 'transparent',
+                            color: active ? color : 'var(--text-muted)',
+                            fontFamily: 'var(--font-body)',
+                            opacity: isStoreManager ? 0.7 : 1,
+                          }}
+                        >
+                          {t(`shifts.status.${s}`)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+                    {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
+                      const active = form.status === s;
+                      const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
+                      const bg = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setForm((p) => ({ ...p, status: s }))}
+                          style={{
+                            flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
+                            fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                            border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                            background: active ? bg : 'transparent',
+                            color: active ? color : 'var(--text-muted)',
+                            fontFamily: 'var(--font-body)',
+                          }}
+                        >
+                          {t(`shifts.status.${s}`)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* ─── Notes ──────────────────────── */}
-          <div style={fieldRow}>
-            <label style={fLabel}>
-              {t('shifts.form.notes')}
-              <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
-            </label>
-            <textarea value={form.notes} onChange={set('notes')} rows={3}
-              style={{ ...fInput, resize: 'vertical', lineHeight: 1.5 }} />
-          </div>
-        </div>{/* end scrollable fields */}
+            {/* ─── Notes ──────────────────────── */}
+            <div style={fieldRow}>
+              <label style={fLabel}>
+                {t('shifts.form.notes')}
+                <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
+              </label>
+              <textarea value={form.notes} onChange={set('notes')} rows={3}
+                style={{ ...fInput, resize: 'vertical', lineHeight: 1.5 }}
+                disabled={isStoreManager} />
+            </div>
+          </div>{/* end scrollable fields */}
 
           {/* Footer — inside the form so type="submit" works correctly */}
           <div style={{
@@ -1462,7 +1487,7 @@ export default function ShiftDrawer({
             display: 'flex', gap: 8, justifyContent: 'flex-end',
             flexShrink: 0,
           }}>
-            {shift && (
+            {!isStoreManager && shift && (
               <button
                 type="button"
                 className="btn btn-danger"

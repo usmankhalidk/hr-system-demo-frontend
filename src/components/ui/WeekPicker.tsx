@@ -11,6 +11,8 @@ interface WeekPickerProps {
   error?: string;
   disabled?: boolean;
   placeholder?: string;
+  align?: 'left' | 'right';
+  disablePortal?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ function formatWeekLabel(isoWeek: string, locale: string): string {
 
 export function WeekPicker({
   label, value, onChange, error, disabled, placeholder,
+  align = 'left', disablePortal = false,
 }: WeekPickerProps) {
   const { i18n } = useTranslation();
   const lang   = i18n.language?.startsWith('it') ? 'it' : 'en';
@@ -112,16 +115,28 @@ export function WeekPicker({
   // Popup position
   useEffect(() => {
     if (!open || !containerRef.current) return;
+    if (disablePortal) {
+      setPopupPos({ top: 0, left: 0 }); // Managed by CSS relative/absolute
+      return;
+    }
     const rect = containerRef.current.getBoundingClientRect();
     const W = 318, H = 360;
+    
     let left = rect.left;
+    if (align === 'right') {
+      left = rect.right - W;
+    }
+    
+    // Safety check for screen edges
     if (left + W > window.innerWidth - 8) left = window.innerWidth - W - 8;
+    if (left < 8) left = 8;
+
     let top = rect.bottom + 6;
     if (top + H > window.innerHeight) top = rect.top - H - 6;
     setPopupPos({ top, left });
-  }, [open]);
+  }, [open, align, disablePortal]);
 
-  // Outside click / Escape / Scroll
+  // Outside click / Escape
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -131,18 +146,11 @@ export function WeekPicker({
       ) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    let scrollHandler: (() => void) | null = null;
-    const timer = setTimeout(() => {
-      scrollHandler = () => setOpen(false);
-      window.addEventListener('scroll', scrollHandler, true);
-    }, 200);
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
-      clearTimeout(timer);
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
-      if (scrollHandler) window.removeEventListener('scroll', scrollHandler, true);
     };
   }, [open]);
 
@@ -164,13 +172,18 @@ export function WeekPicker({
 
   // ── Popup ──────────────────────────────────────────────────────────────────
 
-  const popup = open && popupPos ? ReactDOM.createPortal(
+  const popup = open && popupPos ? (
     <div
       ref={popupRef}
       className="pop-in"
       style={{
-        position: 'fixed', zIndex: 9999,
-        top: popupPos.top, left: popupPos.left,
+        position: disablePortal ? 'absolute' : 'fixed', 
+        zIndex: 9999,
+        top: disablePortal ? 'calc(100% + 6px)' : popupPos.top,
+        left: disablePortal 
+          ? (align === 'right' ? 'auto' : 0) 
+          : popupPos.left,
+        right: (disablePortal && align === 'right') ? 0 : 'auto',
         width: 318,
         background: 'var(--surface)',
         border: '1px solid var(--border)',
@@ -181,7 +194,7 @@ export function WeekPicker({
       }}
       onMouseDown={e => e.stopPropagation()}
     >
-      {/* ─ Header ─ */}
+      {/* ... header and grid code remains same ... */}
       <div style={{
         background: 'var(--primary)', padding: '10px 14px',
         display: 'flex', alignItems: 'center', gap: 8,
@@ -213,7 +226,6 @@ export function WeekPicker({
         )}
       </div>
 
-      {/* ─ Month navigation ─ */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '7px 12px',
@@ -254,11 +266,9 @@ export function WeekPicker({
         </button>
       </div>
 
-      {/* ─ Calendar grid ─ */}
       <div style={{ padding: '8px 10px 6px', background: 'var(--surface-warm)' }}>
-        {/* Day-of-week headers */}
         <div style={{ display: 'grid', gridTemplateColumns: '24px repeat(7, 1fr)', marginBottom: 3 }}>
-          <div /> {/* week# column */}
+          <div />
           {dayLabels.map(d => (
             <div key={d} style={{
               textAlign: 'center', fontSize: 9, fontWeight: 700,
@@ -269,7 +279,6 @@ export function WeekPicker({
           ))}
         </div>
 
-        {/* Week rows */}
         {weeks.map((week, wi) => {
           const isoWeek  = dateToIsoWeek(week[0]);
           const isSelected  = isoWeek === value;
@@ -295,21 +304,15 @@ export function WeekPicker({
                 transition: 'background 0.1s',
               }}
             >
-              {/* Week number badge */}
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 8, fontWeight: 700,
-                color: isSelected
-                  ? 'rgba(255,255,255,0.65)'
-                  : isThisWeek
-                  ? 'var(--accent)'
-                  : 'var(--border)',
+                color: isSelected ? 'rgba(255,255,255,0.65)' : isThisWeek ? 'var(--accent)' : 'var(--border)',
                 fontFamily: 'var(--font-display)',
               }}>
                 {weekNum}
               </div>
 
-              {/* Day cells */}
               {week.map((day, di) => {
                 const inMonth = day.getMonth() === viewMonth;
                 const isToday = day.toDateString() === today.toDateString();
@@ -318,13 +321,7 @@ export function WeekPicker({
                     textAlign: 'center', padding: '5px 1px',
                     fontSize: 12, fontFamily: 'var(--font-body)',
                     fontWeight: isToday ? 700 : 400,
-                    color: isSelected
-                      ? '#fff'
-                      : isToday
-                      ? 'var(--accent)'
-                      : inMonth
-                      ? 'var(--text-primary)'
-                      : 'var(--text-disabled)',
+                    color: isSelected ? '#fff' : isToday ? 'var(--accent)' : inMonth ? 'var(--text-primary)' : 'var(--text-disabled)',
                   }}>
                     {day.getDate()}
                   </div>
@@ -335,7 +332,6 @@ export function WeekPicker({
         })}
       </div>
 
-      {/* ─ Footer ─ */}
       <div style={{
         borderTop: '1px solid var(--border)',
         background: 'var(--surface)',
@@ -356,14 +352,12 @@ export function WeekPicker({
           {lang === 'it' ? 'Settimana corrente' : 'This week'}
         </button>
       </div>
-    </div>,
-    document.body,
+    </div>
   ) : null;
-
-  // ── Trigger ────────────────────────────────────────────────────────────────
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
+      {/* ... label ... */}
       {label && (
         <label style={{
           display: 'block', fontSize: 13, fontWeight: 600,
@@ -378,9 +372,9 @@ export function WeekPicker({
         onClick={() => !disabled && setOpen(o => !o)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          height: 38, padding: '0 10px',
+          height: 42, padding: '0 12px',
           border: `1.5px solid ${error ? 'var(--danger)' : open ? 'var(--accent)' : 'var(--border)'}`,
-          borderRadius: 8,
+          borderRadius: 12,
           background: disabled ? 'var(--surface-warm)' : 'var(--surface)',
           boxShadow: open ? '0 0 0 3px var(--accent-light)' : 'none',
           cursor: disabled ? 'not-allowed' : 'pointer',
@@ -398,7 +392,7 @@ export function WeekPicker({
           <line x1="3" y1="10" x2="21" y2="10"/>
         </svg>
         <span style={{
-          flex: 1, fontSize: 13, fontFamily: 'var(--font-body)',
+          flex: 1, fontSize: 14, fontFamily: 'var(--font-body)',
           color: value ? 'var(--text-primary)' : 'var(--text-disabled)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
@@ -428,7 +422,7 @@ export function WeekPicker({
         </span>
       )}
 
-      {popup}
+      {disablePortal ? popup : (open && popupPos ? ReactDOM.createPortal(popup, document.body) : null)}
     </div>
   );
 }

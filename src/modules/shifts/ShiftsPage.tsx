@@ -17,6 +17,7 @@ import ShiftTemplatesPanel from './ShiftTemplatesPanel';
 import ExternalAffluenceLivePanel from './ExternalAffluenceLivePanel';
 import CalendarActivitiesModal from './CalendarActivitiesModal';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -120,18 +121,18 @@ function IconPlus() {
 function IconUpload() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/>
-      <line x1="12" y1="3" x2="12" y2="15"/>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   );
 }
 function IconMenu() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="1"/>
-      <circle cx="12" cy="5" r="1"/>
-      <circle cx="12" cy="19" r="1"/>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
     </svg>
   );
 }
@@ -156,13 +157,13 @@ export default function ShiftsPage() {
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [copyConfirmOpen, setCopyConfirmOpen] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
-  const [importOpen, setImportOpen]           = useState(false);
-  const [importFile, setImportFile]           = useState<File | null>(null);
-  const [importing, setImporting]             = useState(false);
-  const [importResult, setImportResult]       = useState<ImportResult | null>(null);
-  const [dragover, setDragover]               = useState(false);
-  const [guideOpen, setGuideOpen]             = useState(false);
-  const fileInputRef                          = useRef<HTMLInputElement>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [dragover, setDragover] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [affluenceOpen, setAffluenceOpen] = useState(false);
   const [leaveBlocks, setLeaveBlocks] = useState<LeaveBlock[]>([]);
   const [transferBlocks, setTransferBlocks] = useState<TransferAssignment[]>([]);
@@ -193,7 +194,7 @@ export default function ShiftsPage() {
   // Load stores for admin/hr/area_manager store filter (not for store_manager or employee)
   useEffect(() => {
     if (canEdit && !isStoreManager) {
-      getStores().then(setStores).catch(() => {});
+      getStores().then(setStores).catch(() => { });
     }
   }, [canEdit, isStoreManager]);
 
@@ -225,7 +226,7 @@ export default function ShiftsPage() {
     for (const activity of activities) {
       const start = new Date(activity.startDate + 'T12:00:00');
       const end = new Date(activity.endDate + 'T12:00:00');
-      
+
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = formatDateDisplay(d);
         expandedActivities.push({
@@ -261,11 +262,11 @@ export default function ShiftsPage() {
           const year = currentDate.getFullYear();
           const month = currentDate.getMonth();
           dateFrom = formatDateDisplay(new Date(year, month, 1));
-          dateTo   = formatDateDisplay(new Date(year, month + 1, 0));
+          dateTo = formatDateDisplay(new Date(year, month + 1, 0));
         } else {
           const weekStart = viewMode === 'day' ? getWeekStart(currentDate) : currentDate;
           dateFrom = formatDateDisplay(weekStart);
-          dateTo   = formatDateDisplay(addDays(weekStart, 6));
+          dateTo = formatDateDisplay(addDays(weekStart, 6));
         }
         const [leaveRes, transferRes] = await Promise.allSettled([
           getLeaveBlocks(dateFrom, dateTo),
@@ -328,10 +329,10 @@ export default function ShiftsPage() {
     if (refreshNeeded) fetchShifts();
   }
 
-  async function handleExport(format: 'csv' | 'xlsx') {
+  async function handleExport(format: 'csv' | 'xlsx' | 'pdf') {
     try {
       const blob = await exportShifts({ week: formatIsoWeek(currentDate), store_id: storeFilter ?? undefined, format });
-      const ext = format === 'xlsx' ? 'xlsx' : 'csv';
+      const ext = format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'csv';
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -522,8 +523,8 @@ export default function ShiftsPage() {
   const periodLabel = viewMode === 'day'
     ? currentDate.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })
     : viewMode === 'week'
-    ? formatIsoWeek(currentDate)
-    : currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+      ? formatIsoWeek(currentDate)
+      : currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
 
   const periodPrefix = viewMode === 'week'
     ? `${currentDate.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} – ${addDays(currentDate, 6).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}`
@@ -630,8 +631,12 @@ export default function ShiftsPage() {
                       {t('shifts.export')}
                     </button>
                     <button className="btn btn-secondary" onClick={() => handleExport('xlsx')}>
-                      <IconDownload />
+                      <i className="ri-file-excel-line" style={{ marginRight: 6 }}></i>
                       {t('shifts.exportExcel')}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => handleExport('pdf')}>
+                      <i className="ri-file-pdf-line" style={{ marginRight: 6 }}></i>
+                      {t('shifts.exportPdf', 'Export PDF')}
                     </button>
                     <button className="btn btn-secondary" onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
                       <IconUpload />
@@ -650,13 +655,15 @@ export default function ShiftsPage() {
                     {t('shifts.affluence_btn')}
                   </button>
                 )}
-                <button
-                  className="btn btn-primary"
-                  onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
-                >
-                  <IconPlus />
-                  {t('shifts.newShift', 'Nuovo turno')}
-                </button>
+                {!isStoreManager && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
+                  >
+                    <IconPlus />
+                    {t('shifts.newShift', 'Nuovo turno')}
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -719,10 +726,10 @@ export default function ShiftsPage() {
             {!isMobile && <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0, margin: '0 2px' }} />}
 
             {/* Navigation: prev · period label · next */}
-            <div className="shifts-navigation" style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 2, 
+            <div className="shifts-navigation" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
               flexShrink: 0,
               width: isMobile ? '100%' : 'auto',
               marginTop: isMobile ? 8 : 0,
@@ -808,29 +815,27 @@ export default function ShiftsPage() {
             )}
 
             {!isStoreManager && stores.length > 0 && (
-              <select
-                value={storeFilter ?? ''}
-                onChange={(e) => setStoreFilter(e.target.value ? Number(e.target.value) : null)}
-                className="shifts-store-filter"
-                style={{
-                  padding: '6px 10px',
-                  border: '1.5px solid var(--border)', borderRadius: 7,
-                  fontFamily: 'var(--font-body)', fontSize: 12,
-                  background: 'var(--surface)', color: 'var(--text-primary)',
-                  cursor: 'pointer', outline: 'none',
-                  minWidth: isMobile ? 0 : 150,
-                  maxWidth: isMobile ? 'none' : 220,
-                  flex: isMobile ? 1 : 'none',
-                  width: isMobile ? '100%' : 'auto'
-                }}
-              >
-                <option value="">{t('shifts.allStores', 'Tutti i negozi')}</option>
-                {stores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.companyName ? `${s.name} (${s.companyName})` : s.name}
-                  </option>
-                ))}
-              </select>
+              <div style={{
+                minWidth: isMobile ? '100%' : 180,
+                maxWidth: isMobile ? 'none' : 240,
+                flex: isMobile ? 1 : 'none'
+              }}>
+                <CustomSelect
+                  value={storeFilter ? String(storeFilter) : ''}
+                  onChange={(val) => setStoreFilter(val ? Number(val) : null)}
+                  placeholder={t('shifts.allStores', 'Tutti i negozi')}
+                  options={[
+                    { value: '', label: t('shifts.allStores', 'Tutti i negozi') },
+                    ...stores.map((s) => ({
+                      value: String(s.id),
+                      label: s.companyName ? `${s.name} (${s.companyName})` : s.name
+                    }))
+                  ]}
+                  searchable={true}
+                  isClearable={true}
+                  controlMinHeight={36}
+                />
+              </div>
             )}
 
             {loading && (
@@ -1005,7 +1010,7 @@ export default function ShiftsPage() {
                   }}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
                   </svg>
                   {guideOpen ? t('shifts.importGuideHide') : t('shifts.importGuideToggle')}
                 </button>
@@ -1036,18 +1041,18 @@ export default function ShiftsPage() {
                       </thead>
                       <tbody>
                         {[
-                          { col: 'data',         req: true,  fmt: 'YYYY-MM-DD',  ex: '2026-03-25' },
-                          { col: 'unique_id',     req: true,  fmt: 'Codice dipendente', ex: 'EMP-AB12CD (foglio Dipendenti)' },
-                          { col: 'store_code',    req: true,  fmt: 'Codice negozio', ex: 'ROM-01 (foglio Negozi)' },
-                          { col: 'inizio',        req: true,  fmt: 'HH:MM',       ex: '09:00' },
-                          { col: 'fine',          req: true,  fmt: 'HH:MM',       ex: '18:00' },
-                          { col: 'pausa_inizio',  req: false, fmt: 'HH:MM',       ex: '13:00' },
-                          { col: 'pausa_fine',    req: false, fmt: 'HH:MM',       ex: '14:00' },
-                          { col: 'spezzato',      req: false, fmt: 'SI / NO',     ex: 'NO' },
-                          { col: 'inizio2',       req: false, fmt: 'HH:MM',       ex: '14:30 (se spezzato=SI)' },
-                          { col: 'fine2',         req: false, fmt: 'HH:MM',       ex: '19:00 (se spezzato=SI)' },
-                          { col: 'stato',         req: false, fmt: 'scheduled / confirmed / cancelled', ex: 'scheduled' },
-                          { col: 'note',          req: false, fmt: 'Testo libero', ex: 'Note turno' },
+                          { col: 'data', req: true, fmt: 'YYYY-MM-DD', ex: '2026-03-25' },
+                          { col: 'unique_id', req: true, fmt: 'Codice dipendente', ex: 'EMP-AB12CD (foglio Dipendenti)' },
+                          { col: 'store_code', req: true, fmt: 'Codice negozio', ex: 'ROM-01 (foglio Negozi)' },
+                          { col: 'inizio', req: true, fmt: 'HH:MM', ex: '09:00' },
+                          { col: 'fine', req: true, fmt: 'HH:MM', ex: '18:00' },
+                          { col: 'pausa_inizio', req: false, fmt: 'HH:MM', ex: '13:00' },
+                          { col: 'pausa_fine', req: false, fmt: 'HH:MM', ex: '14:00' },
+                          { col: 'spezzato', req: false, fmt: 'SI / NO', ex: 'NO' },
+                          { col: 'inizio2', req: false, fmt: 'HH:MM', ex: '14:30 (se spezzato=SI)' },
+                          { col: 'fine2', req: false, fmt: 'HH:MM', ex: '19:00 (se spezzato=SI)' },
+                          { col: 'stato', req: false, fmt: 'scheduled / confirmed / cancelled', ex: 'scheduled' },
+                          { col: 'note', req: false, fmt: 'Testo libero', ex: 'Note turno' },
                         ].map((row, i) => (
                           <tr key={row.col} style={{ background: i % 2 === 0 ? 'var(--surface)' : 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
                             <td style={{ padding: '5px 10px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{row.col}</td>
@@ -1175,7 +1180,7 @@ export default function ShiftsPage() {
             </div>
           </div>
         </div>
-      , document.body)}
+        , document.body)}
 
       <ShiftDrawer
         open={drawerOpen}
@@ -1300,51 +1305,53 @@ export default function ShiftsPage() {
               padding: '16px 0',
             }}>
               {/* New Shift */}
-              <button
-                onClick={() => {
-                  setEditingShift(null);
-                  setDrawerOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '14px 20px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'background 0.15s',
-                  borderBottom: '1px solid var(--border)',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: 'linear-gradient(135deg, var(--primary), var(--accent))',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <IconPlus />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
-                    {t('shifts.newShift', 'New shift')}
+              {!isStoreManager && (
+                <button
+                  onClick={() => {
+                    setEditingShift(null);
+                    setDrawerOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '14px 20px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background 0.15s',
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <IconPlus />
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
-                    {t('shifts.newShiftDesc', 'Create a new shift')}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+                      {t('shifts.newShift', 'New shift')}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                      {t('shifts.newShiftDesc', 'Create a new shift')}
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              )}
 
               {/* Templates */}
               <button
@@ -1589,6 +1596,34 @@ export default function ShiftsPage() {
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
                         {t('shifts.exportExcelDesc', 'Download as Excel file')}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Export PDF */}
+                  <button
+                    className="att-card"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 16,
+                      padding: 16, borderRadius: 12, background: 'var(--surface)',
+                      border: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left',
+                      transition: 'all 0.2s', width: '100%',
+                    }}
+                    onClick={() => handleExport('pdf')}
+                  >
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 10,
+                      background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+                    }}>
+                      <i className="ri-file-pdf-line"></i>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>
+                        {t('shifts.exportPdf', 'Export PDF')}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {t('shifts.exportPdfDesc', 'Download as PDF file')}
                       </div>
                     </div>
                   </button>

@@ -431,6 +431,7 @@ export async function getAllInterviews(params?: {
   candidateId?: number;
   interviewerId?: number;
   status?: string;
+  companyId?: number;
 }): Promise<{ interviews: Interview[] }> {
   const queryParams = new URLSearchParams();
   if (params?.dateFrom) queryParams.append('date_from', params.dateFrom);
@@ -439,6 +440,7 @@ export async function getAllInterviews(params?: {
   if (params?.candidateId) queryParams.append('candidate_id', String(params.candidateId));
   if (params?.interviewerId) queryParams.append('interviewer_id', String(params.interviewerId));
   if (params?.status) queryParams.append('status', params.status);
+  if (params?.companyId) queryParams.append('company_id', String(params.companyId));
 
   const queryString = queryParams.toString();
   const url = queryString ? `/ats/interviews?${queryString}` : '/ats/interviews';
@@ -572,13 +574,13 @@ export async function sendInterviewEmail(
 // Alerts + Risks
 // ---------------------------------------------------------------------------
 
-export async function getAlerts(): Promise<HRAlert[]> {
-  const { data } = await apiClient.get('/ats/alerts');
+export async function getAlerts(params?: { companyId?: number }): Promise<HRAlert[]> {
+  const { data } = await apiClient.get('/ats/alerts', { params });
   return (data.data.alerts ?? []) as HRAlert[];
 }
 
-export async function getRisks(): Promise<JobRisk[]> {
-  const { data } = await apiClient.get('/ats/risks');
+export async function getRisks(params?: { companyId?: number }): Promise<JobRisk[]> {
+  const { data } = await apiClient.get('/ats/risks', { params });
   return (data.data.risks ?? []) as JobRisk[];
 }
 
