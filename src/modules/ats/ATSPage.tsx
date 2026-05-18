@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   BadgeCheck,
@@ -2355,7 +2356,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [intDescription, setIntDescription] = useState('');
   const [intDuration, setIntDuration] = useState<number | ''>('');
   const [intInterviewerId, setIntInterviewerId] = useState<string | null>(null);
-  const [intSendIcs, setIntSendIcs] = useState(false);
+  const [intSendIcs, setIntSendIcs] = useState(true);
   const [savingInt, setSavingInt] = useState(false);
   const [interviewerUsers, setInterviewerUsers] = useState<Employee[]>([]);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
@@ -2366,6 +2367,24 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [resumeFileSizeLabel, setResumeFileSizeLabel] = useState<string | null>(null);
   const [hoveredFeedbackId, setHoveredFeedbackId] = useState<number | null>(null);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
+  const [hasScrolledToTab, setHasScrolledToTab] = useState(false);
+
+  // Auto-scroll to section based on URL parameter
+  useEffect(() => {
+    if (!hasScrolledToTab) {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab === 'resume' || tab === 'comments') {
+        setTimeout(() => {
+          const el = document.getElementById(tab === 'resume' ? 'resume-section' : 'comments-section');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setHasScrolledToTab(true);
+          }
+        }, 500); // Small delay to ensure content is rendered
+      }
+    }
+  }, [hasScrolledToTab]);
 
   // Load notification logs for interviews
   const loadInterviewNotifications = useCallback(async (interviewIds: number[]) => {
@@ -2812,7 +2831,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       setShowInterviewForm(false);
       setEditingInterviewId(null);
       setIntDate(''); setIntTime('09:00'); setIntLocation('');
-      setIntType(defaultInterviewType); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(false);
+      setIntType(defaultInterviewType); setIntDescription(''); setIntDuration(''); setIntInterviewerId(null); setIntSendIcs(true);
     } catch (err) {
       showToast(t('ats.interviewError'), 'error');
     } finally {
@@ -2829,7 +2848,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     setIntDescription('');
     setIntDuration('');
     setIntInterviewerId(null);
-    setIntSendIcs(false);
+    setIntSendIcs(true);
     setShowInterviewForm(true);
   };
 
@@ -2843,7 +2862,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     setIntDescription('');
     setIntDuration('');
     setIntInterviewerId(null);
-    setIntSendIcs(false);
+    setIntSendIcs(true);
   };
 
   const renderInterviewStatusChip = (
@@ -3066,7 +3085,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
 
             {/* Resume/CV - Smaller Icon */}
             {displayResumePath && (
-              <div style={{ marginTop: 4, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+              <div id="resume-section" style={{ marginTop: 4, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
                   <span>📄 {t('ats.resume', 'Resume / CV')}</span>
                   {resumeFileSizeLabel && (
@@ -4426,6 +4445,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                     </div>
 
                     {/* Feedback Comments List */}
+                    <div id="comments-section"></div>
                     {interviewFeedback[iv.id] && interviewFeedback[iv.id].length > 0 && (
                       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -4706,7 +4726,7 @@ const stripHtml = (html: string) => {
   return text.trim();
 };
 
-const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
+const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit, companyId }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
@@ -4724,16 +4744,18 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [showComplianceModal, setShowComplianceModal] = useState(false);
 
   const defaultCompanyId = useMemo(() => {
+    if (companyId) return companyId;
     if (targetCompanyId) return targetCompanyId;
     if (user?.companyId) return user.companyId;
     return companies[0]?.id ?? null;
-  }, [targetCompanyId, user?.companyId, companies]);
+  }, [companyId, targetCompanyId, user?.companyId, companies]);
 
   const feedCompanyId = useMemo(() => {
+    if (companyId) return companyId;
     if (targetCompanyId) return targetCompanyId;
     if (user?.companyId) return user.companyId;
     return companies.length === 1 ? companies[0].id : null;
-  }, [targetCompanyId, user?.companyId, companies]);
+  }, [companyId, targetCompanyId, user?.companyId, companies]);
 
   const feedUrl = feedCompanyId
     ? `${getApiBaseUrl()}/ats/feed/${feedCompanyId}/jobs.xml`
@@ -4753,16 +4775,20 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     try {
       const params: { status?: string; companyId?: number } = {};
       if (filterStatus) params.status = filterStatus;
-      if (!user?.isSuperAdmin && defaultCompanyId) {
+      
+      if (companyId) {
+        params.companyId = companyId;
+      } else if (!user?.isSuperAdmin && defaultCompanyId) {
         params.companyId = defaultCompanyId;
       }
+
       setJobs(await getJobs(Object.keys(params).length > 0 ? params : undefined));
     } catch {
       showToast(t('ats.errorLoad'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, user?.isSuperAdmin, defaultCompanyId, showToast, t]);
+  }, [filterStatus, user?.isSuperAdmin, companyId, defaultCompanyId, showToast, t]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -5414,7 +5440,13 @@ const JobsPanel: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
 // ─── Kanban Panel ─────────────────────────────────────────────────────────────
 
-const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: boolean }> = ({ canEdit, canFeedback, canTag }) => {
+const KanbanPanel: React.FC<{ 
+  canEdit: boolean; 
+  canFeedback: boolean; 
+  canTag: boolean; 
+  companyId?: number;
+  preSelectedCandidateId?: number | null;
+}> = ({ canEdit, canFeedback, canTag, companyId, preSelectedCandidateId }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
@@ -5481,10 +5513,10 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   const [creatingEmployee, setCreatingEmployee] = useState(false);
 
   const hasMultiCompanyScope = (allowedCompanyIds?.length ?? 0) > 1;
-  const effectiveCompanyId = hasMultiCompanyScope
+  const effectiveCompanyId = companyId ?? (hasMultiCompanyScope
     ? undefined
-    : (targetCompanyId ?? (user?.isSuperAdmin ? undefined : user?.companyId ?? undefined));
-  const scopedCompanyId = user?.isSuperAdmin ? undefined : effectiveCompanyId;
+    : (targetCompanyId ?? (user?.isSuperAdmin ? undefined : user?.companyId ?? undefined)));
+  const scopedCompanyId = user?.isSuperAdmin ? companyId : effectiveCompanyId;
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -5492,7 +5524,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       const [cands, js, emps] = await Promise.all([
         getCandidates(filterJob ? { jobId: parseInt(filterJob, 10), companyId: effectiveCompanyId } : { companyId: effectiveCompanyId }),
         getJobs(scopedCompanyId ? { companyId: scopedCompanyId } : undefined),
-        effectiveCompanyId ? getEmployees({ targetCompanyId: effectiveCompanyId, status: 'active', includeStoreTerminals: false, limit: 500 }) : Promise.resolve({ employees: [] }),
+        effectiveCompanyId ? getEmployees({ targetCompanyId: effectiveCompanyId, status: 'active', includeStoreTerminals: false, limit: 500 }) : (companyId ? getEmployees({ targetCompanyId: companyId, status: 'active', includeStoreTerminals: false, limit: 500 }) : Promise.resolve({ employees: [] })),
       ]);
       setCandidates(cands); setJobs(js); setEmployees(emps.employees || []);
 
@@ -5500,7 +5532,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
       if (effectiveCompanyId) {
         const [notifResult, emailResult] = await Promise.allSettled([
           getNotificationSettings(effectiveCompanyId),
-          getEmailConfig(),
+          getEmailConfig(effectiveCompanyId),
         ]);
 
         if (notifResult.status === 'fulfilled') {
@@ -5525,6 +5557,16 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
   }, [filterJob, effectiveCompanyId, scopedCompanyId, showToast, t]);
 
   useEffect(() => { fetch(); }, [fetch]);
+
+  // Handle deep linking for candidate selection
+  useEffect(() => {
+    if (preSelectedCandidateId && candidates.length > 0 && !selected) {
+      const match = candidates.find(c => c.id === preSelectedCandidateId);
+      if (match) {
+        setSelected(match);
+      }
+    }
+  }, [preSelectedCandidateId, candidates, selected]);
 
   useEffect(() => {
     if (!socket) return;
@@ -7264,7 +7306,7 @@ const KanbanPanel: React.FC<{ canEdit: boolean; canFeedback: boolean; canTag: bo
 
 // ─── Alerts Panel ─────────────────────────────────────────────────────────────
 
-const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
+const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ canViewRisks, companyId }) => {
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
   const [alerts, setAlerts] = useState<HRAlert[]>([]);
@@ -7274,10 +7316,11 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
 
   useEffect(() => {
     let isMounted = true;
+    setLoading(true);
 
     Promise.allSettled([
-      getAlerts(),
-      canViewRisks ? getRisks() : Promise.resolve([] as JobRisk[]),
+      getAlerts({ companyId }),
+      canViewRisks ? getRisks({ companyId }) : Promise.resolve([] as JobRisk[]),
       getAllInterviewFeedbackComments(),
     ])
       .then(([alertsResult, risksResult, feedbacksResult]) => {
@@ -7308,7 +7351,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean }> = ({ canViewRisks }) => {
     return () => {
       isMounted = false;
     };
-  }, [canViewRisks]);
+  }, [canViewRisks, companyId]);
 
   const ALERT_ICON: Record<string, string> = {
     new_candidates: '👤',
@@ -7619,8 +7662,25 @@ export default function ATSPage() {
   const [tab, setTab] = useState<'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar'>('candidates');
   const [stores, setStores] = useState<Store[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | undefined>(undefined);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkCandidateId = searchParams.get('candidateId') ? Number(searchParams.get('candidateId')) : null;
+
+  const isSuperAdmin = !!user?.isSuperAdmin;
+  const isAdmin = user?.role === 'admin';
+  const canFilterCompany = isSuperAdmin || isAdmin;
+
+  // Fetch all companies for the filter if authorized
+  useEffect(() => {
+    if (canFilterCompany) {
+      getCompanies()
+        .then(data => setAllCompanies(data))
+        .catch(err => console.error('Failed to fetch companies for filter:', err));
+    }
+  }, [canFilterCompany]);
 
   // Fetch data for calendar when calendar tab is active
   useEffect(() => {
@@ -7629,7 +7689,7 @@ export default function ATSPage() {
         getStores().catch(() => []),
         getCompanies().catch(() => []),
         getEmployees({ status: 'active', includeStoreTerminals: false, limit: 500 }).then(res => res.employees).catch(() => []),
-        getJobs().catch(() => []),
+        getJobs({ companyId: selectedCompanyId }).catch(() => []),
       ]).then(([storesData, companiesData, employeesData, jobsData]) => {
         setStores(storesData);
         setCompanies(companiesData);
@@ -7637,7 +7697,7 @@ export default function ATSPage() {
         setJobs(jobsData);
       });
     }
-  }, [tab]);
+  }, [tab, selectedCompanyId]);
 
   const tabs = isStoreManager
     ? [
@@ -7659,6 +7719,13 @@ export default function ATSPage() {
       setTab('candidates');
     }
   }, [isStoreManager, tab]);
+
+  // Handle deep link tab switching
+  useEffect(() => {
+    if (deepLinkCandidateId && tab !== 'candidates') {
+      setTab('candidates');
+    }
+  }, [deepLinkCandidateId, tab]);
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '0 0 20px' : '0 0 28px' }} className="page-enter">
@@ -7717,6 +7784,29 @@ export default function ATSPage() {
         </div>
       </div>
 
+      {/* Company Filter Dropdown (Super Admin / Admin Only) */}
+      {canFilterCompany && (
+        <div style={{ 
+          marginBottom: isMobile ? 18 : 28,
+          display: 'flex',
+          justifyContent: 'flex-start',
+          maxWidth: isMobile ? '100%' : 320
+        }}>
+          <CustomSelect
+            value={selectedCompanyId ? String(selectedCompanyId) : 'all'}
+            onChange={(val) => setSelectedCompanyId(val === 'all' ? undefined : Number(val))}
+            options={[
+              { value: 'all', label: t('common.allCompanies', 'All Companies') },
+              ...allCompanies.map(c => ({
+                value: String(c.id),
+                label: c.name
+              }))
+            ]}
+            placeholder={t('common.filterByCompany', 'Filter by Company')}
+          />
+        </div>
+      )}
+
       {/* Pill tab switcher */}
       <div 
         className="no-scrollbar"
@@ -7755,11 +7845,11 @@ export default function ATSPage() {
         })}
       </div>
 
-      {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} />}
-      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} canTag={canTag} />}
-      {tab === 'interviews' && <InterviewsPanel />}
-      {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} />}
-      {tab === 'alerts' && <AlertsPanel canViewRisks={canViewRisks} />}
+      {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} companyId={selectedCompanyId} />}
+      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} canTag={canTag} companyId={selectedCompanyId} preSelectedCandidateId={deepLinkCandidateId} />}
+      {tab === 'interviews' && <InterviewsPanel companyId={selectedCompanyId} />}
+      {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} companyId={selectedCompanyId} />}
+      {tab === 'alerts' && <AlertsPanel canViewRisks={canViewRisks} companyId={selectedCompanyId} />}
     </div>
   );
 }

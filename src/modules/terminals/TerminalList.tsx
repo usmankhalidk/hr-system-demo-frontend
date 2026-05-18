@@ -13,6 +13,26 @@ import { Pagination } from '../../components/ui/Pagination';
 import { TerminalForm } from './TerminalForm';
 import { Plus, ChevronRight } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+
+const truncateChars = (str: string, max: number) => {
+  if (!str) return '';
+  return str.length > max ? `${str.slice(0, max)}...` : str;
+};
+
+const truncateWords = (str: string, max: number) => {
+  if (!str) return '';
+  const words = str.split(' ').filter(Boolean);
+  if (words.length > max) return `${words.slice(0, max).join(' ')}...`;
+  return str;
+};
+
+const getInitials = (name: string) => {
+  if (!name) return '?';
+  const parts = name.split(' ').filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+};
 
 const ROLE_BADGE_VARIANT: Record<UserRole | string, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
   admin: 'accent',
@@ -28,6 +48,7 @@ export default function TerminalList() {
   const { user } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
 
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +117,19 @@ export default function TerminalList() {
       label: t('common.name'),
       render: (row) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700 }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            background: '#0D2137',
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '13px',
+            fontWeight: 700,
+            flexShrink: 0
+          }}>
             {row.name.charAt(0).toUpperCase()}
           </div>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{row.name}</span>
@@ -106,17 +139,21 @@ export default function TerminalList() {
     {
       key: 'email',
       label: 'Email',
-      render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{row.email}</span>,
+      render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{truncateChars(row.email, 15)}</span>,
     },
     {
       key: 'storeName',
       label: t('employees.colStore'),
-      render: (row) => <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500 }}>{row.storeName}</span>,
+      render: (row) => (
+        <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500 }}>
+          {truncateWords(row.storeName ?? '', 2)}
+        </span>
+      ),
     },
     {
       key: 'companyName',
       label: t('employees.colCompany'),
-      render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{row.companyName}</span>,
+      render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{truncateWords(row.companyName ?? '', 2)}</span>,
     },
     {
       key: 'role',
@@ -156,8 +193,14 @@ export default function TerminalList() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '20px' }}>
-        <div style={{ flex: 1, maxWidth: '400px' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        justifyContent: 'space-between',
+        alignItems: isMobile ? 'stretch' : 'flex-end',
+        gap: '16px'
+      }}>
+        <div style={{ flex: 1, maxWidth: isMobile ? '100%' : '400px' }}>
           <Input
             placeholder={t('terminals.searchPlaceholder')}
             value={search}
@@ -165,7 +208,10 @@ export default function TerminalList() {
           />
         </div>
         {(isAdminOrHr || isSuperAdmin) && (
-          <Button onClick={() => handleOpenForm(null)}>
+          <Button
+            onClick={() => handleOpenForm(null)}
+            style={{ width: isMobile ? '100%' : 'auto', height: '42px' }}
+          >
             <Plus size={18} style={{ marginRight: '8px' }} />
             {t('terminals.newTerminal')}
           </Button>
@@ -180,6 +226,9 @@ export default function TerminalList() {
           data={terminals}
           loading={loading}
           onRowClick={(row) => handleOpenForm(row)}
+          headerBackground="#0D2137"
+          headerTextColor="#FFFFFF"
+          headerBorderBottom="none"
         />
       </div>
 

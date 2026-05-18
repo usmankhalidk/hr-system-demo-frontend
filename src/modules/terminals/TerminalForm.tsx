@@ -230,7 +230,7 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
 
         {!createdCredentials ? (
           <>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', minHeight: 0 }}>
               {error && (
                 <div style={{ marginBottom: '20px' }}>
                   <Alert variant="danger">{error}</Alert>
@@ -255,8 +255,12 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                         cursor: isEditMode ? 'not-allowed' : 'pointer', textAlign: 'left',
                       }}
                     >
-                      <span style={{ fontSize: '14px', color: selectedStore ? 'var(--text-primary)' : 'var(--text-disabled)' }}>
-                        {selectedStore ? `${selectedStore.name} (${selectedStore.companyName})` : t('terminals.selectStore')}
+                      <span style={{ fontSize: '14px', color: (selectedStore || (isEditMode && terminal)) ? 'var(--text-primary)' : 'var(--text-disabled)' }}>
+                        {selectedStore 
+                          ? `${selectedStore.name} (${selectedStore.companyName})` 
+                          : (isEditMode && terminal 
+                              ? `${terminal.storeName} (${terminal.companyName})` 
+                              : t('terminals.selectStore'))}
                       </span>
                       {!isEditMode && <ChevronDown size={16} color="var(--text-muted)" />}
                     </button>
@@ -309,23 +313,43 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '18px' }}>
                   <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.colCompany')}</label>
-                    <Input value={selectedStore?.companyName || (terminal?.companyName) || ''} readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} />
+                    <Input 
+                      value={selectedStore?.companyName || (terminal?.companyName) || ''} 
+                      placeholder={loadingStores ? t('common.loading') : ''}
+                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.colCode')}</label>
-                    <Input value={selectedStore?.code || ''} readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} />
+                    <Input 
+                      value={selectedStore?.code || ''} 
+                      placeholder={loadingStores ? t('common.loading') : ''}
+                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.fieldMaxStaff')}</label>
-                    <Input value={selectedStore?.maxStaff !== undefined && selectedStore?.maxStaff !== null ? String(selectedStore.maxStaff) : ''} readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} />
+                    <Input 
+                      value={selectedStore?.maxStaff !== undefined && selectedStore?.maxStaff !== null ? String(selectedStore.maxStaff) : ''} 
+                      placeholder={loadingStores ? t('common.loading') : ''}
+                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
+                    />
                   </div>
                   <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.colAddress')}</label>
-                    <Input value={selectedStore?.address || ''} readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} />
+                    <Input 
+                      value={selectedStore?.address || ''} 
+                      placeholder={loadingStores ? t('common.loading') : ''}
+                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.fieldCap')}</label>
-                    <Input value={selectedStore?.cap || ''} readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} />
+                    <Input 
+                      value={selectedStore?.cap || ''} 
+                      placeholder={loadingStores ? t('common.loading') : ''}
+                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
+                    />
                   </div>
                 </div>
 

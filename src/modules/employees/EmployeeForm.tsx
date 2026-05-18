@@ -462,7 +462,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
     }
     if (validateStep1()) {
       // Check store capacity if a store is selected
-      if (formData.storeId) {
+      if (!isEditMode && formData.storeId) {
         const store = stores.find(s => String(s.id) === formData.storeId);
         if (store && store.maxStaff != null && (store.employeeCount ?? 0) >= store.maxStaff) {
           showToast(t('employees.storeFullCapacity', 'That store has full capacity'), 'error');

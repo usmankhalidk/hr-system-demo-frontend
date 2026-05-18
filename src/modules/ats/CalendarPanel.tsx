@@ -37,6 +37,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 interface CalendarPanelProps {
   positions: JobPosting[];
   employees: Employee[];
+  companyId?: number;
 }
 
 type CalendarView = 'weekly' | 'monthly';
@@ -44,6 +45,7 @@ type CalendarView = 'weekly' | 'monthly';
 export default function CalendarPanel({
   positions,
   employees,
+  companyId,
 }: CalendarPanelProps) {
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
@@ -85,6 +87,7 @@ export default function CalendarPanel({
       const params: any = {
         dateFrom: dateRange.start,
         dateTo: dateRange.end,
+        companyId,
       };
 
       if (filters.positionId !== null) {

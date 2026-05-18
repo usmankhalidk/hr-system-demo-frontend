@@ -274,7 +274,7 @@ export async function deleteTemplate(id: number): Promise<void> {
   await client.delete(`/shifts/templates/${id}`);
 }
 
-export async function exportShifts(params: { store_id?: number; week?: string; format?: 'csv' | 'xlsx' }): Promise<Blob> {
+export async function exportShifts(params: { store_id?: number; week?: string; format?: 'csv' | 'xlsx' | 'pdf' }): Promise<Blob> {
   const res = await client.get('/shifts/export', {
     params,
     responseType: 'blob',

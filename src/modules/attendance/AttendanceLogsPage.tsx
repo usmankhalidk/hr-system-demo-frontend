@@ -10,6 +10,7 @@ import { formatLocalDate } from '../../utils/date';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
 import { WeekPicker } from '../../components/ui/WeekPicker';
+import CustomSelect from '../../components/ui/CustomSelect';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 // Convert ISO week 'YYYY-WNN' → { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } (Mon–Sun)
@@ -66,6 +67,15 @@ export default function AttendanceLogsPage() {
   const [total, setTotal]         = useState(0);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
+
+  // ── Search Debounce ────────────────────────────────────────────────────────
+  const [searchInput, setSearchInput] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilterSearch(searchInput);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // ── Edit modal state ───────────────────────────────────────────────────────
   const [editingEvent, setEditingEvent]         = useState<AttendanceEvent | null>(null);
@@ -360,7 +370,7 @@ export default function AttendanceLogsPage() {
   ];
 
   const heroPad = isMobile ? '20px 16px 0' : isTablet ? '24px 20px 0' : '28px 32px 0';
-  const contentPad = isMobile ? '12px 16px' : isTablet ? '16px 20px' : '20px 32px';
+  const contentPad = isMobile ? '12px 0 40px' : isTablet ? '16px 0 60px' : '20px 0 80px';
   const filterPad = isMobile ? '10px 16px' : '12px 32px';
 
   return (
@@ -384,7 +394,12 @@ export default function AttendanceLogsPage() {
       `}</style>
 
       {/* ── Hero header ───────────────────────────────────────────────────── */}
-      <div style={{ background: 'var(--primary)', padding: heroPad }}>
+      <div style={{ 
+        background: 'var(--primary)', 
+        padding: heroPad,
+        borderRadius: isMobile ? '16px' : '24px',
+        marginBottom: 20
+      }}>
 
         {/* Title row */}
         <div style={{
@@ -470,7 +485,8 @@ export default function AttendanceLogsPage() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-          gap: isMobile ? 8 : 10,
+          gap: isMobile ? 12 : 16,
+          paddingBottom: 24, // Added gap at the bottom of the buttons
         }}>
           {(['checkin', 'checkout', 'break_start', 'break_end'] as const).map((type) => {
             const meta   = EVENT_META[type];
@@ -483,33 +499,37 @@ export default function AttendanceLogsPage() {
                 onClick={() => setEventType(active ? '' : type)}
                 style={{
                   display: 'flex', alignItems: 'center',
-                  gap: isMobile ? 8 : 12,
-                  padding: isMobile ? '10px 12px' : '14px 16px',
-                  background: active ? 'rgba(201,151,58,0.12)' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${active ? 'rgba(201,151,58,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                  borderBottom: `3px solid ${active ? 'var(--accent)' : meta.dot}`,
-                  borderRadius: '8px 8px 0 0',
-                  cursor: 'pointer', transition: 'all 0.18s',
+                  gap: isMobile ? 10 : 14,
+                  padding: isMobile ? '12px 14px' : '16px 20px',
+                  background: active ? 'rgba(201,151,58,0.15)' : 'rgba(255,255,255,0.07)',
+                  border: `1px solid ${active ? 'rgba(201,151,58,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                  borderBottom: `4px solid ${active ? 'var(--accent)' : meta.dot}`,
+                  borderRadius: 14, // Onboarding style radius
+                  cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   textAlign: 'left', outline: 'none',
+                  boxShadow: active ? '0 8px 24px rgba(0,0,0,0.2)' : 'none',
                 }}
               >
                 <div style={{
-                  width: isMobile ? 30 : 36, height: isMobile ? 30 : 36,
-                  borderRadius: 8,
-                  background: `${meta.dot}22`,
+                  width: isMobile ? 32 : 40, height: isMobile ? 32 : 40,
+                  borderRadius: 10,
+                  background: active ? 'var(--accent)' : meta.dot, // Use solid color for better visibility
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: isMobile ? 14 : 16, flexShrink: 0,
-                  border: `1.5px solid ${meta.dot}44`,
+                  fontSize: isMobile ? 14 : 18, flexShrink: 0,
+                  color: '#fff', // White icon for clear visibility
+                  boxShadow: `0 4px 12px ${meta.dot}44`,
                 }}>
                   {meta.icon}
                 </div>
                 <div>
                   <div style={{
                     fontSize: isMobile ? 17 : 20, fontWeight: 800,
-                    color: loading ? 'rgba(255,255,255,0.25)' : (count > 0 ? meta.dot : 'rgba(255,255,255,0.3)'),
+                    color: count > 0 ? meta.dot : 'rgba(255,255,255,0.3)',
                     fontFamily: 'var(--font-display)', lineHeight: 1,
+                    opacity: loading ? 0.4 : 1, // Use opacity instead of '—' to prevent layout shake
+                    transition: 'opacity 0.2s',
                   }}>
-                    {loading ? '—' : count}
+                    {count}
                   </div>
                   <div style={{
                     fontSize: isMobile ? 9 : 10,
@@ -527,133 +547,103 @@ export default function AttendanceLogsPage() {
 
       {/* ── Filter bar ────────────────────────────────────────────────────── */}
       <div style={{
+        margin: isMobile ? '0 0 16px' : '0 0 20px',
         padding: filterPad,
         background: 'var(--surface)',
-        borderBottom: '1px solid var(--border)',
+        border: '1px solid var(--border)',
+        borderRadius: isMobile ? 16 : 24, // Matching hero section radius
         display: 'flex',
         flexDirection: isMobile ? 'column' : 'row',
         alignItems: isMobile ? 'flex-start' : 'center',
         gap: isMobile ? 10 : 12,
         flexWrap: isMobile ? undefined : 'wrap',
-        position: 'sticky', top: 0, zIndex: 20,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        position: 'relative',
+        zIndex: 20,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
       }}>
 
-        {/* Tab bar + date row: side by side on mobile */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-          width: isMobile ? '100%' : undefined,
-          flexWrap: isMobile ? 'wrap' : undefined,
-        }}>
-          {/* Loading indicator (inline on mobile) */}
-          {loading && isMobile && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: 'var(--accent)', display: 'inline-block',
-                animation: 'spin 0.8s linear infinite',
-              }} />
-              {t('common.loading')}
-            </div>
-          )}
-        </div>
-
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          width: isMobile ? '100%' : undefined,
+          gap: 12,
+          width: '100%',
           flexWrap: isMobile ? 'wrap' : undefined,
         }}>
-          {!isMobile && <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />}
-          <input
-            value={filterSearch}
-            onChange={(e) => setFilterSearch(e.target.value)}
-            placeholder={t('employees.searchPlaceholder', { defaultValue: 'Search by name, surname or ID...' })}
-            style={{
-              minWidth: isMobile ? 180 : 240,
-              width: isMobile ? '100%' : 260,
-              height: 34,
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              padding: '0 10px',
-              background: 'var(--background)',
-              color: 'var(--text)',
-              fontSize: 12,
-              outline: 'none',
-            }}
-          />
-          <select
-            value={filterStoreId}
-            onChange={(e) => {
-              const nextStoreId = e.target.value;
-              setFilterStoreId(nextStoreId);
-              setFilterUserId('');
-              void loadFilterEmployees(nextStoreId ? parseInt(nextStoreId, 10) : undefined);
-            }}
-            style={{
-              minWidth: isMobile ? 140 : 180,
-              height: 34,
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              padding: '0 10px',
-              background: 'var(--background)',
-              color: 'var(--text)',
-              fontSize: 12,
-              outline: 'none',
-            }}
-          >
-            <option value="">{t('common.all')} {t('common.store').toLowerCase()}</option>
-            {filterStores.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.companyName ? `${s.name} (${s.companyName})` : s.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filterUserId}
-            onChange={(e) => setFilterUserId(e.target.value)}
-            style={{
-              minWidth: isMobile ? 160 : 220,
-              height: 34,
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              padding: '0 10px',
-              background: 'var(--background)',
-              color: 'var(--text)',
-              fontSize: 12,
-              outline: 'none',
-            }}
-          >
-            <option value="">{t('common.all')} {t('employees.colName').toLowerCase()}</option>
-            {filterEmployees.map((e) => (
-              <option key={e.id} value={String(e.id)}>
-                {e.name} {e.surname}
-              </option>
-            ))}
-          </select>
+          <div style={{ flex: isMobile ? '1 1 100%' : 1.5 }}>
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder={t('employees.searchPlaceholder', { defaultValue: 'Search by name, surname or ID...' })}
+              style={{
+                width: '100%',
+                height: 42,
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+                padding: '0 16px',
+                background: 'var(--background)',
+                color: 'var(--text)',
+                fontSize: 14,
+                outline: 'none',
+                transition: 'all 0.15s',
+              }}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <CustomSelect
+              value={filterStoreId}
+              onChange={(val) => {
+                const nextStoreId = val ?? '';
+                setFilterStoreId(nextStoreId);
+                setFilterUserId('');
+                void loadFilterEmployees(nextStoreId ? parseInt(nextStoreId, 10) : undefined);
+              }}
+              options={[
+                { value: '', label: `${t('common.all')} ${t('common.store').toLowerCase()}` },
+                ...filterStores.map(s => ({
+                  value: String(s.id),
+                  label: s.companyName ? `${s.name} (${s.companyName})` : s.name
+                }))
+              ]}
+              placeholder={`${t('common.all')} ${t('common.store').toLowerCase()}`}
+              searchable
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <CustomSelect
+              value={filterUserId}
+              onChange={(val) => setFilterUserId(val ?? '')}
+              options={[
+                { value: '', label: `${t('common.all')} ${t('employees.colName').toLowerCase()}` },
+                ...filterEmployees.map(e => ({
+                  value: String(e.id),
+                  label: `${e.name} ${e.surname}`
+                }))
+              ]}
+              placeholder={`${t('common.all')} ${t('employees.colName').toLowerCase()}`}
+              searchable
+            />
+          </div>
         </div>
 
-        {/* Date range — horizontally scrollable row on mobile */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 8,
-          overflowX: isMobile ? 'auto' : undefined,
-          width: isMobile ? '100%' : undefined,
-          flexShrink: 0,
-          paddingBottom: isMobile ? 2 : 0, // breathing room for scrollbar
+          display: 'flex', alignItems: 'center', gap: 12,
+          width: '100%',
+          flexWrap: isMobile ? 'wrap' : undefined,
+          paddingTop: 8,
+          borderTop: '1px solid var(--border-light)',
         }}>
-          {!isMobile && <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />}
           <span style={{
             fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
             textTransform: 'uppercase', letterSpacing: '1.2px', flexShrink: 0,
           }}>
             {t('attendance.dateFrom')}
           </span>
-          <div style={{ width: isMobile ? 140 : 152, flexShrink: 0 }}>
-            <DatePicker value={dateFrom} onChange={setDateFrom} />
+          <div style={{ flex: 1 }}>
+            <DatePicker 
+              value={dateFrom} 
+              onChange={setDateFrom} 
+              disablePortal={true}
+            />
           </div>
           <span style={{
             fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
@@ -661,18 +651,21 @@ export default function AttendanceLogsPage() {
           }}>
             {t('attendance.dateTo')}
           </span>
-          <div style={{ width: isMobile ? 140 : 152, flexShrink: 0 }}>
-            <DatePicker value={dateTo} onChange={setDateTo} />
+          <div style={{ flex: 1 }}>
+            <DatePicker 
+              value={dateTo} 
+              onChange={setDateTo} 
+              align="right"
+              disablePortal={true}
+            />
           </div>
-          {!isMobile && <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />}
-          {/* Week picker inline with dates */}
           <span style={{
             fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
             textTransform: 'uppercase', letterSpacing: '1.2px', flexShrink: 0,
           }}>
             {t('shifts.week')}
           </span>
-          <div style={{ width: isMobile ? 170 : 200, flexShrink: 0 }}>
+          <div style={{ flex: 1.2 }}>
             <WeekPicker
               value={''}
               onChange={(w) => {
@@ -680,6 +673,8 @@ export default function AttendanceLogsPage() {
                 if (range) { setDateFrom(range.from); setDateTo(range.to); }
               }}
               placeholder={t('shifts.weekPickerHint')}
+              align="right"
+              disablePortal={true}
             />
           </div>
         </div>
@@ -719,21 +714,41 @@ export default function AttendanceLogsPage() {
           })}
         </div>
 
-        {/* Loading indicator desktop */}
-        {loading && !isMobile && (
-          <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: 'var(--accent)', display: 'inline-block',
-              animation: 'spin 0.8s linear infinite',
-            }} />
-            {t('common.loading')}
-          </div>
-        )}
+        {/* Loading indicator desktop - Using a fixed-height container to prevent shift */}
+        <div style={{ 
+          position: 'absolute', right: isMobile ? 12 : 24, top: isMobile ? 12 : 18,
+          height: 20, display: 'flex', alignItems: 'center', pointerEvents: 'none'
+        }}>
+          {loading && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, animation: 'rowIn 0.2s ease' }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: 'var(--accent)', display: 'inline-block',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+              {t('common.loading')}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
-      <div style={{ padding: contentPad }}>
+      <div style={{ padding: contentPad, minHeight: '60vh', position: 'relative' }}>
+        {loading && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(255,255,255,0.4)', zIndex: 10,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(1px)', borderRadius: 24,
+            pointerEvents: 'none',
+          }}>
+             <div style={{
+               width: 32, height: 32, border: '3px solid var(--accent)',
+               borderTopColor: 'transparent', borderRadius: '50%',
+               animation: 'spin 0.8s linear infinite'
+             }} />
+          </div>
+        )}
 
           {error && (
             <div style={{
@@ -877,7 +892,7 @@ export default function AttendanceLogsPage() {
             /* ── Desktop / tablet: table ────────────────────────────────── */
             <div style={{
               background: 'var(--surface)',
-              borderRadius: 'var(--radius-lg)',
+              borderRadius: isMobile ? 16 : 24, // Matching top section radius
               border: '1px solid var(--border)',
               overflow: 'hidden',
               boxShadow: 'var(--shadow-sm)',
@@ -894,7 +909,7 @@ export default function AttendanceLogsPage() {
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
                     <thead>
-                      <tr style={{ background: 'var(--surface)' }}>
+                      <tr style={{ background: '#0d2137' }}>
                         {[
                           t('employees.colName'),
                           t('common.store'),
@@ -904,12 +919,12 @@ export default function AttendanceLogsPage() {
                           ...(canEdit ? [t('common.actions')] : []),
                         ].map((h, i) => (
                           <th key={`${h}-${i}`} style={{
-                            padding: isTablet ? '9px 12px' : '10px 16px',
+                            padding: isTablet ? '12px 12px' : '14px 16px',
                             textAlign: 'left',
-                            fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                            fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
                             textTransform: 'uppercase', letterSpacing: '1.5px',
-                            borderBottom: '2px solid var(--border)',
-                            ...(i === 0 ? { paddingLeft: 20 } : {}),
+                            borderBottom: '1px solid rgba(255,255,255,0.1)',
+                            ...(i === 0 ? { paddingLeft: 24 } : {}),
                           }}>{h}</th>
                         ))}
                       </tr>
@@ -936,15 +951,32 @@ export default function AttendanceLogsPage() {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                                 <div style={{
                                   width: 4, alignSelf: 'stretch', borderRadius: '0 2px 2px 0',
-                                  background: meta.dot, flexShrink: 0, marginRight: 16,
+                                  background: meta.dot, flexShrink: 0, marginRight: 12,
                                 }} />
+                                <div style={{
+                                  width: 32, height: 32, borderRadius: '50%',
+                                  background: meta.bg, color: meta.color,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 12, fontWeight: 800, marginRight: 12, flexShrink: 0,
+                                  border: `1px solid ${meta.dot}33`,
+                                }}>
+                                  {ev.userName?.charAt(0)}{ev.userSurname?.charAt(0)}
+                                </div>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
-                                  {ev.userName} {ev.userSurname}
+                                  {(() => {
+                                     const fullName = `${ev.userName} ${ev.userSurname}`;
+                                     const words = fullName.trim().split(/\s+/);
+                                     return words.length > 2 ? words.slice(0, 2).join(' ') + '...' : fullName;
+                                  })()}
                                 </div>
                               </div>
                             </td>
                             <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
-                              {ev.storeName}
+                              {(() => {
+                                 const sName = ev.storeName || '';
+                                 const words = sName.trim().split(/\s+/);
+                                 return words.length > 3 ? words.slice(0, 3).join(' ') + '...' : sName;
+                              })()}
                             </td>
                             <td style={{ padding: '11px 16px' }}>
                               <span style={{
@@ -964,10 +996,10 @@ export default function AttendanceLogsPage() {
                                   {dt.date}
                                 </span>
                                 <span style={{
-                                  fontSize: 13, fontWeight: 700, color: 'var(--text)',
+                                  fontSize: 13, fontWeight: 700, color: '#9b7a32',
                                   fontVariantNumeric: 'tabular-nums',
-                                  background: 'var(--bg)', padding: '2px 8px',
-                                  borderRadius: 6, border: '1px solid var(--border)',
+                                  background: 'rgba(155, 122, 50, 0.08)', padding: '2px 8px',
+                                  borderRadius: 6, border: '1px solid rgba(155, 122, 50, 0.2)',
                                 }}>
                                   {dt.time}
                                 </span>

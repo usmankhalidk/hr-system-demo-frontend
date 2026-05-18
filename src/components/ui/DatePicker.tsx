@@ -75,11 +75,12 @@ interface DatePickerProps {
   placement?: 'top' | 'bottom';
   disableFlip?: boolean;
   disablePortal?: boolean;
+  align?: 'left' | 'right' | 'auto';
 }
 
 type PickerView = 'calendar' | 'month' | 'year';
 
-export function DatePicker({ label, value, onChange, error, placeholder, disabled, initialViewYear, placement, disableFlip, disablePortal }: DatePickerProps) {
+export function DatePicker({ label, value, onChange, error, placeholder, disabled, initialViewYear, placement, disableFlip, disablePortal, align = 'auto' }: DatePickerProps) {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('it') ? 'it' : 'en';
 
@@ -100,6 +101,7 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
   });
   const [hovered, setHovered] = useState<number | null>(null);
   const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
+  const [isMobileView, setIsMobileView] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -118,58 +120,33 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
   const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
 
   useEffect(() => {
-    if (!open || !containerRef.current || disablePortal) return;
+    if (!open || !containerRef.current) return;
 
     const updatePosition = () => {
+      const isMobile = window.innerWidth < 500;
+      setIsMobileView(isMobile);
+
+      if (isMobile) return; // Position handled by CSS for mobile modal
+
+      if (disablePortal) return;
+
       const rect = containerRef.current!.getBoundingClientRect();
-      const popupWidth = 272; // min-width of popup
-      const popupHeight = 300; // approximate height of popup
+      const popupWidth = 272;
+      const popupHeight = 310;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       
-      // Check if popup would go off-screen to the right
       let left = rect.left;
       if (left + popupWidth > viewportWidth - 10) {
-        // Align to right edge of viewport with 10px margin
         left = viewportWidth - popupWidth - 10;
       }
-      
-      // Ensure it doesn't go off-screen to the left
-      if (left < 10) {
-        left = 10;
-      }
+      if (left < 10) left = 10;
 
-      // Adjust top position to ensure popup appears below the input trigger
       let top = rect.bottom + 4;
-      
-      // Check if popup would go off-screen at the bottom
       if (top + popupHeight > viewportHeight - 10) {
-        // Position above the input instead
         top = rect.top - popupHeight - 4;
       }
-      
-      // Ensure popup doesn't go off-screen at the top of the viewport
-      if (top < 10) {
-        top = 10;
-      }
-      
-      // If inside a scrollable modal body, clamp coordinates so that
-      // the popup doesn't escape the top or bottom edges of the modal.
-      const modalBody = containerRef.current!.closest('.modal-body');
-      if (modalBody) {
-        const modalRect = modalBody.getBoundingClientRect();
-        const minTop = modalRect.top + 4;
-        const maxTop = modalRect.bottom - popupHeight - 4;
-        
-        if (maxTop >= minTop) {
-          if (top < minTop) {
-            top = minTop;
-          }
-          if (top > maxTop) {
-            top = maxTop;
-          }
-        }
-      }
+      if (top < 10) top = 10;
       
       setCoords({
         top: top,
@@ -207,6 +184,17 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+
+  // Body Scroll Lock (Mobile Only)
+  useEffect(() => {
+    if (open && isMobileView) {
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalStyle;
+      };
+    }
+  }, [open, isMobileView]);
 
   // Close on Escape
   useEffect(() => {
@@ -534,11 +522,11 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
         className="pop-in"
         style={{
           position: 'absolute',
-          zIndex: 100,
-          top: finalPlacement === 'bottom' ? 'calc(100% + 4px)' : 'auto',
-          bottom: finalPlacement === 'top' ? 'calc(100% + 4px)' : 'auto',
-          left: 0,
-          minWidth: '272px',
+          zIndex: 1000,
+          top: 'calc(100% + 4px)',
+          left: align === 'right' ? 'auto' : 0,
+          right: align === 'right' ? 0 : 'auto',
+          width: '272px',
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
@@ -550,25 +538,40 @@ export function DatePicker({ label, value, onChange, error, placeholder, disable
         {popupContent}
       </div>
     ) : createPortal(
-      <div
-        ref={popupRef}
-        className="pop-in"
-        style={{
-          position: 'fixed',
-          zIndex: 99999,
-          top: coords.top,
-          left: coords.left,
-          minWidth: '272px',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)',
-          overflow: 'hidden',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {popupContent}
-      </div>,
+      <>
+        {/* Backdrop for mobile */}
+        {isMobileView && (
+          <div 
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(13,33,55,0.45)',
+              backdropFilter: 'blur(3px)',
+              zIndex: 99998,
+            }}
+            onClick={() => setOpen(false)}
+          />
+        )}
+        <div
+          ref={popupRef}
+          className="pop-in"
+          style={{
+            position: 'fixed',
+            zIndex: 99999,
+            top: isMobileView ? '50%' : coords.top,
+            left: isMobileView ? '50%' : coords.left,
+            transform: isMobileView ? 'translate(-50%, -50%)' : 'none',
+            width: isMobileView ? 'min(300px, 92vw)' : '272px',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.1)',
+            overflow: 'hidden',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {popupContent}
+        </div>
+      </>,
       document.body
     )
   ) : null;

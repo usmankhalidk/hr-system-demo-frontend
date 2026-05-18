@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Moon, Palmtree, Pencil, PlayCircle, Store as StoreIcon, Thermometer, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Moon, Palmtree, Pencil, PlayCircle, Store as StoreIcon, Thermometer, Trash2, Filter } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import CustomSelect from '../../components/ui/CustomSelect';
 import {
   Shift,
   ShiftTemplate,
@@ -128,6 +130,19 @@ function enumerateDatesForPattern(patternDay: number, startDate: string, endDate
   return out;
 }
 
+function enumerateAllDates(startDate: string, endDate: string): string[] {
+  const start = parseIsoDate(startDate);
+  const end = parseIsoDate(endDate);
+  if (!start || !end || start > end) return [];
+  const out: string[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    out.push(toIsoDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+
 function enumerateMonthsInRange(startDate: string, endDate: string): string[] {
   const start = parseIsoDate(startDate);
   const end = parseIsoDate(endDate);
@@ -224,6 +239,9 @@ interface ShiftTemplatesPanelProps {
 export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPanelProps) {
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
+  const { user } = useAuth();
+
+  const isManagementRole = user && (user.isSuperAdmin || ['admin', 'hr', 'area_manager'].includes(user.role));
 
   const DAY_LABELS_FULL = [
     t('stores.dayMonday', 'Monday'),
@@ -241,6 +259,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [storeFilter, setStoreFilter] = useState<number | null>(null);
 
   // Expanded template (to view shift patterns)
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -249,6 +268,7 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
   const [applyTemplate, setApplyTemplate] = useState<ShiftTemplate | null>(null);
   const [applyStartDate, setApplyStartDate] = useState('');
   const [applyEndDate, setApplyEndDate] = useState('');
+  const [applySelectedDates, setApplySelectedDates] = useState<string[]>([]);
   const [applyEmployeeIds, setApplyEmployeeIds] = useState<number[]>([]);
   const [applyEmployeeSearch, setApplyEmployeeSearch] = useState('');
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -329,6 +349,11 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
 
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name) || a.surname.localeCompare(b.surname));
   }, [employees, applyTransfers, applyTemplate]);
+
+  const filteredTemplates = useMemo(() => {
+    if (!storeFilter) return templates;
+    return templates.filter((t) => t.storeId === storeFilter);
+  }, [templates, storeFilter]);
 
   const filteredApplyEmployees = useMemo(() => {
     const q = applyEmployeeSearch.trim().toLowerCase();
@@ -667,9 +692,39 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     return result;
   }, [applyEmployees, applyRangeShifts, applyLeaveBlocks, applyStartDate, applyEndDate]);
 
+  const activeDOWs = useMemo(() => {
+    if (!applyTemplate) return new Set<number>();
+    const patterns: ShiftPattern[] = ((applyTemplate.templateData as unknown as TemplateData)?.shifts) ?? [];
+    return new Set(patterns.map((p) => p.dayOfWeek));
+  }, [applyTemplate]);
+
+  const allDatesInRange = useMemo(() => {
+    if (!applyStartDate || !applyEndDate || applyStartDate > applyEndDate) return [];
+    return enumerateAllDates(applyStartDate, applyEndDate);
+  }, [applyStartDate, applyEndDate]);
+
+  const dateGridSlots = useMemo(() => {
+    if (allDatesInRange.length === 0) return [];
+    const firstDate = parseIsoDate(allDatesInRange[0]);
+    if (!firstDate) return [];
+    const startOffset = dayOfWeekMonBased(firstDate);
+    const slots: (string | null)[] = [];
+    for (let i = 0; i < startOffset; i++) slots.push(null);
+    for (const d of allDatesInRange) slots.push(d);
+    return slots;
+  }, [allDatesInRange]);
+
   useEffect(() => {
     setApplyEmployeeIds((prev) => prev.filter((id) => applyEmployees.some((emp) => emp.id === id)));
   }, [applyEmployees]);
+
+  useEffect(() => {
+    if (applySelectedDates.length > 0 && (applyStartDate || applyEndDate)) {
+      setApplySelectedDates((prev) => 
+        prev.filter((d) => (applyStartDate ? d >= applyStartDate : true) && (applyEndDate ? d <= applyEndDate : true))
+      );
+    }
+  }, [applyStartDate, applyEndDate]);
 
   async function handleApply(e: React.FormEvent) {
     e.preventDefault();
@@ -703,10 +758,20 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
       }
     }
 
-    const patternDates = patterns.map((pattern) => ({
-      pattern,
-      dates: enumerateDatesForPattern(pattern.dayOfWeek, applyStartDate, applyEndDate),
-    }));
+    const patternDates = patterns.map((pattern) => {
+      let dates: string[];
+      if (applySelectedDates.length > 0) {
+        // Use only manually selected dates that match this pattern's DOW
+        dates = applySelectedDates.filter((d) => {
+          const dobj = parseIsoDate(d);
+          return dobj && dayOfWeekMonBased(dobj) === pattern.dayOfWeek;
+        });
+      } else {
+        // Legacy: use entire range
+        dates = enumerateDatesForPattern(pattern.dayOfWeek, applyStartDate, applyEndDate);
+      }
+      return { pattern, dates };
+    });
 
     const applyEmployeeById = new Map(applyEmployees.map((employee) => [employee.id, employee]));
 
@@ -1344,6 +1409,72 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                 </div>
               )}
 
+              {/* Date selection grid */}
+              {allDatesInRange.length > 0 && (
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{t('shifts.selectSpecificDates', 'Select Specific Dates (Optional)')}</span>
+                    {applySelectedDates.length > 0 && (
+                      <button type="button" onClick={() => setApplySelectedDates([])} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
+                        {t('common.clear', 'Clear')}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4,
+                    background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                    borderRadius: 12, padding: 8,
+                  }}>
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
+                      <div key={i} style={{ textAlign: 'center', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 4 }}>{day}</div>
+                    ))}
+                    {dateGridSlots.map((dateStr, i) => {
+                      if (!dateStr) return <div key={`empty-${i}`} />;
+                      const isSelected = applySelectedDates.includes(dateStr);
+                      const dateObj = parseIsoDate(dateStr)!;
+                      const dow = dayOfWeekMonBased(dateObj);
+                      const isActiveInTemplate = activeDOWs.has(dow);
+                      const dayNum = dateStr.split('-')[2];
+
+                      return (
+                        <button
+                          key={dateStr}
+                          type="button"
+                          onClick={() => {
+                            setApplySelectedDates((prev) =>
+                              prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr]
+                            );
+                          }}
+                          style={{
+                            aspectRatio: '1',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: 8,
+                            border: 'none',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.12s',
+                            background: isSelected ? 'var(--accent)' : 'rgba(148,163,184,0.08)',
+                            color: isSelected ? '#fff' : isActiveInTemplate ? 'var(--text-primary)' : 'var(--text-muted)',
+                            opacity: isActiveInTemplate ? 1 : 0.5,
+                          }}
+                        >
+                          {dayNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} /> {t('common.selected', 'Selected')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(148,163,184,0.3)' }} /> {t('shifts.inTemplate', 'In Template')}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
                   {t('shifts.applyEmployees', 'Employees')}
@@ -1726,20 +1857,62 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
             </button>
           </div>
 
+          {/* Store Filter for management roles */}
+          {isManagementRole && stores.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <label style={labelStyle}>{t('shifts.filterByStore', 'Filter by Store')}</label>
+              <CustomSelect
+                value={storeFilter ? String(storeFilter) : ''}
+                onChange={(val) => setStoreFilter(val ? Number(val) : null)}
+                placeholder={t('shifts.allStores', 'All Stores')}
+                options={[
+                  { 
+                    value: '', 
+                    label: t('shifts.allStores', 'All Stores'),
+                    render: (
+                      <span style={{ color: '#7a5715', fontWeight: 700 }}>
+                        {t('shifts.allStores', 'All Stores')}
+                      </span>
+                    )
+                  },
+                  ...stores.map((s) => ({
+                    value: String(s.id),
+                    label: s.name,
+                    render: (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                        <span style={{ color: '#000', fontWeight: 600 }}>{s.name}</span>
+                        {s.companyName && (
+                          <span style={{ color: '#7a5715', fontSize: 11, fontWeight: 700, marginLeft: 12 }}>
+                            {s.companyName}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  }))
+                ]}
+                searchable={true}
+                isClearable={true}
+                controlMinHeight={38}
+              />
+            </div>
+          )}
+
           {/* Template list */}
           {loading ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('common.loading', 'Loading...')}</p>
-          ) : templates.length === 0 ? (
+          ) : filteredTemplates.length === 0 ? (
             <div style={{
               textAlign: 'center', padding: '32px 0',
               color: 'var(--text-muted)', fontSize: 13,
             }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-              <div>{t('shifts.noTemplates', 'No templates yet. Create your first shift template above!')}</div>
+              <div>{storeFilter 
+                ? t('shifts.noTemplatesForStore', 'No templates for this store.')
+                : t('shifts.noTemplates', 'No templates yet. Create your first shift template above!')}</div>
             </div>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {templates.map((tmpl) => {
+              {filteredTemplates.map((tmpl) => {
                 const patterns: ShiftPattern[] = (tmpl.templateData as unknown as TemplateData)?.shifts ?? [];
                 const storeName = tmpl.storeName ?? stores.find((s) => s.id === tmpl.storeId)?.name ?? `#${tmpl.storeId}`;
                 const isExpanded = expandedId === tmpl.id;
