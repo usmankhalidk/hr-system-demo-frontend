@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Building2, Database, Info, UserRound } from 'lucide-react';
+import { ArrowLeftRight, Building2, Info, UserRound } from 'lucide-react';
 import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 import {
   ExternalAffluenceCalculationSettings,
@@ -9,28 +9,13 @@ import {
   getExternalAffluenceConfiguration,
   updateExternalAffluenceConfiguration,
 } from '../../api/externalAffluence';
-import { getAffluence, StoreAffluence } from '../../api/shifts';
 import { useAuth } from '../../context/AuthContext';
 
 type SlotWeightState = Record<string, string>;
-type ConfigDataMode = 'live' | 'dummy';
 type ParamHelpKey = 'visitorsPerStaff' | 'lowMaxStaff' | 'mediumMaxStaff' | 'coverageTolerance' | 'slotWeights';
-
-const DAY_LABEL_BY_ISO: Record<number, { key: string; fallback: string }> = {
-  1: { key: 'dayMonday', fallback: 'Monday' },
-  2: { key: 'dayTuesday', fallback: 'Tuesday' },
-  3: { key: 'dayWednesday', fallback: 'Wednesday' },
-  4: { key: 'dayThursday', fallback: 'Thursday' },
-  5: { key: 'dayFriday', fallback: 'Friday' },
-  6: { key: 'daySaturday', fallback: 'Saturday' },
-  7: { key: 'daySunday', fallback: 'Sunday' },
-};
 
 interface Props {
   storeId: number;
-  week: string;
-  initialMode?: ConfigDataMode;
-  onOpenDummyManager?: () => void;
   onClose: () => void;
   onSaved?: () => void;
 }
@@ -45,9 +30,6 @@ function buildWeightState(settings: ExternalAffluenceCalculationSettings): SlotW
 
 export default function ExternalAffluenceLiveConfigModal({
   storeId,
-  week,
-  initialMode = 'live',
-  onOpenDummyManager,
   onClose,
   onSaved,
 }: Props) {
@@ -58,11 +40,8 @@ export default function ExternalAffluenceLiveConfigModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [mode, setMode] = useState<ConfigDataMode>(initialMode);
 
   const [config, setConfig] = useState<ExternalAffluenceConfigurationResponse | null>(null);
-  const [dummyRows, setDummyRows] = useState<StoreAffluence[]>([]);
-  const [dummyLoading, setDummyLoading] = useState(false);
   const [visitorsPerStaff, setVisitorsPerStaff] = useState<string>('10');
   const [lowMaxStaff, setLowMaxStaff] = useState<string>('2');
   const [mediumMaxStaff, setMediumMaxStaff] = useState<string>('4');
@@ -88,31 +67,9 @@ export default function ExternalAffluenceLiveConfigModal({
     }
   }, [storeId, t, targetCompanyId]);
 
-  const loadDummyRows = useCallback(async () => {
-    setDummyLoading(true);
-    try {
-      const res = await getAffluence({ store_id: storeId, week });
-      setDummyRows(res.affluence);
-    } catch {
-      setDummyRows([]);
-    } finally {
-      setDummyLoading(false);
-    }
-  }, [storeId, week]);
-
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (mode === 'dummy') {
-      void loadDummyRows();
-    }
-  }, [loadDummyRows, mode]);
-
-  useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
 
   const sortedSlotWeights = useMemo(() => {
     if (!config) return [] as Array<{ timeSlot: string; weight: number }>;
@@ -126,13 +83,6 @@ export default function ExternalAffluenceLiveConfigModal({
     coverageTolerance: t('shifts.affluence_coverage_tolerance_hint', 'Gap status compares recommended vs scheduled staff per slot; if the gap stays within this margin, status stays Balanced.'),
     slotWeights: t('shifts.affluence_slot_weights_hint', 'Default is 0.25 for each slot (equal split).'),
   }), [t]);
-
-  const sortedDummyRows = useMemo(() => {
-    return [...dummyRows].sort((a, b) => {
-      if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
-      return a.timeSlot.localeCompare(b.timeSlot);
-    });
-  }, [dummyRows]);
 
   const storeLogoUrl = getStoreLogoUrl(config?.localStoreLogoFilename ?? null);
   const integratedByAvatarUrl = getAvatarUrl(config?.integration.mappedByAvatarFilename ?? null);
@@ -327,35 +277,6 @@ export default function ExternalAffluenceLiveConfigModal({
               >
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#5f3e2f' }}>{t('shifts.affluence_integration_details', 'Store Integration')}</div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{
-                      padding: '6px 12px',
-                      background: mode === 'live' ? '#2e567a' : '#fff',
-                      color: mode === 'live' ? '#fff' : 'var(--text-secondary)',
-                      borderColor: mode === 'live' ? '#2e567a' : '#d0d7de',
-                    }}
-                    onClick={() => setMode('live')}
-                  >
-                    {t('shifts.affluence_data_mode_live', 'Live external data')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{
-                      padding: '6px 12px',
-                      background: mode === 'dummy' ? '#7a5b2e' : '#fff',
-                      color: mode === 'dummy' ? '#fff' : 'var(--text-secondary)',
-                      borderColor: mode === 'dummy' ? '#7a5b2e' : '#d0d7de',
-                    }}
-                    onClick={() => setMode('dummy')}
-                  >
-                    {t('shifts.affluence_data_mode_dummy', 'Dummy local data')}
-                  </button>
-                </div>
-
                 <div
                   style={{
                     border: '1px solid rgba(95,62,47,0.2)',
@@ -457,206 +378,127 @@ export default function ExternalAffluenceLiveConfigModal({
                   </div>
                 </div>
               </div>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff' }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#2e567a', marginBottom: 10 }}>{t('shifts.affluence_formula_parameters', 'Calculation Parameters')}</div>
 
-              {mode === 'live' ? (
-                <>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff' }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: '#2e567a', marginBottom: 10 }}>{t('shifts.affluence_formula_parameters', 'Calculation Parameters')}</div>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(220px, 320px)' }}>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    {renderHelpLabel(t('shifts.affluence_visitors_per_staff', 'Visitors for 1 staff'), 'visitorsPerStaff')}
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={visitorsPerStaff}
+                      onChange={(event) => setVisitorsPerStaff(event.target.value)}
+                      style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
+                    />
+                  </label>
 
-                    <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(220px, 320px)' }}>
-                      <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        {renderHelpLabel(t('shifts.affluence_visitors_per_staff', 'Visitors for 1 staff'), 'visitorsPerStaff')}
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={visitorsPerStaff}
-                          onChange={(event) => setVisitorsPerStaff(event.target.value)}
-                          style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
-                        />
-                      </label>
-
-                    </div>
-
-                    <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                        {renderHelpLabel(t('shifts.affluence_slot_weights', 'Slot Weights'), 'slotWeights')}
-                      </div>
-                      <div style={{ overflowX: 'auto' }}>
-                        <div style={{ minWidth: 620, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(4, minmax(140px, 1fr))' }}>
-                          {sortedSlotWeights.map((slot) => (
-                            <label key={slot.timeSlot} style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                              {slot.timeSlot}
-                              <input
-                                type="number"
-                                min={0}
-                                max={1}
-                                step={0.01}
-                                value={slotWeights[slot.timeSlot] ?? String(slot.weight)}
-                                onChange={(event) => setSlotWeights((prev) => ({ ...prev, [slot.timeSlot]: event.target.value }))}
-                                style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
-                              />
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 12, border: '1px solid #dbe4ee', borderRadius: 10, padding: 10, background: '#f8fbff', display: 'grid', gap: 10 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#2e567a' }}>
-                        {t('shifts.affluence_level_rules_section', 'Level & Gap Rules')}
-                      </div>
-
-                      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-                        <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                          {renderHelpLabel(t('shifts.affluence_low_max_staff', 'Low visitors up to'), 'lowMaxStaff')}
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={lowMaxStaff}
-                            onChange={(event) => setLowMaxStaff(event.target.value)}
-                            style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
-                          />
-                        </label>
-
-                        <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                          {renderHelpLabel(t('shifts.affluence_medium_max_staff', 'Medium visitors up to'), 'mediumMaxStaff')}
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={mediumMaxStaff}
-                            onChange={(event) => setMediumMaxStaff(event.target.value)}
-                            style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
-                          />
-                        </label>
-
-                        <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                          {renderHelpLabel(t('shifts.affluence_coverage_tolerance', 'Balanced gap margin'), 'coverageTolerance')}
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={coverageTolerance}
-                            onChange={(event) => setCoverageTolerance(event.target.value)}
-                            style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'rgba(46,86,122,0.06)', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 4 }}>
-                    <strong style={{ color: '#2e567a' }}>{t('shifts.affluence_formula_title', 'How calculation works')}</strong>
-                    <div>{t('shifts.affluence_formula_line1', 'Estimated visitors per slot = weekday average visitors * slot weight.')}</div>
-                    <div>{t('shifts.affluence_formula_line2', 'Recommended staff = ceil(estimated visitors / visitors for 1 staff).')}</div>
-                    <div>{t('shifts.affluence_formula_line3', 'Gap = recommended staff - confirmed scheduled staff (average in selected date range).')}</div>
-                    <div>{t('shifts.affluence_formula_line4', 'Level tag per slot uses estimated visitors: Low <= low visitors, Medium <= medium visitors, High > medium visitors.')}</div>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 8 }}>
-                    <strong style={{ color: '#2e567a' }}>{t('shifts.affluence_status_tags_title', 'Status Tags')}</strong>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 88, padding: '4px 8px', borderRadius: 999, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5' }}>
-                        {t('shifts.affluence_status_under', 'under')}
-                      </span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 88, padding: '4px 8px', borderRadius: 999, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }}>
-                        {t('shifts.affluence_status_balanced', 'balanced')}
-                      </span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 88, padding: '4px 8px', borderRadius: 999, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: '#1e40af', background: '#dbeafe', border: '1px solid #93c5fd' }}>
-                        {t('shifts.affluence_status_over', 'over')}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {t('shifts.affluence_status_tags_hint', 'These tags are shown in the live table to quickly indicate if a slot has too few, balanced, or extra staff.')}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
-                  <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', background: 'rgba(122,91,46,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: '#7a5b2e' }}>{t('shifts.affluence_dummy_preview_title', 'Dummy Affluence Table')}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {t('shifts.affluence_dummy_preview_subtitle', 'This is the editable local table used for manual planning fallback.')}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => {
-                        onClose();
-                        onOpenDummyManager?.();
-                      }}
-                    >
-                      {t('shifts.affluence_open_dummy_editor', 'Open Dummy Editor')}
-                    </button>
-                  </div>
-
-                  {dummyLoading ? (
-                    <div style={{ padding: 18, textAlign: 'center', color: 'var(--text-muted)' }}>{t('common.loading')}</div>
-                  ) : sortedDummyRows.length === 0 ? (
-                    <div style={{ padding: 18, textAlign: 'center', color: 'var(--text-muted)' }}>{t('shifts.affluence_no_data', 'No affluence data configured for this store.')}</div>
-                  ) : (
-                    <div style={{ maxHeight: 330, overflowY: 'auto' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '160px 160px 1fr 130px', padding: '8px 12px', fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: 0.3, textTransform: 'uppercase', borderBottom: '1px solid var(--border)', background: 'rgba(148,163,184,0.08)' }}>
-                        <div>{t('shifts.affluence_day_label', 'Day')}</div>
-                        <div>{t('shifts.affluence_time_slot_label', 'Time slot')}</div>
-                        <div>{t('shifts.affluence_level_label', 'Traffic level')}</div>
-                        <div>{t('shifts.affluence_required_staff_label', 'Staff required')}</div>
-                      </div>
-
-                      {sortedDummyRows.map((row, index) => {
-                        const dayMeta = DAY_LABEL_BY_ISO[row.dayOfWeek];
-                        const dayText = dayMeta ? t(`shifts.${dayMeta.key}`, { defaultValue: dayMeta.fallback }) : String(row.dayOfWeek);
-
-                        return (
-                          <div
-                            key={row.id}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: '160px 160px 1fr 130px',
-                              padding: '10px 12px',
-                              fontSize: 12,
-                              color: 'var(--text-secondary)',
-                              borderBottom: '1px solid var(--border)',
-                              background: index % 2 === 0 ? '#fff' : '#f8fbff',
-                            }}
-                          >
-                            <div style={{ fontWeight: 700 }}>{dayText}</div>
-                            <div style={{ fontWeight: 700 }}>{row.timeSlot}</div>
-                            <div>{t(`shifts.level_${row.level}`, row.level)}</div>
-                            <div>{row.requiredStaff}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
-              )}
+
+                <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    {renderHelpLabel(t('shifts.affluence_slot_weights', 'Slot Weights'), 'slotWeights')}
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <div style={{ minWidth: 620, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(4, minmax(140px, 1fr))' }}>
+                      {sortedSlotWeights.map((slot) => (
+                        <label key={slot.timeSlot} style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                          {slot.timeSlot}
+                          <input
+                            type="number"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={slotWeights[slot.timeSlot] ?? String(slot.weight)}
+                            onChange={(event) => setSlotWeights((prev) => ({ ...prev, [slot.timeSlot]: event.target.value }))}
+                            style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12, border: '1px solid #dbe4ee', borderRadius: 10, padding: 10, background: '#f8fbff', display: 'grid', gap: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2e567a' }}>
+                    {t('shifts.affluence_level_rules_section', 'Level & Gap Rules')}
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                    <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                      {renderHelpLabel(t('shifts.affluence_low_max_staff', 'Low visitors up to'), 'lowMaxStaff')}
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={lowMaxStaff}
+                        onChange={(event) => setLowMaxStaff(event.target.value)}
+                        style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
+                      />
+                    </label>
+
+                    <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                      {renderHelpLabel(t('shifts.affluence_medium_max_staff', 'Medium visitors up to'), 'mediumMaxStaff')}
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={mediumMaxStaff}
+                        onChange={(event) => setMediumMaxStaff(event.target.value)}
+                        style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
+                      />
+                    </label>
+
+                    <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                      {renderHelpLabel(t('shifts.affluence_coverage_tolerance', 'Balanced gap margin'), 'coverageTolerance')}
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={coverageTolerance}
+                        onChange={(event) => setCoverageTolerance(event.target.value)}
+                        style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'rgba(46,86,122,0.06)', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 4 }}>
+                <strong style={{ color: '#2e567a' }}>{t('shifts.affluence_formula_title', 'How calculation works')}</strong>
+                <div>{t('shifts.affluence_formula_line1', 'Estimated visitors per slot = weekday average visitors * slot weight.')}</div>
+                <div>{t('shifts.affluence_formula_line2', 'Recommended staff = ceil(estimated visitors / visitors for 1 staff).')}</div>
+                <div>{t('shifts.affluence_formula_line3', 'Gap = recommended staff - confirmed scheduled staff (average in selected date range).')}</div>
+                <div>{t('shifts.affluence_formula_line4', 'Level tag per slot uses estimated visitors: Low <= low visitors, Medium <= medium visitors, High > medium visitors.')}</div>
+              </div>
+
+              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 8 }}>
+                <strong style={{ color: '#2e567a' }}>{t('shifts.affluence_status_tags_title', 'Status Tags')}</strong>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 88, padding: '4px 8px', borderRadius: 999, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5' }}>
+                    {t('shifts.affluence_status_under', 'under')}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 88, padding: '4px 8px', borderRadius: 999, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }}>
+                    {t('shifts.affluence_status_balanced', 'balanced')}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 88, padding: '4px 8px', borderRadius: 999, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: '#1e40af', background: '#dbeafe', border: '1px solid #93c5fd' }}>
+                    {t('shifts.affluence_status_over', 'over')}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('shifts.affluence_status_tags_hint', 'These tags are shown in the live table to quickly indicate if a slot has too few, balanced, or extra staff.')}
+                </div>
+              </div>
             </>
           ) : null}
         </div>
 
         <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button className="btn btn-secondary" onClick={onClose}>{t('common.close')}</button>
-          {mode === 'live' ? (
-            <button className="btn btn-primary" onClick={() => { void handleSave(); }} disabled={loading || saving || !config}>
-              {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-            </button>
-          ) : (
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                onClose();
-                onOpenDummyManager?.();
-              }}
-            >
-              <Database size={14} style={{ marginRight: 6 }} />
-              {t('shifts.affluence_open_dummy_editor', 'Open Dummy Editor')}
-            </button>
-          )}
+          <button className="btn btn-primary" onClick={() => { void handleSave(); }} disabled={loading || saving || !config}>
+            {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+          </button>
         </div>
       </div>
     </div>,
