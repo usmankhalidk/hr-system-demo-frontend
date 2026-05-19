@@ -19,12 +19,32 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
 
         script: |
-          cd /var/www/hr-system-demo-frontend
+            # Stop on any error immediately
+            set -e
 
-          git pull origin main
+            cd /var/www/hr-system-demo-frontend
 
-          npm install
+            # Ensure git pull always works cleanly
+            git fetch origin main
+            git reset --hard origin/main
 
-          npm run build
+            # Use correct Node version (adjust to your version)
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use 20
 
-          sudo systemctl restart nginx
+            # Clean, reproducible install
+            npm ci
+
+            # Ensure env file exists before building
+            if [ ! -f .env ]; then
+              echo "ERROR: .env file missing on VPS" && exit 1
+            fi
+
+            # Build with production env
+            NODE_ENV=production npm run build
+
+            # Reload nginx (graceful — no downtime)
+            sudo systemctl reload nginx
+
+            echo "✅ Deployment successful"
