@@ -542,8 +542,14 @@ export interface AllInterviewFeedbackComment {
   updatedAt: string;
 }
 
-export async function getAllInterviewFeedbackComments(): Promise<AllInterviewFeedbackComment[]> {
-  const { data } = await apiClient.get('/ats/interviews/feedback/all');
+function getAtsCompanyParams(params?: { companyId?: number }): { company_id: number } | undefined {
+  return params?.companyId ? { company_id: params.companyId } : undefined;
+}
+
+export async function getAllInterviewFeedbackComments(params?: { companyId?: number }): Promise<AllInterviewFeedbackComment[]> {
+  const { data } = await apiClient.get('/ats/interviews/feedback/all', {
+    params: getAtsCompanyParams(params),
+  });
   return (data.data.comments ?? []) as AllInterviewFeedbackComment[];
 }
 
@@ -575,12 +581,12 @@ export async function sendInterviewEmail(
 // ---------------------------------------------------------------------------
 
 export async function getAlerts(params?: { companyId?: number }): Promise<HRAlert[]> {
-  const { data } = await apiClient.get('/ats/alerts', { params });
+  const { data } = await apiClient.get('/ats/alerts', { params: getAtsCompanyParams(params) });
   return (data.data.alerts ?? []) as HRAlert[];
 }
 
 export async function getRisks(params?: { companyId?: number }): Promise<JobRisk[]> {
-  const { data } = await apiClient.get('/ats/risks', { params });
+  const { data } = await apiClient.get('/ats/risks', { params: getAtsCompanyParams(params) });
   return (data.data.risks ?? []) as JobRisk[];
 }
 

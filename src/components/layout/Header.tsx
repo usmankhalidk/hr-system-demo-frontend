@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Briefcase, CalendarClock, FileText, GraduationCap, LogOut, Settings, ShieldAlert, UserCircle2 } from 'lucide-react';
+import { AlertTriangle, Briefcase, CalendarClock, ExternalLink, FileText, GraduationCap, LogOut, Settings, ShieldAlert, UserCircle2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
@@ -15,6 +15,7 @@ import {
   markAllNotificationsRead,
   Notification,
 } from '../../api/notifications';
+import { getNotificationNavigationUrl } from '../../utils/notificationNavigation';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -192,6 +193,14 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
       setUnreadCount((c) => Math.max(0, c - 1));
     } catch { /* ignore */ }
+  };
+
+  const handleViewNotification = async (notification: Notification, navigationUrl: string) => {
+    if (!notification.isRead) {
+      await handleMarkRead(notification.id);
+    }
+    setDropOpen(false);
+    navigate(navigationUrl);
   };
 
   const handleMarkAll = async () => {
@@ -397,6 +406,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
                     notifications.map((n) => {
                       const visual = typeVisual(n.type);
                       const Icon = visual.icon;
+                      const navigationUrl = getNotificationNavigationUrl(n);
                       return (
                         <div
                           key={n.id}
@@ -439,33 +449,63 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>
                               {notificationMessage(n, t)}
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                {timeAgo(n.createdAt, t)}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', minWidth: 0 }}>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                  {timeAgo(n.createdAt, t)}
+                                </div>
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  color: PRIORITY_COLOR[n.priority] ?? '#C9973A',
+                                  background: `${PRIORITY_COLOR[n.priority] ?? '#C9973A'}15`,
+                                  borderRadius: 4,
+                                  padding: '1px 5px',
+                                  fontFamily: 'var(--font-display)',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.03em',
+                                }}>
+                                  {t(`notifications.priority_${n.priority}`)}
+                                </span>
+                                <span style={{
+                                  fontSize: 10,
+                                  color: 'var(--text-muted)',
+                                  background: 'var(--background)',
+                                  borderRadius: 4,
+                                  padding: '1px 5px',
+                                  fontFamily: 'var(--font-display)',
+                                }}>
+                                  {typeLabel(n.type, t)}
+                                </span>
                               </div>
-                              <span style={{
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: PRIORITY_COLOR[n.priority] ?? '#C9973A',
-                                background: `${PRIORITY_COLOR[n.priority] ?? '#C9973A'}15`,
-                                borderRadius: 4,
-                                padding: '1px 5px',
-                                fontFamily: 'var(--font-display)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.03em',
-                              }}>
-                                {t(`notifications.priority_${n.priority}`)}
-                              </span>
-                              <span style={{
-                                fontSize: 10,
-                                color: 'var(--text-muted)',
-                                background: 'var(--background)',
-                                borderRadius: 4,
-                                padding: '1px 5px',
-                                fontFamily: 'var(--font-display)',
-                              }}>
-                                {typeLabel(n.type, t)}
-                              </span>
+                              {navigationUrl && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleViewNotification(n, navigationUrl);
+                                  }}
+                                  title={t('notifications.viewSource', 'Go to source')}
+                                  style={{
+                                    border: '1px solid var(--primary)',
+                                    background: 'var(--primary)',
+                                    color: '#fff',
+                                    borderRadius: 7,
+                                    fontSize: 10.5,
+                                    fontWeight: 700,
+                                    padding: '4px 8px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    flexShrink: 0,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  <ExternalLink size={11} />
+                                  {t('notifications.view', 'View')}
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -5776,6 +5776,11 @@ const KanbanPanel: React.FC<{
       return;
     }
 
+    if (!addGdprConsent) {
+      showToast(t('publicCareers.privacyRequiredError', 'You must accept the privacy notice to submit your application.'), 'error');
+      return;
+    }
+
     const normalizedName = [addFirstName.trim(), addLastName.trim()]
       .filter(Boolean)
       .join(' ')
@@ -6924,6 +6929,7 @@ const KanbanPanel: React.FC<{
                       type="checkbox"
                       checked={addGdprConsent}
                       onChange={(e) => setAddGdprConsent(e.target.checked)}
+                      required
                       style={{ marginTop: 2 }}
                     />
                     <span>{t('publicCareers.privacyConsent', 'Privacy consent collected')}</span>
@@ -7321,7 +7327,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
     Promise.allSettled([
       getAlerts({ companyId }),
       canViewRisks ? getRisks({ companyId }) : Promise.resolve([] as JobRisk[]),
-      getAllInterviewFeedbackComments(),
+      getAllInterviewFeedbackComments({ companyId }),
     ])
       .then(([alertsResult, risksResult, feedbacksResult]) => {
         if (!isMounted) return;

@@ -122,7 +122,7 @@ export default function CalendarPanel({
     } finally {
       setLoading(false);
     }
-  }, [dateRange.start, dateRange.end, filters, t, showToast]);
+  }, [dateRange.start, dateRange.end, filters, companyId, t, showToast]);
 
   // Fetch on mount and when dependencies change
   useEffect(() => {
