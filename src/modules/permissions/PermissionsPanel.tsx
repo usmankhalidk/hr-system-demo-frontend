@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Users, Clock, CalendarCheck, CalendarOff, Store, MessageSquare,
-  FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield, ArrowLeftRight, Monitor, Bell, Clipboard, Zap,
+  FileText, Briefcase, BarChart2, Settings, Wallet, AlertTriangle, Shield, ArrowLeftRight, Monitor, Bell, Clipboard, Zap, Layers
 } from 'lucide-react';
 import { getPermissions, updatePermissions } from '../../api/permissions';
 import { getCompanies } from '../../api/companies';
@@ -73,6 +73,7 @@ const PermissionsPanel: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [associatedGroupName, setAssociatedGroupName] = useState<string | null>(null);
 
   useEffect(() => {
     const nextTarget = targetCompanyId ?? allowedCompanyIds[0] ?? null;
@@ -80,20 +81,27 @@ const PermissionsPanel: React.FC = () => {
   }, [targetCompanyId, allowedCompanyIds.join(',')]);
 
   useEffect(() => {
-    if (allowedCompanyIds.length <= 1) {
+    if (allowedCompanyIds.length === 0) {
       setCompanyOptions([]);
       return;
     }
     getCompanies()
       .then((companies) => {
-        const options = companies
-          .filter((c) => allowedCompanyIds.includes(c.id))
-          .map((c) => ({ id: c.id, name: c.name }));
-        setCompanyOptions(options);
+        const allowed = companies.filter((c) => allowedCompanyIds.includes(c.id));
+        
+        const groupName = allowed.find((c) => c.groupName)?.groupName || null;
+        setAssociatedGroupName(groupName);
+
+        if (allowedCompanyIds.length <= 1) {
+          setCompanyOptions([]);
+        } else {
+          setCompanyOptions(allowed.map((c) => ({ id: c.id, name: c.name })));
+        }
       })
       .catch(() => {
-        // Fallback
-        setCompanyOptions(allowedCompanyIds.map((id) => ({ id, name: `#${id}` })));
+        if (allowedCompanyIds.length > 1) {
+          setCompanyOptions(allowedCompanyIds.map((id) => ({ id, name: `#${id}` })));
+        }
       });
   }, [allowedCompanyIds.join(',')]);
 
@@ -172,6 +180,26 @@ const PermissionsPanel: React.FC = () => {
         <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
           {t('permissions.subtitle')}
         </p>
+        {associatedGroupName && (
+          <div style={{ marginTop: 12 }}>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 999,
+              background: 'var(--accent-light)',
+              color: 'var(--accent)',
+              fontSize: 12,
+              fontWeight: 700,
+              border: '1px solid rgba(201,151,58,0.3)',
+              boxShadow: 'var(--shadow-sm)'
+            }}>
+              <Layers size={14} />
+              {t('permissions.associatedGroup', { defaultValue: 'Associated Group:' })} {associatedGroupName}
+            </span>
+          </div>
+        )}
       </div>
 
       {allowedCompanyIds.length > 1 && (

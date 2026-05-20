@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   BadgeCheck,
@@ -27,6 +27,7 @@ import {
   Users,
   Wallet,
   ChevronDown,
+  MessageSquare,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
@@ -2337,16 +2338,19 @@ interface CandidateModalProps {
   onReject: (reason?: string) => Promise<void>;
   onDelete: () => Promise<void>;
   saving: boolean;
+  companies?: Company[];
 }
 
 const CandidateModal: React.FC<CandidateModalProps> = ({
   candidate, jobs, employees, canEdit, canTag, canFeedback, interviewInviteEnabled, smtpConfigured,
   onClose, onAdvance, onReject, onDelete, saving,
+  companies = [],
 }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { user } = useAuth();
   const { isMobile } = useBreakpoint();
+  const navigate = useNavigate();
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [showInterviewForm, setShowInterviewForm] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<number | null>(null);
@@ -2497,15 +2501,30 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         const fullName = `${emp.name} ${emp.surname}`.trim();
         const avatarUrl = getAvatarUrl(emp.avatarFilename);
         const roleLabel = t(`roles.${emp.role}`, emp.role);
+        
+        // Generate beautiful initials and avatar bg for company label
+        const companyInitials = emp.companyName ? initials(emp.companyName) : 'CO';
+        const companyAvatarBg = emp.companyName 
+          ? ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'][Math.abs(emp.companyName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 6]
+          : 'var(--border)';
+
         return {
           value: String(emp.id),
           label: `${fullName} ${roleLabel}`.trim(),
           render: (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1.2fr 1fr auto',
+              gap: 16,
+              width: '100%',
+              padding: '4px 0',
+              alignItems: 'center',
+            }}>
+              {/* Column 1: User Avatar + Name + Sub-detail (email) */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                 <div style={{
-                  width: 26,
-                  height: 26,
+                  width: 28,
+                  height: 28,
                   borderRadius: '50%',
                   overflow: 'hidden',
                   background: avatarUrl ? 'transparent' : 'var(--primary)',
@@ -2543,9 +2562,86 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                   </div>
                 </div>
               </div>
-              <Badge size="sm" variant={ROLE_BADGE_VARIANT[emp.role] ?? 'neutral'}>
-                {roleLabel}
-              </Badge>
+
+              {/* Column 2: Company initials Avatar + Company Name + Store Name (in italics underneath) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                {emp.companyName ? (
+                  <>
+                    {(() => {
+                      const comp = companies?.find((c) => String(c.id) === String(emp.companyId) || c.name === emp.companyName);
+                      // Use companyLogoFilename directly from backend, fallback to the one in companies list
+                      const logoFile = (emp as any).companyLogoFilename || comp?.logoFilename;
+                      const companyLogoUrl = logoFile ? getCompanyLogoUrl(logoFile) : null;
+                      return companyLogoUrl ? (
+                        <div style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 4,
+                          overflow: 'hidden',
+                          border: '1px solid var(--border)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          background: 'var(--surface-warm)',
+                        }}>
+                          <img src={companyLogoUrl} alt={emp.companyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ) : (
+                        <div style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 4,
+                          background: companyAvatarBg,
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 9,
+                          fontWeight: 800,
+                          flexShrink: 0,
+                        }}>
+                          {companyInitials}
+                        </div>
+                      );
+                    })()}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--text-secondary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {emp.companyName}
+                      </div>
+                      {((emp as any).storeName) ? (
+                        <div style={{
+                          fontSize: 10,
+                          color: 'var(--text-muted)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {(emp as any).storeName}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, color: 'var(--text-disabled)', fontStyle: 'italic' }}>
+                    {t('ats.noCompanyAssigned', 'No company assigned')}
+                  </span>
+                )}
+              </div>
+
+              {/* Column 3: User Role Badge */}
+              <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                <Badge size="sm" variant={ROLE_BADGE_VARIANT[emp.role] ?? 'neutral'}>
+                  {roleLabel}
+                </Badge>
+              </div>
             </div>
           ),
         };
@@ -2933,7 +3029,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingRight: 36 }}>
             {/* Avatar */}
             <div style={{
-              width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
+              width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
               background: stageColor, color: '#fff',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18,
@@ -4462,73 +4558,104 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                             <div key={comment.id} style={{
                               background: 'var(--background)',
                               borderRadius: 8,
-                              padding: '8px 10px 28px',
+                              padding: '8px 10px',
                               border: '1px solid var(--border)',
                               position: 'relative',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 2,
                             }}
                               onMouseEnter={() => setHoveredFeedbackId(comment.id)}
                               onMouseLeave={() => setHoveredFeedbackId(null)}
                             >
-                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                                    {comment.body}
-                                  </div>
-                                </div>
-                                <div style={{ display: 'grid', justifyItems: 'end', gap: 4, flexShrink: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                      {authorName}
-                                    </span>
-                                    <div style={{
-                                      width: 22,
-                                      height: 22,
-                                      borderRadius: '50%',
-                                      overflow: 'hidden',
-                                      background: authorAvatar ? 'transparent' : 'var(--primary)',
-                                      color: '#fff',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      fontSize: 9,
-                                      fontWeight: 700,
-                                      flexShrink: 0,
-                                    }}>
-                                      {authorAvatar ? (
-                                        <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      ) : initials(authorName)}
-                                    </div>
-                                  </div>
-                                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-                                    {fmtDateTime(comment.createdAt)}
-                                  </div>
-                                </div>
-                              </div>
-                              {canDelete && (
-                                <button
-                                  onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id, comment.authorId)}
-                                  disabled={deletingFeedbackId === comment.id}
-                                  style={{
-                                    position: 'absolute',
-                                    right: 8,
-                                    bottom: 8,
-                                    background: hoveredFeedbackId === comment.id ? 'rgba(220,38,38,0.08)' : 'transparent',
-                                    border: '1px solid rgba(185,28,28,0.24)',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
+                              {/* Header row */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                  <div style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    background: authorAvatar ? 'transparent' : 'var(--primary)',
+                                    color: '#fff',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
-                                    opacity: hoveredFeedbackId === comment.id ? 1 : 0,
-                                    transition: 'opacity 0.15s ease, background 0.15s ease',
-                                  }}
-                                  title={t('common.delete', 'Delete')}
-                                >
-                                  <Trash2 size={10} color="#991b1b" />
-                                </button>
-                              )}
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    flexShrink: 0,
+                                  }}>
+                                    {authorAvatar ? (
+                                      <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : initials(authorName)}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {authorName}
+                                    </span>
+                                    <span style={{ fontSize: 9, color: 'var(--text-muted)', flexShrink: 0 }}>
+                                      • {fmtDateTime(comment.createdAt)}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Actions */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                  {/* Message / Chat button */}
+                                  <button
+                                    onClick={() => {
+                                      const subjectVal = `Feedback: ${candidate.fullName}`;
+                                      navigate(`/hr-chat?recipientId=${comment.authorId}&recipientName=${encodeURIComponent(authorName)}&subject=${encodeURIComponent(subjectVal)}`);
+                                      onClose();
+                                    }}
+                                    style={{
+                                      background: hoveredFeedbackId === comment.id ? 'rgba(201, 151, 58, 0.08)' : 'transparent',
+                                      border: 'none',
+                                      borderRadius: 6,
+                                      width: 24,
+                                      height: 24,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      opacity: hoveredFeedbackId === comment.id ? 1 : 0,
+                                      transition: 'opacity 0.15s ease, background 0.15s ease',
+                                    }}
+                                    title={t('ats.messageAuthor', 'Message Author')}
+                                  >
+                                    <MessageSquare size={12} color="var(--accent)" />
+                                  </button>
+
+                                  {/* Delete button */}
+                                  {canDelete && (
+                                    <button
+                                      onClick={() => handleDeleteInterviewFeedback(iv.id, comment.id, comment.authorId)}
+                                      disabled={deletingFeedbackId === comment.id}
+                                      style={{
+                                        background: hoveredFeedbackId === comment.id ? 'rgba(220,38,38,0.08)' : 'transparent',
+                                        border: 'none',
+                                        borderRadius: 6,
+                                        width: 24,
+                                        height: 24,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                        opacity: hoveredFeedbackId === comment.id ? 1 : 0,
+                                        transition: 'opacity 0.15s ease, background 0.15s ease',
+                                      }}
+                                      title={t('common.delete', 'Delete')}
+                                    >
+                                      <Trash2 size={12} color="#991b1b" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Body row indented */}
+                              <div style={{ paddingLeft: 30, fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                                {comment.body}
+                              </div>
                             </div>
                           );
                         })}
@@ -5448,7 +5575,8 @@ const KanbanPanel: React.FC<{
   canTag: boolean; 
   companyId?: number;
   preSelectedCandidateId?: number | null;
-}> = ({ canEdit, canFeedback, canTag, companyId, preSelectedCandidateId }) => {
+  companies?: Company[];
+}> = ({ canEdit, canFeedback, canTag, companyId, preSelectedCandidateId, companies = [] }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
@@ -6071,7 +6199,7 @@ const KanbanPanel: React.FC<{
             placeholder={t('ats.allJobs')}
             searchable
             isClearable={false}
-            highlightSelected
+            highlightSelected={false}
           />
         </div>
 
@@ -6995,6 +7123,7 @@ const KanbanPanel: React.FC<{
           onReject={handleReject}
           onDelete={handleDelete}
           saving={saving}
+          companies={companies}
         />
       )}
 
@@ -7792,71 +7921,79 @@ export default function ATSPage() {
         </div>
       </div>
 
-      {/* Company Filter Dropdown (Super Admin / Admin Only) */}
-      {canFilterCompany && (
-        <div style={{ 
-          marginBottom: isMobile ? 18 : 28,
-          display: 'flex',
-          justifyContent: 'flex-start',
-          maxWidth: isMobile ? '100%' : 320
-        }}>
-          <CustomSelect
-            value={selectedCompanyId ? String(selectedCompanyId) : 'all'}
-            onChange={(val) => setSelectedCompanyId(val === 'all' ? undefined : Number(val))}
-            options={[
-              { value: 'all', label: t('common.allCompanies', 'All Companies') },
-              ...allCompanies.map(c => ({
-                value: String(c.id),
-                label: c.name
-              }))
-            ]}
-            placeholder={t('common.filterByCompany', 'Filter by Company')}
-          />
+      {/* Tab Row Container: Pill tab switcher on left, Company Filter on right */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 16,
+        marginBottom: isMobile ? 18 : 28,
+        width: '100%'
+      }}>
+        {/* Pill tab switcher */}
+        <div 
+          className="no-scrollbar"
+          style={{
+            display: 'flex', gap: 4,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 12, padding: 4, width: isMobile ? '100%' : 'fit-content',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {tabs.map((tb) => {
+            const isActive = tab === tb.key;
+            return (
+              <button
+                key={tb.key}
+                onClick={() => setTab(tb.key as typeof tab)}
+                style={{
+                  padding: isMobile ? '8px 12px' : '8px 20px',
+                  background: isActive ? 'var(--primary)' : 'transparent',
+                  border: 'none', borderRadius: 9,
+                  color: isActive ? '#fff' : 'var(--text-secondary)',
+                  fontWeight: isActive ? 600 : 400,
+                  fontSize: isMobile ? 12.5 : 14, cursor: 'pointer',
+                  transition: 'all 0.18s ease',
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  fontFamily: 'var(--font-body)',
+                  boxShadow: isActive ? '0 2px 8px rgba(13,33,55,0.18)' : 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{ fontSize: isMobile ? 13 : 15 }}>{tb.icon}</span>
+                {tb.label}
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      {/* Pill tab switcher */}
-      <div 
-        className="no-scrollbar"
-        style={{
-          display: 'flex', gap: 4, marginBottom: isMobile ? 18 : 28,
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 12, padding: 4, width: '100%', maxWidth: 'fit-content',
-          overflowX: 'auto',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        {tabs.map((tb) => {
-          const isActive = tab === tb.key;
-          return (
-            <button
-              key={tb.key}
-              onClick={() => setTab(tb.key as typeof tab)}
-              style={{
-                padding: isMobile ? '8px 12px' : '8px 20px',
-                background: isActive ? 'var(--primary)' : 'transparent',
-                border: 'none', borderRadius: 9,
-                color: isActive ? '#fff' : 'var(--text-secondary)',
-                fontWeight: isActive ? 600 : 400,
-                fontSize: isMobile ? 12.5 : 14, cursor: 'pointer',
-                transition: 'all 0.18s ease',
-                display: 'flex', alignItems: 'center', gap: 7,
-                fontFamily: 'var(--font-body)',
-                boxShadow: isActive ? '0 2px 8px rgba(13,33,55,0.18)' : 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span style={{ fontSize: isMobile ? 13 : 15 }}>{tb.icon}</span>
-              {tb.label}
-            </button>
-          );
-        })}
+        {/* Company Filter Dropdown (Super Admin / Admin Only) */}
+        {canFilterCompany && (
+          <div style={{ 
+            width: isMobile ? '100%' : 260
+          }}>
+            <CustomSelect
+              value={selectedCompanyId ? String(selectedCompanyId) : 'all'}
+              onChange={(val) => setSelectedCompanyId(val === 'all' ? undefined : Number(val))}
+              options={[
+                { value: 'all', label: t('common.allCompanies', 'All Companies') },
+                ...allCompanies.map(c => ({
+                  value: String(c.id),
+                  label: c.name
+                }))
+              ]}
+              placeholder={t('common.filterByCompany', 'Filter by Company')}
+            />
+          </div>
+        )}
       </div>
 
       {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} companyId={selectedCompanyId} />}
-      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} canTag={canTag} companyId={selectedCompanyId} preSelectedCandidateId={deepLinkCandidateId} />}
+      {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} canTag={canTag} companyId={selectedCompanyId} preSelectedCandidateId={deepLinkCandidateId} companies={companies} />}
       {tab === 'interviews' && <InterviewsPanel companyId={selectedCompanyId} />}
-      {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} companyId={selectedCompanyId} />}
+      {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} companyId={selectedCompanyId} companies={companies} />}
       {tab === 'alerts' && <AlertsPanel canViewRisks={canViewRisks} companyId={selectedCompanyId} />}
     </div>
   );

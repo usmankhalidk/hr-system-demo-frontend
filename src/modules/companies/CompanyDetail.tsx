@@ -17,6 +17,7 @@ import {
   UploadCloud,
   MapPin,
   Image as ImageIcon,
+  Coins,
   Hash,
   CalendarClock,
   HardDrive,
@@ -211,6 +212,8 @@ export default function CompanyDetail() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
+  const [logoSize, setLogoSize] = useState<number | null>(null);
+  const [bannerSize, setBannerSize] = useState<number | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -226,6 +229,67 @@ export default function CompanyDetail() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'billing'>('overview');
+
+  const bannerUrl = getCompanyBannerUrl(company?.bannerFilename);
+  const logoUrl = getCompanyLogoUrl(company?.logoFilename);
+
+  useEffect(() => {
+    if (logoUrl) {
+      fetch(logoUrl, { method: 'HEAD' })
+        .then((res) => {
+          const len = res.headers.get('content-length');
+          if (len) {
+            setLogoSize(parseInt(len, 10));
+          } else {
+            fetch(logoUrl)
+              .then((res2) => res2.blob())
+              .then((blob) => setLogoSize(blob.size))
+              .catch(() => {});
+          }
+        })
+        .catch(() => {
+          fetch(logoUrl)
+            .then((res2) => res2.blob())
+            .then((blob) => setLogoSize(blob.size))
+            .catch(() => {});
+        });
+    } else {
+      setLogoSize(null);
+    }
+  }, [logoUrl]);
+
+  useEffect(() => {
+    if (bannerUrl) {
+      fetch(bannerUrl, { method: 'HEAD' })
+        .then((res) => {
+          const len = res.headers.get('content-length');
+          if (len) {
+            setBannerSize(parseInt(len, 10));
+          } else {
+            fetch(bannerUrl)
+              .then((res2) => res2.blob())
+              .then((blob) => setBannerSize(blob.size))
+              .catch(() => {});
+          }
+        })
+        .catch(() => {
+          fetch(bannerUrl)
+            .then((res2) => res2.blob())
+            .then((blob) => setBannerSize(blob.size))
+            .catch(() => {});
+        });
+    } else {
+      setBannerSize(null);
+    }
+  }, [bannerUrl]);
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
 
   const canEdit = user?.role === 'admin' || (company?.ownerUserId != null && user?.id === company.ownerUserId);
 
@@ -528,8 +592,8 @@ export default function CompanyDetail() {
     );
   }
 
-  const bannerUrl = getCompanyBannerUrl(company.bannerFilename);
-  const logoUrl = getCompanyLogoUrl(company.logoFilename);
+
+
   const ownerAvatarUrl = getAvatarUrl(company.ownerAvatarFilename);
   const ownerLabel = company.ownerName
     ? `${company.ownerName} ${company.ownerSurname ?? ''}`.trim()
@@ -552,13 +616,13 @@ export default function CompanyDetail() {
     { label: t('companies.location', 'Location'), value: companyLocation || null },
     { label: t('companies.currency', 'Currency'), value: company.currency },
   ];
-  const heroTitleOffset = 'clamp(136px, 32vw, 160px)';
+  const heroTitleOffset = 'clamp(130px, 32vw, 130px)';
   const bannerActionLabel = company.bannerFilename
-    ? t('companies.reuploadBanner', 'Re-upload banner')
-    : t('companies.uploadBanner', 'Upload banner');
+    ? t('companies.reuploadBanner', 'Re-upload')
+    : t('companies.uploadBanner', 'Upload');
   const logoActionLabel = company.logoFilename
-    ? t('companies.reuploadLogo', 'Re-upload logo')
-    : t('companies.uploadLogo');
+    ? t('companies.reuploadLogo', 'Re-upload')
+    : t('companies.uploadLogo', 'Upload');
 
   return (
     <div className="page-enter" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -605,7 +669,7 @@ export default function CompanyDetail() {
       >
         <div
           style={{
-            minHeight: 230,
+            minHeight: 240,
             padding: '12px 20px',
             display: 'flex',
             alignItems: 'flex-end',
@@ -619,7 +683,7 @@ export default function CompanyDetail() {
               {company.name}
               {company.country ? (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
-                  <ReactCountryFlag countryCode={company.country} svg style={{ width: '0.95em', height: '0.95em' }} />
+                  <ReactCountryFlag countryCode={company.country} svg style={{ width: '1em', height: '1em', borderRadius: '4px' }} />
                   {companyCountryName}
                 </span>
               ) : null}
@@ -706,31 +770,37 @@ export default function CompanyDetail() {
                   {company.isActive ? t('common.active') : t('common.inactive')}
                 </span>
               </div>
-              <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                {ownerAvatarUrl ? (
-                  <span style={{ width: 20, height: 20, borderRadius: '50%', overflow: 'hidden', display: 'inline-flex', border: '1px solid var(--border)' }}>
-                    <img src={ownerAvatarUrl} alt={ownerLabel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </span>
-                ) : null}
-                {ownerLabel}
-              </div>
+              {company.ownerName && (
+                <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {ownerAvatarUrl ? (
+                    <span style={{ width: 20, height: 20, borderRadius: '50%', overflow: 'hidden', display: 'inline-flex', border: '1px solid var(--border)' }}>
+                      <img src={ownerAvatarUrl} alt={ownerLabel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </span>
+                  ) : null}
+                  {ownerLabel}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
-          <InfoChip icon={<StoreIcon size={13} />} label={t('companies.statStores')} value={String(company.storeCount)} />
+          <InfoChip variant="stores" icon={<StoreIcon size={13} />} label={t('companies.statStores')} value={String(company.storeCount)} />
           <InfoChip
+            variant="employees"
             icon={<Users size={13} />}
             label={t('companies.statEmployees')}
             value={String(activeEmployees.length)}
             endSlot={<EmployeeAvatarStack employees={activeEmployees} />}
           />
-          <InfoChip icon={<Building2 size={13} />} label={t('companies.ownerField')} value={ownerLabel} avatarUrl={ownerAvatarUrl} />
-          <InfoChip icon={<CalendarClock size={13} />} label={t('companies.labelCreated')} value={new Date(company.createdAt).toLocaleDateString(locale)} />
-          <InfoChip icon={<Layers size={13} />} label={t('companies.fieldGroup')} value={company.groupName ?? t('companies.optionStandalone')} />
+          {company.ownerName && (
+            <InfoChip variant="owner" icon={<Building2 size={13} />} label={t('companies.ownerField')} value={ownerLabel} avatarUrl={ownerAvatarUrl} />
+          )}
+          <InfoChip variant="since" icon={<CalendarClock size={13} />} label={t('companies.labelCreated')} value={new Date(company.createdAt).toLocaleDateString(locale)} />
+          <InfoChip variant="group" icon={<Layers size={13} />} label={t('companies.fieldGroup')} value={company.groupName ?? t('companies.optionStandalone')} />
           {company.country ? (
             <InfoChip
+              variant="country"
               icon={<MapPin size={13} />}
               label={t('companies.country', 'Country')}
               value={(
@@ -741,12 +811,21 @@ export default function CompanyDetail() {
               )}
             />
           ) : null}
-          {company.currency ? <InfoChip icon={<ImageIcon size={13} />} label={t('companies.currency', 'Currency')} value={company.currency} /> : null}
+          {company.currency ? <InfoChip variant="currency" icon={<Coins size={13} />} label={t('companies.currency', 'Currency')} value={company.currency} /> : null}
         </div>
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+      <div style={{
+        display: 'inline-flex',
+        background: 'var(--surface-warm)',
+        borderRadius: 10,
+        padding: 4,
+        gap: 4,
+        border: '1px solid var(--border)',
+        marginBottom: 10,
+        alignSelf: 'flex-start',
+      }}>
         {(['overview', 'billing'] as const).map((tab) => {
           const isActive = activeTab === tab;
           const label = tab === 'overview' ? 'Overview' : 'Billing';
@@ -757,17 +836,23 @@ export default function CompanyDetail() {
               id={`company-detail-tab-${tab}`}
               onClick={() => setActiveTab(tab)}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '9px 18px',
-                fontSize: 13, fontWeight: 700,
-                border: 'none', background: 'none', cursor: 'pointer',
-                borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-                marginBottom: -2,
-                color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-                transition: 'color 0.15s, border-color 0.15s',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 18px',
+                fontSize: 13,
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                background: isActive ? 'var(--accent)' : 'transparent',
+                color: isActive ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: isActive ? '0 2px 6px rgba(201, 151, 58, 0.24)' : 'none',
               }}
             >
-              {icon}{label}
+              {icon}
+              {label}
             </button>
           );
         })}
@@ -1096,6 +1181,7 @@ export default function CompanyDetail() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title={t('companies.editCompany', 'Edit Company')}
+        maxWidth="980px"
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditOpen(false)} disabled={editSaving}>{t('common.cancel')}</Button>
@@ -1103,189 +1189,245 @@ export default function CompanyDetail() {
           </>
         }
       >
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {editError ? <Alert variant="danger" onClose={() => setEditError(null)}>{editError}</Alert> : null}
 
-          <Input
-            label={t('companies.fieldName', 'Company name *')}
-            value={editName}
-            onChange={(event) => setEditName(event.target.value)}
-            disabled={editSaving}
-          />
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '1.1fr 1fr',
+            gap: 24,
+            alignItems: 'start',
+          }}>
+            {/* Left Column: Company Information */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 4px 0', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+                {t('companies.editCompanyInfoSection', 'Company Information')}
+              </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                {t('companies.fieldGroup', 'Business group')}
-              </label>
-              <CustomSelect
-                value={editGroupId != null ? String(editGroupId) : 'standalone'}
-                onChange={(value) => setEditGroupId(value === 'standalone' || !value ? null : parseInt(value, 10))}
-                options={companyGroupOptions}
-                placeholder={t('companies.optionStandalone', 'Standalone')}
+              <Input
+                label={t('companies.fieldName', 'Company name *')}
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
                 disabled={editSaving}
-                isClearable
+              />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    {t('companies.fieldGroup', 'Business group')}
+                  </label>
+                  <CustomSelect
+                    value={editGroupId != null ? String(editGroupId) : 'standalone'}
+                    onChange={(value) => setEditGroupId(value === 'standalone' || !value ? null : parseInt(value, 10))}
+                    options={companyGroupOptions}
+                    placeholder={t('companies.optionStandalone', 'Standalone')}
+                    disabled={editSaving}
+                    isClearable
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    {t('companies.ownerField', 'Owner')}
+                  </label>
+                  <CustomSelect
+                    value={editOwnerUserId || null}
+                    onChange={(value) => setEditOwnerUserId(value ?? '')}
+                    options={ownerSelectOptions}
+                    placeholder={t('companies.currentOwner', 'Current owner')}
+                    disabled={editSaving || ownerCandidatesLoading}
+                    searchable
+                    isClearable
+                    searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
+                    noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
+                  />
+                </div>
+              </div>
+
+              <Input
+                label={t('companies.registrationNumber', 'Registration number')}
+                value={editProfile.registrationNumber}
+                onChange={(event) => setEditProfile((prev) => ({ ...prev, registrationNumber: event.target.value }))}
+                disabled={editSaving}
+              />
+
+              <Input
+                label={t('companies.companyEmail', 'Company email')}
+                type="email"
+                value={editProfile.companyEmail}
+                onChange={(event) => setEditProfile((prev) => ({ ...prev, companyEmail: event.target.value }))}
+                disabled={editSaving}
+              />
+
+              <Input
+                label={t('companies.officesLocations', 'Offices locations')}
+                value={editProfile.officesLocations}
+                onChange={(event) => setEditProfile((prev) => ({ ...prev, officesLocations: event.target.value }))}
+                disabled={editSaving}
+              />
+
+              <Input
+                label={t('companies.currency', 'Currency')}
+                value={editProfile.currency}
+                onChange={(event) => setEditProfile((prev) => ({ ...prev, currency: event.target.value }))}
+                disabled={editSaving}
+              />
+
+              <LocationFieldGroup
+                value={{
+                  country: editProfile.country,
+                  state: editProfile.state,
+                  city: editProfile.city,
+                  address: editProfile.address,
+                  postalCode: '',
+                  phone: editProfile.companyPhoneNumbers,
+                }}
+                onChange={(location) => {
+                  setEditProfile((prev) => ({
+                    ...prev,
+                    country: location.country,
+                    state: location.state,
+                    city: location.city,
+                    address: location.address,
+                    companyPhoneNumbers: location.phone,
+                  }));
+                }}
+                includeAddress
+                includePostalCode={false}
+                includePhone
+                disabled={editSaving}
+                labels={{
+                  country: t('companies.country', 'Country'),
+                  state: t('companies.state', 'State'),
+                  city: t('companies.city', 'City'),
+                  address: t('companies.address', 'Address'),
+                  phone: t('companies.companyPhoneNumbers', 'Company phone numbers'),
+                }}
               />
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                {t('companies.ownerField', 'Owner')}
-              </label>
-              <CustomSelect
-                value={editOwnerUserId || null}
-                onChange={(value) => setEditOwnerUserId(value ?? '')}
-                options={ownerSelectOptions}
-                placeholder={t('companies.currentOwner', 'Current owner')}
-                disabled={editSaving || ownerCandidatesLoading}
-                searchable
-                isClearable
-                searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
-                noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
-              />
+            {/* Right Column: Billing & Access Settings */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', position: 'relative' }}>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 4px 0', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+                {t('companies.editBillingAccessSection', 'Billing & Access Settings')}
+              </h3>
+
+              {isSuperAdmin ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Input
+                    type="number"
+                    label={t('companies.pricePerEmployee', 'Set price per employee')}
+                    value={editProfile.pricePerEmployee}
+                    onChange={(e) => setEditProfile(p => ({ ...p, pricePerEmployee: e.target.value ? Number(e.target.value) : '' }))}
+                    disabled={editSaving}
+                  />
+                  <Input
+                    type="number"
+                    label={t('companies.pricePerDevice', 'Set price per device')}
+                    value={editProfile.pricePerDevice}
+                    onChange={(e) => setEditProfile(p => ({ ...p, pricePerDevice: e.target.value ? Number(e.target.value) : '' }))}
+                    disabled={editSaving}
+                  />
+                  <Input
+                    type="number"
+                    label={t('companies.extraStoragePrice', 'Set extra storage price (per GB)')}
+                    value={editProfile.extraStoragePricePerGb}
+                    onChange={(e) => setEditProfile(p => ({ ...p, extraStoragePricePerGb: e.target.value ? Number(e.target.value) : '' }))}
+                    disabled={editSaving}
+                  />
+                  <Input
+                    type="number"
+                    label={t('companies.storageLimit', 'Set Storage Limit (GB)')}
+                    value={editProfile.storageLimitGb}
+                    onChange={(e) => setEditProfile(p => ({ ...p, storageLimitGb: e.target.value ? Number(e.target.value) : '' }))}
+                    disabled={editSaving}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <DatePicker
+                      label={t('companies.accessValidFrom', 'From Date')}
+                      value={editProfile.accessValidFrom}
+                      onChange={(val) => setEditProfile(p => ({ ...p, accessValidFrom: val }))}
+                      disabled={editSaving}
+                    />
+                    <DatePicker
+                      label={t('companies.accessValidTo', 'To Date')}
+                      value={editProfile.accessValidTo}
+                      onChange={(val) => setEditProfile(p => ({ ...p, accessValidTo: val }))}
+                      disabled={editSaving}
+                    />
+                  </div>
+                  <Input
+                    type="number"
+                    label={t('companies.discountPercent', 'Discount (%)')}
+                    value={editProfile.discountPercent}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setEditProfile(p => ({ ...p, discountPercent: '' }));
+                      } else {
+                        const num = Number(val);
+                        if (num >= 0 && num <= 100) {
+                          setEditProfile(p => ({ ...p, discountPercent: num }));
+                        }
+                      }
+                    }}
+                    disabled={editSaving}
+                    min={0}
+                    max={100}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <DatePicker
+                      label={t('companies.discountValidFrom', 'Discount From Date')}
+                      value={editProfile.discountValidFrom}
+                      onChange={(val) => setEditProfile(p => ({ ...p, discountValidFrom: val }))}
+                      disabled={editSaving}
+                    />
+                    <DatePicker
+                      label={t('companies.discountValidTo', 'Discount To Date')}
+                      value={editProfile.discountValidTo}
+                      onChange={(val) => setEditProfile(p => ({ ...p, discountValidTo: val }))}
+                      disabled={editSaving}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  border: '1px dashed var(--border)',
+                  borderRadius: 10,
+                  padding: '24px 16px',
+                  textAlign: 'center',
+                  background: 'var(--surface-warm)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  flex: 1,
+                  minHeight: 280,
+                  marginTop: 10,
+                }}>
+                  <div style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: '50%',
+                    background: 'rgba(201, 151, 58, 0.1)',
+                    color: 'var(--accent)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Receipt size={22} />
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {t('companies.billingRestrictedTitle', 'Super Admin Access Required')}
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', maxWidth: 220, lineHeight: 1.4 }}>
+                    {t('companies.billingRestrictedDesc', 'Billing pricing, storage limits, and license periods can only be configured by a system Super Admin.')}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-
-          <Input
-            label={t('companies.registrationNumber', 'Registration number')}
-            value={editProfile.registrationNumber}
-            onChange={(event) => setEditProfile((prev) => ({ ...prev, registrationNumber: event.target.value }))}
-            disabled={editSaving}
-          />
-
-          <Input
-            label={t('companies.companyEmail', 'Company email')}
-            type="email"
-            value={editProfile.companyEmail}
-            onChange={(event) => setEditProfile((prev) => ({ ...prev, companyEmail: event.target.value }))}
-            disabled={editSaving}
-          />
-
-          <Input
-            label={t('companies.officesLocations', 'Offices locations')}
-            value={editProfile.officesLocations}
-            onChange={(event) => setEditProfile((prev) => ({ ...prev, officesLocations: event.target.value }))}
-            disabled={editSaving}
-          />
-
-          <Input
-            label={t('companies.currency', 'Currency')}
-            value={editProfile.currency}
-            onChange={(event) => setEditProfile((prev) => ({ ...prev, currency: event.target.value }))}
-            disabled={editSaving}
-          />
-
-          <LocationFieldGroup
-            value={{
-              country: editProfile.country,
-              state: editProfile.state,
-              city: editProfile.city,
-              address: editProfile.address,
-              postalCode: '',
-              phone: editProfile.companyPhoneNumbers,
-            }}
-            onChange={(location) => {
-              setEditProfile((prev) => ({
-                ...prev,
-                country: location.country,
-                state: location.state,
-                city: location.city,
-                address: location.address,
-                companyPhoneNumbers: location.phone,
-              }));
-            }}
-            includeAddress
-            includePostalCode={false}
-            includePhone
-            disabled={editSaving}
-            labels={{
-              country: t('companies.country', 'Country'),
-              state: t('companies.state', 'State'),
-              city: t('companies.city', 'City'),
-              address: t('companies.address', 'Address'),
-              phone: t('companies.companyPhoneNumbers', 'Company phone numbers'),
-            }}
-          />
-
-          {isSuperAdmin && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Input
-                type="number"
-                label={t('companies.pricePerEmployee', 'Set price per employee')}
-                value={editProfile.pricePerEmployee}
-                onChange={(e) => setEditProfile(p => ({ ...p, pricePerEmployee: e.target.value ? Number(e.target.value) : '' }))}
-                disabled={editSaving}
-              />
-              <Input
-                type="number"
-                label={t('companies.pricePerDevice', 'Set price per device')}
-                value={editProfile.pricePerDevice}
-                onChange={(e) => setEditProfile(p => ({ ...p, pricePerDevice: e.target.value ? Number(e.target.value) : '' }))}
-                disabled={editSaving}
-              />
-              <Input
-                type="number"
-                label={t('companies.extraStoragePrice', 'Set extra storage price (per GB)')}
-                value={editProfile.extraStoragePricePerGb}
-                onChange={(e) => setEditProfile(p => ({ ...p, extraStoragePricePerGb: e.target.value ? Number(e.target.value) : '' }))}
-                disabled={editSaving}
-              />
-              <Input
-                type="number"
-                label={t('companies.storageLimit', 'Set Storage Limit (GB)')}
-                value={editProfile.storageLimitGb}
-                onChange={(e) => setEditProfile(p => ({ ...p, storageLimitGb: e.target.value ? Number(e.target.value) : '' }))}
-                disabled={editSaving}
-              />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <DatePicker
-                  label={t('companies.accessValidFrom', 'From Date')}
-                  value={editProfile.accessValidFrom}
-                  onChange={(val) => setEditProfile(p => ({ ...p, accessValidFrom: val }))}
-                  disabled={editSaving}
-                />
-                <DatePicker
-                  label={t('companies.accessValidTo', 'To Date')}
-                  value={editProfile.accessValidTo}
-                  onChange={(val) => setEditProfile(p => ({ ...p, accessValidTo: val }))}
-                  disabled={editSaving}
-                />
-              </div>
-              <Input
-                type="number"
-                label={t('companies.discountPercent', 'Discount (%)')}
-                value={editProfile.discountPercent}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '') {
-                    setEditProfile(p => ({ ...p, discountPercent: '' }));
-                  } else {
-                    const num = Number(val);
-                    if (num >= 0 && num <= 100) {
-                      setEditProfile(p => ({ ...p, discountPercent: num }));
-                    }
-                  }
-                }}
-                disabled={editSaving}
-                min={0}
-                max={100}
-              />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <DatePicker
-                  label={t('companies.discountValidFrom', 'Discount From Date')}
-                  value={editProfile.discountValidFrom}
-                  onChange={(val) => setEditProfile(p => ({ ...p, discountValidFrom: val }))}
-                  disabled={editSaving}
-                />
-                <DatePicker
-                  label={t('companies.discountValidTo', 'Discount To Date')}
-                  value={editProfile.discountValidTo}
-                  onChange={(val) => setEditProfile(p => ({ ...p, discountValidTo: val }))}
-                  disabled={editSaving}
-                />
-              </div>
-            </div>
-          )}
         </div>
       </Modal>
 
@@ -1321,31 +1463,51 @@ export default function CompanyDetail() {
           />
 
           <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: 'var(--surface)' }}>
-            <div style={{ height: 126, background: bannerUrl ? `linear-gradient(180deg, rgba(13,33,55,0.32) 0%, rgba(13,33,55,0.8) 100%), url(${bannerUrl}) center/cover no-repeat` : 'linear-gradient(135deg, rgba(13,33,55,0.9) 0%, rgba(15,118,110,0.7) 100%)' }} />
+            <div
+              style={{
+                height: 126,
+                padding: '8px 14px',
+                display: 'flex',
+                alignItems: 'flex-end',
+                background: bannerUrl ? `linear-gradient(180deg, rgba(13,33,55,0.32) 0%, rgba(13,33,55,0.8) 100%), url(${bannerUrl}) center/cover no-repeat` : 'linear-gradient(135deg, rgba(13,33,55,0.9) 0%, rgba(15,118,110,0.7) 100%)'
+              }}
+            >
+              <div style={{ minWidth: 0, paddingLeft: 94 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1.1, fontWeight: 800, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {company.name}
+                  {company.country ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                      <ReactCountryFlag countryCode={company.country} svg style={{ width: '0.95em', height: '0.95em' }} />
+                      {companyCountryName}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
             <div style={{ padding: '0 14px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: -42 }}>
-                <div style={{ width: 84, height: 84, borderRadius: 16, overflow: 'hidden', background: logoUrl ? '#fff' : 'var(--primary)', border: '4px solid var(--surface)', color: '#fff', fontSize: 24, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: 84, height: 84, borderRadius: 16, overflow: 'hidden', background: logoUrl ? '#fff' : 'var(--primary)', border: '4px solid var(--surface)', boxShadow: '0 4px 12px rgba(13,33,55,0.15)', color: '#fff', fontSize: 24, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {logoUrl ? <img src={logoUrl} alt={company.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(company.name)}
                 </div>
-                <div style={{ minWidth: 0, paddingBottom: 8 }}>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {company.name}
-                  </div>
-                  <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>#{company.id}</span>
+                <div style={{ flex: 1, minWidth: 0, paddingBottom: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                     {company.groupName ? (
-                      <span style={{ fontSize: 10, color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.34)', background: 'rgba(201,151,58,0.12)', borderRadius: 999, padding: '2px 7px' }}>
+                      <span style={{ fontSize: 9, color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.34)', background: 'rgba(201,151,58,0.12)', borderRadius: 999, padding: '1px 6px' }}>
                         {company.groupName}
                       </span>
-                    ) : null}
-                    <span style={{ fontSize: 10, borderRadius: 999, padding: '2px 7px', color: company.isActive ? '#166534' : '#991b1b', border: company.isActive ? '1px solid rgba(34,197,94,0.36)' : '1px solid rgba(248,113,113,0.44)', background: company.isActive ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)' }}>
+                    ) : (
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)', border: '1px dashed var(--border)', borderRadius: 999, padding: '1px 6px' }}>
+                        {t('companies.optionStandalone')}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 9, borderRadius: 999, padding: '1px 6px', color: company.isActive ? '#166534' : '#991b1b', border: company.isActive ? '1px solid rgba(34,197,94,0.36)' : '1px solid rgba(248,113,113,0.44)', background: company.isActive ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)' }}>
                       {company.isActive ? t('common.active') : t('common.inactive')}
                     </span>
                   </div>
+                  <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
+                    {t('companies.mediaPreviewHint', 'Preview updates after each upload')}
+                  </div>
                 </div>
-              </div>
-              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-                {t('companies.mediaPreviewHint', 'Preview updates after each upload')}
               </div>
             </div>
           </div>
@@ -1358,15 +1520,29 @@ export default function CompanyDetail() {
               <div style={{ height: 108, borderRadius: 10, border: '1px solid var(--border)', background: bannerUrl ? `url(${bannerUrl}) center/cover no-repeat` : 'linear-gradient(135deg, rgba(13,33,55,0.86) 0%, rgba(15,118,110,0.7) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
                 {bannerUrl ? '' : t('companies.bannerEmpty', 'No banner set')}
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              
+              {company.bannerFilename && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                    📄 {company.bannerFilename}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
+                    {bannerSize ? formatBytes(bannerSize) : '...'}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: company.bannerFilename ? 'repeat(3, 1fr)' : '1fr', gap: 8 }}>
                 <button
                   type="button"
                   disabled={bannerUploading || logoUploading}
                   onClick={() => bannerInputRef.current?.click()}
-                  style={{ ...mediaActionBtnStyle, flex: 1, minWidth: 140 }}
+                  style={{ ...mediaActionBtnStyle, width: 'auto', minWidth: 0 }}
                 >
                   <UploadCloud size={14} />
-                  {bannerUploading ? t('companies.bannerUploading', 'Uploading banner...') : bannerActionLabel}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {bannerUploading ? t('companies.bannerUploading', 'Uploading...') : bannerActionLabel}
+                  </span>
                 </button>
                 {company.bannerFilename && (
                   <>
@@ -1374,19 +1550,23 @@ export default function CompanyDetail() {
                       type="button"
                       disabled={bannerUploading || logoUploading}
                       onClick={() => bannerInputRef.current?.click()}
-                      style={{ ...mediaActionBtnStyle, flex: 1, minWidth: 120 }}
+                      style={{ ...mediaActionBtnStyle, width: 'auto', minWidth: 0 }}
                     >
                       <Pencil size={14} />
-                      {t('companies.editBanner', 'Edit banner')}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('companies.editBanner', 'Edit')}
+                      </span>
                     </button>
                     <button
                       type="button"
                       disabled={bannerUploading || logoUploading}
                       onClick={() => void handleDeleteBanner()}
-                      style={{ ...mediaActionBtnStyle, borderColor: 'rgba(185,28,28,0.22)', color: '#991b1b', background: 'rgba(220,38,38,0.08)', minWidth: 130 }}
+                      style={{ ...mediaActionBtnStyle, borderColor: 'rgba(185,28,28,0.22)', color: '#991b1b', background: 'rgba(220,38,38,0.08)', width: 'auto', minWidth: 0 }}
                     >
                       <Trash2 size={14} />
-                      {t('companies.removeBanner', 'Remove banner')}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('companies.deleteBanner', 'Delete')}
+                      </span>
                     </button>
                   </>
                 )}
@@ -1409,15 +1589,29 @@ export default function CompanyDetail() {
                   <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>{t('companies.logoHint')}</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+
+              {company.logoFilename && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                    📄 {company.logoFilename}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
+                    {logoSize ? formatBytes(logoSize) : '...'}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: company.logoFilename ? 'repeat(3, 1fr)' : '1fr', gap: 8 }}>
                 <button
                   type="button"
                   disabled={logoUploading || bannerUploading}
                   onClick={() => logoInputRef.current?.click()}
-                  style={{ ...mediaActionBtnStyle, flex: 1, minWidth: 140 }}
+                  style={{ ...mediaActionBtnStyle, width: 'auto', minWidth: 0 }}
                 >
                   <UploadCloud size={14} />
-                  {logoUploading ? t('companies.logoUploading') : logoActionLabel}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {logoUploading ? t('companies.logoUploading', 'Uploading...') : logoActionLabel}
+                  </span>
                 </button>
                 {company.logoFilename && (
                   <>
@@ -1425,19 +1619,23 @@ export default function CompanyDetail() {
                       type="button"
                       disabled={logoUploading || bannerUploading}
                       onClick={() => logoInputRef.current?.click()}
-                      style={{ ...mediaActionBtnStyle, flex: 1, minWidth: 120 }}
+                      style={{ ...mediaActionBtnStyle, width: 'auto', minWidth: 0 }}
                     >
                       <Pencil size={14} />
-                      {t('companies.editLogo', 'Edit logo')}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('companies.editLogo', 'Edit')}
+                      </span>
                     </button>
                     <button
                       type="button"
                       disabled={logoUploading || bannerUploading}
                       onClick={() => void handleDeleteLogo()}
-                      style={{ ...mediaActionBtnStyle, borderColor: 'rgba(185,28,28,0.22)', color: '#991b1b', background: 'rgba(220,38,38,0.08)', minWidth: 130 }}
+                      style={{ ...mediaActionBtnStyle, borderColor: 'rgba(185,28,28,0.22)', color: '#991b1b', background: 'rgba(220,38,38,0.08)', width: 'auto', minWidth: 0 }}
                     >
                       <Trash2 size={14} />
-                      {t('companies.removeLogo', 'Remove logo')}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('companies.deleteLogo', 'Delete')}
+                      </span>
                     </button>
                   </>
                 )}
@@ -1536,7 +1734,26 @@ function ManagerAvatar({ employee }: { employee: Employee }) {
   );
 }
 
-function InfoChip({ icon, label, value, avatarUrl, endSlot }: { icon: React.ReactNode; label: string; value: React.ReactNode; avatarUrl?: string | null; endSlot?: React.ReactNode }) {
+function InfoChip({
+  icon,
+  label,
+  value,
+  avatarUrl,
+  endSlot,
+  variant = 'default',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  avatarUrl?: string | null;
+  endSlot?: React.ReactNode;
+  variant?: 'stores' | 'employees' | 'owner' | 'since' | 'group' | 'country' | 'currency' | 'default';
+}) {
+  const iconBg = 'rgba(201, 151, 58, 0.12)';
+  const cardBg = 'var(--surface-warm)';
+  const borderColor = 'rgba(201, 151, 58, 0.28)';
+  const shadowColor = 'rgba(13, 33, 55, 0.03)';
+
   const valueNode = typeof value === 'string' ? (
     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</span>
   ) : (
@@ -1544,23 +1761,51 @@ function InfoChip({ icon, label, value, avatarUrl, endSlot }: { icon: React.Reac
   );
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'var(--surface-warm)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {icon}
-        {label}
-      </div>
-      <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-          {avatarUrl ? (
-            <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
-              <img src={avatarUrl} alt={typeof value === 'string' ? value : label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </span>
-          ) : null}
-          <span style={{ minWidth: 0 }}>{valueNode}</span>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .info-chip-card {
+          transition: all 0.24s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .info-chip-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(13, 33, 55, 0.08), var(--shadow-md) !important;
+          border-color: var(--accent) !important;
+        }
+      `}} />
+      <div
+        className="info-chip-card"
+        style={{
+          border: `1px solid ${borderColor}`,
+          borderRadius: 10,
+          padding: '10px 12px',
+          background: cardBg,
+          boxShadow: `0 4px 12px ${shadowColor}, var(--shadow-sm)`,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: 74,
+          cursor: 'default',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, background: iconBg, color: 'var(--accent)' }}>
+            {icon}
+          </span>
+          {label}
         </div>
-        {endSlot ? <div style={{ flexShrink: 0 }}>{endSlot}</div> : null}
+        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+            {avatarUrl ? (
+              <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                <img src={avatarUrl} alt={typeof value === 'string' ? value : label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </span>
+            ) : null}
+            <span style={{ minWidth: 0 }}>{valueNode}</span>
+          </div>
+          {endSlot ? <div style={{ flexShrink: 0 }}>{endSlot}</div> : null}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

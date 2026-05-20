@@ -7,11 +7,11 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Interview as APIInterview, JobPosting, getAllInterviews, updateInterview, deleteInterview, InterviewType } from '../../api/ats';
-import { Employee } from '../../types';
+import { Employee, Company } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
-import { getAvatarUrl } from '../../api/client';
+import { getAvatarUrl, getCompanyLogoUrl } from '../../api/client';
 import { Button } from '../../components/ui/Button';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import ATSWeeklyCalendar from './ATSWeeklyCalendar';
@@ -38,6 +38,7 @@ interface CalendarPanelProps {
   positions: JobPosting[];
   employees: Employee[];
   companyId?: number;
+  companies?: Company[];
 }
 
 type CalendarView = 'weekly' | 'monthly';
@@ -46,6 +47,7 @@ export default function CalendarPanel({
   positions,
   employees,
   companyId,
+  companies = [],
 }: CalendarPanelProps) {
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
@@ -400,62 +402,142 @@ export default function CalendarPanel({
         
         const roleColor = roleColors[emp.role] || { bg: '#f3f4f6', text: '#374151' };
         
+        const initials = (name: string) => name.split(' ').map((w) => w[0] ?? '').join('').toUpperCase().slice(0, 2);
+        
+        // Generate beautiful initials and avatar bg for company label
+        const companyInitials = (emp as any).companyName ? initials((emp as any).companyName) : 'CO';
+        const companyAvatarBg = (emp as any).companyName 
+          ? ['#0D2137', '#163352', '#8B6914', '#1B4D3E', '#2C5282', '#5B2333'][Math.abs((emp as any).companyName.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % 6]
+          : 'var(--border)';
+
         return {
           value: String(emp.id),
           label: `${fullName}${(emp as Employee & { companyName?: string | null }).companyName ? ` — ${(emp as Employee & { companyName?: string | null }).companyName}` : ''}`,
           render: (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-              {/* Avatar */}
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={fullName}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    border: '2px solid #e2e8f0',
-                    flexShrink: 0,
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                    color: '#fff',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    border: '2px solid #e2e8f0',
-                    flexShrink: 0,
-                  }}
-                >
-                  {fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1.2fr 1fr auto',
+              gap: 16,
+              width: '100%',
+              padding: '4px 0',
+              alignItems: 'center',
+            }}>
+              {/* Column 1: User Avatar + Name + Sub-detail (interviews) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <div style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  background: avatarUrl ? 'transparent' : 'var(--primary)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : initials(fullName)}
                 </div>
-              )}
-              
-              {/* Name and Interview Count */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {fullName}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
-                  {t('ats.interviewsCount', 'Interviews')}: {interviewCount}
-                </div>
-                {(emp as Employee & { companyName?: string | null }).companyName && (
-                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {(emp as Employee & { companyName?: string | null }).companyName}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {fullName}
                   </div>
+                  <div style={{
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {t('ats.interviewsCount', 'Interviews')}: {interviewCount}
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 2: Company initials Avatar + Company Name + Store Name (in italics underneath) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                {(emp as any).companyName ? (
+                  <>
+                    {(() => {
+                      const comp = companies?.find((c) => c.id === emp.companyId || c.name === (emp as any).companyName);
+                      const companyLogoUrl = comp?.logoFilename ? getCompanyLogoUrl(comp.logoFilename) : null;
+                      return companyLogoUrl ? (
+                        <div style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 4,
+                          overflow: 'hidden',
+                          border: '1px solid var(--border)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          background: 'var(--surface-warm)',
+                        }}>
+                          <img src={companyLogoUrl} alt={(emp as any).companyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ) : (
+                        <div style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 4,
+                          background: companyAvatarBg,
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 9,
+                          fontWeight: 800,
+                          flexShrink: 0,
+                        }}>
+                          {companyInitials}
+                        </div>
+                      );
+                    })()}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--text-secondary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {(emp as any).companyName}
+                      </div>
+                      {(emp as any).storeName ? (
+                        <div style={{
+                          fontSize: 10,
+                          fontStyle: 'italic',
+                          color: 'var(--text-muted)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {(emp as any).storeName}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, color: 'var(--text-disabled)', fontStyle: 'italic' }}>
+                    {t('ats.noCompanyAssigned', 'No company assigned')}
+                  </span>
                 )}
               </div>
-              
-              {/* Role Tag */}
+
+              {/* Column 3: User Role Tag */}
               <div
                 style={{
                   padding: '3px 8px',
@@ -466,6 +548,8 @@ export default function CalendarPanel({
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
                 }}
               >
                 {roleLabels[emp.role] || emp.role}
