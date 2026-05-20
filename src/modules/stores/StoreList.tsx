@@ -736,15 +736,16 @@ export function StoreList() {
       key: 'companyName' as keyof Store,
       label: t('stores.colCompany'),
       render: (row: Store) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div style={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
+            width: 34,
+            height: 34,
+            borderRadius: 10,
             overflow: 'hidden',
-            background: row.companyName ? getCompanyAvatarColor(row.companyName) : 'var(--border)',
-            color: '#fff',
-            fontSize: 10,
+            border: '1px solid var(--border)',
+            background: row.companyLogoFilename ? '#fff' : 'rgba(13,33,55,0.08)',
+            color: 'var(--accent)',
+            fontSize: 11,
             fontWeight: 800,
             display: 'flex',
             alignItems: 'center',
@@ -758,18 +759,20 @@ export function StoreList() {
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              getCompanyInitials(row.companyName)
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)' }}>
+                {getCompanyInitials(row.companyName)}
+              </span>
             )}
           </div>
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                fontSize: '13px',
-                color: row.companyName ? 'var(--text-secondary)' : 'var(--text-disabled)',
+                fontSize: '13.5px',
+                color: row.companyName ? 'var(--text-primary)' : 'var(--text-disabled)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                fontWeight: 600,
+                fontWeight: 700,
               }}
               title={row.companyName ?? undefined}
             >
@@ -786,9 +789,9 @@ export function StoreList() {
     }] : []),
     {
       key: 'name',
-      label: t('stores.colName'),
+      label: t('stores.colStore', 'Store'),
       render: (row) => {
-        const logoUrl = getCompanyLogoUrl(row.companyLogoFilename);
+        const storeLogoUrl = row.logoFilename ? getStoreLogoUrl(row.logoFilename) : null;
         const countryLabel = getCountryDisplayName(row.country);
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -798,21 +801,21 @@ export function StoreList() {
               borderRadius: 10,
               overflow: 'hidden',
               border: '1px solid var(--border)',
-              background: logoUrl ? '#fff' : 'rgba(13,33,55,0.08)',
+              background: storeLogoUrl ? '#fff' : 'rgba(13,33,55,0.08)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}>
-              {logoUrl ? (
-                <img src={logoUrl} alt={row.companyName ?? row.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {storeLogoUrl ? (
+                <img src={storeLogoUrl} alt={row.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)' }}>{getStoreInitials(row.name)}</span>
               )}
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.name}>
-                {truncateText(row.name, 16)}
+                {truncateText(row.name, 18)}
               </div>
               {(row.country || countryLabel) ? (
                 <div style={{ marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
@@ -826,9 +829,55 @@ export function StoreList() {
       },
     },
     { key: 'code', label: t('stores.colCode') },
-    { key: 'address', label: t('stores.colAddress'), render: (row) => truncateText(row.address ?? '—', 24) },
+    { key: 'address', label: t('stores.colAddress'), render: (row) => truncateText(row.address ?? '—', 32) },
     { key: 'cap', label: t('stores.colCap'), render: (row) => row.cap ?? '—' },
-    { key: 'maxStaff', label: t('stores.colMaxStaff'), render: (row) => String(row.maxStaff) },
+    {
+      key: 'maxStaff',
+      label: t('stores.colMaxStaff'),
+      render: (row) => {
+        const max = row.maxStaff;
+        const current = row.employeeCount ?? 0;
+        if (max === null || max <= 0) {
+          return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+        }
+        const pct = Math.min((current / max) * 100, 100);
+        
+        let barColor = '#10B981';
+        if (pct >= 90) {
+          barColor = '#EF4444';
+        } else if (pct >= 70) {
+          barColor = '#F59E0B';
+        }
+        
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 100 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{max}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{Math.round((current / max) * 100)}%</span>
+            </div>
+            <div style={{
+              width: '100%',
+              height: 6,
+              borderRadius: 3,
+              background: 'rgba(13,33,55,0.08)',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              <div style={{
+                width: `${pct}%`,
+                height: '100%',
+                borderRadius: 3,
+                background: barColor,
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 500 }}>
+              {current} / {max} {t('stores.staffUnit', 'employees')}
+            </div>
+          </div>
+        );
+      }
+    },
     { key: 'employeeCount', label: t('stores.colEmployees'), render: (row) => String(row.employeeCount ?? 0) },
     {
       key: 'isActive',

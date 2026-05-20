@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { MessageSquare, Reply, Plus, Inbox } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -258,6 +259,7 @@ export default function HRChatPage() {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const isEmployee = user?.role === 'employee';
   const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
@@ -270,6 +272,33 @@ export default function HRChatPage() {
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeRecipient, setComposeRecipient] = useState<{ id: number; name: string } | null>(null);
   const [composeDefaultSubject, setComposeDefaultSubject] = useState<string>('');
+
+  useEffect(() => {
+    const recipientIdStr = searchParams.get('recipientId');
+    const recipientName = searchParams.get('recipientName');
+    const subject = searchParams.get('subject');
+
+    if (recipientIdStr) {
+      const recipientId = parseInt(recipientIdStr, 10);
+      if (!isNaN(recipientId)) {
+        setComposeRecipient({
+          id: recipientId,
+          name: recipientName ? decodeURIComponent(recipientName) : '—',
+        });
+        if (subject) {
+          setComposeDefaultSubject(decodeURIComponent(subject));
+        }
+        setComposeOpen(true);
+
+        // Clear search parameters from the URL immediately so they don't persist on refresh or reload
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('recipientId');
+        newParams.delete('recipientName');
+        newParams.delete('subject');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [searchParams, setSearchParams]);
 
   // HR contact (for employee role only)
   const [hrRecipient, setHrRecipient] = useState<{ recipientId: number; recipientName: string } | null>(null);

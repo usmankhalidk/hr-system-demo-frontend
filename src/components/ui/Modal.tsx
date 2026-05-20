@@ -7,6 +7,7 @@ interface ModalProps {
   title: string | React.ReactNode;
   children?: React.ReactNode;
   footer?: React.ReactNode;
+  maxWidth?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -15,6 +16,7 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   footer,
+  maxWidth,
 }) => {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -51,7 +53,7 @@ export const Modal: React.FC<ModalProps> = ({
     borderRadius: 'var(--radius-lg)',
     boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
     width: '100%',
-    maxWidth: '560px',
+    maxWidth: maxWidth || '560px',
     maxHeight: '90vh',
     display: 'flex',
     flexDirection: 'column',

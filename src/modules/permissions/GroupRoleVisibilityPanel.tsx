@@ -9,10 +9,11 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
-import { getCompanyGroups, createCompanyGroup, getGroupRoleVisibility, updateGroupRoleVisibility } from '../../api/companyGroups';
+import { getCompanyGroups, getGroupRoleVisibility, updateGroupRoleVisibility } from '../../api/companyGroups';
 import { getCompanies } from '../../api/companies';
 import { useAuth } from '../../context/AuthContext';
 import type { Company } from '../../types';
+import { GroupManagementModal } from './GroupManagementModal';
 
 import type { CompanyGroup, GroupRoleVisibility, GroupVisibilityCompany } from '../../api/companyGroups';
 
@@ -34,9 +35,7 @@ export default function GroupRoleVisibilityPanel() {
 
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
 
   const dirty = useMemo(() => (
     localVisibility.hr !== serverVisibility.hr || localVisibility.areaManager !== serverVisibility.areaManager
@@ -91,22 +90,15 @@ export default function GroupRoleVisibilityPanel() {
       }))
     : groupCompanies;
 
-  const handleCreateGroup = async () => {
-    if (!newGroupName.trim()) return;
-    setCreating(true);
-    setErrorMsg(null);
+  const refreshGroups = async () => {
     try {
-      const created = await createCompanyGroup({ name: newGroupName.trim() });
-      showToast(t('permissions.groupVisibility.groupCreatedSuccess'), 'success');
-      setNewGroupName('');
-      setShowNewGroup(false);
       const g = await getCompanyGroups();
       setGroups(g);
-      setGroupId(created.id);
-    } catch (err) {
-      setErrorMsg(translateApiError(err, t, t('permissions.groupVisibility.errorCreateGroup')));
-    } finally {
-      setCreating(false);
+      if (groupId != null && !g.find((group) => group.id === groupId)) {
+        setGroupId(g[0]?.id ?? -1);
+      }
+    } catch {
+      setErrorMsg(t('permissions.groupVisibility.errorLoadGroups'));
     }
   };
 
@@ -199,15 +191,15 @@ export default function GroupRoleVisibilityPanel() {
             </Select>
           </div>
           <button
-            onClick={() => setShowNewGroup((v) => !v)}
-            title={t('permissions.groupVisibility.createGroupButton')}
+            onClick={() => setShowManageModal(true)}
+            title={t('permissions.groupVisibility.manageGroups', { defaultValue: 'Manage Groups' })}
             style={{
               height: 36,
               padding: '0 12px',
               borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--border)',
-              background: showNewGroup ? 'var(--accent-light)' : 'var(--surface)',
-              color: showNewGroup ? 'var(--accent)' : 'var(--text-secondary)',
+              background: 'var(--surface)',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -215,40 +207,22 @@ export default function GroupRoleVisibilityPanel() {
               fontSize: 12,
               fontWeight: 600,
               fontFamily: 'var(--font-body)',
-              transition: 'background 0.15s',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--accent-light)';
+              e.currentTarget.style.color = 'var(--accent)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--surface)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
             }}
           >
-            <Plus size={13} />
-            {t('permissions.groupVisibility.createGroupButton')}
+            <Layers size={13} />
+            {t('permissions.groupVisibility.manageGroups', { defaultValue: 'Manage Groups' })}
           </button>
         </div>
       </div>
-
-      {/* New group row */}
-      {showNewGroup && (
-        <div style={{
-          padding: '14px 20px',
-          borderBottom: '1px solid var(--border-light)',
-          background: 'rgba(201,151,58,0.04)',
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: 10,
-        }}>
-          <div style={{ flex: 1 }}>
-            <Input
-              label={t('permissions.groupVisibility.newGroupOptionalLabel')}
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              disabled={creating}
-              placeholder={t('permissions.groupVisibility.newGroupPlaceholder')}
-              onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateGroup(); }}
-            />
-          </div>
-          <Button loading={creating} onClick={handleCreateGroup} disabled={!newGroupName.trim()}>
-            {t('permissions.groupVisibility.createGroupButton')}
-          </Button>
-        </div>
-      )}
 
       {errorMsg && (
         <div style={{ padding: '12px 20px' }}>
@@ -408,6 +382,13 @@ export default function GroupRoleVisibilityPanel() {
           </Button>
         </div>
       )}
+
+      <GroupManagementModal
+        isOpen={showManageModal}
+        onClose={() => setShowManageModal(false)}
+        groups={groups}
+        onGroupsChanged={refreshGroups}
+      />
     </div>
   );
 }

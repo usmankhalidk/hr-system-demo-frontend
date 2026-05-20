@@ -41,3 +41,12 @@ export async function updateGroupRoleVisibility(
   await apiClient.put(`/company-groups/${groupId}/role-visibility`, payload);
 }
 
+export async function updateCompanyGroup(groupId: number, payload: { name: string }): Promise<CompanyGroup> {
+  const { data } = await apiClient.put(`/company-groups/${groupId}`, payload);
+  return data.data;
+}
+
+export async function deleteCompanyGroup(groupId: number): Promise<void> {
+  await apiClient.delete(`/company-groups/${groupId}`);
+}
+
