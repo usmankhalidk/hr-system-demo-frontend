@@ -48,6 +48,7 @@ import { getApiBaseUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl, getRes
 import { getStores } from '../../api/stores';
 import { getCompanies } from '../../api/companies';
 import { getEmployees, createEmployee } from '../../api/employees';
+import { listInterviewers } from '../../api/ats';
 import { getNotificationSettings, type NotificationSetting } from '../../api/documents';
 import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
@@ -2644,26 +2645,27 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
       && emp.status === 'active'
     ));
 
-    if (localEligible.length > 0) {
-      setInterviewerUsers(localEligible);
-      return () => {
-        active = false;
-      };
-    }
-
-    getEmployees({ targetCompanyId: candidate.companyId, status: 'active', includeStoreTerminals: false, limit: 500 })
+    // Attempt to load interviewers from the ATS endpoint which returns
+    // users across grouped companies (when allowed). Fallback to local employees if empty.
+    listInterviewers(candidate.companyId)
       .then((res) => {
         if (!active) return;
-        setInterviewerUsers(res.employees ?? []);
+        const fromApi = (res?.interviewers ?? []) as Employee[];
+        if (fromApi.length > 0) {
+          setInterviewerUsers(fromApi);
+        } else if (localEligible.length > 0) {
+          setInterviewerUsers(localEligible);
+        } else {
+          setInterviewerUsers([]);
+        }
       })
       .catch(() => {
         if (!active) return;
-        setInterviewerUsers([]);
+        if (localEligible.length > 0) setInterviewerUsers(localEligible);
+        else setInterviewerUsers([]);
       });
 
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [candidate.companyId, employees]);
 
   useEffect(() => {

@@ -64,6 +64,11 @@ export async function deactivateEmployee(id: number): Promise<Employee> {
   return data.data;
 }
 
+export async function deleteEmployeePermanently(id: number): Promise<{ id: number }> {
+  const { data } = await apiClient.delete(`/employees/${id}/permanent`);
+  return data.data;
+}
+
 export async function activateEmployee(id: number): Promise<Employee> {
   const { data } = await apiClient.patch(`/employees/${id}/activate`);
   return data.data;

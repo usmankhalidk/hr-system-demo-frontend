@@ -6,6 +6,9 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getEmployee, createEmployee, updateEmployee, getEmployees } from '../../api/employees';
+import { deleteEmployeePermanently } from '../../api/employees';
+import ConfirmModal from '../../components/ui/ConfirmModal';
+import { useNavigate } from 'react-router-dom';
 import { getCompanies } from '../../api/companies';
 import { translateApiError } from '../../utils/apiErrors';
 import { getStores } from '../../api/stores';
@@ -162,6 +165,9 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   // After creation: show credentials card
   const [createdCredentials, setCreatedCredentials] = useState<{ name: string; email: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
 
   const regeneratePassword = useCallback(() => {
     setTempPassword(generateTempPassword());
@@ -2048,9 +2054,22 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           flexShrink: 0,
         }}>
-          <button
-            onClick={onCancel}
-            disabled={loading}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {isEditMode && (user?.role === 'admin' || user?.isSuperAdmin) && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={loading || deleting}
+                style={{
+                  background: 'transparent', border: '1px solid rgba(220,38,38,0.18)',
+                  color: '#DC2626', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+                }}
+              >
+                {t('common.delete')}
+              </button>
+            )}
+            <button
+              onClick={onCancel}
+              disabled={loading}
             style={{
               background: 'none', border: '1px solid var(--border)',
               borderRadius: 'var(--radius-sm)', padding: '8px 16px',
@@ -2061,6 +2080,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
           >
             {t('common.cancel')}
           </button>
+          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {step === 2 && (
               <Button variant="secondary" onClick={handleBack} disabled={loading}>
@@ -2079,6 +2099,33 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
             )}
           </div>
         </div>}
+      {showDeleteConfirm && (
+        <ConfirmModal
+          open={showDeleteConfirm}
+          title={t('employees.confirmPermanentDelete', 'Delete employee permanently')}
+          message={t('employees.confirmPermanentDeleteMsg', 'This action will remove the user and all related data. This cannot be undone.')}
+          variant="danger"
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
+          onConfirm={async () => {
+            if (!employeeId) return;
+            setDeleting(true);
+            try {
+              await deleteEmployeePermanently(employeeId);
+              showToast(t('employees.permanentlyDeleted'), 'success');
+              setShowDeleteConfirm(false);
+              onCancel();
+              navigate('/dipendenti');
+            } catch (err: unknown) {
+              const message = translateApiError(err, t, 'Delete error') ?? 'Delete error';
+              showToast(message, 'error');
+            } finally {
+              setDeleting(false);
+            }
+          }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
       </div>
     </div>,
     document.body
