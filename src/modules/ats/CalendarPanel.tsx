@@ -402,7 +402,7 @@ export default function CalendarPanel({
         
         return {
           value: String(emp.id),
-          label: fullName,
+          label: `${fullName}${(emp as Employee & { companyName?: string | null }).companyName ? ` — ${(emp as Employee & { companyName?: string | null }).companyName}` : ''}`,
           render: (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
               {/* Avatar */}
@@ -448,6 +448,11 @@ export default function CalendarPanel({
                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
                   {t('ats.interviewsCount', 'Interviews')}: {interviewCount}
                 </div>
+                {(emp as Employee & { companyName?: string | null }).companyName && (
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {(emp as Employee & { companyName?: string | null }).companyName}
+                  </div>
+                )}
               </div>
               
               {/* Role Tag */}

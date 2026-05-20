@@ -1,5 +1,12 @@
 import apiClient from './client';
 
+export async function listInterviewers(companyId?: number): Promise<{ interviewers: any[] }> {
+  const params: Record<string, any> = {};
+  if (companyId != null) params.company_id = companyId;
+  const { data } = await apiClient.get('/ats/interviewers', { params });
+  return data.data;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------

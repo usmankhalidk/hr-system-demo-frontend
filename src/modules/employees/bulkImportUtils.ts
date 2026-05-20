@@ -195,7 +195,7 @@ export function parseExcelFile(file: File): Promise<ParsedRow[]> {
         const wb = XLSX.read(data, { type: 'array', cellDates: false });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-        const rows: ParsedRow[] = json.map((row, i) => ({ rowIndex: i + 2, data: row }));
+        const rows: ParsedRow[] = json.map((row: Record<string, unknown>, i: number) => ({ rowIndex: i + 2, data: row }));
         resolve(rows);
       } catch (err) {
         reject(err);

@@ -4,9 +4,14 @@ import axios from 'axios';
 // Must include protocol: https://xxxx.up.railway.app (NOT just xxxx.up.railway.app)
 // In development, Vite's proxy forwards /api → localhost:3001.
 let apiBase = import.meta.env.VITE_API_URL || '';
-// Defensive: auto-add https:// if the value was set without a protocol
+// Defensive: auto-add protocol when the value was set without one.
+// Prefer http for localhost/127.0.0.1/0.0.0.0 and https otherwise.
 if (apiBase && !apiBase.startsWith('http://') && !apiBase.startsWith('https://')) {
-  apiBase = `https://${apiBase}`;
+  if (apiBase.startsWith('localhost') || apiBase.startsWith('127.') || apiBase.startsWith('0.0.0.0')) {
+    apiBase = `http://${apiBase}`;
+  } else {
+    apiBase = `https://${apiBase}`;
+  }
 }
 const BASE_URL = apiBase ? `${apiBase}/api` : '/api';
 
