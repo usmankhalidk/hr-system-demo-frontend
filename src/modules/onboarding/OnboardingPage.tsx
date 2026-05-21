@@ -119,7 +119,7 @@ function fmtRelative(iso: string, t: TFunction) {
   return t('onboarding.relMonthsAgo', { count: Math.floor(days / 30), defaultValue: '{{count}}mo ago' });
 }
 
-const ADMIN_HR    = ['admin', 'hr'];
+const ADMIN_HR    = ['admin', 'hr', 'area_manager'];
 const OVERVIEW_R  = ['admin', 'hr', 'area_manager'];
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────

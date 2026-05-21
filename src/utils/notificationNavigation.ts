@@ -1,10 +1,20 @@
 import type { Notification } from '../api/notifications';
 
-export function getNotificationNavigationUrl(notification: Pick<Notification, 'type'>): string | null {
-  const { type } = notification;
+export function getNotificationNavigationUrl(notification: Notification): string | null {
+  const { type, metadata } = notification;
+
+  // Deep-link for ATS feedback notifications
+  if (type === 'ats.feedback_added' && metadata?.candidateId) {
+    const params = new URLSearchParams();
+    params.set('view', 'candidates');
+    params.set('candidateId', String(metadata.candidateId));
+    if (metadata.interviewId) params.set('interviewId', String(metadata.interviewId));
+    if (metadata.feedbackId) params.set('feedbackId', String(metadata.feedbackId));
+    return `/ats?${params.toString()}`;
+  }
 
   if (type.startsWith('ats.')) {
-    return '/ats';
+    return '/ats?view=candidates';
   }
 
   if (type.startsWith('employee.')) {
