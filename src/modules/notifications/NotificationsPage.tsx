@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   Bell,
@@ -213,6 +214,7 @@ function typeVisual(type: string): {
 
 export default function NotificationsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
 
@@ -1625,16 +1627,21 @@ export default function NotificationsPage() {
                         />
                         <button
                           type="button"
-                          onClick={() => {
-                            if (canMark && !deleteMode) {
-                              void handleMarkRead(item);
+                          onClick={async () => {
+                            if (!deleteMode) {
+                              if (canMark) {
+                                await handleMarkRead(item);
+                              }
+                              if (navigationUrl) {
+                                navigate(navigationUrl);
+                              }
                             }
                           }}
                           style={{
                             border: "none",
                             background: "transparent",
                             textAlign: "left",
-                            cursor: canMark && !deleteMode ? "pointer" : "default",
+                            cursor: (canMark || navigationUrl) && !deleteMode ? "pointer" : "default",
                             padding: "12px 14px 11px",
                             width: "100%",
                           }}
@@ -1817,9 +1824,12 @@ export default function NotificationsPage() {
                       {isHovered && navigationUrl && !deleteMode && (
                         <a
                           href={navigationUrl}
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.preventDefault();
-                            window.location.href = navigationUrl;
+                            if (canMark) {
+                              await handleMarkRead(item);
+                            }
+                            navigate(navigationUrl);
                           }}
                           style={{
                             position: "absolute",

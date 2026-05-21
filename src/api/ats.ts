@@ -401,6 +401,12 @@ export async function deleteCandidate(id: number): Promise<void> {
   await apiClient.delete(`/ats/candidates/${id}`);
 }
 
+export async function getCandidate(id: number): Promise<Candidate> {
+  const { data } = await apiClient.get(`/ats/candidates/${id}`);
+  return data.data.candidate as Candidate;
+}
+
+
 // ---------------------------------------------------------------------------
 // Candidate Comments
 // ---------------------------------------------------------------------------

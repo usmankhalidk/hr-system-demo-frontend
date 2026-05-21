@@ -185,8 +185,25 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                             }}
                           />
                         ) : (
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {group.name}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {group.name}
+                            </div>
+                            {group.companies && group.companies.length > 0 ? (
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                                  {group.companies.length}
+                                </span>{' '}
+                                {group.companies.length === 1
+                                  ? t('common.company', { defaultValue: 'company' })
+                                  : t('common.companies', { defaultValue: 'companies' })}
+                                : {group.companies.map((c) => c.name).join(', ')}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {t('permissions.groupVisibility.noCompanies', { defaultValue: 'No companies attached' })}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

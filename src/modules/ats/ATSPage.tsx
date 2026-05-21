@@ -28,6 +28,7 @@ import {
   Wallet,
   ChevronDown,
   MessageSquare,
+  Bell,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
@@ -55,7 +56,7 @@ import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob,
-  getCandidates, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
+  getCandidates, getCandidate, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
   getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
   getInterviewNotifications, sendInterviewEmail,
@@ -2351,6 +2352,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const { user } = useAuth();
   const { isMobile } = useBreakpoint();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [showInterviewForm, setShowInterviewForm] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<number | null>(null);
@@ -2373,12 +2375,14 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [hoveredFeedbackId, setHoveredFeedbackId] = useState<number | null>(null);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [hasScrolledToTab, setHasScrolledToTab] = useState(false);
+  const [notificationModalFeedbackId, setNotificationModalFeedbackId] = useState<number | null>(null);
+  const [notificationModalLogs, setNotificationModalLogs] = useState<InterviewNotificationLog[]>([]);
+  const [hasScrolledToFeedback, setHasScrolledToFeedback] = useState(false);
 
   // Auto-scroll to section based on URL parameter
   useEffect(() => {
     if (!hasScrolledToTab) {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get('tab');
+      const tab = searchParams.get('tab');
       if (tab === 'resume' || tab === 'comments') {
         setTimeout(() => {
           const el = document.getElementById(tab === 'resume' ? 'resume-section' : 'comments-section');
@@ -2389,7 +2393,29 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         }, 500); // Small delay to ensure content is rendered
       }
     }
-  }, [hasScrolledToTab]);
+  }, [searchParams, hasScrolledToTab]);
+
+  // Auto-scroll to specific feedback comment when deep-linked
+  const [scrolledFeedbackId, setScrolledFeedbackId] = useState<string | null>(null);
+  useEffect(() => {
+    const feedbackId = searchParams.get('feedbackId');
+    if (feedbackId && feedbackId !== scrolledFeedbackId && Object.keys(interviewFeedback).length > 0) {
+      const feedbackExists = Object.values(interviewFeedback).some(comments =>
+        comments.some(c => String(c.id) === String(feedbackId))
+      );
+
+      if (feedbackExists) {
+        const timer = setTimeout(() => {
+          const el = document.getElementById(`feedback-comment-${feedbackId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setScrolledFeedbackId(feedbackId);
+          }
+        }, 300);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [searchParams, interviewFeedback, scrolledFeedbackId]);
 
   // Load notification logs for interviews
   const loadInterviewNotifications = useCallback(async (interviewIds: number[]) => {
@@ -4554,17 +4580,25 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                           const authorAvatar = getAvatarUrl(comment.authorAvatarFilename ?? null);
                           const canDelete = canEdit || comment.authorId === user?.id;
 
+                          const deepLinkedFeedbackId = Number(searchParams.get('feedbackId') || '0');
+                          const isHighlighted = comment.id === deepLinkedFeedbackId;
+
                           return (
-                            <div key={comment.id} style={{
-                              background: 'var(--background)',
-                              borderRadius: 8,
-                              padding: '8px 10px',
-                              border: '1px solid var(--border)',
-                              position: 'relative',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 2,
-                            }}
+                            <div
+                              key={comment.id}
+                              id={`feedback-comment-${comment.id}`}
+                              style={{
+                                background: isHighlighted ? 'rgba(201, 151, 58, 0.12)' : 'var(--background)',
+                                borderRadius: 8,
+                                padding: '8px 10px',
+                                border: isHighlighted ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                boxShadow: isHighlighted ? '0 0 12px rgba(201, 151, 58, 0.25)' : 'none',
+                                position: 'relative',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 2,
+                                transition: 'all 0.3s ease',
+                              }}
                               onMouseEnter={() => setHoveredFeedbackId(comment.id)}
                               onMouseLeave={() => setHoveredFeedbackId(null)}
                             >
@@ -4601,6 +4635,48 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                                 
                                 {/* Actions */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                  {/* Notifications button */}
+                                  {interviewNotifications[iv.id]?.some((log) => {
+                                    try {
+                                      const payload = JSON.parse(log.recipientEmail || '{}');
+                                      return payload.feedbackId === comment.id;
+                                    } catch {
+                                      return false;
+                                    }
+                                  }) && (
+                                    <button
+                                      onClick={() => {
+                                        setNotificationModalFeedbackId(comment.id);
+                                        setNotificationModalLogs(
+                                          interviewNotifications[iv.id]?.filter(log => {
+                                            try {
+                                              const payload = JSON.parse(log.recipientEmail || '{}');
+                                              return payload.feedbackId === comment.id;
+                                            } catch {
+                                              return false;
+                                            }
+                                          }) || []
+                                        );
+                                      }}
+                                      style={{
+                                        background: hoveredFeedbackId === comment.id ? 'rgba(2, 132, 199, 0.08)' : 'transparent',
+                                        border: 'none',
+                                        borderRadius: 6,
+                                        width: 24,
+                                        height: 24,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        opacity: hoveredFeedbackId === comment.id ? 1 : 0,
+                                        transition: 'opacity 0.15s ease, background 0.15s ease',
+                                      }}
+                                      title={t('ats.feedbackNotifications', 'View Notifications')}
+                                    >
+                                      <Bell size={12} color="var(--primary)" />
+                                    </button>
+                                  )}
+
                                   {/* Message / Chat button */}
                                   <button
                                     onClick={() => {
@@ -4833,6 +4909,105 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
           filename={previewDoc.filename}
           onClose={() => setPreviewDoc(null)}
         />
+      )}
+
+      {notificationModalFeedbackId !== null && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(13,33,55,0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => { setNotificationModalFeedbackId(null); setNotificationModalLogs([]); }}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: 12,
+              width: '100%',
+              maxWidth: 400,
+              padding: 24,
+              boxShadow: '0 24px 72px rgba(0,0,0,0.22)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {t('ats.notificationsSent', 'Notifications Sent')}
+            </h3>
+            {notificationModalLogs.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData', 'No data')}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '60vh', overflowY: 'auto' }}>
+                {notificationModalLogs.map((log) => {
+                  let name = '';
+                  let role = log.recipientType;
+                  let company = '';
+                  let storeName = '';
+                  let avatarUrl: string | null = null;
+                  try {
+                    const data = JSON.parse(log.recipientEmail || '{}');
+                    name = data.name || '';
+                    role = data.role || role;
+                    company = data.companyName || '';
+                    storeName = data.storeName || '';
+                    avatarUrl = data.avatarFilename ? getAvatarUrl(data.avatarFilename) : null;
+                  } catch {}
+                  return (
+                    <div key={log.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          background: avatarUrl ? 'transparent' : 'var(--primary)',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?'
+                          )}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name || 'Unknown'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {company}
+                            {storeName && <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: 11, marginTop: 2 }}>{storeName}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>{role.charAt(0).toUpperCase() + role.slice(1).replace('_', ' ')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {new Date(log.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => { setNotificationModalFeedbackId(null); setNotificationModalLogs([]); }}>
+                {t('common.close', 'Close')}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </>
   );
@@ -5589,6 +5764,26 @@ const KanbanPanel: React.FC<{
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
   const [filterJob, setFilterJob] = useState<string>('');
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const openCandidateModal = (c: Candidate) => {
+    setSelected(c);
+    setSearchParams((prev) => {
+      prev.set('candidateId', String(c.id));
+      return prev;
+    }, { replace: true });
+  };
+
+  const closeCandidateModal = () => {
+    setSelected(null);
+    setSearchParams((prev) => {
+      prev.delete('candidateId');
+      prev.delete('interviewId');
+      prev.delete('feedbackId');
+      return prev;
+    }, { replace: true });
+  };
   const [showAddModal, setShowAddModal] = useState(false);
   const [addStep, setAddStep] = useState<1 | 2>(1);
   const [addJobId, setAddJobId] = useState<string>('');
@@ -5690,10 +5885,30 @@ const KanbanPanel: React.FC<{
 
   // Handle deep linking for candidate selection
   useEffect(() => {
-    if (preSelectedCandidateId && candidates.length > 0 && !selected) {
-      const match = candidates.find(c => c.id === preSelectedCandidateId);
-      if (match) {
-        setSelected(match);
+    if (preSelectedCandidateId) {
+      if (!selected || selected.id !== preSelectedCandidateId) {
+        const match = candidates.find(c => c.id === preSelectedCandidateId);
+        if (match) {
+          setSelected(match);
+        } else {
+          let active = true;
+          getCandidate(preSelectedCandidateId)
+            .then(c => {
+              if (active && c) {
+                setSelected(c);
+              }
+            })
+            .catch(err => {
+              console.error('Failed to fetch deep-linked candidate:', err);
+            });
+          return () => {
+            active = false;
+          };
+        }
+      }
+    } else {
+      if (selected) {
+        setSelected(null);
       }
     }
   }, [preSelectedCandidateId, candidates, selected]);
@@ -5866,7 +6081,7 @@ const KanbanPanel: React.FC<{
     try {
       const updated = await updateCandidateStage(selected.id, 'rejected', reason);
       setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-      setSelected(null);
+      closeCandidateModal();
       showToast(t('ats.candidateRejected'), 'success');
     } catch { showToast(t('ats.errorStage'), 'error'); }
     finally { setSaving(false); }
@@ -5879,7 +6094,7 @@ const KanbanPanel: React.FC<{
     try {
       await deleteCandidate(selected.id);
       setCandidates((prev) => prev.filter((c) => c.id !== selected.id));
-      setSelected(null);
+      closeCandidateModal();
       showToast(t('ats.candidateDeleted'), 'success');
     } catch (err) {
       showToast(translateApiError(err, t, t('ats.errorDelete')) ?? t('ats.errorDelete'), 'error');
@@ -6313,7 +6528,7 @@ const KanbanPanel: React.FC<{
                     return (
                       <button
                         key={c.id}
-                        onClick={() => setSelected(c)}
+                        onClick={() => openCandidateModal(c)}
                         style={{
                           background: 'var(--surface)',
                           border: `1px solid ${c.unread ? sc : 'var(--border)'}`,
@@ -7118,7 +7333,7 @@ const KanbanPanel: React.FC<{
           canFeedback={canFeedback}
           interviewInviteEnabled={interviewInviteEnabled}
           smtpConfigured={smtpConfigured}
-          onClose={() => setSelected(null)}
+          onClose={closeCandidateModal}
           onAdvance={handleAdvance}
           onReject={handleReject}
           onDelete={handleDelete}
@@ -7796,14 +8011,42 @@ export default function ATSPage() {
   const canViewRisks = !!user && ['admin', 'hr'].includes(user.role);
   const canFeedback = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
   const canTag = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
-  const [tab, setTab] = useState<'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar'>('candidates');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTabState] = useState<'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar'>(
+    (searchParams.get('view') as 'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar') || 'candidates'
+  );
+  
+  const setTab = (newTab: 'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar') => {
+    setTabState(newTab);
+    setSearchParams((prev) => {
+      prev.set('view', newTab);
+      return prev;
+    }, { replace: true });
+  };
+
+  useEffect(() => {
+    if (!searchParams.get('view')) {
+      setSearchParams((prev) => {
+        prev.set('view', tab);
+        return prev;
+      }, { replace: true });
+    }
+  }, []);
+
+  const urlView = searchParams.get('view') as 'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar' | null;
+  useEffect(() => {
+    if (urlView && urlView !== tab) {
+      setTabState(urlView);
+    }
+  }, [urlView, tab]);
+
   const [stores, setStores] = useState<Store[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | undefined>(undefined);
-  const [searchParams, setSearchParams] = useSearchParams();
+  
   const deepLinkCandidateId = searchParams.get('candidateId') ? Number(searchParams.get('candidateId')) : null;
 
   const isSuperAdmin = !!user?.isSuperAdmin;

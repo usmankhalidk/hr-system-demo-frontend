@@ -20,6 +20,8 @@ export interface Notification {
   recipientSurname?: string | null;
   recipientRole?: string | null;
   recipientAvatarFilename?: string | null;
+  /** Additional data for deep linking (e.g. candidateId, interviewId, feedbackId) */
+  metadata?: Record<string, any>;
 }
 
 export interface NotificationsPage {

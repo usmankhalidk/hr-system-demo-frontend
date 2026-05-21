@@ -3,6 +3,7 @@ import apiClient from './client';
 export interface CompanyGroup {
   id: number;
   name: string;
+  companies?: { id: number; name: string }[];
 }
 
 export interface GroupVisibilityCompany {

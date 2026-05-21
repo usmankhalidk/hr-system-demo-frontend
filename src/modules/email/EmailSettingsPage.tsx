@@ -35,6 +35,8 @@ export default function EmailSettingsPage() {
   });
 
   const [showPass, setShowPass] = useState(false);
+  const [isEditing, setIsEditing] = useState(true);
+  const [hasSavedConfig, setHasSavedConfig] = useState(false);
 
   // Helper to update form fields and reset validation status to idle
   function handleFormChange(fields: Partial<SmtpConfig>) {
@@ -78,7 +80,7 @@ export default function EmailSettingsPage() {
           setCompanyName(null);
         }
 
-        if (data.config) {
+        if (data.config && data.config.smtpHost) {
           setFormData({
             smtpHost: data.config.smtpHost || '',
             smtpPort: data.config.smtpPort || 587,
@@ -86,6 +88,8 @@ export default function EmailSettingsPage() {
             smtpPass: data.config.smtpPass || '',
             smtpFrom: data.config.smtpFrom || '',
           });
+          setHasSavedConfig(true);
+          setIsEditing(false);
         } else {
           // Reset form to defaults if no config has been set for this company yet
           setFormData({
@@ -95,6 +99,8 @@ export default function EmailSettingsPage() {
             smtpPass: '',
             smtpFrom: '',
           });
+          setHasSavedConfig(false);
+          setIsEditing(true);
         }
       } catch (err) {
         console.error('Failed to load email config:', err);
@@ -115,14 +121,8 @@ export default function EmailSettingsPage() {
       await saveEmailConfig(formData, selectedCompanyId);
       showToast(t('email.saveSuccess', 'SMTP configuration saved successfully'), 'success');
 
-      // Immediately trigger email configuration validation process
-      setValidationState('checking');
-      const isValid = await verifyEmailConfig(selectedCompanyId);
-      if (isValid) {
-        setValidationState('success');
-      } else {
-        setValidationState('failed');
-      }
+      setHasSavedConfig(true);
+      setIsEditing(false);
     } catch (err: any) {
       console.error('Failed to save email config:', err);
       const backendError = err.response?.data?.error;
@@ -130,6 +130,21 @@ export default function EmailSettingsPage() {
       showToast(backendError || t('email.errorSave', 'Failed to save email configuration'), 'error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleVerify() {
+    setValidationState('checking');
+    try {
+      const isValid = await verifyEmailConfig(selectedCompanyId);
+      if (isValid) {
+        setValidationState('success');
+      } else {
+        setValidationState('failed');
+      }
+    } catch (err) {
+      console.error('Failed to verify email config:', err);
+      setValidationState('failed');
     }
   }
 
@@ -289,6 +304,7 @@ export default function EmailSettingsPage() {
                 value={formData.smtpHost}
                 onChange={(e) => handleFormChange({ smtpHost: e.target.value })}
                 required
+                disabled={!isEditing}
               />
               <Input
                 label={t('email.smtpPort', 'SMTP Port')}
@@ -297,6 +313,7 @@ export default function EmailSettingsPage() {
                 value={formData.smtpPort}
                 onChange={(e) => handleFormChange({ smtpPort: parseInt(e.target.value, 10) || 0 })}
                 required
+                disabled={!isEditing}
               />
             </div>
 
@@ -307,6 +324,7 @@ export default function EmailSettingsPage() {
                 value={formData.smtpUser}
                 onChange={(e) => handleFormChange({ smtpUser: e.target.value })}
                 required
+                disabled={!isEditing}
               />
               <div style={{ position: 'relative' }}>
                 <Input
@@ -316,23 +334,26 @@ export default function EmailSettingsPage() {
                   value={formData.smtpPass}
                   onChange={(e) => handleFormChange({ smtpPass: e.target.value })}
                   required
+                  disabled={!isEditing}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
+                  disabled={!isEditing}
                   style={{
                     position: 'absolute',
                     right: 12,
                     top: 36,
                     background: 'none',
                     border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
+                    color: !isEditing ? 'var(--text-muted)' : 'var(--text-secondary)',
+                    cursor: !isEditing ? 'not-allowed' : 'pointer',
                     padding: 4,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    zIndex: 10
+                    zIndex: 10,
+                    opacity: !isEditing ? 0.5 : 1
                   }}
                 >
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -346,6 +367,7 @@ export default function EmailSettingsPage() {
               value={formData.smtpFrom}
               onChange={(e) => handleFormChange({ smtpFrom: e.target.value })}
               required
+              disabled={!isEditing}
             />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '10px', borderRadius: 8, background: 'rgba(201,151,58,0.05)', border: '1px solid rgba(201,151,58,0.1)' }}>
@@ -355,14 +377,49 @@ export default function EmailSettingsPage() {
               </p>
             </div>
 
-            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                type="submit"
-                loading={saving}
-                style={{ minWidth: 140 }}
-              >
-                {t('common.save', 'Save Configuration')}
-              </Button>
+            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              {hasSavedConfig && !isEditing && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleVerify}
+                  disabled={validationState === 'checking'}
+                >
+                  {t('email.verifyBtn', 'Verify Configuration')}
+                </Button>
+              )}
+              
+              {!isEditing ? (
+                <Button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  style={{ minWidth: 140 }}
+                >
+                  {t('common.edit', 'Edit Configuration')}
+                </Button>
+              ) : (
+                <>
+                  {hasSavedConfig && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setIsEditing(false);
+                        setValidationState('idle');
+                      }}
+                    >
+                      {t('common.cancel', 'Cancel')}
+                    </Button>
+                  )}
+                  <Button
+                    type="submit"
+                    loading={saving}
+                    style={{ minWidth: 140 }}
+                  >
+                    {t('common.save', 'Save Configuration')}
+                  </Button>
+                </>
+              )}
             </div>
           </form>
         </section>

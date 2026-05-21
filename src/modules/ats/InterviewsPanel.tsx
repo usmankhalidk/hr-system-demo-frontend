@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar, Clock, Phone, Users, Briefcase, FileText, Mail, PhoneIcon, Linkedin, Building2, Store, MessageSquare, Trash2 } from 'lucide-react';
+import { Calendar, Clock, Phone, Users, Briefcase, FileText, Mail, PhoneIcon, Linkedin, Building2, Store, MessageSquare, Trash2, Bell } from 'lucide-react';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { getResumeUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
 import { useTranslation } from 'react-i18next';
-import { getAllInterviews, Interview as APIInterview, getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment, InterviewFeedbackComment } from '../../api/ats';
+import { getAllInterviews, Interview as APIInterview, getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment, InterviewFeedbackComment, getInterviewNotifications, InterviewNotificationLog } from '../../api/ats';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Spinner } from '../../components/ui/Spinner';
@@ -26,6 +26,9 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
   const [savingFeedback, setSavingFeedback] = useState(false);
   const [deletingFeedbackId, setDeletingFeedbackId] = useState<number | null>(null);
   const [hoveredFeedbackId, setHoveredFeedbackId] = useState<number | null>(null);
+  const [interviewNotifications, setInterviewNotifications] = useState<InterviewNotificationLog[]>([]);
+  const [notificationModalFeedbackId, setNotificationModalFeedbackId] = useState<number | null>(null);
+  const [notificationModalLogs, setNotificationModalLogs] = useState<InterviewNotificationLog[]>([]);
 
   useEffect(() => {
     loadInterviews();
@@ -49,8 +52,12 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
     setFeedbackDraft('');
     setLoadingFeedback(true);
     try {
-      const comments = await getInterviewFeedbackComments(interview.id);
+      const [comments, notifications] = await Promise.all([
+        getInterviewFeedbackComments(interview.id),
+        getInterviewNotifications(interview.id).catch(() => []),
+      ]);
       setFeedbackComments(comments);
+      setInterviewNotifications(notifications);
     } catch (error) {
       console.error('Failed to load feedback:', error);
       showToast(t('ats.errorLoadFeedback', 'Failed to load feedback'), 'error');
@@ -953,7 +960,52 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
                                 </div>
                               </div>
                             </div>
-                            {canDelete && (
+                            
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              {/* Notifications button */}
+                              {interviewNotifications.some((log) => {
+                                try {
+                                  const payload = JSON.parse(log.recipientEmail || '{}');
+                                  return payload.feedbackId === comment.id;
+                                } catch {
+                                  return false;
+                                }
+                              }) && (
+                                <button
+                                  onClick={() => {
+                                    setNotificationModalFeedbackId(comment.id);
+                                    setNotificationModalLogs(
+                                      interviewNotifications.filter(log => {
+                                        try {
+                                          const payload = JSON.parse(log.recipientEmail || '{}');
+                                          return payload.feedbackId === comment.id;
+                                        } catch {
+                                          return false;
+                                        }
+                                      }) || []
+                                    );
+                                  }}
+                                  style={{
+                                    background: hoveredFeedbackId === comment.id ? 'rgba(2, 132, 199, 0.08)' : 'transparent',
+                                    border: '1px solid rgba(2, 132, 199, 0.24)',
+                                    borderRadius: 6,
+                                    width: 28,
+                                    height: 28,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    opacity: hoveredFeedbackId === comment.id ? 1 : 0.5,
+                                    transition: 'all 0.15s',
+                                    flexShrink: 0,
+                                  }}
+                                  title={t('ats.feedbackNotifications', 'View Notifications')}
+                                >
+                                  <Bell size={14} color="var(--primary)" />
+                                </button>
+                              )}
+
+                              {canDelete && (
                               <button
                                 onClick={() => handleDeleteFeedback(comment.id)}
                                 disabled={deletingFeedbackId === comment.id}
@@ -976,6 +1028,7 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
                                 <Trash2 size={14} color="#991b1b" />
                               </button>
                             )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1029,6 +1082,105 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
                 loading={savingFeedback}
               >
                 {t('ats.saveFeedback', 'Save Feedback')}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {notificationModalFeedbackId !== null && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(13,33,55,0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => { setNotificationModalFeedbackId(null); setNotificationModalLogs([]); }}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: 12,
+              width: '100%',
+              maxWidth: 400,
+              padding: 24,
+              boxShadow: '0 24px 72px rgba(0,0,0,0.22)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {t('ats.notificationsSent', 'Notifications Sent')}
+            </h3>
+            {notificationModalLogs.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData', 'No data')}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '60vh', overflowY: 'auto' }}>
+                {notificationModalLogs.map((log) => {
+                  let name = '';
+                  let role = log.recipientType;
+                  let company = '';
+                  let storeName = '';
+                  let avatarUrl: string | null = null;
+                  try {
+                    const data = JSON.parse(log.recipientEmail || '{}');
+                    name = data.name || '';
+                    role = data.role || role;
+                    company = data.companyName || '';
+                    storeName = data.storeName || '';
+                    avatarUrl = data.avatarFilename ? getAvatarUrl(data.avatarFilename) : null;
+                  } catch {}
+                  return (
+                    <div key={log.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          background: avatarUrl ? 'transparent' : 'var(--primary)',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?'
+                          )}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name || 'Unknown'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {company}
+                            {storeName && <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: 11, marginTop: 2 }}>{storeName}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>{role.charAt(0).toUpperCase() + role.slice(1).replace('_', ' ')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {new Date(log.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => { setNotificationModalFeedbackId(null); setNotificationModalLogs([]); }}>
+                {t('common.close', 'Close')}
               </Button>
             </div>
           </div>
