@@ -984,6 +984,7 @@ const en = {
   // ─── Shifts ───────────────────────────────────────────────────────────────
   shifts: {
     title: 'Shifts',
+    employees: 'Employees',
     templates: 'Templates',
     copyWeek: 'Copy week',
     export: 'Export CSV',

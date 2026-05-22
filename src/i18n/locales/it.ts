@@ -978,6 +978,7 @@ const it = {
   // ─── Shifts ───────────────────────────────────────────────────────────────
   shifts: {
     title: 'Turni',
+    employees: 'Collaboratori',
     templates: 'Template',
     copyWeek: 'Copia settimana',
     export: 'Esporta CSV',

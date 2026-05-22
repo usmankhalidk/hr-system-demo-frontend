@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, CalendarDays, Moon, Palmtree, Thermometer, Coffee, Store as StoreIcon } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Moon, Palmtree, Thermometer, Coffee, Store as StoreIcon, Clock } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
@@ -236,7 +236,7 @@ export default function DayCalendar({
           {/* Hour ruler */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface-warm)' }}>
             <div style={{
-              width: 190,
+              width: 170,
               flexShrink: 0,
               position: 'sticky',
               left: 0,
@@ -245,6 +245,7 @@ export default function DayCalendar({
               borderRight: '1px solid var(--border)',
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'space-between',
               padding: '6px 10px',
               fontSize: 10,
               fontWeight: 700,
@@ -252,7 +253,8 @@ export default function DayCalendar({
               textTransform: 'uppercase',
               letterSpacing: 0.5,
             }}>
-              {t('shifts.employees', 'Collaboratori')}
+              <span>{t('shifts.employees', 'Employees')}</span>
+              <Clock size={14} strokeWidth={2.5} />
             </div>
             
             <div style={{ display: 'flex', flex: 1, position: 'relative' }}>
@@ -315,6 +317,11 @@ export default function DayCalendar({
               ? getActivityPalette(rowActivities[0].activityType)
               : null;
 
+            const truncateStoreName = (name: string, maxLength: number = 16): string => {
+              if (name.length <= maxLength) return name;
+              return name.slice(0, maxLength) + '...';
+            };
+
             const renderIdentityRow = (opts: {
               storeName: string;
               isTransfer: boolean;
@@ -323,6 +330,7 @@ export default function DayCalendar({
               const isTransfer = opts.isTransfer;
               const status = opts.status ?? 'active';
               const statusVisual = isTransfer ? transferVisualMeta(status) : null;
+              const displayStoreName = truncateStoreName(opts.storeName);
               return (
                 <div style={{
                   minHeight: showDualLane ? 42 : 46,
@@ -357,7 +365,7 @@ export default function DayCalendar({
                       {avatarInitials}
                     </div>
                   )}
-                  <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{
                       fontSize: 13,
                       fontWeight: 700,
@@ -374,7 +382,7 @@ export default function DayCalendar({
                       alignItems: 'center',
                       gap: 4,
                       padding: '1px 6px',
-                      borderRadius: 999,
+                      borderRadius: 99,
                       background: isTransfer ? statusVisual?.bg : 'rgba(13,33,55,0.08)',
                       border: `1px solid ${isTransfer ? statusVisual?.border : 'rgba(13,33,55,0.16)'}`,
                       color: isTransfer ? statusVisual?.color : 'var(--text-secondary)',
@@ -386,7 +394,7 @@ export default function DayCalendar({
                     }}>
                       <StoreIcon size={10} strokeWidth={2.3} style={{ flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }} title={opts.storeName}>
-                        {opts.storeName}
+                        {displayStoreName}
                       </span>
                     </div>
                   </div>
@@ -662,7 +670,7 @@ export default function DayCalendar({
               >
                 {/* Name */}
                 <div style={{
-                  width: 190,
+                  width: 170,
                   flexShrink: 0,
                   padding: 0,
                   fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
@@ -786,7 +794,7 @@ export default function DayCalendar({
                         {HOUR_LABELS.slice(0, -1).map((_, i) => (
                           <div key={`origin-grid-${i}`} style={{
                             position: 'absolute', top: 0, bottom: 0,
-                            left: `${(i / (HOUR_LABELS.length - 1)) * 100}%`,
+                            left: `${(i / (HOUR_LABELS.length - 0.15)) * 100}%`,
                             borderLeft: '1px solid var(--border)',
                             opacity: 0.5, pointerEvents: 'none',
                           }} />
@@ -814,7 +822,7 @@ export default function DayCalendar({
                         {HOUR_LABELS.slice(0, -1).map((_, i) => (
                           <div key={`transfer-grid-${i}`} style={{
                             position: 'absolute', top: 0, bottom: 0,
-                            left: `${(i / (HOUR_LABELS.length - 1)) * 100}%`,
+                            left: `${(i / (HOUR_LABELS.length - 0.15)) * 100}%`,
                             borderLeft: '1px solid var(--border)',
                             opacity: 0.5, pointerEvents: 'none',
                           }} />
@@ -838,7 +846,7 @@ export default function DayCalendar({
                       {HOUR_LABELS.slice(0, -1).map((_, i) => (
                         <div key={i} style={{
                           position: 'absolute', top: 0, bottom: 0,
-                          left: `${(i / (HOUR_LABELS.length - 1)) * 100}%`,
+                          left: `${(i / (HOUR_LABELS.length - 0.15)) * 100}%`,
                           borderLeft: '1px solid var(--border)',
                           opacity: 0.5, pointerEvents: 'none',
                         }} />
