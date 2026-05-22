@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, CalendarDays, Moon, Palmtree, Thermometer, Coffee, Store as StoreIcon, Clock } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Moon, Palmtree, Thermometer, Coffee, Store as StoreIcon, Clock, Maximize, Minimize } from 'lucide-react';
 import { Shift } from '../../api/shifts';
 import { LeaveBlock } from '../../api/leave';
 import { TransferAssignment } from '../../api/transfers';
@@ -126,6 +126,7 @@ export default function DayCalendar({
   const { t, i18n } = useTranslation();
   const { isMobile } = useBreakpoint();
   const [legendOpen, setLegendOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
 
   // Close legend when clicking outside
@@ -189,12 +190,14 @@ export default function DayCalendar({
   const showNowLine = isToday && nowMins >= START_HOUR * 60 && nowMins <= END_HOUR * 60;
 
   return (
-    <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Day header */}
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Day header - Fixed, not scrollable */}
       <div style={{
         padding: '16px 20px 12px',
         borderBottom: '1px solid var(--border)',
         display: 'flex', alignItems: 'center', gap: 12,
+        position: 'relative',
+        zIndex: 8,
       }}>
         <div style={{
           width: 44, height: 44, borderRadius: '50%',
@@ -209,7 +212,7 @@ export default function DayCalendar({
             {date.toLocaleDateString(locale, { month: 'short' }).toUpperCase()}
           </span>
         </div>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: 'var(--primary)' }}>
             {date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
@@ -219,7 +222,30 @@ export default function DayCalendar({
               : t('shifts.noShiftsToday')}
           </div>
         </div>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 30,
+            height: 30,
+            borderRadius: 6,
+            border: '1.5px solid var(--border)',
+            background: isExpanded ? 'var(--primary)' : 'var(--surface)',
+            color: isExpanded ? '#fff' : 'var(--text-primary)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            flexShrink: 0,
+          }}
+          title={isExpanded ? t('common.close', 'Compact') : t('common.open', 'Expand')}
+        >
+          {isExpanded ? <Minimize size={16} strokeWidth={2.5} /> : <Maximize size={16} strokeWidth={2.5} />}
+        </button>
       </div>
+
+      {/* Scrollable content area */}
+      <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
 
       {users.length === 0 ? (
         <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -232,7 +258,7 @@ export default function DayCalendar({
           )}
         </div>
       ) : (
-        <div style={{ minWidth: 1200, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ minWidth: isExpanded ? 2000 : 1200, display: 'flex', flexDirection: 'column' }}>
           {/* Hour ruler */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface-warm)' }}>
             <div style={{
@@ -794,7 +820,7 @@ export default function DayCalendar({
                         {HOUR_LABELS.slice(0, -1).map((_, i) => (
                           <div key={`origin-grid-${i}`} style={{
                             position: 'absolute', top: 0, bottom: 0,
-                            left: `${(i / (HOUR_LABELS.length - 0.15)) * 100}%`,
+                            left: `${(i / (HOUR_LABELS.length - (isExpanded ? 0.525 : 0.15))) * 100}%`,
                             borderLeft: '1px solid var(--border)',
                             opacity: 0.5, pointerEvents: 'none',
                           }} />
@@ -822,7 +848,7 @@ export default function DayCalendar({
                         {HOUR_LABELS.slice(0, -1).map((_, i) => (
                           <div key={`transfer-grid-${i}`} style={{
                             position: 'absolute', top: 0, bottom: 0,
-                            left: `${(i / (HOUR_LABELS.length - 0.15)) * 100}%`,
+                            left: `${(i / (HOUR_LABELS.length - (isExpanded ? 0.525 : 0.15))) * 100}%`,
                             borderLeft: '1px solid var(--border)',
                             opacity: 0.5, pointerEvents: 'none',
                           }} />
@@ -846,7 +872,7 @@ export default function DayCalendar({
                       {HOUR_LABELS.slice(0, -1).map((_, i) => (
                         <div key={i} style={{
                           position: 'absolute', top: 0, bottom: 0,
-                          left: `${(i / (HOUR_LABELS.length - 0.15)) * 100}%`,
+                          left: `${(i / (HOUR_LABELS.length - (isExpanded ? 0.525 : 0.15))) * 100}%`,
                           borderLeft: '1px solid var(--border)',
                           opacity: 0.5, pointerEvents: 'none',
                         }} />
@@ -1104,6 +1130,7 @@ export default function DayCalendar({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
