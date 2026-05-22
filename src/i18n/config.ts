@@ -5,7 +5,35 @@ import en from './locales/en';
 
 const STORAGE_KEY = 'hr_lang';
 
-const savedLang = localStorage.getItem(STORAGE_KEY);
+const getStorageItem = (key: string): string | null => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem(key);
+    }
+    if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+      return localStorage.getItem(key);
+    }
+  } catch (e) {
+    // Ignore storage access errors
+  }
+  return null;
+};
+
+const setStorageItem = (key: string, value: string): void => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, value);
+      return;
+    }
+    if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
+      localStorage.setItem(key, value);
+    }
+  } catch (e) {
+    // Ignore storage access errors
+  }
+};
+
+const savedLang = getStorageItem(STORAGE_KEY);
 const defaultLang = (savedLang === 'it' || savedLang === 'en') ? savedLang : 'it';
 
 i18n
@@ -24,7 +52,7 @@ i18n
 
 // Persist language change to localStorage
 i18n.on('languageChanged', (lng) => {
-  localStorage.setItem(STORAGE_KEY, lng);
+  setStorageItem(STORAGE_KEY, lng);
 });
 
 export default i18n;

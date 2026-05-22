@@ -236,74 +236,108 @@ const LoginPage: React.FC = () => {
         {/* Right edge separator */}
         <div style={{ position: 'absolute', top: '8%', right: 0, width: 1, height: '84%', background: 'linear-gradient(180deg, transparent, rgba(201,151,58,0.28) 25%, rgba(201,151,58,0.28) 75%, transparent)', pointerEvents: 'none' }} />
 
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', padding: '48px 52px' }}>
-          {/* Logo mark */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-            <img src={fusaroLogoUrl} alt="Fusaro Antonio 1893" style={{ width: 100, height: 100, objectFit: 'contain' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#C9973A', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-              {t('nav.appVersion')}
-            </span>
-          </div>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', padding: '24px 52px' }}>
+          {/* ── Center: Logo prominently centered ── */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0px' }}>
+            {/* Logo — large, centered, beautiful */}
+            <img
+              src={fusaroLogoUrl}
+              alt="Fusaro Antonio 1893"
+              style={{
+                width: '280px',
+                height: 'auto',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0px 8px 32px rgba(201,151,58,0.25))',
+              }}
+            />
 
-          {/* Central copy */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: '32px' }}>
-            <div style={{ width: 44, height: 2, background: 'linear-gradient(90deg, #C9973A, rgba(201,151,58,0.25))', marginBottom: '32px', borderRadius: 1 }} />
+            {/* Decorative gold line */}
+            <div style={{ width: 48, height: 1.5, background: 'linear-gradient(90deg, transparent, #C9973A, transparent)', borderRadius: 1, marginBottom: '20px' }} />
 
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', fontWeight: 800, lineHeight: 0.94, letterSpacing: '-0.04em', color: '#FFFFFF', marginBottom: '4px' }}>
-              FUSARO
+            {/* HR System badge — centered under logo */}
+            <div style={{ marginBottom: '20px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: '#C9973A', textTransform: 'uppercase', letterSpacing: '0.14em', border: '1px solid rgba(201,151,58,0.3)', padding: '5px 15px', borderRadius: '20px', background: 'rgba(201,151,58,0.05)', display: 'inline-block' }}>
+                {t('nav.appName')}
+              </span>
             </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', fontWeight: 300, lineHeight: 0.94, letterSpacing: '0.16em', color: '#C9973A', marginBottom: '32px' }}>
-              UOMO
-            </div>
 
-            <p style={{ fontSize: '13.5px', color: 'rgba(255,255,255,0.36)', lineHeight: 1.75, maxWidth: '280px', marginBottom: '48px' }}>
+            {/* Subtitle */}
+            <p style={{
+              fontSize: '13px',
+              color: 'rgba(201,151,58,0.65)',
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+              margin: '0 0 40px',
+              textAlign: 'center',
+            }}>
               {t('login.brandSubtitle')}
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Feature highlights */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {([
                 { path: <><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" /></>, text: t('login.feature1') },
                 { path: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />, text: t('login.feature2') },
                 { path: <><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></>, text: t('login.feature3') },
               ] as { path: React.ReactNode; text: string }[]).map((f, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                  <div style={{ width: 30, height: 30, flexShrink: 0, background: 'rgba(201,151,58,0.1)', border: '1px solid rgba(201,151,58,0.22)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9973A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{f.path}</svg>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: 28, height: 28, flexShrink: 0, background: 'rgba(201,151,58,0.08)', border: '1px solid rgba(201,151,58,0.18)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9973A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{f.path}</svg>
                   </div>
-                  <span style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.42)', lineHeight: 1.6, paddingTop: '5px' }}>{f.text}</span>
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.38)', lineHeight: 1.5 }}>{f.text}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Footer */}
-          <div>
+          <div style={{ marginTop: 'auto' }}>
             <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.06)', marginBottom: '18px' }} />
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.16)', letterSpacing: '0.02em' }}>{t('login.footer', { year: new Date().getFullYear() })}</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.16)', letterSpacing: '0.02em', textAlign: 'center' }}>{t('login.footer', { year: new Date().getFullYear() })}</p>
           </div>
         </div>
       </div>
 
       {/* ══ RIGHT — form panel ══ */}
-      <div style={{ flex: 1, overflowY: 'auto', background: '#FFFFFF', position: 'relative' }}>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#FFFFFF', position: 'relative', display: 'flex', flexDirection: 'column' }}>
 
         {/* Language switcher — top right */}
-        <div style={{ position: 'absolute', top: 24, right: 32, zIndex: 10 }}>
+        <div style={{ position: 'absolute', top: isMobile ? 10 : 24, right: isMobile ? 12 : 32, zIndex: 10 }}>
           <LangPill />
         </div>
 
+        {/* Mobile logo header — centered at top */}
+        {isMobile && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <img
+              src={fusaroLogoUrl}
+              alt="Fusaro Antonio 1893"
+              style={{
+                width: '200px',
+                height: 'auto',
+                objectFit: 'contain',
+              }}
+            />
+          </div>
+        )}
+
         {/* Centered form */}
-        <div style={{ minHeight: '100%', display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? '40px 16px' : '80px 48px 60px' }}>
-          <div style={{ width: isMobile ? '100%' : '420px', maxWidth: '100%', padding: isMobile ? '28px 20px' : '0px 0px', animation: 'fadeSlideUp 0.35s ease forwards' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? '0px 20px 40px' : '60px 48px 60px' }}>
+          <div style={{ width: isMobile ? '100%' : '420px', maxWidth: '100%', animation: 'fadeSlideUp 0.35s ease forwards' }}>
 
             {/* Editorial number */}
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '110px', fontWeight: 800, color: 'rgba(13,33,55,0.05)', lineHeight: 1, marginBottom: '-28px', marginLeft: '-5px', userSelect: 'none', letterSpacing: '-0.06em' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? '80px' : '110px', fontWeight: 800, color: 'rgba(13,33,55,0.05)', lineHeight: 1, marginBottom: isMobile ? '-20px' : '-28px', marginLeft: '-5px', userSelect: 'none', letterSpacing: '-0.06em' }}>
               01
             </div>
 
             {/* Heading */}
-            <div style={{ marginBottom: '36px' }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '32px', fontWeight: 700, color: '#0D2137', letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0 0 14px' }}>
+            <div style={{ marginBottom: isMobile ? '28px' : '36px' }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? '26px' : '32px', fontWeight: 700, color: '#0D2137', letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0 0 14px' }}>
                 {t('login.title')}
               </h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
@@ -362,7 +396,7 @@ const LoginPage: React.FC = () => {
                   </span>
                 </label>
 
-                {/* Submit button — hardcoded colours, no CSS vars */}
+                {/* Submit button */}
                 <button
                   type="submit"
                   disabled={isDisabled}
@@ -396,19 +430,10 @@ const LoginPage: React.FC = () => {
               </div>
             </form>
 
-            {/* 🔥 MOCKUP LOGO PLACEMENT: Centered prominently at the bottom */}{!isMobile ? <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <img
-                src={fusaroLogoUrl}
-                alt="Fusaro Antonio 1893"
-                style={{
-                  height: 150, // Sized perfectly to match the prominence in your mockup
-                  width: 'auto',
-                  objectFit: 'contain'
-                }}
-              />
-            </div> : null}
-
-
+            {/* Subtle footer on form side */}
+            <p style={{ textAlign: 'center', fontSize: '11px', color: '#D1D5DB', marginTop: '36px', letterSpacing: '0.02em' }}>
+              {t('login.footer', { year: new Date().getFullYear() })}
+            </p>
           </div>
         </div>
       </div>
