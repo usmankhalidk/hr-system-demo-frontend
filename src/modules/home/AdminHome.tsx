@@ -243,6 +243,7 @@ interface CustomTimeRangeDropdownProps {
 }
 
 const CustomTimeRangeDropdown: React.FC<CustomTimeRangeDropdownProps> = ({ value, onChange }) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -259,9 +260,9 @@ const CustomTimeRangeDropdown: React.FC<CustomTimeRangeDropdownProps> = ({ value
   }, []);
 
   const options = [
-    { value: 'this_week', label: 'This Week' },
-    { value: 'this_month', label: 'This Month' },
-    { value: 'three_months', label: 'Three Months' },
+    { value: 'this_week', label: t('home.admin.timeRangeThisWeek') },
+    { value: 'this_month', label: t('home.admin.timeRangeThisMonth') },
+    { value: 'three_months', label: t('home.admin.timeRangeThreeMonths') },
   ];
 
   const selectedOption = options.find(opt => opt.value === value) || options[1];
@@ -452,32 +453,32 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRan
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : isTablet ? '1fr 1fr' : 'repeat(4, 1fr)', gap: '16px' }}>
         <StatCard 
-          label="Attendance Rate" 
+          label={t('home.admin.attendanceRate')} 
           value={dashboardStats?.attendanceRate ? `${dashboardStats.attendanceRate}%` : '0%'} 
           icon={<IconActivity />} 
           accent="#15803D" 
-          description={timeRange === 'this_week' ? 'This week' : timeRange === 'three_months' ? 'Last 3 months' : 'This month'} 
+          description={timeRange === 'this_week' ? t('home.admin.thisWeek') : timeRange === 'three_months' ? t('home.admin.lastThreeMonths') : t('home.admin.thisMonth')} 
         />
         <StatCard 
-          label="Total Absences" 
+          label={t('home.admin.totalAbsences')} 
           value={dashboardStats?.totalAbsences || 0} 
           icon={<IconUserMinus />} 
           accent="#EF4444" 
-          description={timeRange === 'this_week' ? 'This week' : timeRange === 'three_months' ? 'Last 3 months' : 'This month'} 
+          description={timeRange === 'this_week' ? t('home.admin.thisWeek') : timeRange === 'three_months' ? t('home.admin.lastThreeMonths') : t('home.admin.thisMonth')} 
         />
         <StatCard 
-          label="Delays" 
+          label={t('home.admin.delays')} 
           value={dashboardStats?.delays || 0} 
           icon={<IconClock />} 
           accent="#D97706" 
-          description={timeRange === 'this_week' ? 'This week' : timeRange === 'three_months' ? 'Last 3 months' : 'This month'} 
+          description={timeRange === 'this_week' ? t('home.admin.thisWeek') : timeRange === 'three_months' ? t('home.admin.lastThreeMonths') : t('home.admin.thisMonth')} 
         />
         <StatCard 
-          label="Shift Coverage" 
+          label={t('home.admin.shiftCoverage')} 
           value={dashboardStats?.shiftCoverage ? `${dashboardStats.shiftCoverage}%` : '0%'} 
           icon={<IconCalendar />} 
           accent="#0284C7" 
-          description="Confirmed Shifts" 
+          description={t('home.admin.confirmedShifts')} 
         />
       </div>
 
@@ -552,25 +553,25 @@ export const AdminHome: React.FC<AdminHomeProps> = ({ data, timeRange, onTimeRan
       {data.staticStats && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
           <StatCard 
-            label="Document Expiry" 
+            label={t('home.admin.documentExpiry')} 
             value={data.staticStats.documentExpiryCount} 
             icon={<IconDocument />} 
             accent="#D97706" 
-            description="Documents expiring in 60 days" 
+            description={t('home.admin.documentExpiryDesc')} 
           />
           <StatCard 
-            label="Onboarding in progress" 
+            label={t('home.admin.onboardingInProgress')} 
             value={data.staticStats.onboardingInProgress} 
             icon={<IconClipboard />} 
             accent="#0284C7" 
-            description={`${data.staticStats.onboardingCompletionRate}% average completion`} 
+            description={t('home.admin.onboardingCompletionRate', { rate: data.staticStats.onboardingCompletionRate })} 
           />
           <StatCard 
-            label="ATS Candidates" 
+            label={t('home.admin.atsCandidates')} 
             value={data.staticStats.atsTotalCandidates} 
             icon={<IconBriefcase />} 
             accent="#15803D" 
-            description={`${data.staticStats.atsInterviewCandidates} in interview stage`} 
+            description={t('home.admin.atsCandidatesDesc', { count: data.staticStats.atsInterviewCandidates })} 
           />
         </div>
       )}

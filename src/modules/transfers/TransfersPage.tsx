@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Building2, CalendarClock, Clock3, MapPin, Sparkles, Store, UserRound, X } from 'lucide-react';
+import { ArrowLeftRight, Building2, CalendarClock, Clock3, Filter, MapPin, Sparkles, Store, UserRound, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { Employee, Store as StoreType } from '../../types';
+import { Employee, Store as StoreType, Company } from '../../types';
 import { getEmployees, EmployeeListParams } from '../../api/employees';
 import { getStores } from '../../api/stores';
+import { getCompanies } from '../../api/companies';
 import {
   TransferAssignment,
   TransferLinkedShift,
@@ -21,6 +22,8 @@ import {
   completeTransfer,
 } from '../../api/transfers';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import { TransferFilterModal, TransferFilterValues } from './TransferFilterModal';
+import { SelectOption } from '../../components/ui/CustomSelect';
 
 const WRITE_ROLES = ['admin', 'hr', 'area_manager'] as const;
 
@@ -141,8 +144,14 @@ export default function TransfersPage() {
   const dateLocale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
 
   const canWrite = Boolean(user && WRITE_ROLES.includes(user.role as (typeof WRITE_ROLES)[number]));
+  const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr';
+  const isSuperAdmin = user?.isSuperAdmin === true;
 
+  const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<TransferStatus | 'all'>('all');
+  const [companyFilter, setCompanyFilter] = useState<string>('');
+  const [storeFilter, setStoreFilter] = useState<string>('');
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [transfers, setTransfers] = useState<TransferAssignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,6 +164,7 @@ export default function TransfersPage() {
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [linkedShifts, setLinkedShifts] = useState<TransferLinkedShift[]>([]);
   const [linkedShiftsLoading, setLinkedShiftsLoading] = useState(false);
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
@@ -235,19 +245,132 @@ export default function TransfersPage() {
     return { origin, transferred, other };
   }, [linkedShifts, editingTransfer]);
 
+  // Load companies and stores for filters
+  useEffect(() => {
+    if (isAdminOrHr || isSuperAdmin) {
+      getCompanies()
+        .then(setCompanies)
+        .catch(() => setCompanies([]));
+    }
+    getStores()
+      .then(setStores)
+      .catch(() => setStores([]));
+  }, [isAdminOrHr, isSuperAdmin]);
+
+  // Filter options
+  const companyOptions = useMemo<SelectOption[]>(() => {
+    return companies.map((c) => ({
+      value: String(c.id),
+      label: c.name,
+    }));
+  }, [companies]);
+
+  const storeOptions = useMemo<SelectOption[]>(() => {
+    return stores.map((s) => ({
+      value: String(s.id),
+      label: s.companyName ? `${s.name} (${s.companyName})` : s.name,
+    }));
+  }, [stores]);
+
+  const statusOptions = useMemo<SelectOption[]>(() => [
+    { value: 'active', label: t('transfers.status.active', 'Active') },
+    { value: 'completed', label: t('transfers.status.completed', 'Completed') },
+    { value: 'cancelled', label: t('transfers.status.cancelled', 'Cancelled') },
+  ], [t]);
+
+  const hasActiveFilters = !!(search || companyFilter || storeFilter || (statusFilter !== 'all'));
+
+  const activeFilterTags = useMemo(() => {
+    const tags: Array<{ key: string; label: string; value: string }> = [];
+    
+    if (companyFilter) {
+      const company = companies.find((c) => String(c.id) === companyFilter);
+      if (company) {
+        tags.push({ key: 'company', label: t('transfers.filterCompany', 'Company'), value: company.name });
+      }
+    }
+    
+    if (storeFilter) {
+      const store = stores.find((s) => String(s.id) === storeFilter);
+      if (store) {
+        tags.push({ key: 'store', label: t('transfers.filterStore', 'Store'), value: store.name });
+      }
+    }
+    
+    if (statusFilter !== 'all') {
+      const statusLabel = t(`transfers.status.${statusFilter}`, statusFilter);
+      tags.push({ key: 'status', label: t('transfers.filterStatus', 'Status'), value: statusLabel });
+    }
+    
+    return tags;
+  }, [companyFilter, storeFilter, statusFilter, companies, stores, t]);
+
+  // Client-side search filtering
+  const filteredTransfers = useMemo(() => {
+    if (!search.trim()) return transfers;
+    
+    const searchLower = search.toLowerCase().trim();
+    return transfers.filter((transfer) => {
+      const fullName = `${transfer.userName} ${transfer.userSurname}`.toLowerCase();
+      const originStore = transfer.originStoreName?.toLowerCase() || '';
+      const targetStore = transfer.targetStoreName?.toLowerCase() || '';
+      const companyName = transfer.companyName?.toLowerCase() || '';
+      const status = transfer.status.toLowerCase();
+      
+      return (
+        fullName.includes(searchLower) ||
+        originStore.includes(searchLower) ||
+        targetStore.includes(searchLower) ||
+        companyName.includes(searchLower) ||
+        status.includes(searchLower)
+      );
+    });
+  }, [transfers, search]);
+
+  const handleApplyFilters = useCallback((filters: TransferFilterValues) => {
+    setCompanyFilter(filters.company_id);
+    setStoreFilter(filters.store_id);
+    setStatusFilter(filters.status ? (filters.status as TransferStatus) : 'all');
+    setShowFilterModal(false);
+  }, []);
+
+  const removeFilter = useCallback((key: string) => {
+    if (key === 'company') setCompanyFilter('');
+    if (key === 'store') setStoreFilter('');
+    if (key === 'status') setStatusFilter('all');
+  }, []);
+
+  const resetAllFilters = useCallback(() => {
+    setSearch('');
+    setCompanyFilter('');
+    setStoreFilter('');
+    setStatusFilter('all');
+  }, []);
+
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listTransfers(statusFilter === 'all' ? undefined : { status: statusFilter });
-      setTransfers(data.transfers);
+      const params: any = {};
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (storeFilter) params.store_id = parseInt(storeFilter, 10);
+      // Note: Backend doesn't support company_id filter directly, but we can filter client-side
+      const data = await listTransfers(Object.keys(params).length > 0 ? params : undefined);
+      
+      // Client-side company filter
+      let filtered = data.transfers;
+      if (companyFilter) {
+        filtered = filtered.filter(t => String(t.companyId) === companyFilter);
+      }
+      
+      setTransfers(filtered);
     } catch (err: any) {
       const code = err?.response?.data?.code as string | undefined;
       setError(code ? t(`errors.${code}`, t('errors.DEFAULT')) : t('errors.DEFAULT'));
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, t]);
+  }, [statusFilter, storeFilter, companyFilter, t]);
 
   useEffect(() => {
     void fetchTransfers();
@@ -586,28 +709,180 @@ export default function TransfersPage() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        {(['all', 'active', 'completed', 'cancelled'] as const).map((item) => {
-          const active = item === statusFilter;
-          return (
-            <button
-              key={item}
-              onClick={() => setStatusFilter(item)}
+      {/* Search and Filter Section */}
+      <div style={{ 
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        marginBottom: 18,
+      }}>
+        {/* Search and Filter Button Row */}
+        <div style={{ 
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'center',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '10px 12px',
+          boxShadow: 'var(--shadow-xs)',
+        }}>
+          {/* Search Input */}
+          <div style={{ flex: 1, position: 'relative' }}>
+            <svg 
+              width="18" 
+              height="18" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="var(--text-muted)" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
               style={{
-                border: active ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                background: active ? 'rgba(13,33,55,0.08)' : 'var(--surface)',
-                color: active ? 'var(--primary)' : 'var(--text-secondary)',
-                borderRadius: 8,
-                padding: '6px 12px',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                pointerEvents: 'none',
               }}
             >
-              {t(`transfers.filter.${item}`, item)}
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input
+              type="text"
+              placeholder={t('transfers.searchPlaceholder', 'Search transfers...')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: '100%',
+                paddingLeft: '40px',
+                padding: '10px 12px 10px 40px',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                fontSize: '14px',
+                fontFamily: 'var(--font-body)',
+                background: 'var(--background)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                transition: 'border-color 0.15s',
+              }}
+              onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+            />
+          </div>
+
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilterModal(true)}
+            style={{
+              background: hasActiveFilters
+                ? 'linear-gradient(135deg, var(--accent) 0%, #B48719 100%)'
+                : 'var(--surface)',
+              color: hasActiveFilters ? '#fff' : 'var(--text-secondary)',
+              border: hasActiveFilters ? 'none' : '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              padding: '10px 18px',
+              fontSize: '13px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-body)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexShrink: 0,
+              transition: 'all 0.2s',
+              boxShadow: hasActiveFilters ? '0 2px 8px rgba(139,105,20,0.24)' : 'none',
+              position: 'relative',
+            }}
+          >
+            <Filter size={16} strokeWidth={2.5} />
+            {t('transfers.filters', 'Filters')}
+            {activeFilterTags.length > 0 && (
+              <span
+                style={{
+                  background: '#fff',
+                  color: 'var(--accent)',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  borderRadius: '999px',
+                  minWidth: '18px',
+                  textAlign: 'center',
+                }}
+              >
+                {activeFilterTags.length}
+              </span>
+            )}
+          </button>
+
+          {/* Reset Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={resetAllFilters}
+              style={{
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                padding: '10px 14px',
+                fontSize: '13px',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-body)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                flexShrink: 0,
+                transition: 'border-color 0.15s, color 0.15s',
+              }}
+              title={t('transfers.resetFilters', 'Reset all filters')}
+            >
+              <X size={16} />
+              {t('transfers.reset', 'Reset')}
             </button>
-          );
-        })}
+          )}
+        </div>
+
+        {/* Active Filter Tags */}
+        {activeFilterTags.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '0 4px' }}>
+            {activeFilterTags.map((tag) => (
+              <div
+                key={tag.key}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: 'rgba(13,33,55,0.06)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: '5px 10px',
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{tag.label}:</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{tag.value}</span>
+                <button
+                  onClick={() => removeFilter(tag.key)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                    padding: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRadius: 4,
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                  title={t('transfers.removeFilter', 'Remove filter')}
+                >
+                  <X size={14} strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {success && (
@@ -699,7 +974,6 @@ export default function TransfersPage() {
                 <th style={thStyle}>{t('transfers.table.origin', 'Origine')}</th>
                 <th style={thStyle}>{t('transfers.table.target', 'Destinazione')}</th>
                 <th style={thStyle}>{t('transfers.table.period', 'Periodo')}</th>
-                <th style={thStyle}>{t('transfers.table.days', 'Days')}</th>
                 <th style={thStyle}>{t('transfers.table.status', 'Stato')}</th>
                 <th style={{ ...thStyle, textAlign: 'right' }}>{t('common.actions', 'Azioni')}</th>
               </tr>
@@ -707,22 +981,26 @@ export default function TransfersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
                     {t('common.loading', 'Caricamento...')}
                   </td>
                 </tr>
-              ) : transfers.length === 0 ? (
+              ) : filteredTransfers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
-                    {t('transfers.empty', 'Nessun trasferimento trovato')}
+                  <td colSpan={7} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
+                    {search ? t('transfers.noResults', 'No transfers found matching your search') : t('transfers.empty', 'Nessun trasferimento trovato')}
                   </td>
                 </tr>
-              ) : transfers.map((transfer) => {
+              ) : filteredTransfers.map((transfer) => {
                 const badge = statusBadge(transfer.status);
                 const fullName = `${transfer.userName} ${transfer.userSurname}`.trim();
                 const initials = `${transfer.userName?.[0] ?? ''}${transfer.userSurname?.[0] ?? ''}`.toUpperCase() || 'U';
                 const avatarUrl = getAvatarUrl(transfer.userAvatarFilename);
                 const daysInPeriod = transferDaysInclusive(transfer.startDate, transfer.endDate);
+                const originStoreLogoUrl = getStoreLogoUrl(transfer.originStoreLogoFilename);
+                const targetStoreLogoUrl = getStoreLogoUrl(transfer.targetStoreLogoFilename);
+                const originStoreInitials = transfer.originStoreName?.slice(0, 2).toUpperCase() || 'OR';
+                const targetStoreInitials = transfer.targetStoreName?.slice(0, 2).toUpperCase() || 'TA';
                 return (
                   <tr key={transfer.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={tdStyle}>
@@ -753,32 +1031,144 @@ export default function TransfersPage() {
                         </div>
                       </div>
                     </td>
-                    <td style={tdStyle}>{transfer.companyName ?? '—'}</td>
                     <td style={tdStyle}>
-                      <span style={chipStyle}><Store size={11} />{transfer.originStoreName}</span>
-                    </td>
-                    <td style={tdStyle}>
-                      <span style={{ ...chipStyle, borderColor: 'rgba(13,33,55,0.28)' }}><ArrowLeftRight size={11} />{transfer.targetStoreName}</span>
-                    </td>
-                    <td style={tdStyle}>
-                      <span>{transfer.startDate} - {transfer.endDate}</span>
-                    </td>
-                    <td style={tdStyle}>
-                      {daysInPeriod != null ? (
-                        <span style={{
-                          width: 'fit-content',
-                          padding: '2px 8px',
-                          borderRadius: 999,
-                          border: '1px solid rgba(13,33,55,0.2)',
-                          background: 'rgba(13,33,55,0.05)',
-                          color: 'var(--text-secondary)',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          display: 'inline-block',
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <div style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          overflow: 'hidden',
+                          border: '1px solid var(--border)',
+                          background: 'rgba(13,33,55,0.08)',
+                          color: 'var(--accent)',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
                         }}>
-                          {daysInPeriod}
-                        </span>
-                      ) : '—'}
+                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)' }}>
+                            {transfer.companyName ? transfer.companyName.slice(0, 2).toUpperCase() : 'CO'}
+                          </span>
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: transfer.companyName ? 'var(--text-primary)' : 'var(--text-disabled)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              fontWeight: 700,
+                              maxWidth: '140px'
+                            }}
+                            title={transfer.companyName ?? undefined}
+                          >
+                            {transfer.companyName ?? '—'}
+                          </div>
+                          {transfer.groupName ? (
+                            <div style={{ 
+                              fontSize: 11, 
+                              color: 'var(--text-muted)', 
+                              marginTop: 2, 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis', 
+                              whiteSpace: 'nowrap',
+                              maxWidth: '140px'
+                            }} title={transfer.groupName}>
+                              {transfer.groupName}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <div style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          overflow: 'hidden',
+                          border: '1px solid var(--border)',
+                          background: originStoreLogoUrl ? '#fff' : 'rgba(13,33,55,0.08)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          {originStoreLogoUrl ? (
+                            <img src={originStoreLogoUrl} alt={transfer.originStoreName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)' }}>{originStoreInitials}</span>
+                          )}
+                        </div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          fontWeight: 600, 
+                          color: 'var(--text-primary)', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap',
+                          maxWidth: '140px'
+                        }} title={transfer.originStoreName}>
+                          {transfer.originStoreName}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <div style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          overflow: 'hidden',
+                          border: '1px solid var(--border)',
+                          background: targetStoreLogoUrl ? '#fff' : 'rgba(13,33,55,0.08)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          {targetStoreLogoUrl ? (
+                            <img src={targetStoreLogoUrl} alt={transfer.targetStoreName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)' }}>{targetStoreInitials}</span>
+                          )}
+                        </div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          fontWeight: 600, 
+                          color: 'var(--text-primary)', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap',
+                          maxWidth: '140px'
+                        }} title={transfer.targetStoreName}>
+                          {transfer.targetStoreName}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={tdStyle}>
+                      <div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          fontWeight: 700, 
+                          color: 'var(--text-primary)',
+                          marginBottom: 4
+                        }}>
+                          {daysInPeriod != null ? (
+                            <span>{daysInPeriod} {daysInPeriod === 1 ? t('transfers.day', 'giorno') : t('transfers.days', 'giorni')}</span>
+                          ) : '—'}
+                        </div>
+                        <div style={{ 
+                          fontSize: 11, 
+                          color: 'var(--text-muted)', 
+                          lineHeight: 1.3 
+                        }}>
+                          {transfer.startDate} - {transfer.endDate}
+                        </div>
+                      </div>
                     </td>
                     <td style={tdStyle}>
                       <span style={{ background: badge.bg, color: badge.color, padding: '4px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
@@ -786,8 +1176,25 @@ export default function TransfersPage() {
                       </span>
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'right' }}>
-                      <button className="btn btn-secondary" onClick={() => openEditDrawer(transfer)}>
-                        {t('common.detail', 'Dettaglio')}
+                      <button 
+                        onClick={() => openEditDrawer(transfer)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: 'var(--accent)',
+                          fontFamily: 'var(--font-body)',
+                          padding: '5px 10px',
+                          borderRadius: 'var(--radius-sm)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {t('common.detail', 'Dettaglio')} →
                       </button>
                     </td>
                   </tr>
@@ -1397,44 +1804,113 @@ export default function TransfersPage() {
                       marginTop: 14,
                       border: '1px solid var(--border)',
                       borderRadius: 10,
-                      padding: '10px 12px',
+                      padding: '12px 14px',
                       background: 'rgba(13,33,55,0.03)',
                     }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 10 }}>
                         {t('transfers.metaTitle', 'Dettagli trasferimento')}
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.transferredBy', 'Trasferito da')}:</strong>{' '}
-                          {editingTransfer.createdByName ? `${editingTransfer.createdByName} ${editingTransfer.createdBySurname ?? ''}`.trim() : '—'}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {/* Transferred by with avatar */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            background: 'rgba(13,33,55,0.14)',
+                            color: '#0D2137',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            {editingTransfer.createdByAvatarFilename ? (
+                              <img 
+                                src={getAvatarUrl(editingTransfer.createdByAvatarFilename) ?? ''} 
+                                alt={editingTransfer.createdByName ?? ''} 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                              />
+                            ) : (
+                              <span>{editingTransfer.createdByName?.[0] ?? 'U'}{editingTransfer.createdBySurname?.[0] ?? ''}</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.transferredBy', 'Trasferito da')}:</strong>{' '}
+                            {editingTransfer.createdByName ? `${editingTransfer.createdByName} ${editingTransfer.createdBySurname ?? ''}`.trim() : '—'}
+                          </div>
                         </div>
+
+                        {/* Status badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.statusLabel', 'Stato')}:</strong>
+                          </div>
+                          <span style={{ 
+                            background: statusBadge(editingTransfer.status).bg, 
+                            color: statusBadge(editingTransfer.status).color, 
+                            padding: '3px 10px', 
+                            borderRadius: 999, 
+                            fontSize: 10, 
+                            fontWeight: 700,
+                            textTransform: 'uppercase'
+                          }}>
+                            {t(`transfers.status.${editingTransfer.status}`, statusBadge(editingTransfer.status).label)}
+                          </span>
+                        </div>
+
+                        {/* Company */}
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.table.company', 'Azienda')}:</strong>{' '}
                           {transferCompanyGroupLabel(editingTransfer)}
                         </div>
+
+                        {/* Created at */}
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.transferredAt', 'Data trasferimento')}:</strong>{' '}
                           {formatTransferDateTime(editingTransfer.createdAt, dateLocale)}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.form.cancelOriginShifts', 'Annulla turni origine')}:</strong>{' '}
-                          {editingTransfer.cancelOriginShifts ? t('common.yes', 'Sì') : t('common.no', 'No')}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.statusLabel', 'Stato')}:</strong>{' '}
-                          {t(`transfers.status.${editingTransfer.status}`, editingTransfer.status)}
-                        </div>
+
                         {editingTransfer.status === 'completed' && (
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                             <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.completedAt', 'Completato il')}:</strong>{' '}
                             {formatTransferDateTime(editingTransfer.updatedAt, dateLocale)}
                           </div>
                         )}
+
                         {editingTransfer.cancelledAt && (
                           <>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.cancelledBy', 'Annullato da')}:</strong>{' '}
-                              {editingTransfer.cancelledByName ? `${editingTransfer.cancelledByName} ${editingTransfer.cancelledBySurname ?? ''}`.trim() : '—'}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                overflow: 'hidden',
+                                background: 'rgba(13,33,55,0.14)',
+                                color: '#0D2137',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}>
+                                {editingTransfer.cancelledByAvatarFilename ? (
+                                  <img 
+                                    src={getAvatarUrl(editingTransfer.cancelledByAvatarFilename) ?? ''} 
+                                    alt={editingTransfer.cancelledByName ?? ''} 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                  />
+                                ) : (
+                                  <span>{editingTransfer.cancelledByName?.[0] ?? 'U'}{editingTransfer.cancelledBySurname?.[0] ?? ''}</span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.cancelledBy', 'Annullato da')}:</strong>{' '}
+                                {editingTransfer.cancelledByName ? `${editingTransfer.cancelledByName} ${editingTransfer.cancelledBySurname ?? ''}`.trim() : '—'}
+                              </div>
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                               <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.cancelledAt', 'Data annullamento')}:</strong>{' '}
@@ -1442,6 +1918,31 @@ export default function TransfersPage() {
                             </div>
                           </>
                         )}
+
+                        {/* Cancel origin shifts - full width at the end */}
+                        <div style={{ 
+                          marginTop: 4,
+                          paddingTop: 10,
+                          borderTop: '1px solid var(--border)',
+                          fontSize: 11, 
+                          color: 'var(--text-muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}>
+                          <strong style={{ color: 'var(--text-primary)' }}>{t('transfers.form.cancelOriginShifts', 'Annulla turni negozio origine nel periodo')}:</strong>{' '}
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            background: editingTransfer.cancelOriginShifts ? 'rgba(22,163,74,0.14)' : 'rgba(107,114,128,0.14)',
+                            color: editingTransfer.cancelOriginShifts ? '#166534' : '#374151',
+                          }}>
+                            {editingTransfer.cancelOriginShifts ? t('common.yes', 'Sì') : t('common.no', 'No')}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -1494,18 +1995,24 @@ export default function TransfersPage() {
                               title: t('transfers.linkedTransferredStore', 'Turni negozio destinazione'),
                               shifts: linkedShiftBuckets.transferred,
                               accent: 'rgba(13,148,136,0.35)',
+                              storeName: editingTransfer.targetStoreName,
+                              storeLogoFilename: editingTransfer.targetStoreLogoFilename,
                             },
                             {
                               key: 'origin',
                               title: t('transfers.linkedOriginStore', 'Turni negozio origine'),
                               shifts: linkedShiftBuckets.origin,
                               accent: 'rgba(30,64,175,0.35)',
+                              storeName: editingTransfer.originStoreName,
+                              storeLogoFilename: editingTransfer.originStoreLogoFilename,
                             },
                             {
                               key: 'other',
                               title: t('transfers.linkedOtherStore', 'Altri turni correlati'),
                               shifts: linkedShiftBuckets.other,
                               accent: 'rgba(107,114,128,0.28)',
+                              storeName: null,
+                              storeLogoFilename: null,
                             },
                           ].map((section) => (
                             <div key={section.key} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -1517,8 +2024,43 @@ export default function TransfersPage() {
                                 borderBottom: '1px solid var(--border)',
                                 background: 'var(--surface-warm)',
                                 borderLeft: `3px solid ${section.accent}`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
                               }}>
-                                {section.title} ({section.shifts.length})
+                                <span>{section.title} ({section.shifts.length})</span>
+                                {section.storeName && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: 6,
+                                      overflow: 'hidden',
+                                      border: '1px solid var(--border)',
+                                      background: section.storeLogoFilename ? '#fff' : 'rgba(13,33,55,0.08)',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      flexShrink: 0,
+                                    }}>
+                                      {section.storeLogoFilename ? (
+                                        <img 
+                                          src={getStoreLogoUrl(section.storeLogoFilename) ?? ''} 
+                                          alt={section.storeName} 
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                        />
+                                      ) : (
+                                        <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)' }}>
+                                          {section.storeName.slice(0, 2).toUpperCase()}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                      {section.storeName}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8 }}>
                                 {section.shifts.length === 0 ? (
@@ -1540,9 +2082,6 @@ export default function TransfersPage() {
                                         <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 700 }}>
                                           {shift.date} · {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
                                           {shift.shiftHours != null && shift.shiftHours !== '' ? ` (${shift.shiftHours}h)` : ''}
-                                        </div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={shift.storeName}>
-                                          {shift.storeName}
                                         </div>
                                       </div>
                                       <span style={{
@@ -1603,9 +2142,20 @@ export default function TransfersPage() {
                   {editingTransfer && canWrite && (
                     <button
                       type="button"
-                      className="btn btn-danger"
                       onClick={() => setConfirmDeleteOpen(true)}
                       disabled={saving}
+                      style={{
+                        background: '#DC2626',
+                        border: '1px solid #DC2626',
+                        color: '#fff',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-body)',
+                        opacity: saving ? 0.5 : 1,
+                      }}
                     >
                       {t('transfers.delete', 'Elimina trasferimento')}
                     </button>
@@ -1668,6 +2218,22 @@ export default function TransfersPage() {
         variant="danger"
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={() => { void doDeleteTransfer(); }}
+      />
+
+      {/* Filter Modal */}
+      <TransferFilterModal
+        open={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApply={handleApplyFilters}
+        initialFilters={{
+          company_id: companyFilter,
+          store_id: storeFilter,
+          status: statusFilter !== 'all' ? statusFilter : '',
+        }}
+        companyOptions={companyOptions}
+        storeOptions={storeOptions}
+        statusOptions={statusOptions}
+        showCompanyFilter={(isAdminOrHr || isSuperAdmin) && companies.length > 0}
       />
     </div>
   );
