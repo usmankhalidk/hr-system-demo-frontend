@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Upload, Download } from "lucide-react";
+import { Upload, Download, Filter, Search, X, MoreVertical, Plus } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeftRight } from "lucide-react";
+import { createPortal } from "react-dom";
 import { getEmployees } from "../../api/employees";
 import apiClient, { getAvatarUrl } from "../../api/client";
 import { listTransfers, TransferAssignment } from "../../api/transfers";
@@ -19,6 +20,8 @@ import { Alert } from "../../components/ui/Alert";
 import { Pagination } from "../../components/ui/Pagination";
 import { EmployeeForm } from "./EmployeeForm";
 import { BulkImportModal } from "./BulkImportModal";
+import { ExportConfirmModal } from "./ExportConfirmModal";
+import { FilterModal, FilterValues } from "./FilterModal";
 import { exportEmployeesToExcel } from "./bulkImportUtils";
 import CustomSelect, { SelectOption } from "../../components/ui/CustomSelect";
 
@@ -79,6 +82,9 @@ export function EmployeeList() {
   const { showToast } = useToast();
   const [showNewForm, setShowNewForm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [newFormInstance, setNewFormInstance] = useState(0);
   const [listReloadTick, setListReloadTick] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -97,12 +103,23 @@ export function EmployeeList() {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
 
+  // Memoize the parsed arrays to prevent infinite loops
+  const storeIdsArray = useMemo(() => 
+    searchParams.get("store_ids")?.split(",").filter(Boolean) ?? [], 
+    [searchParams]
+  );
+  
+  const companyIdsArray = useMemo(() => 
+    searchParams.get("company_ids")?.split(",").filter(Boolean) ?? [], 
+    [searchParams]
+  );
+
   const search = searchParams.get("search") ?? "";
-  const storeId = searchParams.get("store_id") ?? "";
+  const storeIds = storeIdsArray;
   const department = searchParams.get("department") ?? "";
   const status = searchParams.get("status") ?? "";
   const role = searchParams.get("role") ?? "";
-  const companyFilter = searchParams.get("company_id") ?? "";
+  const companyIds = companyIdsArray;
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = 20;
 
@@ -116,11 +133,11 @@ export function EmployeeList() {
     (t as (k: string) => string)(`roles.${roleKey}`);
   const hasActiveFilters = !!(
     search ||
-    storeId ||
+    storeIds.length > 0 ||
     department ||
     status ||
     role ||
-    companyFilter
+    companyIds.length > 0
   );
 
   const companyOptions = useMemo<SelectOption[]>(() => {
@@ -156,31 +173,64 @@ export function EmployeeList() {
     [t, tRole],
   );
 
-  const handleExport = useCallback(async () => {
+  const handleExportClick = useCallback(() => {
+    setShowExportModal(true);
+  }, []);
+
+  const handleExportConfirm = useCallback(async () => {
     if (exporting) return;
     setExporting(true);
     try {
+      // For multiple stores or companies, we need to fetch all employees and filter client-side
       const res = await getEmployees({
         search: search || undefined,
-        storeId: storeId ? parseInt(storeId, 10) : undefined,
+        storeId: storeIds.length === 1 ? parseInt(storeIds[0], 10) : undefined,
         department: department || undefined,
         status: status || undefined,
         role: role || undefined,
         page: 1,
         limit: 10000,
-        targetCompanyId: companyFilter
-          ? parseInt(companyFilter, 10)
-          : undefined,
+        targetCompanyId: companyIds.length === 1 ? parseInt(companyIds[0], 10) : undefined,
         includeSensitive: true,
       });
+      
+      let employeesToExport = res.employees;
+      
+      // If multiple companies selected, filter client-side
+      if (companyIds.length > 1) {
+        const companyIdNumbers = companyIds.map((id) => parseInt(id, 10));
+        employeesToExport = employeesToExport.filter((emp) => 
+          emp.companyId && companyIdNumbers.includes(emp.companyId)
+        );
+      }
+      
+      // If multiple stores selected, filter client-side
+      if (storeIds.length > 1) {
+        const storeIdNumbers = storeIds.map((id) => parseInt(id, 10));
+        employeesToExport = employeesToExport.filter((emp) => 
+          emp.storeId && storeIdNumbers.includes(emp.storeId)
+        );
+      }
+      
       const safeName = `employees_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      exportEmployeesToExcel(res.employees, safeName);
+      exportEmployeesToExcel(employeesToExport, safeName);
+      setShowExportModal(false);
+      showToast(t("employees.exportSuccess", "Employees exported successfully"), "success");
     } catch {
-      // silently ignore — user stays on the page
+      showToast(t("employees.exportError", "Failed to export employees"), "error");
     } finally {
       setExporting(false);
     }
-  }, [exporting, search, storeId, department, status, role, companyFilter]);
+  }, [exporting, search, storeIds, department, status, role, companyIds, t, showToast]);
+
+  const estimatedFileSize = useMemo(() => {
+    const avgBytesPerEmployee = 500; // Rough estimate
+    const sizeInKB = (total * avgBytesPerEmployee) / 1024;
+    if (sizeInKB < 1024) {
+      return `${Math.round(sizeInKB)} KB`;
+    }
+    return `${(sizeInKB / 1024).toFixed(2)} MB`;
+  }, [total]);
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -198,13 +248,136 @@ export function EmployeeList() {
     [setSearchParams],
   );
 
+  const handleApplyFilters = useCallback(
+    (filters: FilterValues) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        
+        // Handle company_ids array
+        if (filters.company_ids.length > 0) {
+          next.set("company_ids", filters.company_ids.join(","));
+        } else {
+          next.delete("company_ids");
+        }
+        
+        // Handle store_ids array
+        if (filters.store_ids.length > 0) {
+          next.set("store_ids", filters.store_ids.join(","));
+        } else {
+          next.delete("store_ids");
+        }
+        
+        // Handle other filters
+        if (filters.department) {
+          next.set("department", filters.department);
+        } else {
+          next.delete("department");
+        }
+        
+        if (filters.status) {
+          next.set("status", filters.status);
+        } else {
+          next.delete("status");
+        }
+        
+        if (filters.role) {
+          next.set("role", filters.role);
+        } else {
+          next.delete("role");
+        }
+        
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const removeFilter = useCallback(
+    (key: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        
+        // Handle company removal
+        if (key.startsWith("company_")) {
+          const companyId = key.replace("company_", "");
+          const currentIds = next.get("company_ids")?.split(",").filter(Boolean) ?? [];
+          const newIds = currentIds.filter((id) => id !== companyId);
+          if (newIds.length > 0) {
+            next.set("company_ids", newIds.join(","));
+          } else {
+            next.delete("company_ids");
+          }
+        }
+        // Handle store removal
+        else if (key.startsWith("store_")) {
+          const storeId = key.replace("store_", "");
+          const currentIds = next.get("store_ids")?.split(",").filter(Boolean) ?? [];
+          const newIds = currentIds.filter((id) => id !== storeId);
+          if (newIds.length > 0) {
+            next.set("store_ids", newIds.join(","));
+          } else {
+            next.delete("store_ids");
+          }
+        }
+        // Handle other filters
+        else {
+          next.delete(key);
+        }
+        
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const activeFilterTags = useMemo(() => {
+    const tags: Array<{ key: string; label: string; value: string }> = [];
+    
+    // Handle multiple companies
+    if (companyIds.length > 0) {
+      companyIds.forEach((companyId) => {
+        const company = companies.find((c) => String(c.id) === companyId);
+        if (company) {
+          tags.push({ key: `company_${companyId}`, label: t("employees.filterCompany", "Company"), value: company.name });
+        }
+      });
+    }
+    
+    // Handle multiple stores
+    if (storeIds.length > 0) {
+      storeIds.forEach((storeId) => {
+        const store = stores.find((s) => String(s.id) === storeId);
+        if (store) {
+          tags.push({ key: `store_${storeId}`, label: t("employees.filterStore", "Store"), value: store.name });
+        }
+      });
+    }
+    
+    if (department) {
+      tags.push({ key: "department", label: t("employees.filterDepartment", "Department"), value: department });
+    }
+    
+    if (status) {
+      const statusLabel = status === "active" ? t("employees.statusActive") : t("employees.statusInactive");
+      tags.push({ key: "status", label: t("employees.filterStatus", "Status"), value: statusLabel });
+    }
+    
+    if (role) {
+      tags.push({ key: "role", label: t("employees.filterRole", "Role"), value: tRole(role) });
+    }
+    
+    return tags;
+  }, [companyIds, storeIds, department, status, role, companies, stores, t, tRole]);
+
   // Re-fetch stores whenever the company filter changes (super admin viewing a different company)
   useEffect(() => {
-    const targetId = companyFilter ? parseInt(companyFilter, 10) : undefined;
+    const targetId = companyIds.length === 1 ? parseInt(companyIds[0], 10) : undefined;
     getStores(targetId ? { targetCompanyId: targetId } : undefined)
       .then(setStores)
       .catch(() => {});
-  }, [companyFilter]);
+  }, [companyIds.join(",")]);
 
   useEffect(() => {
     if (!isAdminOrHr && !isSuperAdmin) return;
@@ -224,18 +397,37 @@ export function EmployeeList() {
     setError(null);
     getEmployees({
       search: search || undefined,
-      storeId: storeId ? parseInt(storeId, 10) : undefined,
+      storeId: storeIds.length === 1 ? parseInt(storeIds[0], 10) : undefined,
       department: department || undefined,
       status: status || undefined,
       role: role || undefined,
       page,
       limit,
-      targetCompanyId: companyFilter ? parseInt(companyFilter, 10) : undefined,
+      targetCompanyId: companyIds.length === 1 ? parseInt(companyIds[0], 10) : undefined,
     })
       .then((res) => {
-        setEmployees(res.employees);
-        setTotal(res.total);
-        setPages(res.pages);
+        let filteredEmployees = res.employees;
+        
+        // If multiple companies selected, filter client-side
+        if (companyIds.length > 1) {
+          const companyIdNumbers = companyIds.map((id) => parseInt(id, 10));
+          filteredEmployees = filteredEmployees.filter((emp) => 
+            emp.companyId && companyIdNumbers.includes(emp.companyId)
+          );
+        }
+        
+        // If multiple stores selected, filter client-side
+        if (storeIds.length > 1) {
+          const storeIdNumbers = storeIds.map((id) => parseInt(id, 10));
+          filteredEmployees = filteredEmployees.filter((emp) => 
+            emp.storeId && storeIdNumbers.includes(emp.storeId)
+          );
+        }
+        
+        const needsClientSideFiltering = companyIds.length > 1 || storeIds.length > 1;
+        setEmployees(filteredEmployees);
+        setTotal(needsClientSideFiltering ? filteredEmployees.length : res.total);
+        setPages(needsClientSideFiltering ? Math.ceil(filteredEmployees.length / limit) : res.pages);
       })
       .catch((err) => {
         setError(translateApiError(err, t, t("employees.errorLoad")));
@@ -243,13 +435,15 @@ export function EmployeeList() {
       .finally(() => setLoading(false));
   }, [
     search,
-    storeId,
+    storeIds,
     department,
     status,
     role,
-    companyFilter,
+    companyIds,
     page,
     listReloadTick,
+    limit,
+    t,
   ]);
 
   useEffect(() => {
@@ -276,10 +470,10 @@ export function EmployeeList() {
     return () => {
       mounted = false;
     };
-  }, [companyFilter, page, limit, allowedCompanyIds.join(",")]);
+  }, [companyIds.join(","), page, limit, allowedCompanyIds.join(",")]);
 
   // Show company column when admin/hr/super admin is viewing all companies (no specific company filter)
-  const showCompanyColumn = (isAdminOrHr || isSuperAdmin) && !companyFilter;
+  const showCompanyColumn = (isAdminOrHr || isSuperAdmin) && companyIds.length === 0;
 
   const columns: Column<Employee>[] = [
     {
@@ -699,106 +893,41 @@ export function EmployeeList() {
               gap: "10px",
               alignItems: "center",
               flexShrink: 0,
-              width: isMobile ? "100%" : "auto",
-              flexDirection: isMobile ? "column" : "row",
+              width: isMobile ? "auto" : "auto",
+              flexDirection: isMobile ? "row" : "row",
             }}
           >
             {isMobile ? (
-              <>
-                {/* First Row: Export and Import (Full width, 50% split) */}
-                <div style={{ display: "flex", gap: "10px", width: "100%" }}>
-                  <button
-                    onClick={handleExport}
-                    disabled={exporting}
-                    style={{
-                      background: "var(--surface)",
-                      color: "var(--primary)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius)",
-                      padding: "9px 18px",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      fontFamily: "var(--font-body)",
-                      cursor: exporting ? "not-allowed" : "pointer",
-                      opacity: exporting ? 0.65 : 1,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "7px",
-                      flex: 1,
-                      transition: "border-color 0.15s, box-shadow 0.15s",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <Download size={15} />
-                    {exporting
-                      ? t("common.loading", "Exporting…")
-                      : t("employees.exportBtn", "Export Employees")}
-                  </button>
-                  <button
-                    onClick={() => setShowBulkImport(true)}
-                    style={{
-                      background: "var(--surface)",
-                      color: "var(--primary)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius)",
-                      padding: "9px 18px",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      fontFamily: "var(--font-body)",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "7px",
-                      flex: 1,
-                      transition: "border-color 0.15s, box-shadow 0.15s",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <Upload size={15} />
-                    {t("employees.bulkImportBtn", "Import Employees")}
-                  </button>
-                </div>
-                {/* Second Row: New Employee (Full width) */}
-                <button
-                  onClick={() => setShowNewForm(true)}
-                  className="btn btn-primary"
-                  style={{
-                    background: "var(--primary)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "var(--radius)",
-                    padding: "9px 18px",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    fontFamily: "var(--font-body)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "7px",
-                    width: "100%",
-                    boxShadow: "0 2px 8px rgba(13,33,55,0.18)",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "17px",
-                      lineHeight: 1,
-                      marginTop: "-1px",
-                      fontWeight: 300,
-                    }}
-                  >
-                    +
-                  </span>
-                  {t("employees.newEmployee")}
-                </button>
-              </>
+              /* Mobile: Three dots menu button */
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                style={{
+                  background: "var(--surface)",
+                  color: "var(--text-primary)",
+                  border: "1.5px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  padding: "9px 12px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  fontFamily: "var(--font-body)",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "7px",
+                  flexShrink: 0,
+                  transition: "all 0.2s ease",
+                  height: "38px",
+                  minWidth: "38px",
+                }}
+              >
+                <MoreVertical size={18} strokeWidth={2.5} />
+              </button>
             ) : (
+              /* Desktop: All buttons inline */
               <>
                 <button
-                  onClick={handleExport}
+                  onClick={handleExportClick}
                   disabled={exporting}
                   style={{
                     background: "var(--surface)",
@@ -883,244 +1012,178 @@ export function EmployeeList() {
         )}
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar - New Improved Design */}
       <div
         style={{
           display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          gap: "10px",
-          flexWrap: isMobile ? "nowrap" : "wrap",
+          flexDirection: "column",
+          gap: "12px",
           marginBottom: "18px",
-          alignItems: isMobile ? "stretch" : "flex-end",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          padding: "14px 16px",
-          boxShadow: "var(--shadow-xs)",
         }}
       >
-        {isMobile ? (
-          <>
-            {/* Row 1: Search bar (Full width) */}
-            <div style={{ width: "100%" }}>
-              <Input
-                placeholder={t("employees.searchPlaceholder")}
-                value={search}
-                onChange={(e) => updateParam("search", e.target.value)}
-              />
-            </div>
+        {/* Search and Filter Button Row */}
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            alignItems: "center",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            padding: "10px 12px",
+            boxShadow: "var(--shadow-xs)",
+          }}
+        >
+          {/* Universal Search Input */}
+          <div style={{ flex: 1, position: "relative" }}>
+            <Search
+              size={18}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-muted)",
+                pointerEvents: "none",
+              }}
+            />
+            <Input
+              placeholder={t("employees.universalSearchPlaceholder", "Search by name or ID...")}
+              value={search}
+              onChange={(e) => updateParam("search", e.target.value)}
+              style={{
+                paddingLeft: "40px",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                fontSize: "14px",
+              }}
+            />
+          </div>
 
-            {/* Row 2: Company dropdown selector (Full width) */}
-            {(isAdminOrHr || isSuperAdmin) && companies.length > 0 && (
-              <div style={{ width: "100%" }}>
-                <CustomSelect
-                  value={companyFilter || null}
-                  onChange={(value) => updateParam("company_id", value || "")}
-                  options={companyOptions}
-                  placeholder={t("employees.allCompanies")}
-                  isClearable={true}
-                  searchable={companies.length > 5}
-                  highlightSelected={true}
-                  controlMinHeight={38}
-                />
-              </div>
-            )}
-
-            {/* Row 3: Store dropdown + Department search bar (50% / 50% split) */}
-            <div style={{ display: "flex", gap: "10px", width: "100%" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <CustomSelect
-                  value={storeId || null}
-                  onChange={(value) => updateParam("store_id", value || "")}
-                  options={storeOptions}
-                  placeholder={t("employees.allStores")}
-                  isClearable={true}
-                  searchable={stores.length > 5}
-                  highlightSelected={true}
-                  controlMinHeight={38}
-                />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Input
-                  placeholder={t("employees.departmentFilter")}
-                  value={department}
-                  onChange={(e) => updateParam("department", e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Row 4: Status dropdown + Roles dropdown (50% / 50% split) */}
-            <div style={{ display: "flex", gap: "10px", width: "100%" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <CustomSelect
-                  value={status || null}
-                  onChange={(value) => updateParam("status", value || "")}
-                  options={statusOptions}
-                  placeholder={t("employees.allStatuses")}
-                  isClearable={true}
-                  searchable={false}
-                  highlightSelected={true}
-                  controlMinHeight={38}
-                />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <CustomSelect
-                  value={role || null}
-                  onChange={(value) => updateParam("role", value || "")}
-                  options={roleOptions}
-                  placeholder={t("employees.allRoles")}
-                  isClearable={true}
-                  searchable={false}
-                  highlightSelected={true}
-                  controlMinHeight={38}
-                />
-              </div>
-            </div>
-
-            {/* Row 5: Reset Filters button (Full width if active) */}
-            {hasActiveFilters && (
-              <button
-                onClick={() => setSearchParams(new URLSearchParams())}
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilterModal(true)}
+            style={{
+              background: hasActiveFilters
+                ? "linear-gradient(135deg, var(--accent) 0%, #B48719 100%)"
+                : "var(--surface)",
+              color: hasActiveFilters ? "#fff" : "var(--text-secondary)",
+              border: hasActiveFilters ? "none" : "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: 600,
+              fontFamily: "var(--font-body)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexShrink: 0,
+              transition: "all 0.2s",
+              boxShadow: hasActiveFilters ? "0 2px 8px rgba(139,105,20,0.24)" : "none",
+              position: "relative",
+            }}
+          >
+            <Filter size={16} strokeWidth={2.5} />
+            {t("employees.filters", "Filters")}
+            {activeFilterTags.length > 0 && (
+              <span
                 style={{
-                  background: "none",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "10px 12px",
-                  fontSize: "13px",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontFamily: "var(--font-body)",
-                  width: "100%",
+                  background: "#fff",
+                  color: "var(--accent)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  padding: "2px 6px",
+                  borderRadius: "999px",
+                  minWidth: "18px",
                   textAlign: "center",
-                  transition: "border-color 0.15s, color 0.15s",
                 }}
               >
-                ✕ Reset Filters
-              </button>
+                {activeFilterTags.length}
+              </span>
             )}
-          </>
-        ) : (
-          <>
-            <div
+          </button>
+
+          {/* Reset Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={() => setSearchParams(new URLSearchParams())}
               style={{
-                flex: "2 1 200px",
-                minWidth: "150px",
-                maxWidth: "300px",
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                padding: "10px 14px",
+                fontSize: "13px",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                fontFamily: "var(--font-body)",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                flexShrink: 0,
+                transition: "border-color 0.15s, color 0.15s",
               }}
+              title={t("employees.resetFilters", "Reset all filters")}
             >
-              <Input
-                placeholder={t("employees.searchPlaceholder")}
-                value={search}
-                onChange={(e) => updateParam("search", e.target.value)}
-              />
-            </div>
-            {(isAdminOrHr || isSuperAdmin) && companies.length > 0 && (
+              <X size={16} />
+              {!isMobile && t("employees.reset", "Reset")}
+            </button>
+          )}
+        </div>
+
+        {/* Active Filter Tags */}
+        {activeFilterTags.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              padding: "0 4px",
+            }}
+          >
+            {activeFilterTags.map((tag) => (
               <div
+                key={tag.key}
                 style={{
-                  flex: "1 1 175px",
-                  minWidth: "140px",
-                  maxWidth: "240px",
-                }}
-              >
-                <CustomSelect
-                  value={companyFilter || null}
-                  onChange={(value) => updateParam("company_id", value || "")}
-                  options={companyOptions}
-                  placeholder={t("employees.allCompanies")}
-                  isClearable={true}
-                  searchable={companies.length > 5}
-                  highlightSelected={true}
-                  controlMinHeight={38}
-                />
-              </div>
-            )}
-            <div
-              style={{
-                flex: "1 1 155px",
-                minWidth: "130px",
-                maxWidth: "220px",
-              }}
-            >
-              <CustomSelect
-                value={storeId || null}
-                onChange={(value) => updateParam("store_id", value || "")}
-                options={storeOptions}
-                placeholder={t("employees.allStores")}
-                isClearable={true}
-                searchable={stores.length > 5}
-                highlightSelected={true}
-                controlMinHeight={38}
-              />
-            </div>
-            <div
-              style={{
-                flex: "1 1 155px",
-                minWidth: "130px",
-                maxWidth: "220px",
-              }}
-            >
-              <Input
-                placeholder={t("employees.departmentFilter")}
-                value={department}
-                onChange={(e) => updateParam("department", e.target.value)}
-              />
-            </div>
-            <div
-              style={{
-                flex: "1 1 140px",
-                minWidth: "120px",
-                maxWidth: "190px",
-              }}
-            >
-              <CustomSelect
-                value={status || null}
-                onChange={(value) => updateParam("status", value || "")}
-                options={statusOptions}
-                placeholder={t("employees.allStatuses")}
-                isClearable={true}
-                searchable={false}
-                highlightSelected={true}
-                controlMinHeight={38}
-              />
-            </div>
-            <div
-              style={{
-                flex: "1 1 155px",
-                minWidth: "130px",
-                maxWidth: "220px",
-              }}
-            >
-              <CustomSelect
-                value={role || null}
-                onChange={(value) => updateParam("role", value || "")}
-                options={roleOptions}
-                placeholder={t("employees.allRoles")}
-                isClearable={true}
-                searchable={false}
-                highlightSelected={true}
-                controlMinHeight={38}
-              />
-            </div>
-            {hasActiveFilters && (
-              <button
-                onClick={() => setSearchParams(new URLSearchParams())}
-                style={{
-                  background: "none",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "7px 12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "linear-gradient(135deg, rgba(139,105,20,0.08) 0%, rgba(180,135,25,0.08) 100%)",
+                  border: "1px solid rgba(139,105,20,0.25)",
+                  borderRadius: "8px",
+                  padding: "6px 10px 6px 12px",
                   fontSize: "12px",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
+                  color: "var(--text-primary)",
                   fontFamily: "var(--font-body)",
-                  whiteSpace: "nowrap",
-                  transition: "border-color 0.15s, color 0.15s",
                 }}
               >
-                ✕ Reset
-              </button>
-            )}
-          </>
+                <span style={{ fontWeight: 600, color: "var(--accent)" }}>
+                  {tag.label}:
+                </span>
+                <span style={{ color: "var(--text-secondary)" }}>
+                  {tag.value}
+                </span>
+                <button
+                  onClick={() => removeFilter(tag.key)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "2px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--text-muted)",
+                    borderRadius: "4px",
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                  title={t("employees.removeFilter", "Remove filter")}
+                >
+                  <X size={14} strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -1174,6 +1237,331 @@ export function EmployeeList() {
           onClose={() => setShowBulkImport(false)}
           onComplete={() => setListReloadTick((prev) => prev + 1)}
         />
+      )}
+
+      {/* Export Confirmation Modal */}
+      <ExportConfirmModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onConfirm={handleExportConfirm}
+        employeeCount={total}
+        estimatedSize={estimatedFileSize}
+        exporting={exporting}
+      />
+
+      {/* Filter Modal */}
+      <FilterModal
+        open={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApply={handleApplyFilters}
+        initialFilters={{
+          company_ids: companyIds,
+          store_ids: storeIds,
+          department: department,
+          status: status,
+          role: role,
+        }}
+        companyOptions={companyOptions}
+        storeOptions={storeOptions}
+        statusOptions={statusOptions}
+        roleOptions={roleOptions}
+        showCompanyFilter={(isAdminOrHr || isSuperAdmin) && companies.length > 0}
+      />
+
+      {/* Mobile Menu Sidebar */}
+      {isMobile && isAdminOrHr && createPortal(
+        <>
+          {/* Backdrop */}
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1400,
+              background: "rgba(13,33,55,0.55)",
+              backdropFilter: "blur(3px)",
+              opacity: mobileMenuOpen ? 1 : 0,
+              pointerEvents: mobileMenuOpen ? "auto" : "none",
+              transition: "opacity 0.3s ease",
+            }}
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Sidebar */}
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: "min(320px, 85vw)",
+              background: "var(--surface)",
+              boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
+              display: "flex",
+              flexDirection: "column",
+              transform: mobileMenuOpen ? "translateX(0)" : "translateX(100%)",
+              transition: "transform 0.3s ease",
+              zIndex: 1401,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                background: "var(--primary)",
+                color: "#fff",
+                padding: "16px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottom: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    opacity: 0.7,
+                    textTransform: "uppercase",
+                    marginBottom: 4,
+                  }}
+                >
+                  {t("employees.title", "Employees")}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 800,
+                    fontSize: "1.1rem",
+                  }}
+                >
+                  {t("common.options", "Options")}
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  background: "rgba(255,255,255,0.15)",
+                  border: "none",
+                  color: "#fff",
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontSize: 20,
+                  lineHeight: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Menu Items */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "16px 0",
+              }}
+            >
+              {/* New Employee */}
+              <button
+                onClick={() => {
+                  setShowNewForm(true);
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "14px 20px",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "background 0.15s",
+                  borderBottom: "1px solid var(--border)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "var(--background)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "transparent")
+                }
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background:
+                      "linear-gradient(135deg, var(--primary), var(--accent))",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Plus size={16} strokeWidth={2.5} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}
+                  >
+                    {t("employees.newEmployee", "New Employee")}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-muted)",
+                      marginTop: 2,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {t("employees.newEmployeeDesc", "Add a new employee")}
+                  </div>
+                </div>
+              </button>
+
+              {/* Export Employees */}
+              <button
+                onClick={() => {
+                  handleExportClick();
+                  setMobileMenuOpen(false);
+                }}
+                disabled={exporting}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "14px 20px",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text-primary)",
+                  cursor: exporting ? "not-allowed" : "pointer",
+                  textAlign: "left",
+                  transition: "background 0.15s",
+                  borderBottom: "1px solid var(--border)",
+                  opacity: exporting ? 0.5 : 1,
+                }}
+                onMouseEnter={(e) =>
+                  !exporting &&
+                  (e.currentTarget.style.background = "var(--background)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "transparent")
+                }
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background: "rgba(13,124,102,0.12)",
+                    color: "var(--primary)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Download size={16} strokeWidth={2.5} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}
+                  >
+                    {t("employees.exportBtn", "Export Employees")}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-muted)",
+                      marginTop: 2,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {t(
+                      "employees.exportDesc",
+                      "Download employee data to Excel"
+                    )}
+                  </div>
+                </div>
+              </button>
+
+              {/* Import Employees */}
+              <button
+                onClick={() => {
+                  setShowBulkImport(true);
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "14px 20px",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "background 0.15s",
+                  borderBottom: "1px solid var(--border)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "var(--background)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "transparent")
+                }
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background: "rgba(139,105,20,0.12)",
+                    color: "var(--accent)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Upload size={16} strokeWidth={2.5} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}
+                  >
+                    {t("employees.bulkImportBtn", "Import Employees")}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-muted)",
+                      marginTop: 2,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {t(
+                      "employees.importDesc",
+                      "Upload employee data from Excel"
+                    )}
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
       )}
     </div>
   );

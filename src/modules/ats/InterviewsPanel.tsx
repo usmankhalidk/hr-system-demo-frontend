@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Phone, Users, Briefcase, FileText, Mail, PhoneIcon, Linkedin, Building2, Store, MessageSquare, Trash2, Bell } from 'lucide-react';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { getResumeUrl, getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
@@ -16,6 +17,7 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
   const { isMobile } = useBreakpoint();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [interviews, setInterviews] = useState<APIInterview[]>([]);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
@@ -912,56 +914,57 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
                           style={{
                             background: 'var(--background)',
                             borderRadius: 8,
-                            padding: '12px 14px',
+                            padding: '8px 10px',
                             border: '1px solid var(--border)',
                             position: 'relative',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                            transition: 'all 0.3s ease',
                           }}
                           onMouseEnter={() => setHoveredFeedbackId(comment.id)}
                           onMouseLeave={() => setHoveredFeedbackId(null)}
                         >
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, marginBottom: 8 }}>
-                                {comment.body}
+                          {/* Header row */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                              <div style={{
+                                width: 18,
+                                height: 18,
+                                borderRadius: '50%',
+                                overflow: 'hidden',
+                                background: authorAvatar ? 'transparent' : 'var(--primary)',
+                                color: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 9,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}>
+                                {authorAvatar ? (
+                                  <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                  authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                                )}
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: '50%',
-                                  overflow: 'hidden',
-                                  background: authorAvatar ? 'transparent' : 'var(--primary)',
-                                  color: '#fff',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '0.7rem',
-                                  fontWeight: 700,
-                                  flexShrink: 0,
-                                }}>
-                                  {authorAvatar ? (
-                                    <img src={authorAvatar} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  ) : (
-                                    authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-                                  )}
-                                </div>
-                                <div>
-                                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                    {authorName}
-                                  </div>
-                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                    {new Date(comment.createdAt).toLocaleString(undefined, {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
-                                  </div>
-                                </div>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {authorName}
+                                </span>
+                                <span style={{ fontSize: 9, color: 'var(--text-muted)', flexShrink: 0 }}>
+                                  • {new Date(comment.createdAt).toLocaleString(undefined, {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
                               </div>
                             </div>
                             
-                            <div style={{ display: 'flex', gap: 4 }}>
+                            {/* Actions */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                               {/* Notifications button */}
                               {interviewNotifications.some((log) => {
                                 try {
@@ -987,48 +990,77 @@ export default function InterviewsPanel({ companyId }: { companyId?: number }) {
                                   }}
                                   style={{
                                     background: hoveredFeedbackId === comment.id ? 'rgba(2, 132, 199, 0.08)' : 'transparent',
-                                    border: '1px solid rgba(2, 132, 199, 0.24)',
+                                    border: 'none',
                                     borderRadius: 6,
-                                    width: 28,
-                                    height: 28,
+                                    width: 24,
+                                    height: 24,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     cursor: 'pointer',
-                                    opacity: hoveredFeedbackId === comment.id ? 1 : 0.5,
-                                    transition: 'all 0.15s',
-                                    flexShrink: 0,
+                                    opacity: hoveredFeedbackId === comment.id ? 1 : 0,
+                                    transition: 'opacity 0.15s ease, background 0.15s ease',
                                   }}
                                   title={t('ats.feedbackNotifications', 'View Notifications')}
                                 >
-                                  <Bell size={14} color="var(--primary)" />
+                                  <Bell size={12} color="var(--primary)" />
                                 </button>
                               )}
 
-                              {canDelete && (
+                              {/* Message / Chat button */}
                               <button
-                                onClick={() => handleDeleteFeedback(comment.id)}
-                                disabled={deletingFeedbackId === comment.id}
+                                onClick={() => {
+                                  const candidateName = [selectedInterview?.candidateName, selectedInterview?.candidateSurname].filter(Boolean).join(' ').trim() || 'Interview';
+                                  const subjectVal = `Feedback: ${candidateName}`;
+                                  navigate(`/hr-chat?recipientId=${comment.authorId}&recipientName=${encodeURIComponent(authorName)}&subject=${encodeURIComponent(subjectVal)}`);
+                                }}
                                 style={{
-                                  background: hoveredFeedbackId === comment.id ? 'rgba(220,38,38,0.08)' : 'transparent',
-                                  border: '1px solid rgba(185,28,28,0.24)',
+                                  background: hoveredFeedbackId === comment.id ? 'rgba(201, 151, 58, 0.08)' : 'transparent',
+                                  border: 'none',
                                   borderRadius: 6,
-                                  width: 28,
-                                  height: 28,
+                                  width: 24,
+                                  height: 24,
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
-                                  opacity: hoveredFeedbackId === comment.id ? 1 : 0.5,
-                                  transition: 'all 0.15s',
-                                  flexShrink: 0,
+                                  cursor: 'pointer',
+                                  opacity: hoveredFeedbackId === comment.id ? 1 : 0,
+                                  transition: 'opacity 0.15s ease, background 0.15s ease',
                                 }}
-                                title={t('common.delete', 'Delete')}
+                                title={t('ats.messageAuthor', 'Message Author')}
                               >
-                                <Trash2 size={14} color="#991b1b" />
+                                <MessageSquare size={12} color="var(--accent)" />
                               </button>
-                            )}
+
+                              {/* Delete button */}
+                              {canDelete && (
+                                <button
+                                  onClick={() => handleDeleteFeedback(comment.id)}
+                                  disabled={deletingFeedbackId === comment.id}
+                                  style={{
+                                    background: hoveredFeedbackId === comment.id ? 'rgba(220,38,38,0.08)' : 'transparent',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    width: 24,
+                                    height: 24,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: deletingFeedbackId === comment.id ? 'not-allowed' : 'pointer',
+                                    opacity: hoveredFeedbackId === comment.id ? 1 : 0,
+                                    transition: 'opacity 0.15s ease, background 0.15s ease',
+                                  }}
+                                  title={t('common.delete', 'Delete')}
+                                >
+                                  <Trash2 size={12} color="#991b1b" />
+                                </button>
+                              )}
                             </div>
+                          </div>
+
+                          {/* Body row indented */}
+                          <div style={{ paddingLeft: 30, fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                            {comment.body}
                           </div>
                         </div>
                       );

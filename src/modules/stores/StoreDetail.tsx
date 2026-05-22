@@ -316,6 +316,8 @@ export default function StoreDetail() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<'employees' | 'hours' | 'information'>('employees');
+
   const browserTimezone = useMemo(() => getBrowserTimeZone(), []);
 
   const timezoneOptions = useMemo<SelectOption[]>(() => {
@@ -927,9 +929,10 @@ export default function StoreDetail() {
             </span>
           </div>
 
-          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-            <InfoChip icon={<Hash size={13} />} label={t('stores.colCode', 'Code')} value={store.code} />
+          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+            <InfoChip variant="code" icon={<Hash size={13} />} label={t('stores.colCode', 'Code')} value={store.code} />
             <InfoChip
+              variant="location"
               icon={<MapPin size={13} />}
               label={t('stores.colAddress', 'Address')}
               value={[
@@ -940,16 +943,71 @@ export default function StoreDetail() {
                 store.cap,
               ].filter(Boolean).join(', ') || '—'}
             />
-            {store.phone ? <InfoChip icon={<Phone size={13} />} label={t('companies.companyPhoneNumbers', 'Phone')} value={store.phone} /> : null}
-            {store.maxStaff != null ? <InfoChip icon={<Users size={13} />} label={t('stores.colMaxStaff', 'Max staff')} value={String(store.maxStaff)} /> : null}
+            {store.phone ? <InfoChip variant="phone" icon={<Phone size={13} />} label={t('companies.companyPhoneNumbers', 'Phone')} value={store.phone} /> : null}
+            {store.maxStaff != null ? <InfoChip variant="staff" icon={<Users size={13} />} label={t('stores.colMaxStaff', 'Max staff')} value={String(store.maxStaff)} /> : null}
+            <InfoChip icon={<CalendarClock size={13} />} label={t('stores.labelCreated', 'Created')} value={new Date(store.createdAt).toLocaleDateString(locale)} />
+            <InfoChip icon={<Clock3 size={13} />} label={t('stores.timezone', 'Timezone')} value={storeTimezone} />
           </div>
         </div>
       </div>
 
-      <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface)', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'linear-gradient(135deg, rgba(13,33,55,0.95) 0%, rgba(22,51,82,0.88) 100%)' }}>
-          {t('stores.colEmployees')} ({employees.length})
-        </div>
+      {/* ── Tabs ── */}
+      <div style={{
+        display: 'inline-flex',
+        background: 'var(--surface-warm)',
+        borderRadius: 10,
+        padding: 4,
+        gap: 4,
+        border: '1px solid var(--border)',
+        marginBottom: 10,
+        alignSelf: 'flex-start',
+      }}>
+        {(['employees', 'hours', 'information'] as const).map((tab) => {
+          const isActive = activeTab === tab;
+          const label = tab === 'employees' 
+            ? t('stores.tabEmployees', 'Employees')
+            : tab === 'hours'
+            ? t('stores.tabOperatingHours', 'Operating Hours')
+            : t('stores.tabInformation', 'Information');
+          const icon = tab === 'employees' 
+            ? <Users size={14} />
+            : tab === 'hours'
+            ? <Clock3 size={14} />
+            : <Database size={14} />;
+          return (
+            <button
+              key={tab}
+              id={`store-detail-tab-${tab}`}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 18px',
+                fontSize: 13,
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                background: isActive ? 'var(--accent)' : 'transparent',
+                color: isActive ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: isActive ? '0 2px 6px rgba(201, 151, 58, 0.24)' : 'none',
+              }}
+            >
+              {icon}
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Employees Tab ── */}
+      {activeTab === 'employees' && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface)', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'linear-gradient(135deg, rgba(13,33,55,0.95) 0%, rgba(22,51,82,0.88) 100%)' }}>
+            {t('stores.colEmployees')} ({employees.length})
+          </div>
         {employees.length === 0 ? (
           <div style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData')}</div>
         ) : (
@@ -1029,8 +1087,11 @@ export default function StoreDetail() {
             })}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
+      {/* ── Operating Hours Tab ── */}
+      {activeTab === 'hours' && (
       <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface)', overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, rgba(22,51,82,0.92) 0%, rgba(15,118,110,0.82) 100%)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1138,6 +1199,124 @@ export default function StoreDetail() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ── Information Tab ── */}
+      {activeTab === 'information' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+          {/* Store Details Block */}
+          <div style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'linear-gradient(135deg, rgba(13,33,55,0.94) 0%, rgba(16,40,66,0.88) 100%)' }}>
+              {t('stores.storeDetails', 'Store details')}
+            </div>
+            <div style={{ padding: 14, display: 'grid', gap: 10 }}>
+              <InsightRow label={t('stores.storeId', 'Store ID')} value={`#${store.id}`} />
+              <InsightRow label={t('stores.colCode', 'Store code')} value={store.code} />
+              {store.address && <InsightRow label={t('stores.colAddress', 'Address')} value={store.address} />}
+              {store.city && <InsightRow label={t('stores.city', 'City')} value={store.city} />}
+              {store.state && <InsightRow label={t('stores.state', 'State')} value={store.state} />}
+              {store.cap && <InsightRow label={t('stores.postalCode', 'Postal code')} value={store.cap} />}
+              {store.country && (
+                <InsightRow 
+                  label={t('stores.country', 'Country')} 
+                  value={
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                      <ReactCountryFlag countryCode={store.country} svg style={{ width: '1em', height: '1em' }} />
+                      {storeCountryName || store.country}
+                    </span>
+                  }
+                />
+              )}
+              {store.phone && <InsightRow label={t('stores.phone', 'Phone')} value={store.phone} />}
+              <InsightRow label={t('stores.timezone', 'Timezone')} value={storeTimezone} />
+              <InsightRow label={t('stores.activeEmployees', 'Active employees')} value={`${activeEmployeeCount}${store.maxStaff != null ? ` / ${store.maxStaff}` : ''}`} />
+              <InsightRow label={t('stores.labelCreated', 'Created')} value={new Date(store.createdAt).toLocaleDateString(locale)} />
+            </div>
+          </div>
+
+          {/* Company Info Block */}
+          {companyProfile && (
+            <div style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'linear-gradient(135deg, rgba(13,33,55,0.94) 0%, rgba(16,40,66,0.88) 100%)' }}>
+                {t('stores.companyInfo', 'Company information')}
+              </div>
+              <div style={{ padding: 14, display: 'grid', gap: 10 }}>
+                <InsightRow 
+                  label={t('stores.company', 'Company')} 
+                  value={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {companyLogoFilename && (
+                        <span style={{ width: 20, height: 20, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                          <img src={getCompanyLogoUrl(companyLogoFilename)!} alt={companyName || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </span>
+                      )}
+                      <span>{companyName || '—'}</span>
+                    </div>
+                  }
+                />
+                {companyGroupName && <InsightRow label={t('stores.group', 'Group')} value={companyGroupName} />}
+                {companyCountry && (
+                  <InsightRow 
+                    label={t('stores.companyCountry', 'Company country')} 
+                    value={
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                        <ReactCountryFlag countryCode={companyCountry} svg style={{ width: '1em', height: '1em' }} />
+                        {getCountryDisplayName(companyCountry) || companyCountry}
+                      </span>
+                    }
+                  />
+                )}
+                {(companyOwnerName || companyOwnerSurname) && (
+                  <InsightRow 
+                    label={t('stores.companyOwner', 'Company owner')} 
+                    value={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {companyOwnerAvatarFilename && (
+                          <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                            <img src={getAvatarUrl(companyOwnerAvatarFilename)!} alt={`${companyOwnerName} ${companyOwnerSurname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </span>
+                        )}
+                        <span>{`${companyOwnerName || ''} ${companyOwnerSurname || ''}`.trim()}</span>
+                      </div>
+                    }
+                  />
+                )}
+                {companyStoreCount != null && <InsightRow label={t('stores.totalStores', 'Total stores')} value={String(companyStoreCount)} />}
+                {hrContact && (
+                  <InsightRow 
+                    label={t('stores.hrContact', 'HR contact')} 
+                    value={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {hrContact.avatarFilename && (
+                          <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                            <img src={getAvatarUrl(hrContact.avatarFilename)!} alt={`${hrContact.name} ${hrContact.surname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </span>
+                        )}
+                        <span>{`${hrContact.name} ${hrContact.surname}`.trim()}</span>
+                      </div>
+                    }
+                  />
+                )}
+                {managerContact && (
+                  <InsightRow 
+                    label={t('stores.storeManager', 'Store manager')} 
+                    value={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {managerContact.avatarFilename && (
+                          <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                            <img src={getAvatarUrl(managerContact.avatarFilename)!} alt={`${managerContact.name} ${managerContact.surname}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </span>
+                        )}
+                        <span>{`${managerContact.name} ${managerContact.surname}`.trim()}</span>
+                      </div>
+                    }
+                  />
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <Modal
         open={editOpen}
@@ -2463,7 +2642,26 @@ export default function StoreDetail() {
   );
 }
 
-function InfoChip({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+function InfoChip({
+  icon,
+  label,
+  value,
+  avatarUrl,
+  endSlot,
+  variant = 'default',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  avatarUrl?: string | null;
+  endSlot?: React.ReactNode;
+  variant?: 'default' | 'code' | 'location' | 'phone' | 'staff';
+}) {
+  const iconBg = 'rgba(201, 151, 58, 0.12)';
+  const cardBg = 'var(--surface-warm)';
+  const borderColor = 'rgba(201, 151, 58, 0.28)';
+  const shadowColor = 'rgba(13, 33, 55, 0.03)';
+
   const valueNode = typeof value === 'string' ? (
     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</span>
   ) : (
@@ -2471,12 +2669,65 @@ function InfoChip({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'var(--surface-warm)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {icon}
-        {label}
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .info-chip-card {
+          transition: all 0.24s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .info-chip-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(13, 33, 55, 0.08), var(--shadow-md) !important;
+          border-color: var(--accent) !important;
+        }
+      `}} />
+      <div
+        className="info-chip-card"
+        style={{
+          border: `1px solid ${borderColor}`,
+          borderRadius: 10,
+          padding: '10px 12px',
+          background: cardBg,
+          boxShadow: `0 4px 12px ${shadowColor}, var(--shadow-sm)`,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: 74,
+          cursor: 'default',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, background: iconBg, color: 'var(--accent)' }}>
+            {icon}
+          </span>
+          {label}
+        </div>
+        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+            {avatarUrl ? (
+              <span style={{ width: 18, height: 18, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                <img src={avatarUrl} alt={typeof value === 'string' ? value : label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </span>
+            ) : null}
+            <span style={{ minWidth: 0 }}>{valueNode}</span>
+          </div>
+          {endSlot ? <div style={{ flexShrink: 0 }}>{endSlot}</div> : null}
+        </div>
       </div>
-      <div style={{ marginTop: 4, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{valueNode}</div>
+    </>
+  );
+}
+
+function InsightRow({ label, value }: { label: string; value: string | React.ReactNode }) {
+  const valueNode = typeof value === 'string' ? (
+    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</span>
+  ) : (
+    value
+  );
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(13,33,55,0.06)' }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }}>{valueNode}</span>
     </div>
   );
 }

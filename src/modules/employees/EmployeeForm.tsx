@@ -2060,8 +2060,16 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                 onClick={() => setShowDeleteConfirm(true)}
                 disabled={loading || deleting}
                 style={{
-                  background: 'transparent', border: '1px solid rgba(220,38,38,0.18)',
-                  color: '#DC2626', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+                  background: '#DC2626',
+                  border: '1px solid #DC2626',
+                  color: '#fff',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-body)',
+                  opacity: (loading || deleting) ? 0.5 : 1,
                 }}
               >
                 {t('common.delete')}

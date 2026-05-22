@@ -27,7 +27,9 @@ export interface TransferAssignment {
   companyName: string;
   groupName?: string | null;
   originStoreName: string;
+  originStoreLogoFilename?: string | null;
   targetStoreName: string;
+  targetStoreLogoFilename?: string | null;
   createdByName?: string | null;
   createdBySurname?: string | null;
   createdByAvatarFilename?: string | null;
