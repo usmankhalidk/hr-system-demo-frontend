@@ -144,6 +144,11 @@ export default function ShiftDrawer({
   const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.surname}`.trim() : '';
   const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
   const selectedStore = stores.find((store) => String(store.id) === form.store_id) ?? null;
+  const shiftEmployeeName = shift ? `${shift.userName} ${shift.userSurname}`.trim() : '';
+  const shiftEmployeeAvatarUrl = shift?.userAvatarFilename ? getAvatarUrl(shift.userAvatarFilename) : null;
+  const showEmployeeFallback = !selectedEmployee && Boolean(shiftEmployeeName);
+  const shiftStoreName = shift?.storeName?.trim() ?? '';
+  const showStoreFallback = !selectedStore && Boolean(shiftStoreName);
   const expectedStoreId = activeTransferForDate?.targetStoreId ?? selectedEmployee?.storeId ?? null;
   const expectedStoreName = activeTransferForDate?.targetStoreName
     ?? selectedEmployee?.storeName
@@ -451,18 +456,9 @@ export default function ShiftDrawer({
       const isFlexible = form.break_type === 'flexible';
       const isNoBreak = form.break_type === 'none';
       const breakTypeOut: 'fixed' | 'flexible' = form.break_type === 'flexible' ? 'flexible' : 'fixed';
-      const isStoreManager = user?.role === 'store_manager';
       let statusOut: CreateShiftPayload['status'] = form.status;
       if (isOffDay) {
         statusOut = 'cancelled';
-      }
-      if (isStoreManager && statusOut === 'confirmed') {
-        setError(t('shifts.storeManagerCannotConfirm'));
-        setSaving(false);
-        return;
-      }
-      if (isStoreManager && shift?.status === 'confirmed' && !isOffDay) {
-        statusOut = undefined;
       }
       const isNoBreakOut = isNoBreak;
       const isFlexibleOut = breakTypeOut === 'flexible';
@@ -688,6 +684,43 @@ export default function ShiftDrawer({
                         </div>
                       </div>
                     </div>
+                  ) : showEmployeeFallback ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        overflow: 'hidden',
+                        background: shiftEmployeeAvatarUrl ? 'transparent' : getAvatarColor(shiftEmployeeName),
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        {shiftEmployeeAvatarUrl ? (
+                          <img
+                            src={shiftEmployeeAvatarUrl}
+                            alt={shiftEmployeeName}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : getInitials(shiftEmployeeName)}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 13,
+                          color: 'var(--text-primary)',
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {shiftEmployeeName}
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.selectEmployee')}</span>
                   )}
@@ -886,6 +919,37 @@ export default function ShiftDrawer({
                           <span style={{ color: '#0f766e', fontWeight: 700 }}>
                             {` · ${selectedStore.employeeCount ?? 0} ${t('employees.employeesLabel', 'Employees')}`}
                           </span>
+                        </span>
+                      </span>
+                    </span>
+                  ) : showStoreFallback ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                      <span style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        overflow: 'hidden',
+                        background: 'var(--surface-elevated)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: 'var(--text-muted)',
+                      }}>
+                        <StoreIcon size={14} />
+                      </span>
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{
+                          display: 'block',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: 'var(--text-primary)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {shiftStoreName}
                         </span>
                       </span>
                     </span>
@@ -1402,69 +1466,30 @@ export default function ShiftDrawer({
                   </span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
-                {user?.role === 'store_manager' && shift?.status === 'confirmed' ? (
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.45 }}>
-                    <strong style={{ color: 'var(--primary)' }}>{t('shifts.status.confirmed')}</strong>
-                    <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                      {t('shifts.storeManagerConfirmedHint')}
-                    </span>
-                  </div>
-                ) : user?.role === 'store_manager' ? (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-                    {(['scheduled', 'cancelled'] as const).map((s) => {
-                      const active = form.status === s;
-                      const color = s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
-                      const bg = s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => {
-                            if (isStoreManager) return;
-                            setForm((p) => ({ ...p, status: s }));
-                          }}
-                          disabled={isStoreManager}
-                          style={{
-                            flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                            fontWeight: 600, cursor: isStoreManager ? 'not-allowed' : 'pointer', transition: 'all 0.12s',
-                            border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                            background: active ? bg : 'transparent',
-                            color: active ? color : 'var(--text-muted)',
-                            fontFamily: 'var(--font-body)',
-                            opacity: isStoreManager ? 0.7 : 1,
-                          }}
-                        >
-                          {t(`shifts.status.${s}`)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-                    {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
-                      const active = form.status === s;
-                      const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
-                      const bg = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => setForm((p) => ({ ...p, status: s }))}
-                          style={{
-                            flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
-                            fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                            border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                            background: active ? bg : 'transparent',
-                            color: active ? color : 'var(--text-muted)',
-                            fontFamily: 'var(--font-body)',
-                          }}
-                        >
-                          {t(`shifts.status.${s}`)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+                  {(['scheduled', 'confirmed', 'cancelled'] as const).map((s) => {
+                    const active = form.status === s;
+                    const color = s === 'confirmed' ? '#16a34a' : s === 'cancelled' ? 'var(--danger)' : 'var(--primary)';
+                    const bg = s === 'confirmed' ? 'rgba(22,163,74,0.09)' : s === 'cancelled' ? 'var(--danger-bg)' : 'rgba(13,33,55,0.07)';
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, status: s }))}
+                        style={{
+                          flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 12,
+                          fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                          border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                          background: active ? bg : 'transparent',
+                          color: active ? color : 'var(--text-muted)',
+                          fontFamily: 'var(--font-body)',
+                        }}
+                      >
+                        {t(`shifts.status.${s}`)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
