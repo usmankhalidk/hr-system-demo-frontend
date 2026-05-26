@@ -127,6 +127,13 @@ export function getStoreLogoUrl(filename: string | null | undefined): string | n
   return `${base}/uploads/store-logos/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 }
 
+export function getMessageAttachmentUrl(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+  const base = apiBase;
+  return `${base}/uploads/message-attachments/${filename}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+}
+
 export function getPublicAvatarUrl(filename: string | null | undefined): string | null {
   if (!filename) return null;
   const base = apiBase;

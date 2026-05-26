@@ -2271,6 +2271,16 @@ const en = {
     compose: 'New Message',
     searchResults: 'Search Results',
     searchResultsDesc: 'Showing matches from all accessible companies',
+    cannotReply: 'You cannot reply to this conversation. You can only send messages to HR.',
+    newMessages: 'New messages',
+    editSuccess: 'Message edited',
+    editError: 'Error editing message',
+    deleteSuccess: 'Message deleted',
+    deleteError: 'Error deleting message',
+    errorUpload: 'Failed to upload image',
+    uploadingStatus: 'Uploading...',
+    uploadedStatus: 'Uploaded successfully',
+    noConversationMessages: 'No messages in this conversation yet.',
   },
 
   // ─── Notifications ───────────────────────────────────────────────────────

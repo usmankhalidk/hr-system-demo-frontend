@@ -23,7 +23,7 @@ interface Props {
 function buildWeightState(settings: ExternalAffluenceCalculationSettings): SlotWeightState {
   const state: SlotWeightState = {};
   for (const slot of settings.slotWeights) {
-    state[slot.timeSlot] = String(slot.weight);
+    state[slot.timeSlot] = String(Math.round(slot.weight * 100));
   }
   return state;
 }
@@ -49,6 +49,46 @@ export default function ExternalAffluenceLiveConfigModal({
   const [slotWeights, setSlotWeights] = useState<SlotWeightState>({});
   const [hoveredHelpKey, setHoveredHelpKey] = useState<ParamHelpKey | null>(null);
 
+  const sortedSlotWeights = useMemo(() => {
+    if (!config) return [] as Array<{ timeSlot: string; weight: number }>;
+    return [...config.settings.slotWeights].sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+  }, [config]);
+
+  const totalWeightSum = useMemo(() => {
+    return sortedSlotWeights.reduce((sum, slot) => {
+      const valStr = slotWeights[slot.timeSlot];
+      const w = valStr !== '' && valStr != null ? parseInt(valStr, 10) : Math.round(slot.weight * 100);
+      return sum + (isNaN(w) ? 0 : w);
+    }, 0);
+  }, [slotWeights, sortedSlotWeights]);
+
+  const handleWeightChange = (timeSlot: string, rawValue: string) => {
+    if (rawValue === '') {
+      setSlotWeights((prev) => ({ ...prev, [timeSlot]: '' }));
+      return;
+    }
+    let numVal = parseInt(rawValue, 10);
+    if (isNaN(numVal)) {
+      setSlotWeights((prev) => ({ ...prev, [timeSlot]: '' }));
+      return;
+    }
+    numVal = Math.max(0, Math.min(100, numVal));
+
+    const otherSum = sortedSlotWeights
+      .filter((slot) => slot.timeSlot !== timeSlot)
+      .reduce((sum, slot) => {
+        const valStr = slotWeights[slot.timeSlot];
+        const w = valStr !== '' && valStr != null ? parseInt(valStr, 10) : Math.round(slot.weight * 100);
+        return sum + (isNaN(w) ? 0 : w);
+      }, 0);
+
+    if (otherSum + numVal > 100) {
+      numVal = 100 - otherSum;
+    }
+
+    setSlotWeights((prev) => ({ ...prev, [timeSlot]: String(numVal) }));
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -70,11 +110,6 @@ export default function ExternalAffluenceLiveConfigModal({
   useEffect(() => {
     void load();
   }, [load]);
-
-  const sortedSlotWeights = useMemo(() => {
-    if (!config) return [] as Array<{ timeSlot: string; weight: number }>;
-    return [...config.settings.slotWeights].sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
-  }, [config]);
 
   const parameterHelp = useMemo<Record<ParamHelpKey, string>>(() => ({
     visitorsPerStaff: t('shifts.affluence_staff_per_visitor_hint', 'Set how many visitors one staff member should handle. Example: 10 means 1 staff for 10 visitors.'),
@@ -168,10 +203,14 @@ export default function ExternalAffluenceLiveConfigModal({
     setSaving(true);
     setError(null);
     try {
-      const payloadSlotWeights = sortedSlotWeights.map((slot) => ({
-        timeSlot: slot.timeSlot,
-        weight: normalizeNumber(slotWeights[slot.timeSlot] ?? String(slot.weight), slot.weight),
-      }));
+      const payloadSlotWeights = sortedSlotWeights.map((slot) => {
+        const valStr = slotWeights[slot.timeSlot];
+        const valNum = valStr !== '' && valStr != null ? parseInt(valStr, 10) : Math.round(slot.weight * 100);
+        return {
+          timeSlot: slot.timeSlot,
+          weight: (isNaN(valNum) ? 0 : valNum) / 100,
+        };
+      });
 
       const updated = await updateExternalAffluenceConfiguration({
         storeId,
@@ -396,28 +435,137 @@ export default function ExternalAffluenceLiveConfigModal({
 
                 </div>
 
-                <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                    {renderHelpLabel(t('shifts.affluence_slot_weights', 'Slot Weights'), 'slotWeights')}
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <div style={{ minWidth: 620, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(4, minmax(140px, 1fr))' }}>
-                      {sortedSlotWeights.map((slot) => (
-                        <label key={slot.timeSlot} style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                          {slot.timeSlot}
-                          <input
-                            type="number"
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            value={slotWeights[slot.timeSlot] ?? String(slot.weight)}
-                            onChange={(event) => setSlotWeights((prev) => ({ ...prev, [slot.timeSlot]: event.target.value }))}
-                            style={{ padding: '7px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)' }}
-                          />
-                        </label>
-                      ))}
+                <div style={{
+                  marginTop: 14,
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 12,
+                  padding: 16,
+                  background: '#f8fafc',
+                  display: 'grid',
+                  gap: 12,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>
+                      {renderHelpLabel(t('shifts.affluence_slot_weights', 'Slot Weights Allocation'), 'slotWeights')}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        background: totalWeightSum === 100 ? '#dcfce7' : '#fee2e2',
+                        color: totalWeightSum === 100 ? '#15803d' : '#b91c1c',
+                        border: `1px solid ${totalWeightSum === 100 ? '#bbf7d0' : '#fecaca'}`,
+                      }}>
+                        {totalWeightSum === 100
+                          ? t('shifts.affluence_weights_allocated_fully', 'Fully Allocated (100%)')
+                          : t('shifts.affluence_weights_sum_info', `Allocated: ${totalWeightSum}% (Remaining: ${100 - totalWeightSum}%)`)}
+                      </span>
                     </div>
                   </div>
+
+                  {/* Elegant Modern Progress Bar */}
+                  <div style={{ position: 'relative', width: '100%', height: 16, borderRadius: 999, background: '#cbd5e1', overflow: 'hidden', display: 'flex' }}>
+                    {sortedSlotWeights.map((slot, index) => {
+                      const valStr = slotWeights[slot.timeSlot];
+                      const w = valStr !== '' && valStr != null ? parseInt(valStr, 10) : Math.round(slot.weight * 100);
+                      const weightVal = isNaN(w) ? 0 : w;
+                      if (weightVal <= 0) return null;
+
+                      const colors = [
+                        'linear-gradient(90deg, #3b82f6, #1d4ed8)', // Blue
+                        'linear-gradient(90deg, #10b981, #047857)', // Green
+                        'linear-gradient(90deg, #f59e0b, #b45309)', // Amber
+                        'linear-gradient(90deg, #8b5cf6, #5b21b6)', // Purple
+                      ];
+                      const segmentColor = colors[index % colors.length];
+
+                      return (
+                        <div
+                          key={`progress-${slot.timeSlot}`}
+                          style={{
+                            width: `${weightVal}%`,
+                            height: '100%',
+                            background: segmentColor,
+                            transition: 'width 0.3s ease',
+                          }}
+                          title={`${slot.timeSlot}: ${weightVal}%`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Inputs Row */}
+                  <div style={{ overflowX: 'auto', paddingTop: 4 }}>
+                    <div style={{ minWidth: 620, display: 'grid', gap: 12, gridTemplateColumns: 'repeat(4, minmax(140px, 1fr))' }}>
+                      {sortedSlotWeights.map((slot, index) => {
+                        const valStr = slotWeights[slot.timeSlot];
+                        const displayVal = valStr ?? String(Math.round(slot.weight * 100));
+
+                        const borderColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+
+                        return (
+                          <label key={slot.timeSlot} style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                            <span style={{ fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                background: borderColors[index % borderColors.length],
+                              }} />
+                              {slot.timeSlot}
+                            </span>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={displayVal}
+                                onChange={(event) => handleWeightChange(slot.timeSlot, event.target.value)}
+                                style={{
+                                  padding: '8px 30px 8px 10px',
+                                  borderRadius: 8,
+                                  border: `1.5px solid var(--border)`,
+                                  background: 'var(--surface)',
+                                  width: '100%',
+                                  fontWeight: 700,
+                                  color: 'var(--text-main)',
+                                }}
+                              />
+                              <span style={{
+                                position: 'absolute',
+                                right: 10,
+                                fontSize: 11,
+                                fontWeight: 800,
+                                color: '#64748b',
+                                pointerEvents: 'none',
+                              }}>%</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {totalWeightSum !== 100 ? (
+                    <div style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#b91c1c',
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      marginTop: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}>
+                      ⚠️ {t('shifts.affluence_weights_sum_warning', `The total weight sum must equal exactly 100%. Please adjust the slots to allocate the remaining ${100 - totalWeightSum}% space.`)}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div style={{ marginTop: 12, border: '1px solid #dbe4ee', borderRadius: 10, padding: 10, background: '#f8fbff', display: 'grid', gap: 10 }}>
@@ -496,7 +644,12 @@ export default function ExternalAffluenceLiveConfigModal({
 
         <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button className="btn btn-secondary" onClick={onClose}>{t('common.close')}</button>
-          <button className="btn btn-primary" onClick={() => { void handleSave(); }} disabled={loading || saving || !config}>
+          <button
+            className="btn btn-primary"
+            onClick={() => { void handleSave(); }}
+            disabled={loading || saving || !config || totalWeightSum !== 100}
+            title={totalWeightSum !== 100 ? 'Allocated slot weights must sum to exactly 100%' : 'Save Configuration'}
+          >
             {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
           </button>
         </div>

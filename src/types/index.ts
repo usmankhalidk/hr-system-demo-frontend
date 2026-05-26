@@ -243,6 +243,7 @@ export interface Message {
   recipientRole?: UserRole;
   recipientAvatarFilename?: string | null;
   direction?: 'received' | 'sent';
+  attachmentFilename?: string | null;
 }
 
 export interface PermissionGrid {

@@ -22,7 +22,7 @@ interface Props {
   defaultSubject?: string;
   defaultBody?: string;
   onClose: () => void;
-  onSent?: () => void;
+  onSent?: (recipientId: number) => void;
 }
 
 interface PickableEmployee {
@@ -143,7 +143,7 @@ export function ComposeMessage({ recipientId, recipientName, companyId, defaultS
         body: body.trim(),
         companyId: shouldFetchAllAccessibleUsers ? undefined : effectiveCompanyId,
       });
-      onSent?.();
+      onSent?.(effectiveRecipientId);
       onClose();
     } catch (err: unknown) {
       setError(translateApiError(err, t, t('messages.errorSend')));

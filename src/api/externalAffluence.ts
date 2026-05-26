@@ -486,3 +486,82 @@ export async function syncExternalAffluence(payload: {
 
   return data.data;
 }
+
+export interface ForecastSlot {
+  timeSlot: string;
+  slotWeight: number;
+  estimatedVisitors: number;
+  level: 'low' | 'medium' | 'high';
+  requiredStaff: number;
+  currentScheduledStaff: number;
+  deltaToScheduledStaff: number;
+  coverageStatus: 'under' | 'balanced' | 'over';
+}
+
+export interface ForecastDay {
+  date: string;
+  dayOfWeek: number;
+  isOverridden: boolean;
+  overriddenVisitors: number | null;
+  overrideNote: string | null;
+  estimatedDailyVisitors: number;
+  effectiveDailyVisitors: number;
+  slots: ForecastSlot[];
+}
+
+export interface ExternalAffluenceForecastResponse {
+  storeId: number;
+  companyId: number;
+  fromDate: string;
+  toDate: string;
+  days: ForecastDay[];
+  settings: ExternalAffluenceCalculationSettings;
+}
+
+export async function getExternalAffluenceForecast(params: {
+  storeId: number;
+  fromDate?: string;
+  toDate?: string;
+  targetCompanyId?: number;
+}): Promise<ExternalAffluenceForecastResponse> {
+  const { data } = await client.get('/external-affluence/forecast', {
+    params: {
+      store_id: params.storeId,
+      ...(params.fromDate ? { from_date: params.fromDate } : {}),
+      ...(params.toDate ? { to_date: params.toDate } : {}),
+      ...(params.targetCompanyId ? { target_company_id: params.targetCompanyId } : {}),
+    },
+  });
+
+  return data.data;
+}
+
+export async function upsertForecastOverride(payload: {
+  storeId: number;
+  date: string;
+  visitorsOverride: number;
+  note?: string | null;
+  targetCompanyId?: number;
+}): Promise<void> {
+  await client.put('/external-affluence/forecast/override', {
+    store_id: payload.storeId,
+    date: payload.date,
+    visitors_override: payload.visitorsOverride,
+    note: payload.note ?? null,
+    ...(payload.targetCompanyId ? { target_company_id: payload.targetCompanyId } : {}),
+  });
+}
+
+export async function deleteForecastOverride(params: {
+  storeId: number;
+  date: string;
+  targetCompanyId?: number;
+}): Promise<void> {
+  await client.delete('/external-affluence/forecast/override', {
+    params: {
+      store_id: params.storeId,
+      date: params.date,
+      ...(params.targetCompanyId ? { target_company_id: params.targetCompanyId } : {}),
+    },
+  });
+}
