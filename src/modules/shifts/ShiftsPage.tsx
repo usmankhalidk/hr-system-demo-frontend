@@ -944,10 +944,12 @@ export default function ShiftsPage() {
         </div>
 
         {/* ── Affluence Panel ───────────────────────────────────────── */}
-        {affluenceOpen && storeFilter && viewMode === 'week' && (
+        {affluenceOpen && storeFilter && (viewMode === 'week' || viewMode === 'day') && (
           <ExternalAffluenceLivePanel
             storeId={storeFilter}
             week={formatIsoWeek(currentDate)}
+            filterDay={viewMode === 'day' ? ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][currentDate.getDay()] : null}
+            singleDayMode={viewMode === 'day'}
           />
         )}
       </div>

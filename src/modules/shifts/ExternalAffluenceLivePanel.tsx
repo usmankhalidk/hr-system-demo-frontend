@@ -5,11 +5,16 @@ import {
   ArrowRight,
   BarChart3,
   Building2,
+  Calendar,
   Cog,
   Database,
   Info,
   Link2,
+  Pencil,
+  Save,
+  Trash2,
   Users,
+  X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAvatarUrl } from '../../api/client';
@@ -17,6 +22,12 @@ import {
   ExternalAffluencePreviewRow,
   ExternalAffluenceWeekResponse,
   getExternalWeekAffluence,
+  getExternalAffluenceForecast,
+  upsertForecastOverride,
+  deleteForecastOverride,
+  ForecastDay,
+  ForecastSlot,
+  ExternalAffluenceForecastResponse,
 } from '../../api/externalAffluence';
 import { listShifts, Shift } from '../../api/shifts';
 import { useAuth } from '../../context/AuthContext';
@@ -32,16 +43,20 @@ const WEEK_DAYS = [
   { key: 'sunday', isoDay: 7, shortKey: 'daySun', shortFallback: 'SUN', fullKey: 'daySunday', fullFallback: 'Sunday' },
 ] as const;
 
-const STAFFING_SLOTS: Array<{ timeSlot: string; startMinutes: number; endMinutes: number }> = [
-  { timeSlot: '09:00-12:00', startMinutes: 9 * 60, endMinutes: 12 * 60 },
-  { timeSlot: '12:00-15:00', startMinutes: 12 * 60, endMinutes: 15 * 60 },
-  { timeSlot: '15:00-18:00', startMinutes: 15 * 60, endMinutes: 18 * 60 },
-  { timeSlot: '18:00-21:00', startMinutes: 18 * 60, endMinutes: 21 * 60 },
+const STAFFING_SLOTS: Array<{ timeSlot: string; startMinutes: number; endMinutes: number; durationHours: number; label: string }> = [
+  { timeSlot: '00:00-06:00', startMinutes: 0,      endMinutes: 6  * 60, durationHours: 6, label: 'Night' },
+  { timeSlot: '06:00-12:00', startMinutes: 6 * 60, endMinutes: 12 * 60, durationHours: 6, label: 'Morning' },
+  { timeSlot: '12:00-18:00', startMinutes: 12 * 60, endMinutes: 18 * 60, durationHours: 6, label: 'Afternoon' },
+  { timeSlot: '18:00-24:00', startMinutes: 18 * 60, endMinutes: 24 * 60, durationHours: 6, label: 'Evening' },
 ];
 
 interface Props {
   storeId: number;
   week: string;
+  /** When set, pre-selects this ISO weekday key (e.g. 'monday') and hides the day-switcher */
+  filterDay?: string | null;
+  /** When true, hides the day-filter button bar (used in single-day view) */
+  singleDayMode?: boolean;
 }
 
 interface ScheduledStaffAvatar {
@@ -162,7 +177,7 @@ function initials(name: string, surname: string): string {
   return `${n}${s}`.toUpperCase() || '?';
 }
 
-export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
+export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, singleDayMode }: Props) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -197,11 +212,106 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [integrationMissing, setIntegrationMissing] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(filterDay ?? null);
   const [payload, setPayload] = useState<ExternalAffluenceWeekResponse | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [hoveredInfoKey, setHoveredInfoKey] = useState<string | null>(null);
   const [scheduledBySlot, setScheduledBySlot] = useState<ScheduledAvatarMap>({});
+
+  useEffect(() => {
+    setSelectedDay(filterDay ?? null);
+  }, [filterDay]);
+
+  const [activeTab, setActiveTab] = useState<'live' | 'forecast'>('live');
+
+  // Helper date function
+  const formatDateOnly = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  // Forecast states
+  const [forecastFromDate, setForecastFromDate] = useState<string>(() => formatDateOnly(new Date()));
+  const [forecastToDate, setForecastToDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 13);
+    return formatDateOnly(d);
+  });
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+  const [forecastData, setForecastData] = useState<ExternalAffluenceForecastResponse | null>(null);
+
+  // Override edit states
+  const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [overrideValue, setOverrideValue] = useState<string>('');
+  const [overrideSaving, setOverrideSaving] = useState(false);
+
+  const loadForecastData = useCallback(async () => {
+    setForecastLoading(true);
+    setForecastError(null);
+    try {
+      const data = await getExternalAffluenceForecast({
+        storeId,
+        fromDate: forecastFromDate,
+        toDate: forecastToDate,
+      });
+      setForecastData(data);
+    } catch {
+      setForecastError(t('errors.DEFAULT', 'Could not load forecast data'));
+    } finally {
+      setForecastLoading(false);
+    }
+  }, [storeId, forecastFromDate, forecastToDate, t]);
+
+  useEffect(() => {
+    if (activeTab === 'forecast') {
+      void loadForecastData();
+    }
+  }, [activeTab, loadForecastData]);
+
+  const handleSaveOverride = async (date: string) => {
+    const val = parseInt(overrideValue, 10);
+    if (isNaN(val) || val < 0) {
+      alert(t('shifts.affluence_override_invalid', 'Please enter a positive integer for visitors count'));
+      return;
+    }
+
+    setOverrideSaving(true);
+    try {
+      await upsertForecastOverride({
+        storeId,
+        date,
+        visitorsOverride: val,
+      });
+      setEditingDate(null);
+      setOverrideValue('');
+      void loadForecastData();
+    } catch {
+      alert(t('errors.DEFAULT', 'Could not save override'));
+    } finally {
+      setOverrideSaving(false);
+    }
+  };
+
+  const handleDeleteOverride = async (date: string) => {
+    if (!window.confirm(t('shifts.affluence_delete_override_confirm', 'Are you sure you want to clear this manual override?'))) {
+      return;
+    }
+    setForecastLoading(true);
+    try {
+      await deleteForecastOverride({
+        storeId,
+        date,
+      });
+      void loadForecastData();
+    } catch {
+      alert(t('errors.DEFAULT', 'Could not delete override'));
+    } finally {
+      setForecastLoading(false);
+    }
+  };
 
   const loadLiveData = useCallback(async () => {
     setLoading(true);
@@ -480,351 +590,884 @@ export default function ExternalAffluenceLivePanel({ storeId, week }: Props) {
       </div>
 
       <div style={{ padding: '14px 16px 16px', display: 'grid', gap: 12 }}>
-        <>
-          {error && (
-            <div style={{
-              margin: '0 0 2px',
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1px solid var(--danger-border)',
-              background: 'var(--danger-bg)',
-              color: 'var(--danger)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 8,
-              fontSize: 13,
-            }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <AlertCircle size={14} />
-                {error}
-              </span>
-              <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => { void loadLiveData(); }}>
-                {t('common.retry', 'Retry')}
-              </button>
-            </div>
-          )}
+        {/* Tab Switcher */}
+        {!integrationMissing && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            background: 'rgba(13,33,55,0.05)',
+            border: '1px solid rgba(13,33,55,0.08)',
+            padding: 4,
+            borderRadius: 12,
+            width: 'fit-content',
+            marginBottom: 2,
+          }}>
+            <button
+              onClick={() => setActiveTab('live')}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background: activeTab === 'live' ? '#fff' : 'transparent',
+                color: activeTab === 'live' ? '#2e567a' : '#64748b',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer',
+                boxShadow: activeTab === 'live' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {t('shifts.affluence_tab_live', 'Current Week')}
+            </button>
+            <button
+              onClick={() => setActiveTab('forecast')}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background: activeTab === 'forecast' ? '#fff' : 'transparent',
+                color: activeTab === 'forecast' ? '#2e567a' : '#64748b',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer',
+                boxShadow: activeTab === 'forecast' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {t('shifts.affluence_tab_forecast', 'Forecast Planning')}
+            </button>
+          </div>
+        )}
 
-          {!integrationMissing && (
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              border: '1px solid #d6e4ef',
-              borderRadius: 10,
-              background: 'linear-gradient(90deg, #f9f5ef 0%, #f3f9ff 100%)',
-              padding: 10,
-            }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{
-                    padding: '6px 10px',
-                    background: selectedDay === null ? '#2e567a' : '#fff',
-                    color: selectedDay === null ? '#fff' : 'var(--text-secondary)',
-                    borderColor: selectedDay === null ? '#2e567a' : '#d1d5db',
-                  }}
-                  onClick={() => setSelectedDay(null)}
-                >
-                  {t('common.all', 'All')}
-                </button>
-                {WEEK_DAYS.map((day) => {
-                  const active = selectedDay === day.key;
-                  return (
+        <>
+          {activeTab === 'live' ? (
+            /* ──────────────────────────────────────────────────────────
+               TAB: LIVE WEEK VIEW (Existing behavior)
+               ────────────────────────────────────────────────────────── */
+            <>
+              {error && (
+                <div style={{
+                  margin: '0 0 2px',
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  border: '1px solid var(--danger-border)',
+                  background: 'var(--danger-bg)',
+                  color: 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  fontSize: 13,
+                }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <AlertCircle size={14} />
+                    {error}
+                  </span>
+                  <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => { void loadLiveData(); }}>
+                    {t('common.retry', 'Retry')}
+                  </button>
+                </div>
+              )}
+
+              {!integrationMissing && (
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  border: '1px solid #d6e4ef',
+                  borderRadius: 10,
+                  background: 'linear-gradient(90deg, #f9f5ef 0%, #f3f9ff 100%)',
+                  padding: 10,
+                }}>
+                  {!singleDayMode && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     <button
-                      key={day.key}
                       className="btn btn-secondary"
                       style={{
                         padding: '6px 10px',
-                        background: active ? '#2e567a' : '#fff',
-                        color: active ? '#fff' : 'var(--text-secondary)',
-                        borderColor: active ? '#2e567a' : '#d1d5db',
-                        fontWeight: active ? 700 : 600,
+                        background: selectedDay === null ? '#2e567a' : '#fff',
+                        color: selectedDay === null ? '#fff' : 'var(--text-secondary)',
+                        borderColor: selectedDay === null ? '#2e567a' : '#d1d5db',
                       }}
-                      onClick={() => setSelectedDay(day.key)}
+                      onClick={() => setSelectedDay(null)}
                     >
-                      {t(`shifts.${day.shortKey}`, day.shortFallback)}
+                      {t('common.all', 'All')}
                     </button>
-                  );
-                })}
-              </div>
-
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                <div style={{ fontWeight: 700, color: '#5f3e2f' }}>
-                  {t('shifts.affluence_date_range', 'Date range')}: {formatDateRange(payload?.fromDate ?? null, payload?.toDate ?? null)}
-                </div>
-                <div style={{ opacity: 0.9 }}>
-                  {t('shifts.affluence_external_store', 'External store')}: {sourceStoreTitle}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
-          ) : integrationMissing ? (
-            <div style={{
-                border: '1px dashed rgba(95,62,47,0.35)',
-                borderRadius: 14,
-                background: 'linear-gradient(150deg, rgba(46,86,122,0.06), rgba(201,151,58,0.12))',
-                padding: '28px 20px',
-                textAlign: 'center',
-                display: 'grid',
-                gap: 12,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    border: '1px solid rgba(13,33,55,0.15)',
-                    background: '#fff',
-                    display: 'grid',
-                    placeItems: 'center',
-                    color: '#5f3e2f',
-                  }}>
-                    <Building2 size={20} />
-                  </div>
-                  <div style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 999,
-                    border: '1px dashed rgba(13,33,55,0.35)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    color: '#2e567a',
-                    background: 'rgba(255,255,255,0.7)',
-                  }}>
-                    <Link2 size={15} />
-                  </div>
-                  <div style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    border: '1px solid rgba(13,33,55,0.15)',
-                    background: '#fff',
-                    display: 'grid',
-                    placeItems: 'center',
-                    color: '#2e567a',
-                  }}>
-                    <Database size={20} />
-                  </div>
-                </div>
-
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.02rem', fontWeight: 800, color: '#5f3e2f' }}>
-                  {t('shifts.affluence_not_connected_title', 'Store is not connected to any external store yet.')}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 620, margin: '0 auto', lineHeight: 1.5 }}>
-                  {t('shifts.affluence_not_connected_desc', 'Connect this internal store to an external database store to display live affluence data here.')}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <button
-                    type="button"
-                    className="btn btn-accent"
-                    onClick={() => navigate('/integrazioni/database-esterno')}
-                  >
-                    <Database size={14} />
-                    {t('shifts.affluence_connect_database_button', 'Open Database Integration')}
-                    <ArrowRight size={13} />
-                  </button>
-                </div>
-            </div>
-          ) : (
-            <div style={{
-                border: '1px solid #d4e2ef',
-                borderRadius: 10,
-                overflow: 'hidden',
-                background: '#fff',
-            }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: tableColumns,
-                  padding: '10px 12px',
-                  background: 'linear-gradient(90deg, rgba(95,62,47,0.08), rgba(46,86,122,0.08))',
-                  borderBottom: '1px solid #d4e2ef',
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: 0.3,
-                  color: '#334155',
-                  textTransform: 'uppercase',
-                }}>
-                  <div>{t('shifts.affluence_day_label', 'Day')}</div>
-                  <div>{t('shifts.affluence_time_slot_label', 'Time slot')}</div>
-                  <div>{renderColumnHeader(t('shifts.affluence_scheduled_staff_col', 'Scheduled staff'), 'scheduled')}</div>
-                  <div>{renderColumnHeader(t('shifts.affluence_estimated_visitors_col', 'Estimated visitors'), 'estimated')}</div>
-                  <div>{renderColumnHeader(t('shifts.affluence_staff_suggestion_col', 'Staff suggestion'), 'suggestion')}</div>
-                  <div style={{ borderLeft: '1px dashed #cbd5e1', paddingLeft: 10, whiteSpace: 'nowrap' }}>{renderColumnHeader(t('shifts.affluence_level_col', 'Level'), 'baseline')}</div>
-                  <div>{renderColumnHeader(t('shifts.affluence_gap_col', 'Gap'), 'gap')}</div>
-                  <div>{renderColumnHeader(t('common.status', 'Status'), 'status')}</div>
-                </div>
-
-                <div style={{ maxHeight: 430, overflowY: 'auto' }}>
-                  {filteredDays.map((day) => {
-                    const slots = affluenceByDay[day.key] || [];
-                    if (slots.length === 0) {
-                      const dayVisitors = visitorsByIsoDay.get(day.isoDay);
+                    {WEEK_DAYS.map((day) => {
+                      const active = selectedDay === day.key;
                       return (
-                        <div key={day.key} style={{
-                          display: 'grid',
-                          gridTemplateColumns: tableColumns,
-                          alignItems: 'center',
-                          borderBottom: '1px solid #e2e8f0',
-                        }}>
-                          <div style={{ padding: '12px', fontWeight: 700, color: '#5f3e2f', display: 'grid', gap: 2 }}>
-                            <div>{formatDay(day.key)}</div>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
-                              {t('shifts.affluence_day_total_visitors', 'Total visitors')}: {dayVisitors?.totalVisitors ?? 0}
-                            </div>
-                          </div>
-                          <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
-                          <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
-                          <div style={{ padding: '12px', color: 'var(--text-muted)' }}>{t('shifts.affluence_no_data', 'No external data')}</div>
-                          <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
-                          <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
-                          <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
-                          <div style={{ padding: '12px' }}>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('common.na', 'N/A')}</span>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return slots.map((slot, index) => {
-                      const required = slot.requiredStaff;
-                      const statusLabel = slot.coverageStatus || 'under';
-                      const dayVisitors = visitorsByIsoDay.get(slot.dayOfWeek);
-                      const slotWeight = slotWeightByTimeSlot.get(slot.timeSlot);
-                      const statusStyle =
-                        statusLabel === 'balanced'
-                          ? { color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }
-                          : statusLabel === 'over'
-                            ? { color: '#1e40af', background: '#dbeafe', border: '1px solid #93c5fd' }
-                            : { color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5' };
-
-                      const levelStyle =
-                        slot.level === 'low'
-                          ? { color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }
-                          : slot.level === 'medium'
-                            ? { color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }
-                            : { color: '#7f1d1d', background: '#fee2e2', border: '1px solid #fca5a5' };
-
-                      const gapValue = Math.round(slot.deltaToScheduledStaff);
-                      const gapColor = gapValue > 0 ? '#b91c1c' : gapValue < 0 ? '#1d4ed8' : '#166534';
-
-                      return (
-                        <div
-                          key={`${day.key}-${slot.timeSlot}`}
+                        <button
+                          key={day.key}
+                          className="btn btn-secondary"
                           style={{
-                            display: 'grid',
-                            gridTemplateColumns: tableColumns,
-                            alignItems: 'center',
-                            borderBottom: '1px solid #e2e8f0',
-                            background: index % 2 === 0 ? '#fff' : '#f8fbff',
+                            padding: '6px 10px',
+                            background: active ? '#2e567a' : '#fff',
+                            color: active ? '#fff' : 'var(--text-secondary)',
+                            borderColor: active ? '#2e567a' : '#d1d5db',
+                            fontWeight: active ? 700 : 600,
                           }}
+                          onClick={() => setSelectedDay(day.key)}
                         >
-                          {index === 0 ? (
-                            <div
-                              style={{
-                                padding: '12px',
-                                fontWeight: 700,
-                                color: '#5f3e2f',
-                                height: '100%',
-                                display: 'grid',
-                                alignContent: 'center',
-                                gap: 2,
-                                borderRight: '1px solid #e2e8f0',
-                              }}
-                            >
-                              <div>{formatDay(day.key)}</div>
-                              <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
-                                {t('shifts.affluence_day_total_visitors', 'Total visitors')}: {dayVisitors?.totalVisitors ?? 0}
+                          {t(`shifts.${day.shortKey}`, day.shortFallback)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  )}
+
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
+                    <div style={{ fontWeight: 700, color: '#5f3e2f' }}>
+                      {t('shifts.affluence_date_range', 'Date range')}: {formatDateRange(payload?.fromDate ?? null, payload?.toDate ?? null)}
+                    </div>
+                    <div style={{ opacity: 0.9 }}>
+                      {t('shifts.affluence_external_store', 'External store')}: {sourceStoreTitle}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+              ) : integrationMissing ? (
+                <div style={{
+                    border: '1px dashed rgba(95,62,47,0.35)',
+                    borderRadius: 14,
+                    background: 'linear-gradient(150deg, rgba(46,86,122,0.06), rgba(201,151,58,0.12))',
+                    padding: '28px 20px',
+                    textAlign: 'center',
+                    display: 'grid',
+                    gap: 12,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        border: '1px solid rgba(13,33,55,0.15)',
+                        background: '#fff',
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: '#5f3e2f',
+                      }}>
+                        <Building2 size={20} />
+                      </div>
+                      <div style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 999,
+                        border: '1px dashed rgba(13,33,55,0.35)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: '#2e567a',
+                        background: 'rgba(255,255,255,0.7)',
+                      }}>
+                        <Link2 size={15} />
+                      </div>
+                      <div style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        border: '1px solid rgba(13,33,55,0.15)',
+                        background: '#fff',
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: '#2e567a',
+                      }}>
+                        <Database size={20} />
+                      </div>
+                    </div>
+
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.02rem', fontWeight: 800, color: '#5f3e2f' }}>
+                      {t('shifts.affluence_not_connected_title', 'Store is not connected to any external store yet.')}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 620, margin: '0 auto', lineHeight: 1.5 }}>
+                      {t('shifts.affluence_not_connected_desc', 'Connect this internal store to an external database store to display live affluence data here.')}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-accent"
+                        onClick={() => navigate('/integrazioni/database-esterno')}
+                      >
+                        <Database size={14} />
+                        {t('shifts.affluence_connect_database_button', 'Open Database Integration')}
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                </div>
+              ) : (
+                <div style={{
+                    border: '1px solid #d4e2ef',
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    background: '#fff',
+                }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: tableColumns,
+                      padding: '10px 12px',
+                      background: 'linear-gradient(90deg, rgba(95,62,47,0.08), rgba(46,86,122,0.08))',
+                      borderBottom: '1px solid #d4e2ef',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: 0.3,
+                      color: '#334155',
+                      textTransform: 'uppercase',
+                    }}>
+                      <div>{t('shifts.affluence_day_label', 'Day')}</div>
+                      <div>{t('shifts.affluence_time_slot_label', 'Time slot')}</div>
+                      <div>{renderColumnHeader(t('shifts.affluence_scheduled_staff_col', 'Scheduled staff'), 'scheduled')}</div>
+                      <div>{renderColumnHeader(t('shifts.affluence_estimated_visitors_col', 'Estimated visitors'), 'estimated')}</div>
+                      <div>{renderColumnHeader(t('shifts.affluence_staff_suggestion_col', 'Staff suggestion'), 'suggestion')}</div>
+                      <div style={{ borderLeft: '1px dashed #cbd5e1', paddingLeft: 10, whiteSpace: 'nowrap' }}>{renderColumnHeader(t('shifts.affluence_level_col', 'Level'), 'baseline')}</div>
+                      <div>{renderColumnHeader(t('shifts.affluence_gap_col', 'Gap'), 'gap')}</div>
+                      <div>{renderColumnHeader(t('common.status', 'Status'), 'status')}</div>
+                    </div>
+
+                    <div style={{ maxHeight: 430, overflowY: 'auto' }}>
+                      {filteredDays.map((day) => {
+                        const slots = affluenceByDay[day.key] || [];
+                        if (slots.length === 0) {
+                          const dayVisitors = visitorsByIsoDay.get(day.isoDay);
+                          return (
+                            <div key={day.key} style={{
+                              display: 'grid',
+                              gridTemplateColumns: tableColumns,
+                              alignItems: 'center',
+                              borderBottom: '1px solid #e2e8f0',
+                            }}>
+                              <div style={{ padding: '12px', fontWeight: 700, color: '#5f3e2f', display: 'grid', gap: 2 }}>
+                                <div>{formatDay(day.key)}</div>
+                                <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
+                                  {t('shifts.affluence_day_total_visitors', 'Total visitors')}: {dayVisitors?.totalVisitors ?? 0}
+                                </div>
+                              </div>
+                              <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
+                              <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
+                              <div style={{ padding: '12px', color: 'var(--text-muted)' }}>{t('shifts.affluence_no_data', 'No external data')}</div>
+                              <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
+                              <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
+                              <div style={{ padding: '12px', color: 'var(--text-muted)' }}>-</div>
+                              <div style={{ padding: '12px' }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('common.na', 'N/A')}</span>
                               </div>
                             </div>
-                          ) : (
-                            <div style={{ borderRight: '1px solid #e2e8f0', height: '100%' }} />
-                          )}
+                          );
+                        }
 
-                          <div style={{ padding: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'grid', gap: 2 }}>
-                            <div>{slot.timeSlot}</div>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
-                              {t('shifts.affluence_slot_weight_label', 'Weight')}: {slotWeight != null ? `${Math.round(slotWeight * 100)}%` : '-'}
-                            </div>
-                          </div>
+                        return slots.map((slot, index) => {
+                          const required = slot.requiredStaff;
+                          const statusLabel = slot.coverageStatus || 'under';
+                          const dayVisitors = visitorsByIsoDay.get(slot.dayOfWeek);
+                          const slotWeight = slotWeightByTimeSlot.get(slot.timeSlot);
+                          const statusStyle =
+                            statusLabel === 'balanced'
+                              ? { color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }
+                              : statusLabel === 'over'
+                                ? { color: '#1e40af', background: '#dbeafe', border: '1px solid #93c5fd' }
+                                : { color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5' };
 
-                          <div style={{ padding: '10px 12px' }}>
-                            {renderScheduledAvatars(slot.dayOfWeek, slot.timeSlot, slot.currentScheduledStaff)}
-                          </div>
+                          const levelStyle =
+                            slot.level === 'low'
+                              ? { color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }
+                              : slot.level === 'medium'
+                                ? { color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }
+                                : { color: '#7f1d1d', background: '#fee2e2', border: '1px solid #fca5a5' };
 
-                          <div style={{ padding: '10px 12px', fontWeight: 700, color: '#2e567a' }}>
-                            {numberOrDash(slot.estimatedVisitors, 0)}
-                          </div>
+                          const gapValue = Math.round(slot.deltaToScheduledStaff);
+                          const gapColor = gapValue > 0 ? '#b91c1c' : gapValue < 0 ? '#1d4ed8' : '#166534';
 
-                          <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'flex-start', textAlign: 'left' }}>
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              padding: '4px 10px',
-                              borderRadius: 999,
-                              border: '1px solid #d6b99b',
-                              background: '#fbf4ea',
-                              color: '#5f3e2f',
-                              fontSize: 12,
-                              fontWeight: 800,
-                            }}>
-                              {required}
-                              <span style={{ fontWeight: 600, opacity: 0.85 }}>{t('shifts.affluence_required_staff', 'required')}</span>
-                            </span>
-                          </div>
-
-                          <div style={{ padding: '10px 12px', color: 'var(--text-secondary)', borderLeft: '1px dashed #cbd5e1' }}>
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              minWidth: 84,
-                              padding: '3px 8px',
-                              borderRadius: 999,
-                              fontWeight: 700,
-                              fontSize: 11,
-                              textTransform: 'uppercase',
-                              ...levelStyle,
-                            }}>
-                              {t(`shifts.level_${slot.level}`, slot.level)}
-                            </span>
-                          </div>
-
-                          <div style={{ padding: '10px 12px', fontWeight: 800, color: gapColor }}>
-                            {gapValue > 0 ? `+${gapValue}` : String(gapValue)}
-                          </div>
-
-                          <div style={{ padding: '12px' }}>
-                            <span
+                          return (
+                            <div
+                              key={`${day.key}-${slot.timeSlot}`}
                               style={{
-                                display: 'inline-flex',
+                                display: 'grid',
+                                gridTemplateColumns: tableColumns,
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                minWidth: 88,
-                                padding: '4px 8px',
-                                borderRadius: 999,
-                                fontWeight: 700,
-                                fontSize: 11,
-                                textTransform: 'uppercase',
-                                ...statusStyle,
+                                borderBottom: '1px solid #e2e8f0',
+                                background: index % 2 === 0 ? '#fff' : '#f8fbff',
                               }}
                             >
-                              {t(`shifts.affluence_status_${statusLabel}`, statusLabel)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })}
+                              {index === 0 ? (
+                                <div
+                                  style={{
+                                    padding: '12px',
+                                    fontWeight: 700,
+                                    color: '#5f3e2f',
+                                    height: '100%',
+                                    display: 'grid',
+                                    alignContent: 'center',
+                                    gap: 2,
+                                    borderRight: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  <div>{formatDay(day.key)}</div>
+                                  <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
+                                    {t('shifts.affluence_day_total_visitors', 'Total visitors')}: {dayVisitors?.totalVisitors ?? 0}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ borderRight: '1px solid #e2e8f0', height: '100%' }} />
+                              )}
+
+                              <div style={{ padding: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'grid', gap: 2 }}>
+                                <div>{slot.timeSlot}</div>
+                                <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
+                                  {t('shifts.affluence_slot_duration', '6 h')} &nbsp;·&nbsp; {t('shifts.affluence_slot_weight_label', 'Weight')}: {slotWeight != null ? `${Math.round(slotWeight * 100)}%` : '-'}
+                                </div>
+                              </div>
+
+                              <div style={{ padding: '10px 12px' }}>
+                                {renderScheduledAvatars(slot.dayOfWeek, slot.timeSlot, slot.currentScheduledStaff)}
+                              </div>
+
+                              <div style={{ padding: '10px 12px' }}>
+                                <div style={{ fontWeight: 700, color: '#2e567a', fontSize: 15 }}>
+                                  {numberOrDash(slot.estimatedVisitors, 0)}
+                                </div>
+                                <span style={{
+                                  marginTop: 3,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '2px 7px',
+                                  borderRadius: 999,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: 0.3,
+                                  ...levelStyle,
+                                }}>
+                                  {t(`shifts.level_${slot.level}`, slot.level)}
+                                </span>
+                              </div>
+
+                              <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'flex-start', textAlign: 'left' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  padding: '4px 10px',
+                                  borderRadius: 999,
+                                  border: '1px solid #d6b99b',
+                                  background: '#fbf4ea',
+                                  color: '#5f3e2f',
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                }}>
+                                  {required}
+                                  <span style={{ fontWeight: 600, opacity: 0.85 }}>{t('shifts.affluence_required_staff', 'required')}</span>
+                                </span>
+                              </div>
+
+                              <div style={{ padding: '10px 12px', color: 'var(--text-secondary)', borderLeft: '1px dashed #cbd5e1' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  minWidth: 84,
+                                  padding: '3px 8px',
+                                  borderRadius: 999,
+                                  fontWeight: 700,
+                                  fontSize: 11,
+                                  textTransform: 'uppercase',
+                                  ...levelStyle,
+                                }}>
+                                  {t(`shifts.level_${slot.level}`, slot.level)}
+                                </span>
+                              </div>
+
+                              <div style={{ padding: '10px 12px', fontWeight: 800, color: gapColor }}>
+                                {gapValue > 0 ? `+${gapValue}` : String(gapValue)}
+                              </div>
+
+                              <div style={{ padding: '12px' }}>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    minWidth: 88,
+                                    padding: '4px 8px',
+                                    borderRadius: 999,
+                                    fontWeight: 700,
+                                    fontSize: 11,
+                                    textTransform: 'uppercase',
+                                    ...statusStyle,
+                                  }}
+                                >
+                                  {t(`shifts.affluence_status_${statusLabel}`, statusLabel)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })}
+                    </div>
                 </div>
-            </div>
+              )}
+            </>
+          ) : (
+            /* ──────────────────────────────────────────────────────────
+               TAB: FORECAST VIEW (New feature)
+               ────────────────────────────────────────────────────────── */
+            <>
+              {forecastError && (
+                <div style={{
+                  margin: '0 0 2px',
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  border: '1px solid var(--danger-border)',
+                  background: 'var(--danger-bg)',
+                  color: 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  fontSize: 13,
+                }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <AlertCircle size={14} />
+                    {forecastError}
+                  </span>
+                  <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => { void loadForecastData(); }}>
+                    {t('common.retry', 'Retry')}
+                  </button>
+                </div>
+              )}
+
+              {!integrationMissing && (
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  border: '1px solid #d6e4ef',
+                  borderRadius: 10,
+                  background: 'linear-gradient(90deg, #f9f5ef 0%, #f3f9ff 100%)',
+                  padding: 10,
+                }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('common.from', 'From')}:</span>
+                      <input
+                        type="date"
+                        value={forecastFromDate}
+                        onChange={(e) => setForecastFromDate(e.target.value)}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: 8,
+                          border: '1px solid #d1d5db',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: '#fff',
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('common.to', 'To')}:</span>
+                      <input
+                        type="date"
+                        value={forecastToDate}
+                        onChange={(e) => setForecastToDate(e.target.value)}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: 8,
+                          border: '1px solid #d1d5db',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: '#fff',
+                        }}
+                      />
+                    </div>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, background: '#2e567a', color: '#fff', borderColor: '#2e567a' }}
+                      onClick={() => { void loadForecastData(); }}
+                    >
+                      {t('common.apply', 'Apply')}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, background: '#fff' }}
+                      onClick={() => {
+                        const f = formatDateOnly(new Date());
+                        const tDate = new Date();
+                        tDate.setDate(tDate.getDate() + 6);
+                        setForecastFromDate(f);
+                        setForecastToDate(formatDateOnly(tDate));
+                      }}
+                    >
+                      {t('shifts.forecast_range_7d', '7 Days')}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, background: '#fff' }}
+                      onClick={() => {
+                        const f = formatDateOnly(new Date());
+                        const tDate = new Date();
+                        tDate.setDate(tDate.getDate() + 13);
+                        setForecastFromDate(f);
+                        setForecastToDate(formatDateOnly(tDate));
+                      }}
+                    >
+                      {t('shifts.forecast_range_14d', '14 Days')}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, background: '#fff' }}
+                      onClick={() => {
+                        const f = formatDateOnly(new Date());
+                        const tDate = new Date();
+                        tDate.setDate(tDate.getDate() + 29);
+                        setForecastFromDate(f);
+                        setForecastToDate(formatDateOnly(tDate));
+                      }}
+                    >
+                      {t('shifts.forecast_range_30d', '30 Days')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {forecastLoading ? (
+                <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+              ) : integrationMissing ? (
+                <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>{t('shifts.affluence_not_connected_title')}</div>
+              ) : (
+                <div style={{
+                    border: '1px solid #d4e2ef',
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    background: '#fff',
+                }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1.2fr 0.95fr 1.2fr 1.2fr 1.05fr 0.95fr 0.7fr 0.95fr',
+                      padding: '10px 12px',
+                      background: 'linear-gradient(90deg, rgba(95,62,47,0.08), rgba(46,86,122,0.08))',
+                      borderBottom: '1px solid #d4e2ef',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: 0.3,
+                      color: '#334155',
+                      textTransform: 'uppercase',
+                    }}>
+                      <div>{t('common.date', 'Date')}</div>
+                      <div>{t('shifts.affluence_time_slot_label', 'Time slot')}</div>
+                      <div>{t('shifts.affluence_scheduled_staff_col', 'Scheduled staff')}</div>
+                      <div>{t('shifts.affluence_estimated_visitors_col', 'Expected visitors')}</div>
+                      <div>{t('shifts.affluence_staff_suggestion_col', 'Staff suggestion')}</div>
+                      <div style={{ borderLeft: '1px dashed #cbd5e1', paddingLeft: 10, whiteSpace: 'nowrap' }}>{t('shifts.affluence_level_col', 'Level')}</div>
+                      <div>{t('shifts.affluence_gap_col', 'Gap')}</div>
+                      <div>{t('common.status', 'Status')}</div>
+                    </div>
+
+                    <div style={{ maxHeight: 430, overflowY: 'auto' }}>
+                      {forecastData?.days.map((day) => {
+                        const slots = day.slots || [];
+                        const formattedDateLabel = new Date(day.date).toLocaleDateString(undefined, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        });
+
+                        return slots.map((slot, index) => {
+                          const required = slot.requiredStaff;
+                          const statusLabel = slot.coverageStatus || 'balanced';
+                          const statusStyle =
+                            statusLabel === 'balanced'
+                              ? { color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }
+                              : statusLabel === 'over'
+                                ? { color: '#1e40af', background: '#dbeafe', border: '1px solid #93c5fd' }
+                                : { color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5' };
+
+                          const levelStyle =
+                            slot.level === 'low'
+                              ? { color: '#166534', background: '#dcfce7', border: '1px solid #86efac' }
+                              : slot.level === 'medium'
+                                ? { color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }
+                                : { color: '#7f1d1d', background: '#fee2e2', border: '1px solid #fca5a5' };
+
+                          const gapValue = Math.round(slot.deltaToScheduledStaff);
+                          const gapColor = gapValue > 0 ? '#b91c1c' : gapValue < 0 ? '#1d4ed8' : '#166534';
+
+                          return (
+                            <div
+                              key={`${day.date}-${slot.timeSlot}`}
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1.2fr 0.95fr 1.2fr 1.2fr 1.05fr 0.95fr 0.7fr 0.95fr',
+                                alignItems: 'center',
+                                borderBottom: '1px solid #e2e8f0',
+                                background: index % 2 === 0 ? '#fff' : '#f8fbff',
+                              }}
+                            >
+                              {index === 0 ? (
+                                <div
+                                  style={{
+                                    padding: '12px',
+                                    fontWeight: 700,
+                                    color: '#5f3e2f',
+                                    height: '100%',
+                                    display: 'grid',
+                                    alignContent: 'center',
+                                    gap: 6,
+                                    borderRight: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Calendar size={14} style={{ color: '#2e567a' }} />
+                                    {formattedDateLabel}
+                                  </div>
+                                  
+                                  {/* Override Controls */}
+                                  {editingDate === day.date ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={overrideValue}
+                                        onChange={(e) => setOverrideValue(e.target.value)}
+                                        placeholder="Visitors"
+                                        style={{
+                                          width: 70,
+                                          padding: '4px 6px',
+                                          fontSize: 12,
+                                          borderRadius: 6,
+                                          border: '1.5px solid #2e567a',
+                                          fontWeight: 700,
+                                        }}
+                                      />
+                                      <button
+                                        title="Save Override"
+                                        onClick={() => handleSaveOverride(day.date)}
+                                        disabled={overrideSaving}
+                                        style={{
+                                          padding: 5,
+                                          borderRadius: 6,
+                                          border: 'none',
+                                          background: '#10b981',
+                                          color: '#fff',
+                                          cursor: 'pointer',
+                                          display: 'grid',
+                                          placeItems: 'center',
+                                        }}
+                                      >
+                                        <Save size={12} />
+                                      </button>
+                                      <button
+                                        title="Cancel"
+                                        onClick={() => {
+                                          setEditingDate(null);
+                                          setOverrideValue('');
+                                        }}
+                                        style={{
+                                          padding: 5,
+                                          borderRadius: 6,
+                                          border: 'none',
+                                          background: '#ef4444',
+                                          color: '#fff',
+                                          cursor: 'pointer',
+                                          display: 'grid',
+                                          placeItems: 'center',
+                                        }}
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                          {t('shifts.forecast_daily_visitors', 'Total')}: <strong>{day.effectiveDailyVisitors}</strong>
+                                        </span>
+                                        {day.isOverridden && (
+                                          <span style={{
+                                            fontSize: 9,
+                                            fontWeight: 800,
+                                            background: '#fef3c7',
+                                            color: '#d97706',
+                                            border: '1px solid #fde68a',
+                                            padding: '1px 5px',
+                                            borderRadius: 4,
+                                            textTransform: 'uppercase',
+                                          }}>
+                                            Custom
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      {canConfigure && (
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                                          <button
+                                            onClick={() => {
+                                              setEditingDate(day.date);
+                                              setOverrideValue(String(day.effectiveDailyVisitors));
+                                            }}
+                                            style={{
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: 4,
+                                              background: 'none',
+                                              border: 'none',
+                                              color: '#2e567a',
+                                              fontSize: 10,
+                                              fontWeight: 700,
+                                              cursor: 'pointer',
+                                              padding: 0,
+                                            }}
+                                          >
+                                            <Pencil size={10} />
+                                            {t('common.override', 'Override')}
+                                          </button>
+
+                                          {day.isOverridden && (
+                                            <button
+                                              onClick={() => handleDeleteOverride(day.date)}
+                                              style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#ef4444',
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                padding: 0,
+                                              }}
+                                            >
+                                              <Trash2 size={10} />
+                                              {t('common.clear', 'Clear')}
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{ borderRight: '1px solid #e2e8f0', height: '100%' }} />
+                              )}
+
+                              <div style={{ padding: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'grid', gap: 2 }}>
+                                <div>{slot.timeSlot}</div>
+                                <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
+                                  {t('shifts.affluence_slot_duration', '6 h')} &nbsp;·&nbsp; {t('shifts.affluence_slot_weight_label', 'Weight')}: {Math.round(slot.slotWeight * 100)}%
+                                </div>
+                              </div>
+
+                              <div style={{ padding: '10px 12px' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  padding: '4px 9px',
+                                  borderRadius: 999,
+                                  border: '1px solid #bfdbfe',
+                                  background: '#eff6ff',
+                                  color: '#1e3a8a',
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                }}>
+                                  <Users size={12} />
+                                  {slot.currentScheduledStaff} &nbsp;{t('shifts.affluence_scheduled_staff_col', 'scheduled')}
+                                </span>
+                              </div>
+
+                              <div style={{ padding: '10px 12px' }}>
+                                <div style={{ fontWeight: 700, color: '#2e567a', fontSize: 15 }}>
+                                  {numberOrDash(slot.estimatedVisitors, 0)}
+                                </div>
+                                <span style={{
+                                  marginTop: 3,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '2px 7px',
+                                  borderRadius: 999,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: 0.3,
+                                  ...levelStyle,
+                                }}>
+                                  {t(`shifts.level_${slot.level}`, slot.level)}
+                                </span>
+                              </div>
+
+                              <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'flex-start', textAlign: 'left' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  padding: '4px 10px',
+                                  borderRadius: 999,
+                                  border: '1px solid #d6b99b',
+                                  background: '#fbf4ea',
+                                  color: '#5f3e2f',
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                }}>
+                                  {required}
+                                  <span style={{ fontWeight: 600, opacity: 0.85 }}>{t('shifts.affluence_required_staff', 'required')}</span>
+                                </span>
+                              </div>
+
+                              <div style={{ padding: '10px 12px', color: 'var(--text-secondary)', borderLeft: '1px dashed #cbd5e1' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  minWidth: 84,
+                                  padding: '3px 8px',
+                                  borderRadius: 999,
+                                  fontWeight: 700,
+                                  fontSize: 11,
+                                  textTransform: 'uppercase',
+                                  ...levelStyle,
+                                }}>
+                                  {t(`shifts.level_${slot.level}`, slot.level)}
+                                </span>
+                              </div>
+
+                              <div style={{ padding: '10px 12px', fontWeight: 800, color: gapColor }}>
+                                {gapValue > 0 ? `+${gapValue}` : String(gapValue)}
+                              </div>
+
+                              <div style={{ padding: '12px' }}>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    minWidth: 88,
+                                    padding: '4px 8px',
+                                    borderRadius: 999,
+                                    fontWeight: 700,
+                                    fontSize: 11,
+                                    textTransform: 'uppercase',
+                                    ...statusStyle,
+                                  }}
+                                >
+                                  {t(`shifts.affluence_status_${statusLabel}`, statusLabel)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })}
+                    </div>
+                </div>
+              )}
+            </>
           )}
         </>
       </div>
