@@ -13,6 +13,14 @@ export function getNotificationNavigationUrl(notification: Notification): string
     return `/ats?${params.toString()}`;
   }
 
+  // Deep-link for ATS outcome notifications (status change)
+  if (type === 'ats.outcome' && metadata?.candidateId) {
+    const params = new URLSearchParams();
+    params.set('view', 'candidates');
+    params.set('candidateId', String(metadata.candidateId));
+    return `/ats?${params.toString()}`;
+  }
+
   if (type.startsWith('ats.')) {
     return '/ats?view=candidates';
   }
