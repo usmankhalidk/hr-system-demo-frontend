@@ -53,11 +53,25 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
     fetch(resolvedUrl, { headers })
       .then(async (res) => {
         if (!res.ok) {
-          throw new Error(`HTTP_${res.status}`);
+          // Provide more detailed HTTP error messages
+          const statusText = res.statusText || 'Unknown Error';
+          let errorDetail = `HTTP ${res.status} - ${statusText}`;
+          
+          if (res.status === 401) {
+            errorDetail = 'Authentication required (401) - Please log in again';
+          } else if (res.status === 403) {
+            errorDetail = 'Access forbidden (403) - You do not have permission to view this file';
+          } else if (res.status === 404) {
+            errorDetail = 'File not found (404) - The file may have been deleted or moved';
+          } else if (res.status === 500) {
+            errorDetail = 'Server error (500) - Please try again later';
+          }
+          
+          throw new Error(errorDetail);
         }
         const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('text/html')) {
-          throw new Error('HTML_RESPONSE');
+          throw new Error('Server returned HTML instead of file - This may indicate an authentication redirect or server misconfiguration');
         }
         const blob = await res.blob();
         objectUrl = URL.createObjectURL(blob);
@@ -66,11 +80,17 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
       .catch((err: any) => {
         if (active) {
           setPreviewUrl(null);
-          const errMsg = err?.message || String(err || 'preview_failed');
+          let errMsg = err?.message || String(err || 'Unknown error occurred');
+          
+          // Handle network errors
+          if (err?.name === 'TypeError' && errMsg.includes('Failed to fetch')) {
+            errMsg = 'Network error - Unable to reach the server. Check your connection or CORS configuration.';
+          }
+          
           setLoadError(errMsg);
           // Log to console so developers can inspect network/cors/auth issues
           // eslint-disable-next-line no-console
-          console.warn('Document preview failed:', resolvedUrl, errMsg);
+          console.error('Document preview failed:', { url: resolvedUrl, error: errMsg, originalError: err });
         }
       })
       .finally(() => {
@@ -153,11 +173,27 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
           {!loading && loadError && (
             <div style={{ padding: 28, textAlign: 'center', maxWidth: 720 }}>
               <div style={{ fontSize: 46, marginBottom: 12 }}>⚠️</div>
-              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.4 }}>
-                Unable to display this file in the preview.
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.4 }}>
+                Unable to Display File
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Possible causes: the file is not accessible (401 / 403), the server returned HTML (authentication redirect), or the response was blocked by CORS. Technical detail: <strong style={{ color: '#374151' }}>{loadError}</strong>
+              <div style={{ 
+                fontSize: 13, 
+                color: '#dc2626', 
+                marginBottom: 16, 
+                padding: '12px 16px',
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: 8,
+                lineHeight: 1.5,
+                textAlign: 'left',
+                fontFamily: 'monospace',
+                wordBreak: 'break-word'
+              }}>
+                <strong style={{ display: 'block', marginBottom: 4, fontFamily: 'inherit' }}>Error:</strong>
+                {loadError}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+                You can try opening the file in a new tab or downloading it directly.
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <a

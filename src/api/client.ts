@@ -144,10 +144,17 @@ export function getResumeUrl(path: string | null | undefined): string | null {
   const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
   const base = apiBase; // '' in dev (uses Vite proxy), full URL in prod
   
-  // The path is already in format "public-cv/filename.pdf"
-  // In dev: /public-cv/filename.pdf (Vite proxy handles it)
-  // In prod: https://backend.com/public-cv/filename.pdf
-  const url = base ? `${base}/${path}` : `/${path}`;
+  // Extract filename from path if it contains 'public-cv/'
+  // Database stores: "public-cv/filename.pdf"
+  // Backend expects: /uploads/public-cv/filename
+  let filename = path;
+  if (path.includes('public-cv/')) {
+    // Extract everything after 'public-cv/'
+    filename = path.substring(path.indexOf('public-cv/') + 'public-cv/'.length);
+  }
+  
+  // Construct URL: /uploads/public-cv/:filename
+  const url = base ? `${base}/uploads/public-cv/${filename}` : `/uploads/public-cv/${filename}`;
   return token ? `${url}?token=${encodeURIComponent(token)}` : url;
 }
 
