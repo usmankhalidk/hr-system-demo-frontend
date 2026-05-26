@@ -18,8 +18,9 @@ export async function getUnreadCount(companyId?: number | null): Promise<number>
 export interface SendMessagePayload {
   recipientId: number;
   subject?: string;
-  body: string;
+  body?: string;
   companyId?: number | null;
+  attachmentFilename?: string | null;
 }
 
 export async function sendMessage(payload: SendMessagePayload): Promise<Message> {
@@ -28,12 +29,27 @@ export async function sendMessage(payload: SendMessagePayload): Promise<Message>
     subject: payload.subject,
     body: payload.body,
     companyId: payload.companyId,
+    attachmentFilename: payload.attachmentFilename,
   });
   return data.data;
 }
 
 export async function markMessageAsRead(id: number, companyId?: number | null): Promise<Message> {
   const { data } = await apiClient.patch(`/messages/${id}/read`, companyId != null ? { company_id: companyId } : undefined);
+  return data.data;
+}
+
+export async function editMessage(id: number, body: string, companyId?: number | null): Promise<Message> {
+  const { data } = await apiClient.patch(`/messages/${id}`, { body }, {
+    params: companyId != null ? { company_id: companyId } : undefined,
+  });
+  return data.data;
+}
+
+export async function deleteMessage(id: number, companyId?: number | null): Promise<{ id: number }> {
+  const { data } = await apiClient.delete(`/messages/${id}`, {
+    params: companyId != null ? { company_id: companyId } : undefined,
+  });
   return data.data;
 }
 

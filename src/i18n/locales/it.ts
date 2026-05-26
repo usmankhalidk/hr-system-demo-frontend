@@ -2275,6 +2275,16 @@ const it = {
     searchEmployee: 'Cerca dipendente...',
     inbox: 'Messaggi',
     compose: 'Nuovo Messaggio',
+    cannotReply: "Non puoi rispondere a questa conversazione. Puoi inviare messaggi solo all'HR.",
+    newMessages: 'Nuovi messaggi',
+    editSuccess: 'Messaggio modificato',
+    editError: 'Errore durante la modifica',
+    deleteSuccess: 'Messaggio eliminato',
+    deleteError: "Errore durante l'eliminazione",
+    errorUpload: "Impossibile caricare l'immagine",
+    uploadingStatus: 'Caricamento...',
+    uploadedStatus: 'Caricato con successo',
+    noConversationMessages: 'Nessun messaggio in questa conversazione.',
   },
 
   // ─── Notifications ───────────────────────────────────────────────────────
