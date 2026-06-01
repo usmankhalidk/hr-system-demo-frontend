@@ -69,6 +69,7 @@ const it = {
     column: 'Colonna',
     format: 'Formato',
     example: 'Esempio',
+    finish: 'Fine',
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────
@@ -638,7 +639,11 @@ const it = {
     logoError: 'Errore nel caricamento foto negozio',
     logoUploading: 'Caricamento foto negozio...',
     logoHint: 'Passa sul logo per aggiornare la foto',
+    stepDetails: 'Dettagli',
+    stepIntegration: 'Integrazione',
     storeIntegration: 'Integrazione Negozio',
+    storeTerminal: 'Terminale Negozio',
+    adminIntegrationNotice: 'Contatta l\'amministratore della piattaforma per abilitare l\'accesso o per integrare il negozio esterno.',
     goToIntegration: 'Vai all\'Integrazione',
     skipIntegration: 'Salta Integrazione',
     skipTerminal: 'Salta Terminale',
@@ -946,6 +951,7 @@ const it = {
     INVALID_QR_TOKEN: 'Codice QR non valido o scaduto. Esegui di nuovo la scansione.',
     QR_ALREADY_USED: 'Questo codice QR è già stato utilizzato. Scansiona il codice più recente.',
     NO_ACTIVE_SHIFT: 'Nessun turno programmato per oggi in questo negozio. Contatta il tuo responsabile.',
+    SHIFT_TOO_EARLY: 'Hai un turno programmato oggi. Puoi timbrare al massimo 15 minuti prima dell\'inizio del turno.',
     DEVICE_NOT_REGISTERED: 'Dispositivo non registrato. Effettua prima la registrazione del dispositivo.',
     DEVICE_MISMATCH: 'Il tuo dispositivo è diverso, non potrai effettuare entrata, uscita, inizio pausa o fine pausa.',
     DEVICE_REGISTRATION_NOT_REQUIRED: 'La registrazione del dispositivo non è richiesta per il tuo account in questo momento.',

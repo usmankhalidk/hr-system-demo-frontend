@@ -485,12 +485,13 @@ export default function SystemCompanyManagement() {
   };
 
   useEffect(() => {
-    if (!modalOpen || modalMode !== 'edit' || editingCompanyId == null) {
+    if (!modalOpen) {
       return;
     }
     let mounted = true;
     setOwnerCandidatesLoading(true);
-    getEmployees({ role: 'admin', limit: 200, targetCompanyId: editingCompanyId })
+    const targetId = modalMode === 'edit' ? (editingCompanyId ?? undefined) : undefined;
+    getEmployees({ role: 'admin', limit: 200, targetCompanyId: targetId })
       .then((res) => {
         if (!mounted) return;
         setOwnerCandidates(
@@ -644,11 +645,14 @@ export default function SystemCompanyManagement() {
     setFormError(null);
     try {
       if (modalMode === 'create') {
-        await createCompany({
+        const created = await createCompany({
           name: formName.trim(),
           groupId: formGroupId,
           ...payloadFromProfileForm(formProfile),
         });
+        if (formOwnerUserId != null) {
+          await transferCompanyOwnership(created.id, formOwnerUserId);
+        }
         showToast(t('companies.createdSuccess'), 'success');
       } else {
         if (editingCompanyId === null) throw new Error('Missing company id');
@@ -1100,6 +1104,28 @@ export default function SystemCompanyManagement() {
             />
           </div>
 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+              {t('companies.ownerField', 'Owner')}
+            </label>
+            <CustomSelect
+              options={ownerSelectOptions}
+              value={formOwnerUserId != null ? String(formOwnerUserId) : null}
+              onChange={(val) => setFormOwnerUserId(val ? parseInt(val, 10) : null)}
+              placeholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
+              disabled={formSaving || ownerCandidatesLoading}
+              searchable
+              isClearable
+              searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
+              noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
+            />
+            {ownerCandidatesLoading && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {t('companies.ownerLoading', 'Caricamento amministratori in corso...')}
+              </span>
+            )}
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
             <Input
               label={t('companies.registrationNumber', 'Registration Number')}
@@ -1241,26 +1267,7 @@ export default function SystemCompanyManagement() {
             </div>
           )}
 
-          {modalMode === 'edit' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <CustomSelect
-                value={formOwnerUserId != null ? String(formOwnerUserId) : null}
-                onChange={(value) => setFormOwnerUserId(value ? parseInt(value, 10) : null)}
-                options={ownerSelectOptions}
-                placeholder={t('companies.ownerUnchanged', 'Nessuna modifica')}
-                disabled={formSaving || ownerCandidatesLoading}
-                searchable
-                isClearable
-                searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Cerca amministratore...')}
-                noOptionsMessage={t('companies.ownerNoResults', 'Nessun amministratore trovato')}
-              />
-              {ownerCandidatesLoading && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {t('companies.ownerLoading', 'Caricamento amministratori in corso...')}
-                </span>
-              )}
-            </div>
-          )}
+
 
           {modalMode === 'edit' && editingCompany && (
             <>
