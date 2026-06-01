@@ -207,7 +207,7 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
     return t(`shifts.${match.fullKey}`, { defaultValue: match.fullFallback });
   }, [t]);
 
-  const canConfigure = user ? ['admin', 'hr', 'area_manager'].includes(user.role) : false;
+  const canConfigure = user ? user.isSuperAdmin === true : false;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -787,17 +787,19 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
                       {t('shifts.affluence_not_connected_desc', 'Connect this internal store to an external database store to display live affluence data here.')}
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        className="btn btn-accent"
-                        onClick={() => navigate('/integrazioni/database-esterno')}
-                      >
-                        <Database size={14} />
-                        {t('shifts.affluence_connect_database_button', 'Open Database Integration')}
-                        <ArrowRight size={13} />
-                      </button>
-                    </div>
+                    {canConfigure && (
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn btn-accent"
+                          onClick={() => navigate('/integrazioni/database-esterno')}
+                        >
+                          <Database size={14} />
+                          {t('shifts.affluence_connect_database_button', 'Open Database Integration')}
+                          <ArrowRight size={13} />
+                        </button>
+                      </div>
+                    )}
                 </div>
               ) : (
                 <div style={{

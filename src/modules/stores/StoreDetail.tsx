@@ -33,9 +33,14 @@ import {
   Search,
   Link as LinkIcon,
   Unlink,
+  Tablet,
+  EyeOff,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+import QRCode from 'react-qr-code';
+import { generateQrToken } from '../../api/attendance';
 import {
   getStore,
   updateStore,
@@ -47,7 +52,7 @@ import {
   updateStoreOperatingHours,
 } from '../../api/stores';
 import { getCompanyById } from '../../api/companies';
-import { getEmployees } from '../../api/employees';
+import { getEmployees, createEmployee, updateEmployee } from '../../api/employees';
 import { getAvatarUrl, getStoreLogoUrl, getCompanyLogoUrl } from '../../api/client';
 import { Company, Employee, Store, StoreOperatingHour, UserRole } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -244,8 +249,10 @@ export default function StoreDetail() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isSuperAdmin = user?.isSuperAdmin === true;
   const { showToast } = useToast();
   const { slug } = useParams<{ slug: string }>();
+  const { isMobile } = useBreakpoint();
 
   const storeId = useMemo(() => parseStoreIdFromSlug(slug), [slug]);
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
@@ -316,7 +323,17 @@ export default function StoreDetail() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'employees' | 'hours' | 'information'>('employees');
+  const [activeTab, setActiveTab] = useState<'employees' | 'hours' | 'terminal' | 'information'>('employees');
+
+  const [qrData, setQrData] = useState<any | null>(null);
+  const [loadingQr, setLoadingQr] = useState(false);
+
+  const [terminalUser, setTerminalUser] = useState<any | null>(null);
+  const [terminalPassword, setTerminalPassword] = useState('');
+  const [terminalPasswordVisible, setTerminalPasswordVisible] = useState(false);
+  const [terminalPasswordError, setTerminalPasswordError] = useState<string | null>(null);
+  const [terminalSaving, setTerminalSaving] = useState(false);
+  const [terminalSuccessMsg, setTerminalSuccessMsg] = useState<string | null>(null);
 
   const browserTimezone = useMemo(() => getBrowserTimeZone(), []);
 
@@ -354,15 +371,17 @@ export default function StoreDetail() {
     setLoading(true);
     setError(null);
     try {
-      const [storeData, employeesData, hoursData] = await Promise.all([
+      const [storeData, employeesData, hoursData, terminalData] = await Promise.all([
         getStore(storeId),
         getEmployees({ storeId, status: 'active', limit: 250 }).catch(() => ({ employees: [] })),
         getStoreOperatingHours(storeId).catch(() => []),
+        getEmployees({ storeId, role: 'store_terminal', includeStoreTerminals: true }).catch(() => ({ employees: [] })),
       ]);
 
       setStore(storeData);
       setEmployees((employeesData.employees ?? []).sort(compareEmployeesByRoleAndName));
       setHours(normalizeOperatingHours(hoursData));
+      setTerminalUser(terminalData.employees?.[0] ?? null);
     } catch {
       setError(t('stores.errorLoad'));
     } finally {
@@ -394,7 +413,35 @@ export default function StoreDetail() {
     };
   }, [store?.companyId]);
 
+  // Fetch QR Code for the Store Terminal tab
+  useEffect(() => {
+    if (activeTab === 'terminal' && storeId && terminalUser) {
+      setLoadingQr(true);
+      generateQrToken(storeId)
+        .then((data) => {
+          setQrData(data);
+        })
+        .catch((err) => {
+          console.error('Failed to fetch actual terminal QR token:', err);
+          setQrData(null);
+        })
+        .finally(() => {
+          setLoadingQr(false);
+        });
+    } else {
+      setQrData(null);
+    }
+  }, [activeTab, storeId, terminalUser]);
+
   const logoUrl = getStoreLogoUrl(store?.logoFilename);
+  
+  const getTerminalEmail = () => {
+    if (!store) return '';
+    const storeName = store.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cName = (companyProfile?.name || store.companyName || 'company').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${storeName || 'store'}@${cName}.com`;
+  };
+
   const storeCountryName = store?.country ? getCountryDisplayName(store.country) : null;
   const storeTimezone = store?.timezone ?? (store?.country ? getPreferredTimezoneForCountry(store.country, browserTimezone) : browserTimezone);
 
@@ -952,27 +999,43 @@ export default function StoreDetail() {
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{
-        display: 'inline-flex',
+      <div className="tabs-container" style={{
+        display: 'flex',
+        flexWrap: 'nowrap',
         background: 'var(--surface-warm)',
         borderRadius: 10,
         padding: 4,
         gap: 4,
         border: '1px solid var(--border)',
         marginBottom: 10,
-        alignSelf: 'flex-start',
+        alignSelf: isMobile ? 'stretch' : 'flex-start',
+        width: isMobile ? '100%' : 'fit-content',
+        overflowX: 'auto',
+        whiteSpace: 'nowrap',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
+        WebkitOverflowScrolling: 'touch',
       }}>
-        {(['employees', 'hours', 'information'] as const).map((tab) => {
+        <style>{`
+          .tabs-container::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+        {(['employees', 'hours', 'information', 'terminal'] as const).map((tab) => {
           const isActive = activeTab === tab;
           const label = tab === 'employees' 
             ? t('stores.tabEmployees', 'Employees')
             : tab === 'hours'
             ? t('stores.tabOperatingHours', 'Operating Hours')
+            : tab === 'terminal'
+            ? t('stores.storeTerminal', 'Store Terminal')
             : t('stores.tabInformation', 'Information');
           const icon = tab === 'employees' 
             ? <Users size={14} />
             : tab === 'hours'
             ? <Clock3 size={14} />
+            : tab === 'terminal'
+            ? <Tablet size={14} />
             : <Database size={14} />;
           return (
             <button
@@ -988,11 +1051,12 @@ export default function StoreDetail() {
                 fontWeight: 700,
                 border: 'none',
                 borderRadius: 8,
-                cursor: 'pointer',
                 background: isActive ? 'var(--accent)' : 'transparent',
                 color: isActive ? '#fff' : 'var(--text-muted)',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                 boxShadow: isActive ? '0 2px 6px rgba(201, 151, 58, 0.24)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                flexShrink: 0,
               }}
             >
               {icon}
@@ -1318,49 +1382,435 @@ export default function StoreDetail() {
         </div>
       )}
 
+      {/* ── Terminal Tab ── */}
+      {activeTab === 'terminal' && store && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '1.65fr 0.85fr',
+          gap: 20,
+          alignItems: 'start',
+        }}>
+          {/* Left Column: Terminal Settings */}
+          <div style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>
+                {t('stores.storeTerminal', 'Store Terminal')}
+              </h3>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+                {t('stores.terminalDescription', "It's the terminal that employees use to scan QR codes from their mobile devices.")}
+              </p>
+            </div>
+
+            {terminalSuccessMsg && (
+              <Alert variant="success" onClose={() => setTerminalSuccessMsg(null)}>
+                {terminalSuccessMsg}
+              </Alert>
+            )}
+
+            {terminalPasswordError && (
+              <Alert variant="danger" onClose={() => setTerminalPasswordError(null)}>
+                {terminalPasswordError}
+              </Alert>
+            )}
+
+            {terminalUser ? (
+              /* ACTIVE TERMINAL DETAILS */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ padding: '12px 14px', background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                  <InsightRow 
+                    label={t('users.email', 'Email Address')} 
+                    value={
+                      <code style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', background: 'rgba(201,151,58,0.08)', padding: '2px 6px', borderRadius: 4 }}>
+                        {terminalUser.email}
+                      </code>
+                    } 
+                  />
+                  <div style={{ height: 10 }} />
+                  <InsightRow 
+                    label={t('employees.colStatus', 'Status')} 
+                    value={
+                      <Badge variant={terminalUser.status === 'active' ? 'success' : 'neutral'}>
+                        {terminalUser.status === 'active' ? t('common.active', 'Active') : t('common.inactive', 'Inactive')}
+                      </Badge>
+                    } 
+                  />
+                </div>
+
+                {/* ROTATE OR RESET PASSWORD SECTION */}
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px 0', color: 'var(--text-primary)' }}>
+                    {t('stores.rotateCredentials', 'Rotate Terminal Credentials')}
+                  </h4>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+                    {t('stores.rotateCredentialsDesc', 'Set a new temporary password for the tablet kiosk. Save it immediately, as it cannot be shown again.')}
+                  </p>
+
+                  <div style={{ display: 'flex', gap: 12, flexDirection: isMobile ? 'column' : 'row', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', flex: 1, width: '100%' }}>
+                      <Input
+                        type={terminalPasswordVisible ? 'text' : 'password'}
+                        value={terminalPassword}
+                        onChange={(e) => {
+                          setTerminalPassword(e.target.value);
+                          if (terminalPasswordError) setTerminalPasswordError(null);
+                        }}
+                        placeholder={t('stores.enterNewPassword', 'Enter new password...')}
+                        style={{
+                          paddingRight: '40px',
+                          borderColor: terminalPasswordError ? '#DC2626' : undefined,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTerminalPasswordVisible(!terminalPasswordVisible)}
+                        style={{
+                          position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                          padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}
+                      >
+                        {terminalPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto', justifyContent: 'flex-end' }}>
+                      <Button 
+                        variant="secondary" 
+                        onClick={() => {
+                          const length = 10;
+                          const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+                          let retVal = '';
+                          for (let i = 0, n = charset.length; i < length; ++i) {
+                            retVal += charset.charAt(Math.floor(Math.random() * n));
+                          }
+                          setTerminalPassword(retVal);
+                          setTerminalPasswordVisible(true);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <RefreshCw size={14} /> {t('common.generate', 'Generate')}
+                      </Button>
+                      <Button 
+                        onClick={async () => {
+                          if (!terminalPassword || terminalPassword.length < 8) {
+                            setTerminalPasswordError(t('users.validationPasswordLength', 'Password must be at least 8 characters'));
+                            return;
+                          }
+                          try {
+                            setTerminalSaving(true);
+                            await updateEmployee(terminalUser.id, { password: terminalPassword });
+                            setTerminalSuccessMsg(t('stores.credentialsRotated', 'Terminal credentials updated successfully!'));
+                            setTerminalPassword('');
+                            setTerminalPasswordVisible(false);
+                          } catch {
+                            setTerminalPasswordError(t('stores.errorSave', 'Error saving. Please try again.'));
+                          } finally {
+                            setTerminalSaving(false);
+                          }
+                        }}
+                        loading={terminalSaving}
+                      >
+                        {t('common.save', 'Save')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* NO TERMINAL ACCOUNT CREATED */
+              <div style={{
+                border: '1px dashed var(--border)',
+                borderRadius: 10,
+                padding: '24px 16px',
+                textAlign: 'center',
+                background: 'var(--surface-warm)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+                minHeight: 180,
+              }}>
+                <div style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  background: 'rgba(201, 151, 58, 0.1)',
+                  color: 'var(--accent)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Tablet size={22} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {t('stores.noTerminalAccount', 'No Terminal Account Found')}
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', maxWidth: 300, lineHeight: 1.4 }}>
+                  {t('stores.noTerminalAccountDesc', "A store terminal has not been configured yet. Create one to enable clocking in and out via tablet kiosk.")}
+                </p>
+
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 14, alignSelf: 'stretch', textAlign: 'left', marginTop: 8 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px 0', color: 'var(--text-primary)' }}>
+                    {t('stores.createTerminalTitle', 'Configure Store Terminal')}
+                  </h4>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                    <Input
+                      label={t('users.email', 'Terminal Email')}
+                      value={getTerminalEmail()}
+                      readOnly
+                      style={{ backgroundColor: 'var(--surface-50)' }}
+                    />
+                    
+                    <div style={{ position: 'relative' }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        {t('users.fieldPassword', 'Password *')}
+                      </label>
+                      <div style={{ display: 'flex', gap: 12, flexDirection: isMobile ? 'column' : 'row' }}>
+                        <div style={{ position: 'relative', flex: 1, width: '100%' }}>
+                          <Input
+                            type={terminalPasswordVisible ? 'text' : 'password'}
+                            value={terminalPassword}
+                            onChange={(e) => {
+                              setTerminalPassword(e.target.value);
+                              if (terminalPasswordError) setTerminalPasswordError(null);
+                            }}
+                            placeholder={t('stores.enterNewPassword', 'Enter password...')}
+                            style={{
+                              paddingRight: '40px',
+                              borderColor: terminalPasswordError ? '#DC2626' : undefined,
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setTerminalPasswordVisible(!terminalPasswordVisible)}
+                            style={{
+                              position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                              background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                              padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}
+                          >
+                            {terminalPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto', justifyContent: 'flex-end' }}>
+                          <Button 
+                            variant="secondary" 
+                            onClick={() => {
+                              const length = 10;
+                              const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+                              let retVal = '';
+                              for (let i = 0, n = charset.length; i < length; ++i) {
+                                retVal += charset.charAt(Math.floor(Math.random() * n));
+                              }
+                              setTerminalPassword(retVal);
+                              setTerminalPasswordVisible(true);
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                          >
+                            <RefreshCw size={14} /> {t('common.generate', 'Generate')}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    style={{ width: '100%' }}
+                    onClick={async () => {
+                      if (!terminalPassword || terminalPassword.length < 8) {
+                        setTerminalPasswordError(t('users.validationPasswordLength', 'Password must be at least 8 characters'));
+                        return;
+                      }
+                      try {
+                        setTerminalSaving(true);
+                        const created = await createEmployee({
+                          name: 'Terminal',
+                          surname: store.name,
+                          email: getTerminalEmail(),
+                          role: 'store_terminal',
+                          password: terminalPassword,
+                          storeId: store.id,
+                          status: 'active',
+                        } as any);
+                        setTerminalUser(created);
+                        setTerminalSuccessMsg(t('stores.terminalCreated', 'Terminal configured successfully!'));
+                        setTerminalPassword('');
+                        setTerminalPasswordVisible(false);
+                      } catch {
+                        setTerminalPasswordError(t('stores.errorSave', 'Error saving. Please try again.'));
+                      } finally {
+                        setTerminalSaving(false);
+                      }
+                    }}
+                    loading={terminalSaving}
+                  >
+                    {t('stores.createTerminal', 'Create Terminal Account')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Visual QR tablet mockup */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px 16px',
+            background: 'var(--surface-warm)',
+            border: '1px solid var(--border)',
+            borderRadius: '16px',
+            boxShadow: 'var(--shadow-md)',
+            minHeight: '260px',
+            position: 'relative',
+            overflow: 'hidden',
+            width: '100%',
+            maxWidth: '240px',
+            margin: '0 auto',
+          }}>
+            <style>{`
+              @keyframes scanLineAnim {
+                0% { top: 10%; }
+                50% { top: 90%; }
+                100% { top: 10%; }
+              }
+              @keyframes qrPulse {
+                0% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.1)); }
+                50% { transform: scale(1.02); filter: drop-shadow(0 0 12px rgba(139, 92, 246, 0.3)); }
+                100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.1)); }
+              }
+            `}</style>
+            
+            <div style={{ 
+              fontSize: '11px', 
+              fontWeight: 800, 
+              color: 'var(--accent)', 
+              letterSpacing: '0.08em', 
+              textTransform: 'uppercase',
+              marginBottom: '16px',
+              background: 'rgba(201, 151, 58, 0.08)',
+              padding: '4px 10px',
+              borderRadius: '12px',
+              border: '1px solid rgba(201, 151, 58, 0.15)'
+            }}>
+              {t('stores.liveTerminal', 'CLOCK-IN TERMINAL')}
+            </div>
+
+            <div style={{
+              position: 'relative',
+              width: '120px',
+              height: '120px',
+              background: '#fff',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              padding: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: 'qrPulse 3s infinite ease-in-out',
+              overflow: 'hidden',
+            }}>
+              {loadingQr ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <RefreshCw size={20} className="animate-spin" color="var(--text-disabled)" />
+                </div>
+              ) : qrData ? (
+                <div style={{ padding: '4px', background: '#fff' }}>
+                  <QRCode value={qrData.token} size={100} fgColor="#0D2137" bgColor="#fff" level="M" />
+                </div>
+              ) : (
+                <svg width="100%" height="100%" viewBox="0 0 100 100" style={{ display: 'block' }}>
+                  <defs>
+                    <linearGradient id="qrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="var(--accent)" />
+                      <stop offset="50%" stopColor="#8B5CF6" />
+                      <stop offset="100%" stopColor="#3B82F6" />
+                    </linearGradient>
+                  </defs>
+                  
+                  <rect x="25" y="25" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="35" y="25" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="45" y="35" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="25" y="45" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="35" y="45" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  
+                  <rect x="55" y="25" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="65" y="35" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="55" y="45" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="65" y="45" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  
+                  <rect x="25" y="55" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="35" y="65" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="45" y="55" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  
+                  <rect x="55" y="55" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="65" y="55" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="55" y="65" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="65" y="65" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+
+                  <rect x="75" y="25" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="75" y="35" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="75" y="55" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+                  <rect x="75" y="65" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+
+                  {/* Top-Left Anchor */}
+                  <path d="M5,5 H21 V21 H5 Z M9,9 V17 H17 V9 Z" fill="url(#qrGrad)" />
+                  <rect x="11" y="11" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+
+                  {/* Top-Right Anchor */}
+                  <path d="M79,5 H95 V21 H79 Z M83,9 V17 H91 V9 Z" fill="url(#qrGrad)" />
+                  <rect x="85" y="11" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+
+                  {/* Bottom-Left Anchor */}
+                  <path d="M5,79 H21 V95 H5 Z M9,83 V91 H17 V83 Z" fill="url(#qrGrad)" />
+                  <rect x="11" y="85" width="6" height="6" fill="url(#qrGrad)" rx="1" />
+
+                  {/* Bottom-Right alignment */}
+                  <path d="M81,81 H91 V91 H81 Z M84,84 V88 H88 V84 Z" fill="url(#qrGrad)" />
+                </svg>
+              )}
+
+              <div style={{
+                position: 'absolute',
+                left: '6px',
+                right: '6px',
+                height: '2px',
+                background: '#EF4444',
+                boxShadow: '0 0 8px #EF4444, 0 0 12px #EF4444',
+                animation: 'scanLineAnim 3s infinite linear',
+                zIndex: 2,
+                pointerEvents: 'none',
+              }} />
+            </div>
+
+            <div style={{ 
+              fontSize: '11px', 
+              color: 'var(--text-muted)', 
+              marginTop: '16px', 
+              textAlign: 'center', 
+              lineHeight: '1.4', 
+              maxWidth: '180px' 
+            }}>
+              {t('stores.terminalScanTip', 'Employees will scan this QR to Clock-in / Clock-out.')}
+            </div>
+          </div>
+        </div>
+      )}
+
       <Modal
         open={editOpen}
         onClose={() => { setEditOpen(false); setFormStep(1); }}
-        title={
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {formStep === 1 ? t('stores.editStore') : t('stores.storeIntegration')}
-            </div>
-            {/* Step Indicators - Full width centered */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', maxWidth: '400px', margin: '0 auto' }}>
-              {[1, 2].map((s) => (
-                <React.Fragment key={s}>
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    background: formStep === s ? 'var(--accent)' : formStep > s ? '#10B981' : 'var(--border)',
-                    color: formStep >= s ? '#fff' : 'var(--text-muted)',
-                    transition: 'all 0.25s ease',
-                    boxShadow: formStep === s ? '0 0 0 4px rgba(13,33,55,0.12)' : 'none',
-                    flexShrink: 0,
-                  }}>
-                    {formStep > s ? '✓' : s}
-                  </div>
-                  {s < 2 && (
-                    <div style={{
-                      flex: 1,
-                      height: '3px',
-                      background: formStep > s ? '#10B981' : 'var(--border)',
-                      transition: 'background 0.25s ease',
-                      borderRadius: '2px',
-                    }} />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-        }
+        title={t('stores.editStore')}
         footer={
           <>
             {formStep === 2 ? (
@@ -1380,7 +1830,7 @@ export default function StoreDetail() {
                 <Button onClick={handleSave} loading={formSaving}>
                   {t('common.save')}
                 </Button>
-                <Button variant="secondary" onClick={async () => { setFormStep(2); await loadExternalDbData(); }}>
+                <Button variant="secondary" onClick={async () => { setFormStep(2); if (isSuperAdmin) { await loadExternalDbData(); } }}>
                   {t('stores.goToIntegration')} →
                 </Button>
               </>
@@ -1389,6 +1839,74 @@ export default function StoreDetail() {
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Step Indicators */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            background: 'var(--surface-warm)',
+            borderRadius: '8px',
+            border: '1px solid var(--border)',
+            marginBottom: '4px',
+          }}>
+            {([1, 2]).map((s, idx) => {
+              const isActive = formStep === s;
+              const isCompleted = formStep > s;
+              
+              const stepLabel = s === 1 
+                ? t('stores.stepDetails', 'Dettagli') 
+                : t('stores.stepIntegration', 'Integrazione');
+
+              return (
+                <React.Fragment key={s}>
+                  {idx > 0 && (
+                    <div style={{
+                      flex: 1,
+                      height: '2px',
+                      background: isCompleted ? '#10B981' : 'var(--border)',
+                      margin: '0 8px',
+                      marginTop: '11px',
+                      transition: 'background 0.3s ease',
+                    }} />
+                  )}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    textAlign: 'center',
+                  }}>
+                    <span style={{
+                      width: '22px',
+                      height: '22px',
+                      borderRadius: '50%',
+                      background: isCompleted ? '#10B981' : isActive ? 'var(--accent)' : 'var(--border)',
+                      color: '#fff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      transition: 'all 0.3s ease',
+                    }}>
+                      {isCompleted ? '✓' : s}
+                    </span>
+                    <span style={{
+                      fontSize: '11.5px',
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? 'var(--accent)' : isCompleted ? '#10B981' : 'var(--text-muted)',
+                      transition: 'all 0.3s ease',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {stepLabel}
+                    </span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+
           {formError && (
             <Alert variant="danger" onClose={() => setFormError(null)}>
               {formError}
@@ -1397,7 +1915,99 @@ export default function StoreDetail() {
 
           {formStep === 2 ? (
             /* ========== STEP 2: External Database Integration ========== */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            !isSuperAdmin ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Store Info - ATS Style */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                    🏪 {t('stores.colName', 'Store')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    {store?.logoFilename && getStoreLogoUrl(store.logoFilename) ? (
+                      <img 
+                        src={getStoreLogoUrl(store.logoFilename) || ''} 
+                        alt={formData.name}
+                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 8,
+                        background: 'var(--accent)', color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 14,
+                      }}>
+                        {formData.name?.[0]?.toUpperCase() || 'S'}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {formData.name}
+                        </span>
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: 'var(--text-muted)',
+                          background: 'var(--surface-50)',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                        }}>
+                          {formData.code}
+                        </span>
+                        {formData.country && (
+                          <ReactCountryFlag 
+                            countryCode={formData.country} 
+                            svg 
+                            style={{ width: '0.9em', height: '0.9em' }} 
+                          />
+                        )}
+                      </div>
+                      {formData.city && (
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                          {formData.city}{formData.state ? `, ${formData.state}` : ''}{formData.country ? ` · ${formData.country}` : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Premium Admin notice banner */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px 24px',
+                  background: 'var(--surface-50)',
+                  borderRadius: '12px',
+                  border: '1px dashed var(--border)',
+                  textAlign: 'center',
+                  gap: '16px',
+                }}>
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'rgba(13,33,55,0.06)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent)',
+                  }}>
+                    <Database size={24} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('externalAffluence.integration', 'Store Integration')}
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '380px', lineHeight: 1.5 }}>
+                      {t('stores.adminIntegrationNotice')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Database Connection Status - Enhanced */}
               <div style={{
                 display: 'grid',
@@ -2249,7 +2859,8 @@ export default function StoreDetail() {
                   </div>
               )}
             </div>
-          ) : (
+            ))
+          : (
             /* ========== STEP 1: Store Details ========== */
             <>
               <Input

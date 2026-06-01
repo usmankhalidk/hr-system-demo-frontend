@@ -181,7 +181,7 @@ function AppRoutes() {
       } />
 
       <Route path="/integrazioni/database-esterno" element={
-        <ProtectedRoute roles={['admin']} permissionKey="turni">
+        <ProtectedRoute superAdminOnly={true}>
           <Layout title={t('nav.externalAffluence', 'Database Integration')}><ExternalAffluencePage /></Layout>
         </ProtectedRoute>
       } />
@@ -274,7 +274,7 @@ function AppRoutes() {
       } />
 
       <Route path="/impostazioni/email" element={
-        <ProtectedRoute roles={['admin', 'hr']}>
+        <ProtectedRoute roles={['admin', 'hr']} superAdminOnly={true}>
           <Layout title={t('nav.email')}><EmailSettingsPage /></Layout>
         </ProtectedRoute>
       } />

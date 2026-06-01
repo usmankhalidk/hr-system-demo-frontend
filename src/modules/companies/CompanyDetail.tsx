@@ -1181,7 +1181,7 @@ export default function CompanyDetail() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title={t('companies.editCompany', 'Edit Company')}
-        maxWidth="980px"
+        maxWidth={isSuperAdmin ? "980px" : "600px"}
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditOpen(false)} disabled={editSaving}>{t('common.cancel')}</Button>
@@ -1194,7 +1194,7 @@ export default function CompanyDetail() {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1.1fr 1fr',
+            gridTemplateColumns: (isMobile || !isSuperAdmin) ? '1fr' : '1.1fr 1fr',
             gap: 24,
             alignItems: 'start',
           }}>
@@ -1211,37 +1211,35 @@ export default function CompanyDetail() {
                 disabled={editSaving}
               />
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                    {t('companies.fieldGroup', 'Business group')}
-                  </label>
-                  <CustomSelect
-                    value={editGroupId != null ? String(editGroupId) : 'standalone'}
-                    onChange={(value) => setEditGroupId(value === 'standalone' || !value ? null : parseInt(value, 10))}
-                    options={companyGroupOptions}
-                    placeholder={t('companies.optionStandalone', 'Standalone')}
-                    disabled={editSaving}
-                    isClearable
-                  />
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                  {t('companies.fieldGroup', 'Business group')}
+                </label>
+                <CustomSelect
+                  value={editGroupId != null ? String(editGroupId) : 'standalone'}
+                  onChange={(value) => setEditGroupId(value === 'standalone' || !value ? null : parseInt(value, 10))}
+                  options={companyGroupOptions}
+                  placeholder={t('companies.optionStandalone', 'Standalone')}
+                  disabled={editSaving}
+                  isClearable
+                />
+              </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                    {t('companies.ownerField', 'Owner')}
-                  </label>
-                  <CustomSelect
-                    value={editOwnerUserId || null}
-                    onChange={(value) => setEditOwnerUserId(value ?? '')}
-                    options={ownerSelectOptions}
-                    placeholder={t('companies.currentOwner', 'Current owner')}
-                    disabled={editSaving || ownerCandidatesLoading}
-                    searchable
-                    isClearable
-                    searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
-                    noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
-                  />
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                  {t('companies.ownerField', 'Owner')}
+                </label>
+                <CustomSelect
+                  value={editOwnerUserId || null}
+                  onChange={(value) => setEditOwnerUserId(value ?? '')}
+                  options={ownerSelectOptions}
+                  placeholder={t('companies.currentOwner', 'Current owner')}
+                  disabled={editSaving || ownerCandidatesLoading}
+                  searchable
+                  isClearable
+                  searchPlaceholder={t('companies.ownerSearchPlaceholder', 'Search admin...')}
+                  noOptionsMessage={t('companies.ownerNoResults', 'No admin users found')}
+                />
               </div>
 
               <Input
@@ -1307,12 +1305,12 @@ export default function CompanyDetail() {
             </div>
 
             {/* Right Column: Billing & Access Settings */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', position: 'relative' }}>
-              <h3 style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 4px 0', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
-                {t('companies.editBillingAccessSection', 'Billing & Access Settings')}
-              </h3>
+            {isSuperAdmin && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', position: 'relative' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 4px 0', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+                  {t('companies.editBillingAccessSection', 'Billing & Access Settings')}
+                </h3>
 
-              {isSuperAdmin ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <Input
                     type="number"
@@ -1390,43 +1388,8 @@ export default function CompanyDetail() {
                     />
                   </div>
                 </div>
-              ) : (
-                <div style={{
-                  border: '1px dashed var(--border)',
-                  borderRadius: 10,
-                  padding: '24px 16px',
-                  textAlign: 'center',
-                  background: 'var(--surface-warm)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 12,
-                  flex: 1,
-                  minHeight: 280,
-                  marginTop: 10,
-                }}>
-                  <div style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: '50%',
-                    background: 'rgba(201, 151, 58, 0.1)',
-                    color: 'var(--accent)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                    <Receipt size={22} />
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {t('companies.billingRestrictedTitle', 'Super Admin Access Required')}
-                  </div>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', maxWidth: 220, lineHeight: 1.4 }}>
-                    {t('companies.billingRestrictedDesc', 'Billing pricing, storage limits, and license periods can only be configured by a system Super Admin.')}
-                  </p>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </Modal>

@@ -70,6 +70,7 @@ const en = {
     column: 'Column',
     format: 'Format',
     example: 'Example',
+    finish: 'Finish',
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────
@@ -644,7 +645,11 @@ const en = {
     logoError: 'Error uploading store photo',
     logoUploading: 'Uploading store photo...',
     logoHint: 'Hover logo to update photo',
+    stepDetails: 'Details',
+    stepIntegration: 'Integration',
     storeIntegration: 'Store Integration',
+    storeTerminal: 'Store Terminal',
+    adminIntegrationNotice: 'Contact platform admin to give access or to integrate the external store.',
     goToIntegration: 'Go to Integration',
     skipIntegration: 'Skip Integration',
     skipTerminal: 'Skip Terminal',
@@ -952,6 +957,7 @@ const en = {
     INVALID_QR_TOKEN: 'QR code invalid or expired. Please scan again.',
     QR_ALREADY_USED: 'This QR code has already been used. Please scan the latest code.',
     NO_ACTIVE_SHIFT: 'No shift scheduled for you today at this store. Contact your manager.',
+    SHIFT_TOO_EARLY: 'You have a shift scheduled later today. You can only clock in up to 15 minutes before the shift starts.',
     DEVICE_NOT_REGISTERED: 'Device not registered. Please register your device first.',
     DEVICE_MISMATCH: 'Your device is different; you cannot check in, check out, or start or end a break from this device.',
     DEVICE_REGISTRATION_NOT_REQUIRED: 'Device registration is not required for your account right now.',
