@@ -1482,7 +1482,7 @@ export function StoreList() {
               )}
 
               {currentMapping ? (
-                /* Show current integration */
+                /* Show comprehensive integration details */
                 <div style={{
                   background: 'var(--surface)',
                   borderRadius: 'var(--radius-lg)',
@@ -1493,18 +1493,18 @@ export function StoreList() {
                   {/* Header */}
                   <div style={{ 
                     background: 'var(--primary)', 
-                    padding: '12px 16px', 
+                    padding: '14px 18px', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'space-between' 
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <CheckCircle size={16} color="#fff" />
+                      <CheckCircle size={18} color="#fff" />
                       <div>
                         <div style={{ fontSize: '9px', letterSpacing: '2px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: '2px' }}>
                           {t('externalAffluence.integration', 'Integration')}
                         </div>
-                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '13px', color: '#fff' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '14px', color: '#fff' }}>
                           {t('externalAffluence.integrationActive')}
                         </div>
                       </div>
@@ -1528,37 +1528,98 @@ export function StoreList() {
                     </Button>
                   </div>
 
-                  {/* Integration Details */}
-                  <div style={{ padding: '16px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Integration Details Grid */}
+                  <div style={{ padding: '18px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                      {/* External Store Info */}
                       <div style={{ 
-                        padding: '12px',
+                        padding: '14px',
                         background: 'var(--background)',
-                        borderRadius: '6px',
+                        borderRadius: '8px',
                         border: '1px solid var(--border)',
                       }}>
-                        <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                          {t('externalAffluence.externalStoreCode')}
-                        </span>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary)', marginTop: '4px', fontFamily: 'monospace' }}>
-                          {currentMapping.externalStoreCode}
-                        </div>
-                      </div>
-                      {currentMapping.externalStoreName && (
                         <div style={{ 
-                          padding: '12px',
-                          background: 'var(--surface-warm)',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border)',
+                          fontSize: '10px', 
+                          fontWeight: 700, 
+                          color: 'var(--accent)', 
+                          textTransform: 'uppercase', 
+                          letterSpacing: '1.5px', 
+                          marginBottom: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
                         }}>
-                          <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                            {t('externalAffluence.externalStoreName')}
+                          🌐 {t('externalAffluence.externalStore', 'External Store')}
+                        </div>
+                        <div style={{ marginBottom: '10px' }}>
+                          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.storeCode', 'Store Code')}
                           </span>
-                          <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginTop: '4px', fontWeight: 500 }}>
-                            {currentMapping.externalStoreName}
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary)', marginTop: '2px', fontFamily: 'monospace' }}>
+                            {currentMapping.externalStoreCode}
                           </div>
                         </div>
-                      )}
+                        {currentMapping.externalStoreName && (
+                          <div>
+                            <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {t('externalAffluence.storeName', 'Store Name')}
+                            </span>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                              {currentMapping.externalStoreName}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Internal Store Info */}
+                      <div style={{ 
+                        padding: '14px',
+                        background: 'var(--surface-warm)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                      }}>
+                        <div style={{ 
+                          fontSize: '10px', 
+                          fontWeight: 700, 
+                          color: 'var(--primary)', 
+                          textTransform: 'uppercase', 
+                          letterSpacing: '1.5px', 
+                          marginBottom: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          🏪 {t('externalAffluence.internalStore', 'Internal Store')}
+                        </div>
+                        {selectedCompany && (
+                          <div style={{ marginBottom: '10px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              🏢 {t('common.company', 'Company')}
+                            </span>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                              {selectedCompany.name}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ marginBottom: '10px' }}>
+                          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('externalAffluence.storeCode', 'Store Code')}
+                          </span>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary)', marginTop: '2px', fontFamily: 'monospace' }}>
+                            {formData.code}
+                          </div>
+                        </div>
+                        {formData.name && (
+                          <div>
+                            <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {t('externalAffluence.storeName', 'Store Name')}
+                            </span>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                              {formData.name}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -205,14 +205,15 @@ export default function TerminalList() {
             placeholder={t('terminals.searchPlaceholder')}
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
+            autoComplete="off"
           />
         </div>
         {(isAdminOrHr || isSuperAdmin) && (
           <Button
             onClick={() => handleOpenForm(null)}
-            style={{ width: isMobile ? '100%' : 'auto', height: '42px' }}
+            style={{ width: isMobile ? '100%' : 'auto' }}
           >
-            <Plus size={18} style={{ marginRight: '8px' }} />
+            <Plus size={15} />
             {t('terminals.newTerminal')}
           </Button>
         )}

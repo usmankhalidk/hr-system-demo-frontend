@@ -50,7 +50,7 @@ export function getNotificationNavigationUrl(notification: Notification): string
   }
 
   if (type.startsWith('manager.')) {
-    return '/';
+    return '/ats?view=alerts';
   }
 
   return null;

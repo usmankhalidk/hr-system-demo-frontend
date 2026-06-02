@@ -167,16 +167,16 @@ export default function HrDeviceResetPage() {
         }}
       />
 
-      <div className="table-scroll" style={{ border: '1px solid var(--border-light)', background: 'var(--surface)', borderRadius: 24, overflowX: 'auto', boxShadow: '0 12px 32px rgba(0,0,0,0.05)' }}>
+      <div className="table-scroll" style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', overflowX: 'auto', boxShadow: 'var(--shadow-sm)' }}>
         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 930 }}>
           <thead>
             <tr style={{ background: 'var(--primary)', color: '#fff' }}>
-              <th style={{ ...thCell, borderTopLeftRadius: 12 }}>{t('deviceReset.colName')}</th>
+              <th style={thCell}>{t('deviceReset.colName')}</th>
               <th style={thCell}>{t('deviceReset.colUniqueId')}</th>
               <th style={thCell}>{t('deviceReset.colRole')}</th>
               <th style={thCell}>{t('deviceReset.colCompanyStore')}</th>
               <th style={thCell}>{t('deviceReset.colDeviceStatus')}</th>
-              <th style={{ ...thCell, textAlign: 'right', borderTopRightRadius: 12 }}>{t('deviceReset.colAction')}</th>
+              <th style={{ ...thCell, textAlign: 'right' }}>{t('deviceReset.colAction')}</th>
             </tr>
           </thead>
           <tbody>
@@ -248,11 +248,12 @@ export default function HrDeviceResetPage() {
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      disabled={submitting || emp.deviceResetPending === true}
+                      disabled={submitting || emp.deviceResetPending === true || !emp.deviceRegistered}
                       onClick={() => {
                         setSelectedEmployee(emp);
                         setConfirmOpen(true);
                       }}
+                      title={!emp.deviceRegistered ? t('deviceReset.noDeviceRegistered', 'No registered device to reset') : undefined}
                     >
                       {t('deviceReset.resetButton')}
                     </button>
