@@ -283,20 +283,40 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                             }}
                             disabled={s.hasTerminal}
                             style={{
-                              width: '100%', padding: '10px 12px', border: 'none', borderRadius: 'var(--radius-sm)',
+                              width: '100%', padding: '8px 12px', border: 'none', borderRadius: 'var(--radius-sm)',
                               background: selectedStoreId === String(s.id) ? 'var(--primary-light)' : 'transparent',
                               cursor: s.hasTerminal ? 'not-allowed' : 'pointer', textAlign: 'left',
-                              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              gap: '12px'
                             }}
                           >
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: s.hasTerminal ? 'var(--text-disabled)' : 'var(--text-primary)' }}>{s.name}</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.companyName}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                              {/* Store Avatar */}
+                              <div style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                background: s.hasTerminal ? 'rgba(100,116,139,0.1)' : 'var(--accent)',
+                                color: s.hasTerminal ? 'var(--text-disabled)' : '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                flexShrink: 0
+                              }}>
+                                {s.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: s.hasTerminal ? 'var(--text-disabled)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.companyName}</span>
+                              </div>
                             </div>
                             <span style={{
                               fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
                               background: s.hasTerminal ? 'rgba(21,128,61,0.1)' : 'rgba(100,116,139,0.1)',
-                              color: s.hasTerminal ? 'var(--success)' : 'var(--text-muted)', textTransform: 'uppercase'
+                              color: s.hasTerminal ? 'var(--success)' : 'var(--text-muted)', textTransform: 'uppercase',
+                              flexShrink: 0
                             }}>
                               {s.hasTerminal ? t('terminals.terminalCreated') : t('terminals.terminalNotCreated')}
                             </span>
@@ -307,51 +327,48 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                   </div>
                 </div>
 
-                {/* Constant Store Detail Fields */}
-                <SectionDivider label={t('stores.detailsTitle')} />
-                
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '18px' }}>
-                  <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.colCompany')}</label>
-                    <Input 
-                      value={selectedStore?.companyName || (terminal?.companyName) || ''} 
-                      placeholder={loadingStores ? t('common.loading') : ''}
-                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.colCode')}</label>
-                    <Input 
-                      value={selectedStore?.code || ''} 
-                      placeholder={loadingStores ? t('common.loading') : ''}
-                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.fieldMaxStaff')}</label>
-                    <Input 
-                      value={selectedStore?.maxStaff !== undefined && selectedStore?.maxStaff !== null ? String(selectedStore.maxStaff) : ''} 
-                      placeholder={loadingStores ? t('common.loading') : ''}
-                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
-                    />
-                  </div>
-                  <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.colAddress')}</label>
-                    <Input 
-                      value={selectedStore?.address || ''} 
-                      placeholder={loadingStores ? t('common.loading') : ''}
-                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('stores.fieldCap')}</label>
-                    <Input 
-                      value={selectedStore?.cap || ''} 
-                      placeholder={loadingStores ? t('common.loading') : ''}
-                      readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} 
-                    />
-                  </div>
-                </div>
+                {/* Premium Compact Store Detail Card */}
+                {(() => {
+                  const name = selectedStore ? selectedStore.name : (terminal ? terminal.storeName : '');
+                  const code = selectedStore ? selectedStore.code : (stores.find(s => s.id === terminal?.storeId)?.code);
+                  const company = selectedStore ? selectedStore.companyName : (terminal ? terminal.companyName : '');
+                  const address = selectedStore ? selectedStore.address : (stores.find(s => s.id === terminal?.storeId)?.address);
+                  const cap = selectedStore ? selectedStore.cap : (stores.find(s => s.id === terminal?.storeId)?.cap);
+
+                  if (!name && !company) return null;
+
+                  return (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      padding: '12px 14px',
+                      background: 'var(--surface-warm)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)',
+                      fontSize: '12.5px',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{name}</span>
+                        {code && (
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--background)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', fontWeight: 600 }}>
+                            {code}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🏢</span>
+                        <span>{company}</span>
+                      </div>
+                      {address && (
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>📍</span>
+                          <span>{address} {cap ? `(${cap})` : ''}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <SectionDivider label={t('terminals.terminalStep2')} />
 
@@ -375,6 +392,7 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                           }}
                           error={passwordError}
                           style={{ paddingRight: '40px' }}
+                          autoComplete="new-password"
                         />
                         <button
                           type="button"

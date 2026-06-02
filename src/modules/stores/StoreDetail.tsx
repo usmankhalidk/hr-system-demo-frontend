@@ -2458,6 +2458,16 @@ export default function StoreDetail() {
                         }}>
                           🏪 {t('externalAffluence.internalStore', 'Internal Store')}
                         </div>
+                        {companyName && (
+                          <div style={{ marginBottom: '10px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              🏢 {t('common.company', 'Company')}
+                            </span>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                              {companyName}
+                            </div>
+                          </div>
+                        )}
                         <div style={{ marginBottom: '10px' }}>
                           <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             {t('externalAffluence.storeCode', 'Store Code')}
