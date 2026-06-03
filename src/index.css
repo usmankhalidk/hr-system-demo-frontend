@@ -481,10 +481,7 @@ input, select, textarea {
 }
 
 /* ── Rich text preview normalisation (used in ATS position preview + career detail body) ── */
-.rte-preview,
-.careers-detail-body {
-  /* Paragraphs: tight spacing */
-}
+
 .rte-preview p {
   margin: 0 0 6px 0;
   line-height: 1.6;
@@ -544,4 +541,4 @@ input, select, textarea {
 .no-scrollbar {
   -ms-overflow-style: none !important;  /* IE and Edge */
   scrollbar-width: none !important;  /* Firefox */
-}
+}

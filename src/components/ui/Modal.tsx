@@ -122,7 +122,7 @@ export const Modal: React.FC<ModalProps> = ({
         {footer && <div style={footerStyle}>{footer}</div>}
       </div>
     </div>,
-    document.body
+    document.getElementById('modal-root') || document.body
   );
 };
 
