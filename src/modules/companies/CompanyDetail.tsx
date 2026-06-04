@@ -1534,7 +1534,17 @@ export default function CompanyDetail() {
                   </>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('companies.bannerHint', 'Wide format recommended. Max 4MB.')}</div>
+              <div style={mediaMetaRowStyle}>
+                <span style={mediaMetaPillStyle}>
+                  <ImageIcon size={12} />
+                  JPG / PNG / WebP
+                </span>
+                <span style={mediaMetaPillStyle}>
+                  <HardDrive size={12} />
+                  {t('companies.bannerMaxSize', 'Max 12MB')}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('companies.bannerHint', 'Wide format recommended. Max 12MB.')}</div>
             </div>
           </div>
 
@@ -1602,6 +1612,16 @@ export default function CompanyDetail() {
                     </button>
                   </>
                 )}
+              </div>
+              <div style={mediaMetaRowStyle}>
+                <span style={mediaMetaPillStyle}>
+                  <ImageIcon size={12} />
+                  JPG / PNG / WebP
+                </span>
+                <span style={mediaMetaPillStyle}>
+                  <HardDrive size={12} />
+                  {t('companies.logoMaxSize', 'Max 8MB')}
+                </span>
               </div>
             </div>
           </div>
@@ -1860,4 +1880,23 @@ const mediaActionBtnStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 700,
   padding: '9px 12px',
+};
+
+const mediaMetaRowStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 6,
+};
+
+const mediaMetaPillStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  borderRadius: 999,
+  padding: '4px 8px',
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'var(--text-secondary)',
+  background: 'rgba(13,33,55,0.08)',
+  border: '1px solid rgba(13,33,55,0.14)',
 };

@@ -970,10 +970,15 @@ export default function StoreDetail() {
                 )}
               </div>
             </div>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              <UploadCloud size={12} />
-              {logoUploading ? t('stores.logoUploading', 'Uploading...') : t('stores.logoHint', 'Hover logo to update photo')}
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <UploadCloud size={12} />
+                {logoUploading ? t('stores.logoUploading', 'Uploading...') : t('stores.logoHint', 'Hover logo to update photo')}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', border: '1px solid rgba(13,33,55,0.14)', background: 'rgba(13,33,55,0.08)', borderRadius: 999, padding: '3px 8px', fontWeight: 600 }}>
+                {t('stores.logoMaxSize', 'Max 8MB')}
+              </span>
+            </div>
           </div>
 
           <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>

@@ -29,6 +29,8 @@ import {
   ChevronDown,
   MessageSquare,
   Bell,
+  Clipboard,
+  Check,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
@@ -38,6 +40,7 @@ import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { translateApiError } from '../../utils/apiErrors';
+import indeedLogo from '../../assets/indeed-logo.png';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
@@ -55,7 +58,7 @@ import { getNotificationSettings, type NotificationSetting } from '../../api/doc
 import { getEmailConfig } from '../../api/email';
 import { Company, Employee, Store } from '../../types';
 import {
-  getJobs, createJob, updateJob, deleteJob, publishJob,
+  getJobs, createJob, updateJob, deleteJob, publishJob, getJobCompliance,
   getCandidates, getCandidate, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
   getInterviews, createInterview, updateInterview, deleteInterview,
   getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
@@ -70,6 +73,7 @@ import { parseCandidateProfile, serializeCandidateProfile, buildCandidateProfile
 import DocumentPreviewModal from './DocumentPreviewModal';
 import InterviewsPanel from './InterviewsPanel';
 import CalendarPanel from './CalendarPanel';
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -381,6 +385,422 @@ function formatEuroRange(min: number | null, max: number | null, locale: string,
   const to = max === null ? '...' : formatter.format(max);
   return `${from} - ${to}`;
 }
+
+const ReferenceIdBadge: React.FC<{ referenceId: string }> = ({ referenceId }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    navigator.clipboard.writeText(referenceId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = referenceId;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }
+      } catch (err) {
+        console.error('Failed to copy Reference ID', err);
+      }
+    });
+  };
+
+  return (
+    <span
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '11.5px',
+        fontWeight: 600,
+        background: '#F1F5F9',
+        color: '#475569',
+        borderRadius: '6px',
+        padding: '2px 8px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        border: '1px solid #E2E8F0',
+      }}
+    >
+      {referenceId}
+      <button
+        type="button"
+        onClick={handleCopy}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: copied ? '#16A34A' : '#64748B',
+          transition: 'color 0.15s',
+        }}
+        title="Copy Reference ID"
+      >
+        {copied ? (
+          <Check size={12} strokeWidth={2.5} />
+        ) : (
+          <Clipboard size={12} strokeWidth={2} />
+        )}
+      </button>
+    </span>
+  );
+};
+
+interface CheckResult {
+  id: string;
+  field: string;
+  name: string;
+  rule: string;
+  ok: boolean;
+  warn: boolean;
+  fix: string;
+}
+
+interface IndeedComplianceModalProps {
+  referenceId: string;
+  onClose: () => void;
+}
+
+const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ referenceId: initialRefId, onClose }) => {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [refId, setRefId] = useState(initialRefId);
+  const [loading, setLoading] = useState(false);
+  const [job, setJob] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [checks, setChecks] = useState<CheckResult[]>([]);
+
+  const runCheck = async (targetRefId: string) => {
+    if (!targetRefId.trim()) {
+      showToast('Please enter a valid Reference ID', 'error');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setJob(null);
+    setChecks([]);
+    try {
+      const data = await getJobCompliance(targetRefId.trim());
+      if (!data) {
+        setError('Position not found. Check the ID and try again.');
+        setLoading(false);
+        return;
+      }
+      setJob(data);
+      
+      // Perform checks
+      const results: CheckResult[] = [
+        {
+          id: 'C01',
+          field: 'title',
+          name: 'Job Title Quality',
+          rule: 'Title is present, not empty, and does not contain salary, location, or promotional details.',
+          ok: (() => {
+            const title = data.title || '';
+            const hasSalary = /(\d+|stipendio|salary|euro|€|usd|\$|all'ora|al mese|yearly|hourly|monthly|\b\d+k\b)/i.test(title);
+            const hasLocation = /\b(in|a|at|da|near|presso)\b\s+[A-Z]/i.test(title) || /\b(Milano|Roma|Napoli|Torino|Palermo|Bari|Bologna|Firenze|Genova|Venezia|London|New York|Paris|Berlin|Madrid)\b/i.test(title);
+            return title.trim().length > 0 && !hasSalary && !hasLocation;
+          })(),
+          warn: false,
+          fix: 'Remove any salary details, currency symbols, location prepositions, or city names from the job title. Move these to the salary and location override fields.',
+        },
+        {
+          id: 'C02',
+          field: 'date',
+          name: 'Publication Date',
+          rule: 'ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)',
+          ok: (() => {
+            const dateStr = data.publishedAt || data.createdAt || '';
+            return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(dateStr);
+          })(),
+          warn: false,
+          fix: 'Ensure the position has a valid publication date or creation timestamp stored in ISO 8601 standard.',
+        },
+        {
+          id: 'C03',
+          field: 'referencenumber',
+          name: 'Reference Number',
+          rule: 'Present and matches prefix format VY-[XX]-[NNNN]',
+          ok: !!data.referenceId && /^VY-[A-Z]{2}-\d{4}$/.test(data.referenceId),
+          warn: false,
+          fix: 'The position is missing a valid Reference ID. Create a new position to generate it automatically.',
+        },
+        {
+          id: 'C04',
+          field: 'requisitionid',
+          name: 'Requisition ID',
+          rule: 'Present and not empty (REQ-[position-id])',
+          ok: false,
+          warn: false,
+          fix: `requisitionid is missing. Add REQ-${data.id} to the position data. This field is required by Indeed — it was missing from both team lead docs.`,
+        },
+        {
+          id: 'C05',
+          field: 'url',
+          name: 'Apply URL Tracker',
+          rule: 'Apply URL is present and contains ?source=Indeed',
+          ok: false,
+          warn: false,
+          fix: 'URL does not contain ?source=Indeed. Update the URL construction in ats.controller.ts at jobFeedHandler to append ?source=Indeed.',
+        },
+        {
+          id: 'C06',
+          field: 'email',
+          name: 'Contact Email',
+          rule: 'Valid company or recruiter contact email address',
+          ok: (() => {
+            const email = data.companyEmail || '';
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+          })(),
+          warn: false,
+          fix: 'Company email is missing or invalid. Set a valid contact email in the company profile settings.',
+        },
+        {
+          id: 'C07',
+          field: 'city',
+          name: 'Job City Location',
+          rule: 'City field is present and not empty',
+          ok: !!data.city && data.city.trim().length > 0,
+          warn: false,
+          fix: "Specify a city location override for this position or ensure the company profile has a default city configuration.",
+        },
+        {
+          id: 'C08',
+          field: 'state',
+          name: 'Job State/Province',
+          rule: 'Province code or state name, must not be a pure number',
+          ok: (() => {
+            const state = data.state || '';
+            return state.trim().length > 0 && !/^\d+$/.test(state);
+          })(),
+          warn: false,
+          fix: "State contains a numeric value. Replace with the province abbreviation (e.g. 'MI' for Milano, 'SA' for Salerno) or full region name.",
+        },
+        {
+          id: 'C09',
+          field: 'country',
+          name: 'Job Country',
+          rule: 'Country code (e.g. \'IT\', \'US\') is present',
+          ok: !!data.country && data.country.trim().length > 0,
+          warn: false,
+          fix: "Country code is missing. Specify a valid 2-letter country code (e.g. 'IT') in the location override or company profile.",
+        },
+        {
+          id: 'C10',
+          field: 'remotetype',
+          name: 'Remote Type Guideline',
+          rule: 'If job is remote, value must be exactly: \'Fully remote\', \'Hybrid remote\', or \'COVID-19\'',
+          ok: (() => {
+            const isRemote = data.remoteType === 'remote' || data.remoteType === 'hybrid' || data.isRemote;
+            return isRemote ? ['Fully remote', 'Hybrid remote', 'COVID-19'].includes(data.remoteType) : true;
+          })(),
+          warn: false,
+          fix: "Remote type must be mapped to 'Fully remote' or 'Hybrid remote'. Update the XML feed mapping to match Indeed guidelines.",
+        },
+        {
+          id: 'C11',
+          field: 'description',
+          name: 'Job Description Length',
+          rule: 'Description must contain at least 150 characters of content',
+          ok: (() => {
+            const desc = data.description || '';
+            return desc.trim().length >= 150;
+          })(),
+          warn: false,
+          fix: 'Job description must be present and contain at least 150 characters of high-quality content.',
+        },
+        {
+          id: 'C12',
+          field: 'sourcename',
+          name: 'ATS Source Name',
+          rule: 'Developer identifier source name must be present',
+          ok: !!data.source && data.source.trim().length > 0,
+          warn: false,
+          fix: "Source name is missing. Specify the source name parameter (e.g. 'VeyloHR') in the feed.",
+        },
+      ];
+      setChecks(results);
+    } catch (err) {
+      setError('An error occurred while running the compliance check.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (initialRefId) {
+      runCheck(initialRefId);
+    }
+  }, [initialRefId]);
+
+  const passedCount = checks.filter(c => c.ok).length;
+  const totalCount = checks.length;
+  const allPassed = passedCount === totalCount;
+  const progressPercent = totalCount > 0 ? (passedCount / totalCount) * 100 : 0;
+
+  let progressColor = '#DC2626'; // Red
+  if (passedCount >= 10) progressColor = '#15803D'; // Green
+  else if (passedCount >= 6) progressColor = '#D97706'; // Amber
+
+  return (
+    <ModalBackdrop onClose={onClose} width={800}>
+      <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 17, fontWeight: 700 }}>
+              Indeed Compliance Check
+            </h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+              Check this position against Indeed's official XML feed requirements
+            </p>
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+      </div>
+
+      <div style={{ padding: '20px 22px', display: 'grid', gap: 16 }}>
+        {/* Input Row */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 240, display: 'grid', gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+              Position Reference ID
+            </label>
+            <input
+              type="text"
+              value={refId}
+              onChange={(e) => setRefId(e.target.value)}
+              placeholder="e.g. VY-FU-0001"
+              style={{
+                background: 'var(--background)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '9px 12px',
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }}
+            />
+          </div>
+          <Button variant="primary" onClick={() => runCheck(refId)} disabled={loading} style={{ height: 38 }}>
+            {loading ? 'Running...' : 'Run Check'}
+          </Button>
+        </div>
+
+        {error && (
+          <div style={{ padding: 14, borderRadius: 8, background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', fontSize: 13 }}>
+            ⚠️ {error}
+          </div>
+        )}
+
+        {/* Results */}
+        {!loading && job && checks.length > 0 && (
+          <div style={{ display: 'grid', gap: 16 }}>
+            {/* Summary Bar */}
+            <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 16, background: 'rgba(13,33,55,0.02)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {passedCount} of {totalCount} checks passed
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: progressColor }}>
+                  {Math.round(progressPercent)}%
+                </span>
+              </div>
+              <div style={{ height: 8, borderRadius: 99, background: '#E2E8F0', overflow: 'hidden', marginBottom: 14 }}>
+                <div style={{ height: '100%', width: `${progressPercent}%`, background: progressColor, transition: 'width 0.3s ease' }} />
+              </div>
+
+              {allPassed ? (
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534', fontSize: 13, fontWeight: 600 }}>
+                  ✅ This position meets all Indeed XML feed requirements
+                </div>
+              ) : (
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', fontSize: 13, fontWeight: 600 }}>
+                  ❌ {totalCount - passedCount} issues found — resolve before submitting to Indeed
+                </div>
+              )}
+            </div>
+
+            {/* Checks List */}
+            <div style={{ display: 'grid', gap: 10 }}>
+              {checks.map((check) => (
+                <details
+                  key={check.id}
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: '#fff',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <summary
+                    style={{
+                      listStyle: 'none',
+                      cursor: 'pointer',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: 14, minWidth: 24, display: 'inline-flex', justifyContent: 'center' }}>
+                      {check.ok ? '✅' : '❌'}
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-primary)', flex: 1 }}>
+                      {check.name}
+                      <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'monospace', background: '#F1F5F9', color: '#64748B', padding: '1px 5px', borderRadius: 4 }}>
+                        {check.id}
+                      </span>
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {check.ok ? 'Pass' : 'Action Required'}
+                    </span>
+                  </summary>
+
+                  <div style={{ borderTop: '1px solid var(--border)', padding: '12px 14px', background: 'rgba(248,250,252,0.5)', display: 'grid', gap: 8 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <strong>Rule:</strong> {check.rule}
+                    </div>
+                    {!check.ok && (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          background: '#FFFBEB',
+                          border: '1px solid #FDE68A',
+                          color: '#92400E',
+                          fontSize: 12.5,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <strong>How to fix:</strong> {check.fix}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </ModalBackdrop>
+  );
+};
 
 // ─── Shared modal backdrop ─────────────────────────────────────────────────────
 
@@ -782,7 +1202,7 @@ const parseRichTextToHtml = (text: string): string => {
 };
 
 const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultCompanyId, onSave, onClose, saving }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { isMobile, isTablet } = useBreakpoint();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -791,7 +1211,8 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
   const [description, setDescription] = useState(job?.description ?? '');
   const [tags, setTags] = useState<string[]>(job?.tags ?? []);
   const [tagInput, setTagInput] = useState('');
-  const [language, setLanguage] = useState<JobLanguage>(job?.language ?? 'it');
+  const activeLang: JobLanguage = i18n.language?.startsWith('it') ? 'it' : 'en';
+  const language = activeLang;
   const [jobType, setJobType] = useState<JobType | ''>(job?.jobType ?? '');
   const [status, setStatus] = useState<JobStatus>(job?.status ?? 'draft');
   const [companyId, setCompanyId] = useState<string>(() => {
@@ -1703,8 +2124,29 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, color: 'var(--text-primary)' }}>
-                    {job ? t('ats.editJob') : t('ats.newJob')}
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span>{job ? t('ats.editJob') : t('ats.newJob')}</span>
+                    {job && (
+                      job.referenceId ? (
+                        <ReferenceIdBadge referenceId={job.referenceId} />
+                      ) : (
+                        <span style={{
+                          fontFamily: 'monospace',
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          background: '#F1F5F9',
+                          color: '#64748B',
+                          borderRadius: '6px',
+                          padding: '2px 6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          border: '1px solid #E2E8F0',
+                        }}>
+                          —
+                        </span>
+                      )
+                    )}
                   </h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
                     {t('ats.stepFlow', 'Complete each section and review the live summary before saving.')}
@@ -2105,12 +2547,15 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       </label>
                       <CustomSelect
                         value={language}
-                        onChange={(value) => value && setLanguage(value as JobLanguage)}
+                        onChange={() => {}}
                         options={languageSelectOptions}
                         isClearable={false}
                         searchable={false}
-                        disabled={saving}
+                        disabled={true}
                       />
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                        {t('ats.languageLockedHint', 'Locked to current translation language')}
+                      </span>
                     </div>
                     <div>
                       <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
@@ -2770,7 +3215,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     // Attempt to load interviewers from the ATS endpoint which returns
     // users across grouped companies (when allowed). Fallback to local employees if empty.
     listInterviewers(candidate.companyId)
-      .then((res) => {
+      .then((res: any) => {
         if (!active) return;
         const fromApi = (res?.interviewers ?? []) as Employee[];
         if (fromApi.length > 0) {
@@ -5044,8 +5489,59 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
   const [saving, setSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [hoveredId, setHoveredId] = useState<number | null>(null);
-  const [feedCopied, setFeedCopied] = useState(false);
-  const [showComplianceModal, setShowComplianceModal] = useState(false);
+  const [showLinksModal, setShowLinksModal] = useState(false);
+  const [copiedGeneral, setCopiedGeneral] = useState(false);
+  const [copiedCompany, setCopiedCompany] = useState(false);
+  const [complianceRefId, setComplianceRefId] = useState<string | null>(null);
+  const [expandedJobIds, setExpandedJobIds] = useState<Set<number>>(new Set());
+
+  const toggleDescription = useCallback((jobId: number) => {
+    setExpandedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
+      return next;
+    });
+  }, []);
+
+  const fallbackCopy = useCallback((text: string, onSuccess: () => void) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (successful) {
+        onSuccess();
+      } else {
+        showToast(t('common.copyError', 'Failed to copy link'), 'error');
+      }
+    } catch {
+      showToast(t('common.copyError', 'Failed to copy link'), 'error');
+    }
+  }, [showToast, t]);
+
+  const copyToClipboard = useCallback((text: string, onSuccess: () => void) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+          .then(onSuccess)
+          .catch(() => fallbackCopy(text, onSuccess));
+      } else {
+        fallbackCopy(text, onSuccess);
+      }
+    } catch {
+      fallbackCopy(text, onSuccess);
+    }
+  }, [fallbackCopy]);
 
   const defaultCompanyId = useMemo(() => {
     if (companyId) return companyId;
@@ -5053,26 +5549,6 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
     if (user?.companyId) return user.companyId;
     return companies[0]?.id ?? null;
   }, [companyId, targetCompanyId, user?.companyId, companies]);
-
-  const feedCompanyId = useMemo(() => {
-    if (companyId) return companyId;
-    if (targetCompanyId) return targetCompanyId;
-    if (user?.companyId) return user.companyId;
-    return companies.length === 1 ? companies[0].id : null;
-  }, [companyId, targetCompanyId, user?.companyId, companies]);
-
-  const feedUrl = feedCompanyId
-    ? `${getApiBaseUrl()}/ats/feed/${feedCompanyId}/jobs.xml`
-    : null;
-
-  const handleCopyFeed = () => {
-    if (!feedUrl) return;
-    navigator.clipboard.writeText(feedUrl).then(() => {
-      setFeedCopied(true);
-      showToast(t('ats.feedCopied'), 'success');
-      setTimeout(() => setFeedCopied(false), 2500);
-    });
-  };
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -5258,6 +5734,44 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
   const companyMap = useMemo(() => new Map(companies.map((company) => [company.id, company])), [companies]);
   const storeMap = useMemo(() => new Map(stores.map((store) => [store.id, store])), [stores]);
 
+  const groupedJobs = useMemo(() => {
+    const groups: { [key: number]: JobPosting[] } = {};
+    jobs.forEach((job) => {
+      if (!groups[job.companyId]) {
+        groups[job.companyId] = [];
+      }
+      groups[job.companyId].push(job);
+    });
+
+    const result = Object.keys(groups).map((companyIdStr) => {
+      const id = Number(companyIdStr);
+      const comp = companyMap.get(id);
+      const name = comp?.name || `Company #${id}`;
+
+      // Sort: Published -> Draft -> Closed
+      const sortedJobs = [...groups[id]].sort((a, b) => {
+        const statusOrder = { published: 1, draft: 2, closed: 3 };
+        const orderA = statusOrder[a.status as keyof typeof statusOrder] || 99;
+        const orderB = statusOrder[b.status as keyof typeof statusOrder] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+
+        const dateA = new Date(a.publishedAt || a.createdAt || 0).getTime();
+        const dateB = new Date(b.publishedAt || b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      return {
+        companyId: id,
+        companyName: name,
+        company: comp,
+        jobs: sortedJobs,
+      };
+    });
+
+    result.sort((a, b) => a.companyName.localeCompare(b.companyName));
+    return result;
+  }, [jobs, companyMap]);
+
   return (
     <div>
       {/* Toolbar */}
@@ -5336,22 +5850,10 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => {
-                  if (!careersPreviewUrl) return;
-                  window.open(careersPreviewUrl, '_blank', 'noopener,noreferrer');
-                }}
-                disabled={!careersPreviewUrl}
+                onClick={() => setShowLinksModal(true)}
                 fullWidth={isMobile}
               >
                 {t('ats.openCareersPage', 'Open careers page')}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowComplianceModal(true)}
-                fullWidth={isMobile}
-              >
-                {t('ats.complianceCheck')}
               </Button>
             </div>
             <Button
@@ -5370,52 +5872,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
         Careers preview lists <strong>draft</strong> and <strong>published</strong> jobs. XML feed still exports only <strong>published</strong> jobs for active companies.
       </div>
 
-      {/* Feed URL banner */}
-      {canEdit && feedUrl && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(13,33,55,0.04) 0%, rgba(201,151,58,0.06) 100%)',
-          border: '1px solid var(--border)',
-          borderLeft: '3px solid var(--accent)',
-          borderRadius: 12,
-          padding: '14px 18px',
-          marginBottom: 20,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-              📡 {t('ats.feedTitle')}
-            </span>
-            <span style={{
-              background: 'rgba(201,151,58,0.15)', color: '#92600a',
-              borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '2px 7px',
-              border: '1px solid rgba(201,151,58,0.25)',
-            }}>
-              {t('ats.indeedApiPending')}
-            </span>
-          </div>
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            {t('ats.indeedApiPendingHint')}
-          </p>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <code style={{
-              flex: 1, background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 7, padding: '6px 10px', fontSize: 11.5,
-              color: 'var(--text-primary)', fontFamily: 'monospace',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {feedUrl}
-            </code>
-            <Button variant="secondary" size="sm" onClick={handleCopyFeed} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {feedCopied ? '✓ ' + t('common.copied', 'Copied') : t('common.copy', 'Copy URL')}
-            </Button>
-          </div>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            {t('ats.feedHint')}
-          </p>
-        </div>
-      )}
+
 
       {/* Job list */}
       {loading ? (
@@ -5453,201 +5910,343 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
-          {jobs.map((job) => {
-            const sc = STATUS_COLOR[job.status];
-            const isHovered = hoveredId === job.id;
-            const company = companyMap.get(job.companyId);
-            const store = job.storeId ? storeMap.get(job.storeId) : null;
-            const companyLogo = getCompanyLogoUrl(company?.logoFilename ?? null);
-            const companyOwnerAvatar = getAvatarUrl(company?.ownerAvatarFilename ?? null);
-            const storeLogo = getStoreLogoUrl(store?.logoFilename ?? null);
-            const languageFlags = languageFlagCodes(job.language);
-            const locationSummary = [job.city, job.state, job.country].filter(Boolean).join(', ') || t('ats.remoteType_remote', 'Remote');
-            const salarySummary = formatEuroRange(job.salaryMin, job.salaryMax, locale, t('common.noData'));
-            return (
-              <div
-                key={job.id}
-                onMouseEnter={() => setHoveredId(job.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                style={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderLeft: `4px solid ${sc}`,
-                  borderRadius: 14, padding: '16px 20px',
-                  display: 'grid', gap: 12,
-                  transition: 'box-shadow 0.18s, transform 0.18s',
-                  boxShadow: isHovered ? 'var(--shadow)' : 'none',
-                  transform: isHovered ? 'translateY(-1px)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{job.title}</span>
-                  <span style={{
-                    background: `${sc}14`, color: sc, borderRadius: 99,
-                    padding: '2px 10px', fontSize: 11, fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: '0.04em',
-                  }}>
-                    {t(`ats.status_${job.status}`)}
-                  </span>
-                </div>
-
-                {job.description && (
-                  <div style={{
-                    fontSize: 12.5, color: 'var(--text-muted)',
-                    overflow: 'hidden', display: '-webkit-box',
-                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                  }}>
-                    {stripHtml(job.description)}
-                  </div>
-                )}
-
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                  gap: 9,
+        <div style={{ display: 'grid', gap: 28 }}>
+          {groupedJobs.map((group) => (
+            <div key={group.companyId} style={{ display: 'grid', gap: 12 }}>
+              {/* Group Header */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '4px 8px',
+                borderBottom: '1px solid var(--border)',
+                paddingBottom: 8
+              }}>
+                <Building2 size={16} color="var(--text-secondary)" />
+                <h4 style={{
+                  margin: 0,
+                  fontSize: 14.5,
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-display)'
                 }}>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
-                      {t('nav.companies')}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {companyLogo ? <img src={companyLogo} alt={company?.name ?? `Company ${job.companyId}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Building2 size={14} color="#64748B" />}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {company?.name ?? `Company #${job.companyId}`}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                          {company?.groupName ?? '-'}
-                        </div>
-                      </div>
-                      {companyOwnerAvatar ? <img src={companyOwnerAvatar} alt="Owner" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} /> : null}
-                    </div>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
-                      {t('common.store', 'Store')}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(13,33,55,0.14)', background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {storeLogo ? <img src={storeLogo} alt={store?.name ?? 'Store'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <StoreIcon size={14} color="#64748B" />}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {store?.name ?? (job.storeId ? `Store #${job.storeId}` : '-')}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                          {store?.code ? `Code ${store.code}` : '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
-                      {t('ats.location', 'Location')}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <MapPin size={13} color="#64748B" />
-                      {locationSummary}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
-                      {job.remoteType === 'remote' ? t('ats.remoteType_remote', 'Remote') : t(`ats.remoteType_${job.remoteType}`, job.remoteType)}
-                    </div>
-                  </div>
-
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', background: 'rgba(13,33,55,0.03)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 700 }}>
-                      {t('ats.salaryRange', 'Salary range')}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Wallet size={13} color="#64748B" />
-                      {salarySummary}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
-                      {job.weeklyHours ? `${job.weeklyHours}h` : t('common.noData')}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    <span style={{
-                      background: 'rgba(13,33,55,0.08)',
-                      color: 'var(--text-secondary)',
-                      border: '1px solid rgba(13,33,55,0.14)',
-                      borderRadius: 99,
-                      padding: '2px 8px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                    }}>
-                      {languageFlags.map((code) => (
-                        <span key={`${job.id}-${code}`} style={{ marginRight: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <ReactCountryFlag countryCode={code} svg style={{ width: '0.95em', height: '0.95em' }} />
-                        </span>
-                      ))}
-                      {job.language}
-                    </span>
-                    <span style={{
-                      background: 'rgba(2,132,199,0.10)',
-                      color: '#0369A1',
-                      border: '1px solid rgba(2,132,199,0.22)',
-                      borderRadius: 99,
-                      padding: '2px 8px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                    }}>
-                      {t(`ats.jobType_${JOB_TYPE_LABEL[job.jobType]}`)}
-                    </span>
-                    {job.tags.map((tag) => (
-                      <span key={`${job.id}-${tag}`} style={{
-                        background: 'rgba(201,151,58,0.10)', color: 'var(--accent)',
-                        border: '1px solid rgba(201,151,58,0.2)',
-                        borderRadius: 99, padding: '2px 8px', fontSize: 11, fontWeight: 500,
-                      }}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-                    {job.publishedAt && (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                        📅 {fmtDate(job.publishedAt)}
-                      </span>
-                    )}
-                    {canEdit && (
-                      <>
-                        {job.status === 'draft' && (
-                          <Button variant="accent" size="sm" onClick={() => handlePublish(job)}>
-                            {t('ats.publish')}
-                          </Button>
-                        )}
-                        <button
-                          onClick={() => { setEditJob(job); setShowModal(true); }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
-                          title={t('common.edit')}
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(job)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '4px' }}
-                          title={t('common.delete')}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
+                  {group.companyName}
+                </h4>
+                <span style={{
+                  background: 'rgba(13,33,55,0.03)',
+                  color: 'var(--text-muted)',
+                  borderRadius: 99,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  border: '1px solid var(--border)'
+                }}>
+                  {group.jobs.length} {group.jobs.length === 1 ? t('ats.position', 'position') : t('ats.positions', 'positions')}
+                </span>
               </div>
-            );
-          })}
+
+              {/* Group Jobs */}
+              <div style={{ display: 'grid', gap: 10 }}>
+                {group.jobs.map((job) => {
+                  const sc = STATUS_COLOR[job.status];
+                  const isHovered = hoveredId === job.id;
+                  const company = companyMap.get(job.companyId);
+                  const store = job.storeId ? storeMap.get(job.storeId) : null;
+                  const companyLogo = getCompanyLogoUrl(company?.logoFilename ?? null);
+                  const companyOwnerAvatar = getAvatarUrl(company?.ownerAvatarFilename ?? null);
+                  const storeLogo = getStoreLogoUrl(store?.logoFilename ?? null);
+                  const languageFlags = languageFlagCodes(job.language);
+                  const locationSummary = [job.city, job.state, job.country].filter(Boolean).join(', ') || t('ats.remoteType_remote', 'Remote');
+                  const salarySummary = formatEuroRange(job.salaryMin, job.salaryMax, locale, t('common.noData'));
+                  return (
+                    <div
+                      key={job.id}
+                      onMouseEnter={() => setHoveredId(job.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      style={{
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderLeft: `4px solid ${sc}`,
+                        borderRadius: 14, padding: '16px 20px',
+                        display: 'grid', gap: 12,
+                        transition: 'box-shadow 0.18s, transform 0.18s',
+                        boxShadow: isHovered ? 'var(--shadow)' : 'none',
+                        transform: isHovered ? 'translateY(-1px)' : 'none',
+                      }}
+                    >
+                      {/* Header Row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{job.title}</span>
+                          {job.referenceId && <ReferenceIdBadge referenceId={job.referenceId} />}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {/* Copy Reference ID button on hover */}
+                          {isHovered && job.referenceId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(job.referenceId || '', () => {
+                                  showToast('Reference ID copied to clipboard', 'success');
+                                });
+                              }}
+                              style={{
+                                background: 'rgba(13,33,55,0.05)',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'var(--text-secondary)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '4px 6px',
+                                borderRadius: 6,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                gap: 4,
+                                transition: 'background 0.15s',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(13,33,55,0.1)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(13,33,55,0.05)')}
+                              title="Copy Reference ID"
+                            >
+                              <Clipboard size={12} />
+                              <span style={{ fontSize: 10.5 }}>Copy ID</span>
+                            </button>
+                          )}
+                          <span style={{
+                            background: `${sc}08`,
+                            color: sc,
+                            border: `1px solid ${sc}33`,
+                            borderRadius: 99,
+                            padding: '2px 10px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                          }}>
+                            {t(`ats.status_${job.status}`)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Description Row with Show More */}
+                      {job.description && (() => {
+                        const text = stripHtml(job.description);
+                        const isLong = text.length > 240;
+                        const isExpanded = expandedJobIds.has(job.id);
+                        const displayText = isLong && !isExpanded ? `${text.slice(0, 240)}...` : text;
+                        return (
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                            <span>{displayText}</span>
+                            {isLong && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleDescription(job.id);
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: 'var(--primary)',
+                                  cursor: 'pointer',
+                                  fontSize: 12.5,
+                                  fontWeight: 600,
+                                  padding: '0 4px',
+                                  textDecoration: 'underline',
+                                }}
+                              >
+                                {isExpanded ? t('common.showLess', 'Show less') : t('common.showMore', 'Show more')}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Inline Job Metadata Row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                        {/* Store */}
+                        {store && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <StoreIcon size={14} color="var(--text-muted)" />
+                            <strong>{store.name}</strong>
+                          </span>
+                        )}
+                        {/* Location */}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <MapPin size={14} color="var(--text-muted)" />
+                          {locationSummary}
+                        </span>
+                        {/* Remote type / Work arrangement */}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Globe2 size={14} color="var(--text-muted)" />
+                          {job.remoteType === 'remote' ? t('ats.remoteType_remote', 'Remote') : t(`ats.remoteType_${job.remoteType}`, job.remoteType)}
+                        </span>
+                        {/* Salary */}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Wallet size={14} color="var(--text-muted)" />
+                          {salarySummary} {job.weeklyHours ? `(${job.weeklyHours}h)` : ''}
+                        </span>
+                        {/* Job Type */}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <BriefcaseBusiness size={14} color="var(--text-muted)" />
+                          {t(`ats.jobType_${JOB_TYPE_LABEL[job.jobType]}`)}
+                        </span>
+                        {/* Department */}
+                        {job.department && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Building2 size={14} color="var(--text-muted)" />
+                            {job.department}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Footer Row */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid rgba(13,33,55,0.05)', paddingTop: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          {/* Language flag */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {languageFlags.map((code) => (
+                              <ReactCountryFlag
+                                key={`${job.id}-${code}`}
+                                countryCode={code}
+                                svg
+                                style={{ width: '1.3em', height: '1.3em', verticalAlign: 'middle' }}
+                                title={job.language.toUpperCase()}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Tags */}
+                          {job.tags && job.tags.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
+                              <span>Tags:</span>
+                              {job.tags.map((tag) => (
+                                <span key={`${job.id}-${tag}`} style={{
+                                  background: 'rgba(201,151,58,0.06)', 
+                                  color: 'var(--accent)',
+                                  border: '1px solid rgba(201,151,58,0.15)',
+                                  borderRadius: 6, 
+                                  padding: '1px 6px', 
+                                  fontSize: 11, 
+                                  fontWeight: 500,
+                                }}>
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+                          {/* Date */}
+                          {job.publishedAt && (() => {
+                            const dateObj = new Date(job.publishedAt);
+                            const dateStr = dateObj.toLocaleDateString(locale === 'it-IT' ? 'it-IT' : 'en-GB');
+                            const hourStr = String(dateObj.getHours()).padStart(2, '0');
+                            const minStr = String(dateObj.getMinutes()).padStart(2, '0');
+                            return (
+                              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                                {t('ats.publishedLabel', 'Published')}: {dateStr} {hourStr}:{minStr}
+                              </span>
+                            );
+                          })()}
+
+                          {/* Actions */}
+                          {canEdit && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {job.status === 'draft' && (
+                                <Button variant="accent" size="sm" onClick={() => handlePublish(job)} style={{ marginRight: 4 }}>
+                                  {t('ats.publishPosition', 'Publish position')}
+                                </Button>
+                              )}
+                              <button
+                                onClick={() => setComplianceRefId(job.referenceId || String(job.id))}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: '6px',
+                                  borderRadius: '50%',
+                                  color: 'var(--text-muted)',
+                                  transition: 'all 0.2s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'rgba(2,132,199,0.08)';
+                                  e.currentTarget.style.color = 'var(--primary)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'none';
+                                  e.currentTarget.style.color = 'var(--text-muted)';
+                                }}
+                                title="Indeed Compliance Check"
+                              >
+                                <BadgeCheck size={16} />
+                              </button>
+                              <button
+                                onClick={() => { setEditJob(job); setShowModal(true); }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: '6px',
+                                  borderRadius: '50%',
+                                  color: 'var(--text-muted)',
+                                  transition: 'all 0.2s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'rgba(13,33,55,0.05)';
+                                  e.currentTarget.style.color = 'var(--text-primary)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'none';
+                                  e.currentTarget.style.color = 'var(--text-muted)';
+                                }}
+                                title={t('common.edit')}
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(job)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: '6px',
+                                  borderRadius: '50%',
+                                  color: 'var(--text-muted)',
+                                  transition: 'all 0.2s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'rgba(239,68,68,0.08)';
+                                  e.currentTarget.style.color = 'var(--danger)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'none';
+                                  e.currentTarget.style.color = 'var(--text-muted)';
+                                }}
+                                title={t('common.delete')}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -5663,79 +6262,537 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
         />
       )}
 
-      {showComplianceModal && (
-        <ModalBackdrop onClose={() => setShowComplianceModal(false)} width={980}>
+      {showLinksModal && (
+        <ModalBackdrop onClose={() => setShowLinksModal(false)} width={680}>
+          {/* Modal Header */}
           <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{t('ats.complianceCheckTitle')}</h3>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 17, fontWeight: 700 }}>
+                {t('ats.careersPageLinksTitle', 'Careers Page Links')}
+              </h3>
               <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                {jobs.length} job postings - each row shows compliance percentage and detailed checks.
+                {t('ats.careersPageLinksSubtitle', 'Share these links with candidates or embed them on your website')}
               </p>
             </div>
-            <button onClick={() => setShowComplianceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+            <button
+              onClick={() => setShowLinksModal(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}
+            >
+              ×
+            </button>
           </div>
 
-          <div style={{ padding: '16px 22px', display: 'grid', gap: 10 }}>
-            {jobs.length === 0 && (
-              <div style={{ borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-muted)' }}>
-                {t('ats.complianceNoPublishedJobs')}
-              </div>
-            )}
-
-            {jobs.map((job) => {
-              const score = complianceScore(job);
-              const barColor = score.percentage >= 80 ? '#15803D' : score.percentage >= 55 ? '#C9973A' : '#DC2626';
-
-              return (
-                <details key={job.id} style={{ border: '1px solid var(--border)', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
-                  <summary style={{ listStyle: 'none', cursor: 'pointer', padding: '10px 12px', display: 'grid', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <strong style={{ color: 'var(--text-primary)' }}>{job.title}</strong>
-                      <span style={{ fontSize: 11, borderRadius: 99, padding: '2px 8px', background: 'rgba(13,33,55,0.08)', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
-                        {job.status}
-                      </span>
-                      <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: barColor }}>
-                        {score.percentage}% ({score.passed}/{score.total})
-                      </span>
-                    </div>
-
-                    <div style={{ height: 8, borderRadius: 999, background: '#E2E8F0', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${score.percentage}%`, background: barColor }} />
-                    </div>
-                  </summary>
-
-                  <div style={{ borderTop: '1px solid var(--border)', padding: '10px 12px', display: 'grid', gap: 7 }}>
-                    {score.checks.map((check) => (
-                      <div key={`${job.id}-${check.key}`} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                        <span style={{ fontWeight: 800, color: check.ok ? '#166534' : '#B91C1C', minWidth: 16 }}>
-                          {check.ok ? '✓' : '✗'}
-                        </span>
-                        <span style={{ color: 'var(--text-primary)', fontSize: 12.5 }}>{check.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              );
-            })}
-
+          {/* Modal Body */}
+          <div style={{ padding: '20px 22px', display: 'grid', gap: 16 }}>
+            {/* Two Cards Row */}
             <div style={{
-              marginTop: 4,
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1px solid rgba(201,151,58,0.35)',
-              background: 'rgba(201,151,58,0.08)',
-              color: '#5F4308',
-              fontSize: 12.5,
-              lineHeight: 1.5,
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: 16
             }}>
-              <div>
-                Note: Indeed deprecated free XML crawling in March 2026. This checker validates feed readiness and field quality.
+              {/* Card 1: General Portal */}
+              <div style={{
+                flex: 1,
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                padding: 16,
+                background: 'var(--surface)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: 12
+              }}>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      background: 'rgba(2,132,199,0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--primary)'
+                    }}>
+                      <Globe2 size={16} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {t('ats.generalCareersPortal', 'General Careers Portal')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {t('ats.allCompanies', 'All Companies')}
+                      </div>
+                    </div>
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                    {t('ats.generalPortalDesc', 'Displays all active job openings across every company on this platform.')}
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gap: 8, marginTop: 'auto' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${(import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '')}/careers`}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      background: 'var(--background)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      padding: '8px 10px',
+                      fontSize: 11.5,
+                      fontFamily: 'monospace',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      style={{ flex: 1, height: 32 }}
+                      onClick={() => {
+                        const url = `${(import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '')}/careers`;
+                        copyToClipboard(url, () => {
+                          setCopiedGeneral(true);
+                          setTimeout(() => setCopiedGeneral(false), 2000);
+                        });
+                      }}
+                    >
+                      {copiedGeneral ? '✓ ' + t('common.copied', 'Copied') : t('common.copyLink', 'Copy Link')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      style={{ flexShrink: 0, height: 32 }}
+                      onClick={() => window.open(`${(import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '')}/careers`, '_blank')}
+                    >
+                      {t('common.open', 'Open →')}
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <div>
-                Nota: Indeed ha deprecato il crawling XML gratuito da marzo 2026. Questa verifica controlla completezza e conformita del feed.
+
+              {/* Card 2: Company Page */}
+              <div style={{
+                flex: 1,
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                padding: 16,
+                background: 'var(--surface)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: 12
+              }}>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      background: 'rgba(201,151,58,0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--accent)'
+                    }}>
+                      <Building2 size={16} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
+                        {companies.find(c => c.id === (companyId || defaultCompanyId))?.name ?? t('common.company', 'Company')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {t('ats.companySpecific', 'Company-Specific')}
+                      </div>
+                    </div>
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                    {t('ats.companyPortalDesc', 'Displays only the job openings for this specific company. Use this link on your website.')}
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gap: 8, marginTop: 'auto' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${(import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '')}/careers/${companies.find(c => c.id === (companyId || defaultCompanyId))?.slug || ''}`}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      background: 'var(--background)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      padding: '8px 10px',
+                      fontSize: 11.5,
+                      fontFamily: 'monospace',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      style={{ flex: 1, height: 32 }}
+                      onClick={() => {
+                        const slug = companies.find(c => c.id === (companyId || defaultCompanyId))?.slug || '';
+                        const url = `${(import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '')}/careers/${slug}`;
+                        copyToClipboard(url, () => {
+                          setCopiedCompany(true);
+                          setTimeout(() => setCopiedCompany(false), 2000);
+                        });
+                      }}
+                    >
+                      {copiedCompany ? '✓ ' + t('common.copied', 'Copied') : t('common.copyLink', 'Copy Link')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      style={{ flexShrink: 0, height: 32 }}
+                      onClick={() => {
+                        const slug = companies.find(c => c.id === (companyId || defaultCompanyId))?.slug || '';
+                        window.open(`${(import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '')}/careers/${slug}`, '_blank');
+                      }}
+                    >
+                      {t('common.open', 'Open →')}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Info Banner */}
+            <div style={{
+              background: 'rgba(2,132,199,0.06)',
+              border: '1px solid rgba(2,132,199,0.15)',
+              borderRadius: 10,
+              padding: '12px 14px',
+              display: 'flex',
+              gap: 10,
+              alignItems: 'start'
+            }}>
+              <div style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 1 }}>
+                <Globe2 size={16} />
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: '#0369A1', lineHeight: 1.5 }}>
+                {t('ats.linksBannerText', 'These links are always live and show your latest published positions. Share the company link on your website, in email signatures, or on LinkedIn.')}
+              </p>
+            </div>
           </div>
+
+          {/* Modal Footer */}
+          <div style={{ padding: '14px 22px 18px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setShowLinksModal(false)}>
+              {t('common.close', 'Close')}
+            </Button>
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {complianceRefId !== null && (
+        <IndeedComplianceModal
+          referenceId={complianceRefId}
+          onClose={() => setComplianceRefId(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+// ─── Indeed Panel ──────────────────────────────────────────────────────────────
+
+const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit, companyId }) => {
+  const { t, i18n } = useTranslation();
+  const { showToast } = useToast();
+  const { user, targetCompanyId } = useAuth();
+  const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [feedCopied, setFeedCopied] = useState(false);
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
+
+  const defaultCompanyId = useMemo(() => {
+    if (companyId) return companyId;
+    if (targetCompanyId) return targetCompanyId;
+    if (user?.companyId) return user.companyId;
+    return companies[0]?.id ?? null;
+  }, [companyId, targetCompanyId, user?.companyId, companies]);
+
+  const feedCompanyId = useMemo(() => {
+    if (companyId) return companyId;
+    if (targetCompanyId) return targetCompanyId;
+    if (user?.companyId) return user.companyId;
+    return companies.length === 1 ? companies[0].id : null;
+  }, [companyId, targetCompanyId, user?.companyId, companies]);
+
+  const feedUrl = feedCompanyId
+    ? `${getApiBaseUrl()}/ats/feed/${feedCompanyId}/jobs.xml`
+    : null;
+
+  const handleCopyFeed = () => {
+    if (!feedUrl) return;
+    navigator.clipboard.writeText(feedUrl).then(() => {
+      setFeedCopied(true);
+      showToast(t('ats.feedCopied'), 'success');
+      setTimeout(() => setFeedCopied(false), 2500);
+    });
+  };
+
+  const handleOpenFeed = () => {
+    if (!feedUrl) return;
+    window.open(feedUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    
+    const params: { companyId?: number } = {};
+    if (companyId) {
+      params.companyId = companyId;
+    } else if (!user?.isSuperAdmin && defaultCompanyId) {
+      params.companyId = defaultCompanyId;
+    }
+
+    Promise.all([
+      getJobs(Object.keys(params).length > 0 ? params : undefined).catch(() => [] as JobPosting[]),
+      getCompanies().catch(() => [] as Company[]),
+    ]).then(([jobsData, companiesData]) => {
+      if (!mounted) return;
+      setJobs(jobsData);
+      setCompanies(companiesData);
+      setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [companyId, defaultCompanyId, user?.isSuperAdmin]);
+
+  return (
+    <div style={{ display: 'grid', gap: 20 }}>
+      {/* Section 1: XML Feed Card */}
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 16,
+        padding: '24px 28px',
+        display: 'grid',
+        gap: 16,
+        boxShadow: 'var(--shadow-sm)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+            XML Feed
+          </h3>
+          <span style={{
+            background: 'rgba(16,185,129,0.12)',
+            color: '#10B981',
+            borderRadius: 99,
+            fontSize: 11,
+            fontWeight: 700,
+            padding: '4px 10px',
+            border: '1px solid rgba(16,185,129,0.22)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em'
+          }}>
+            Feed URL
+          </span>
+        </div>
+        
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          Your XML feed contains all published positions. This URL is used to sync your job listings directly with Indeed.
+        </p>
+
+        {feedUrl ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              readOnly
+              value={feedUrl}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              style={{
+                flex: 1,
+                minWidth: 200,
+                background: 'var(--background)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '9px 12px',
+                fontSize: 12.5,
+                color: 'var(--text-primary)',
+                fontFamily: 'monospace',
+                outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="secondary" size="sm" onClick={handleCopyFeed} style={{ whiteSpace: 'nowrap' }}>
+                {feedCopied ? '✓ ' + t('common.copied', 'Copied') : t('common.copy', 'Copy URL')}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleOpenFeed} style={{ whiteSpace: 'nowrap' }}>
+                Open Feed
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Select a company to view the XML feed URL.
+          </div>
+        )}
+
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          Indeed crawls this URL every 6 hours.
+        </p>
+      </div>
+
+      {/* Section 2: Compliance Check Card */}
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 16,
+        padding: '24px 28px',
+        display: 'grid',
+        gap: 16,
+        boxShadow: 'var(--shadow-sm)'
+      }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+          Position Compliance Check
+        </h3>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          Verify that a position meets all Indeed XML feed requirements before submission.
+        </p>
+        <div>
+          <Button variant="primary" size="sm" onClick={() => setShowComplianceModal(true)}>
+            {t('ats.complianceCheck', 'Run Compliance Check')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Section 3: Placeholder card (muted style) */}
+      <div style={{
+        background: 'rgba(248,250,252,0.5)',
+        border: '1px dashed var(--border)',
+        borderRadius: 16,
+        padding: '24px 28px',
+        display: 'grid',
+        gap: 8,
+        boxShadow: 'none'
+      }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text-muted)' }}>
+          More Indeed Tools
+        </h3>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          Additional Indeed integration tools — coming soon.
+        </p>
+      </div>
+
+      {showComplianceModal && (
+        <ModalBackdrop onClose={() => setShowComplianceModal(false)} width={980}>
+            {(() => {
+              const publishedJobs = jobs.filter((j) => j.status === 'published');
+              const publishedCount = publishedJobs.length;
+              return (
+                <>
+                  <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{t('ats.complianceCheckTitle')}</h3>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                        {publishedCount} {t('ats.complianceJobsCount', 'published job postings')} - each row shows compliance percentage and detailed checks.
+                      </p>
+                    </div>
+                    <button onClick={() => setShowComplianceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+                  </div>
+
+                  <div style={{ padding: '16px 22px', display: 'grid', gap: 10 }}>
+                    {publishedCount === 0 ? (
+                      <div style={{
+                        borderRadius: 10,
+                        padding: '16px 20px',
+                        border: '1px solid rgba(2,132,199,0.18)',
+                        background: 'rgba(2,132,199,0.04)',
+                        color: '#0369A1',
+                        fontSize: 13,
+                        lineHeight: 1.5
+                      }}>
+                        {i18n.language?.startsWith('it') ? (
+                          <div>
+                            <strong>Nessun annuncio pubblicato trovato.</strong>
+                            <p style={{ margin: '4px 0 0' }}>La verifica di conformità si applica solo agli annunci pubblicati. Assicurati di pubblicare un annuncio o di selezionare un'altra azienda dal menu a discesa in alto a destra.</p>
+                          </div>
+                        ) : (
+                          <div>
+                            <strong>No published jobs found.</strong>
+                            <p style={{ margin: '4px 0 0' }}>The compliance check only runs on published job postings. Make sure you publish a position or select a different company from the dropdown in the top-right corner.</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      publishedJobs.map((job) => {
+                        const score = complianceScore(job);
+                        const barColor = score.percentage >= 80 ? '#15803D' : score.percentage >= 55 ? '#C9973A' : '#DC2626';
+
+                        return (
+                          <details key={job.id} style={{ border: '1px solid var(--border)', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+                            <summary style={{ listStyle: 'none', cursor: 'pointer', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <strong style={{ color: 'var(--text-primary)' }}>{job.title}</strong>
+                                <span style={{ fontSize: 11, borderRadius: 99, padding: '2px 8px', background: 'rgba(13,33,55,0.08)', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
+                                  {job.status}
+                                </span>
+                                <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: barColor }}>
+                                  {score.percentage}% ({score.passed}/{score.total})
+                                </span>
+                              </div>
+
+                              <div style={{ height: 8, borderRadius: 999, background: '#E2E8F0', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${score.percentage}%`, background: barColor }} />
+                              </div>
+                            </summary>
+
+                            <div style={{ borderTop: '1px solid var(--border)', padding: '10px 12px', display: 'grid', gap: 7 }}>
+                              {score.checks.map((check) => (
+                                <div key={`${job.id}-${check.key}`} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                  <span style={{ fontWeight: 800, color: check.ok ? '#166534' : '#B91C1C', minWidth: 16 }}>
+                                    {check.ok ? '✓' : '✗'}
+                                  </span>
+                                  <span style={{ color: 'var(--text-primary)', fontSize: 12.5 }}>{check.label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        );
+                      })
+                    )}
+
+                    <div style={{
+                      marginTop: 4,
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      border: '1px solid rgba(201,151,58,0.35)',
+                      background: 'rgba(201,151,58,0.08)',
+                      color: '#5F4308',
+                      fontSize: 12.5,
+                      lineHeight: 1.5,
+                    }}>
+                      {i18n.language?.startsWith('it') ? (
+                        <div>
+                          Nota: Indeed ha deprecato il crawling XML gratuito da marzo 2026. Questa verifica controlla completezza e conformita del feed.
+                        </div>
+                      ) : (
+                        <div>
+                          Note: Indeed deprecated free XML crawling in March 2026. This checker validates feed readiness and field quality.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
         </ModalBackdrop>
       )}
     </div>
@@ -5893,12 +6950,12 @@ const KanbanPanel: React.FC<{
         } else {
           let active = true;
           getCandidate(preSelectedCandidateId)
-            .then(c => {
+            .then((c: Candidate) => {
               if (active && c) {
                 setSelected(c);
               }
             })
-            .catch(err => {
+            .catch((err: any) => {
               console.error('Failed to fetch deep-linked candidate:', err);
             });
           return () => {
@@ -7999,6 +9056,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
   );
 };
 
+
 // ─── Main ATSPage ─────────────────────────────────────────────────────────────
 
 export default function ATSPage() {
@@ -8012,11 +9070,11 @@ export default function ATSPage() {
   const canFeedback = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
   const canTag = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTabState] = useState<'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar'>(
-    (searchParams.get('view') as 'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar') || 'candidates'
+  const [tab, setTabState] = useState<'jobs' | 'indeed' | 'candidates' | 'interviews' | 'alerts' | 'calendar'>(
+    (searchParams.get('view') as 'jobs' | 'indeed' | 'candidates' | 'interviews' | 'alerts' | 'calendar') || 'candidates'
   );
   
-  const setTab = (newTab: 'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar') => {
+  const setTab = (newTab: 'jobs' | 'indeed' | 'candidates' | 'interviews' | 'alerts' | 'calendar') => {
     setTabState(newTab);
     setSearchParams((prev) => {
       prev.set('view', newTab);
@@ -8033,7 +9091,7 @@ export default function ATSPage() {
     }
   }, []);
 
-  const urlView = searchParams.get('view') as 'jobs' | 'candidates' | 'interviews' | 'alerts' | 'calendar' | null;
+  const urlView = searchParams.get('view') as 'jobs' | 'indeed' | 'candidates' | 'interviews' | 'alerts' | 'calendar' | null;
   useEffect(() => {
     if (urlView && urlView !== tab) {
       setTabState(urlView);
@@ -8091,6 +9149,7 @@ export default function ATSPage() {
       { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
       { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
       { key: 'alerts', label: t('ats.tabAlerts'), icon: '🔔' },
+      ...(canEdit ? [{ key: 'indeed', label: t('ats.tabIndeed', 'Indeed'), icon: '📡' }] : []),
     ];
 
   // Keep store managers on their allowed tabs only
@@ -8234,6 +9293,7 @@ export default function ATSPage() {
       </div>
 
       {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} companyId={selectedCompanyId} />}
+      {tab === 'indeed' && canEdit && <IndeedPanel canEdit={canEdit} companyId={selectedCompanyId} />}
       {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} canTag={canTag} companyId={selectedCompanyId} preSelectedCandidateId={deepLinkCandidateId} companies={companies} />}
       {tab === 'interviews' && <InterviewsPanel companyId={selectedCompanyId} />}
       {tab === 'calendar' && <CalendarPanel positions={jobs} employees={employees} companyId={selectedCompanyId} companies={companies} />}
