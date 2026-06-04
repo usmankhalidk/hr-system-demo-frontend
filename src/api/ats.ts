@@ -598,9 +598,11 @@ export async function previewJobTranslation(payload: {
   return data.data as { translatedText: string; targetLanguage: 'en'; provider: string };
 }
 
-export async function getJobCompliance(identifier: string): Promise<any> {
-  const { data } = await apiClient.get(`/ats/jobs/${identifier}/compliance`);
-  return data.data;
+export async function getJobCompliance(identifier: string, companyId?: number): Promise<any> {
+  const { data } = await apiClient.get(`/ats/jobs/${identifier}/compliance`, {
+    params: companyId ? { company_id: companyId } : undefined
+  });
+  return data.data.job;
 }
 
 export async function listInterviewers(companyId?: number): Promise<{ interviewers: Employee[] }> {
@@ -614,4 +616,24 @@ export async function getCandidate(id: number): Promise<Candidate> {
   const { data } = await apiClient.get(`/ats/candidates/${id}`);
   return data.data.candidate as Candidate;
 }
+
+export interface IndeedStatsResponse {
+  companiesOnFeed: number;
+  livePositions: number;
+  indeedCandidatesThisMonth: number;
+  totalIndeedCandidates: number;
+  totalDirectCandidates: number;
+  monthlyTrend: Array<{
+    month: string;
+    indeedCandidates: number;
+    directCandidates: number;
+    newPositionsPublished: number;
+  }>;
+}
+
+export async function getIndeedStats(params?: { companyId?: number }): Promise<IndeedStatsResponse> {
+  const { data } = await apiClient.get('/ats/indeed-stats', { params });
+  return data.data as IndeedStatsResponse;
+}
+
 

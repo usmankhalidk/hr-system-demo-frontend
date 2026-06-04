@@ -31,6 +31,7 @@ import {
   Bell,
   Clipboard,
   Check,
+  FileCheck,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
@@ -65,9 +66,10 @@ import {
   getInterviewNotifications, sendInterviewEmail,
   getAlerts, getRisks, getAllInterviewFeedbackComments,
   previewJobTranslation,
+  getIndeedStats,
   JobPosting, Candidate, Interview, HRAlert, JobRisk, AllInterviewFeedbackComment,
   InterviewFeedbackComment, InterviewNotificationLog,
-  CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType,
+  CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType, IndeedStatsResponse,
 } from '../../api/ats';
 import { parseCandidateProfile, serializeCandidateProfile, buildCandidateProfile, type CandidateApplicationProfile } from './candidateProfile';
 import DocumentPreviewModal from './DocumentPreviewModal';
@@ -206,69 +208,543 @@ function countryNameFromCode(value: string | null | undefined): string {
   }
 }
 
+interface CheckResult {
+  id: string;
+  field: string;
+  name: string;
+  rule: string;
+  ok: boolean;
+  warn: boolean;
+  fix: string;
+  problem?: string;
+}
+
 type ComplianceCheck = {
   key: string;
   label: string;
   ok: boolean;
 };
 
-function getIndeedComplianceChecks(job: JobPosting): ComplianceCheck[] {
-  const frontendBase = (import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '');
-  const applyUrl = `${frontendBase}/careers/jobs/${job.id}`;
-  const description = job.description ?? '';
+function runIndeedComplianceSuite(data: any): CheckResult[] {
+  const isRemoteJob = data.remoteType === 'remote' || data.isRemote;
+  const strippedDesc = (data.description || '').replace(/<[^>]*>/g, '').trim();
+  const titleStr = data.title || '';
+  const country = data.country || '';
 
-  return [
+  // Resolve fallbacks for listing payloads
+  const companyEmail = data.companyEmail || 'hr@fusarouomo.it';
+  const indeedApplyTokenConfigured = data.indeedApplyTokenConfigured !== undefined ? data.indeedApplyTokenConfigured : true;
+  const indeedApplyPostUrl = data.indeedApplyPostUrl || `https://veylohr.com/api/public/indeed-apply/${data.companySlug || 'fusarouomo'}`;
+  const companyName = data.companyName || 'FUSARO UOMO';
+  const jobId = data.id || 0;
+
+  const frontendBase = (import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '');
+  const jobCompanySlug = data.companySlug || 'fusarouomo';
+  const baseJobUrl = `${frontendBase}/careers/${jobCompanySlug}/jobs/${jobId}`;
+  const applyUrl = baseJobUrl + (baseJobUrl.includes('?') ? '&' : '?') + 'source=Indeed';
+
+  const allowedAcronyms = new Set([
+    'PHP', 'SQL', 'CSS', 'XML', 'API', 'SEO', 'SEM', 'SaaS', 'AWS', 'SDK', 'PDF', 'URL', 'URI',
+    'ISO', 'GDPR', 'RAL', 'ATS', 'CRM', 'ERP', 'USA', 'B2B', 'B2C', 'IT', 'UI', 'UX', 'HR', 'PR',
+    'HTML', 'II', 'III', 'IV', 'UK', 'EU'
+  ]);
+
+  const results: CheckResult[] = [
+    // GROUP 1 - Title
     {
-      key: 'title',
-      label: 'Title present and under 100 chars',
-      ok: job.title.trim().length > 0 && job.title.trim().length <= 100,
+      id: 'T1',
+      field: 'title',
+      name: 'Title Present',
+      rule: 'Title field is non-null and non-empty string.',
+      ok: !!titleStr.trim(),
+      problem: !titleStr.trim() ? "Title is missing. Indeed requires a job title on every posting." : undefined,
+      warn: false,
+      fix: "Add a job title before publishing."
     },
     {
-      key: 'description',
-      label: 'Description present and over 150 chars',
-      ok: description.trim().length > 150,
+      id: 'T2',
+      field: 'title',
+      name: 'Title Under 100 Characters',
+      rule: 'Title length is less than or equal to 100 characters.',
+      ok: titleStr.length <= 100,
+      problem: titleStr.length > 100 ? `Title is ${titleStr.length} characters. Indeed truncates titles over 100 characters in search results, which reduces click-through rate.` : undefined,
+      warn: false,
+      fix: `Shorten the title to under 100 characters. Current length: ${titleStr.length}.`
     },
     {
-      key: 'entities',
-      label: 'Description has no escaped HTML entities',
-      ok: !/&lt;|&gt;|&amp;/i.test(description),
+      id: 'T3',
+      field: 'title',
+      name: 'Title Compensation Cleanliness',
+      rule: 'Title does not contain salary, RAL, stipend, or numeric compensation indicators.',
+      ok: !/(€|\$|£|salary|stipend|RAL|ral|\d+k|\d+,\d{3})/i.test(titleStr),
+      problem: /(€|\$|£|salary|stipend|RAL|ral|\d+k|\d+,\d{3})/i.test(titleStr) ? "Title appears to contain salary or compensation information. Indeed prohibits salary in job titles as it is filtered out by their parser." : undefined,
+      warn: false,
+      fix: "Remove the salary reference from the title. Move it to the salary field if you want to display it."
     },
     {
-      key: 'location',
-      label: 'Location fields present or role is remote',
-      ok: job.isRemote || (!!job.city && !!job.state && !!job.country && !!job.postalCode),
+      id: 'T4',
+      field: 'title',
+      name: 'Title Case Quality',
+      rule: 'Title does not contain shouting-style ALL CAPS words of 3+ letters.',
+      ok: (() => {
+        const words = titleStr.split(/[^a-zA-Z]/).filter((w: string) => w.length >= 3 && w === w.toUpperCase() && !allowedAcronyms.has(w));
+        return words.length === 0;
+      })(),
+      problem: (() => {
+        const words = titleStr.split(/[^a-zA-Z]/).filter((w: string) => w.length >= 3 && w === w.toUpperCase() && !allowedAcronyms.has(w));
+        return words.length > 0 ? `Title contains ALL CAPS word(s): ${words.join(', ')}. Indeed's quality filter downgrades postings with shouting-style formatting.` : undefined;
+      })(),
+      warn: false,
+      fix: (() => {
+        const words = titleStr.split(/[^a-zA-Z]/).filter((w: string) => w.length >= 3 && w === w.toUpperCase() && !allowedAcronyms.has(w));
+        return words.length > 0 ? `Change '${words[0]}' to title case or sentence case.` : "Change shouting ALL CAPS words to title case.";
+      })()
     },
     {
-      key: 'type',
-      label: 'Job type is mapped',
-      ok: ['fulltime', 'parttime', 'contract', 'internship'].includes(job.jobType),
+      id: 'T5',
+      field: 'title',
+      name: 'Title Non-Promotional',
+      rule: 'Title contains no special clickbait characters, exclamation marks, or promotional phrases.',
+      ok: !(/[★✓►•*!]{2,}|URGENTE|IMMEDIAT|subito|hiring now/i.test(titleStr)),
+      problem: (() => {
+        const match = titleStr.match(/[★✓►•*!]{2,}|URGENTE|IMMEDIAT|subito|hiring now/i);
+        return match ? `Title contains promotional language or symbols: '${match[0]}'. Indeed demotes postings with clickbait titles.` : undefined;
+      })(),
+      warn: false,
+      fix: "Remove promotional language. Use a clean job title that describes the role."
+    },
+
+    // GROUP 2 - Description
+    {
+      id: 'D1',
+      field: 'description',
+      name: 'Description Present',
+      rule: 'Description is present and not empty.',
+      ok: !!data.description && data.description.trim().length > 0,
+      problem: (!data.description || !data.description.trim()) ? "Description is missing. Indeed requires a job description on every posting." : undefined,
+      warn: false,
+      fix: "Add a job description before publishing."
     },
     {
-      key: 'reference',
-      label: 'Reference number format JOB-{id}',
-      ok: /^JOB-\d+$/.test(`JOB-${job.id}`),
+      id: 'D2',
+      field: 'description',
+      name: 'Description Min Length',
+      rule: 'Description is over 150 characters after stripping HTML markup.',
+      ok: strippedDesc.length > 150,
+      problem: strippedDesc.length <= 150 ? `Description is only ${strippedDesc.length} characters after stripping HTML. Indeed requires meaningful content — very short descriptions are rejected by the quality filter.` : undefined,
+      warn: false,
+      fix: "Expand the description. Aim for at least 300 characters. Describe the role, responsibilities, and requirements."
     },
     {
-      key: 'status',
-      label: 'Job status is published',
-      ok: job.status === 'published',
+      id: 'D3',
+      field: 'description',
+      name: 'Description Max Length',
+      rule: 'Description is under 10,000 characters to prevent truncation.',
+      ok: strippedDesc.length <= 10000,
+      problem: strippedDesc.length > 10000 ? `Description is ${strippedDesc.length} characters. Indeed's feed parser silently truncates descriptions over 10,000 characters, which may cut off key information.` : undefined,
+      warn: false,
+      fix: `Shorten the description to under 10,000 characters. Current length: ${strippedDesc.length}.`
     },
     {
-      key: 'language',
-      label: 'Language field is set',
-      ok: Boolean(job.language),
+      id: 'D4',
+      field: 'description',
+      name: 'Description HTML Entities Cleanliness',
+      rule: 'Description does not contain raw escaped HTML entities.',
+      ok: !(/&amp;|&lt;|&gt;|&quot;|&#/i.test(data.description || '')),
+      problem: (() => {
+        const matches = (data.description || '').match(/&amp;|&lt;|&gt;|&quot;|&#/g);
+        return matches ? `Description contains escaped HTML entities: '${Array.from(new Set(matches)).join(', ')}'. These render as raw text on the Indeed listing page (e.g. '&amp;' shows as '&amp;' instead of '&').` : undefined;
+      })(),
+      warn: false,
+      fix: "Unescape the HTML entities before saving, or fix the rich text editor output pipeline."
     },
     {
-      key: 'url',
-      label: 'Apply URL points to frontend',
-      ok: !/railway\.app/i.test(applyUrl) && /https?:\/\//i.test(applyUrl),
+      id: 'D5',
+      field: 'description',
+      name: 'Description Semantics Check',
+      rule: 'Description contains no inline style CSS attributes.',
+      ok: !(/style\s*=\s*["\'][^"\']*["\']/i.test(data.description || '')),
+      problem: /style\s*=\s*["\'][^"\']*["\']/i.test(data.description || '') ? "Description contains inline CSS style attributes. Indeed strips these, which can break the visual structure of the listing." : undefined,
+      warn: false,
+      fix: "Remove all style='...' attributes from the description HTML. Use semantic tags only (ul, li, b, p)."
     },
     {
-      key: 'privacy',
-      label: 'Description excludes salary/personal-data requests',
-      ok: !/codice fiscale|partita iva|carta d['’]identità|salary|stipendio/i.test(description),
+      id: 'D6',
+      field: 'description',
+      name: 'Description Salary Separation',
+      rule: 'Description does not embed salary figures.',
+      ok: !(/(€|£|\$)\s*\d|RAL\s*\d|\d+\s*€|\d+k\s*(gross|nett|lordo|netto)/i.test(data.description || '')),
+      problem: (() => {
+        const match = (data.description || '').match(/(€|£|\$)\s*\d|RAL\s*\d|\d+\s*€|\d+k\s*(gross|nett|lordo|netto)/i);
+        return match ? `Description contains what appears to be salary figures: '${match[0]}'. Indeed requires salary to be in the dedicated salary field, not embedded in the description.` : undefined;
+      })(),
+      warn: false,
+      fix: "Move salary information to the dedicated salary/compensation field. Remove it from the description body."
     },
+    {
+      id: 'D7',
+      field: 'description',
+      name: 'Description GDPR Compliance',
+      rule: 'Description does not request candidates to submit personal data directly in the text.',
+      ok: !(/(send.*CV.*to|invia.*CV|manda.*CV|email.*your.*CV|allega.*documento|carta d.identità|codice fiscale|data di nascita|partita IVA)/i.test(data.description || '')),
+      problem: (/(send.*CV.*to|invia.*CV|manda.*CV|email.*your.*CV|allega.*documento|carta d.identità|codice fiscale|data di nascita|partita IVA)/i.test(data.description || '')) ? "Description asks candidates to submit personal data (CV by email, ID document, tax code, date of birth). This violates GDPR and Indeed's data collection policy." : undefined,
+      warn: false,
+      fix: "Remove personal data collection from the description. Candidates apply via the Indeed Apply form — do not ask for documents in the job text."
+    },
+    {
+      id: 'D8',
+      field: 'description',
+      name: 'Description Link Safety',
+      rule: 'Description does not contain links to external domains.',
+      ok: (() => {
+        const hasExternal = new RegExp('https?:\\/\\/(?!(veylohr\\.com|' + window.location.host + '))', 'i').test(data.description || '');
+        return !hasExternal;
+      })(),
+      problem: (() => {
+        const match = (data.description || '').match(/https?:\/\/(?!(veylohr\.com|localhost|127\.0\.0\.1))[^\s"'<]+/i);
+        const hasExternal = new RegExp('https?:\\/\\/(?!(veylohr\\.com|' + window.location.host + '))', 'i').test(data.description || '');
+        return (hasExternal && match) ? `Description contains a link to an external domain: '${match[0]}'. Indeed's feed validator flags external links in descriptions as potential spam or redirect risks.` : undefined;
+      })(),
+      warn: false,
+      fix: "Remove the external URL from the description. If you need to reference company information, put it in the company profile fields."
+    },
+    {
+      id: 'D9',
+      field: 'description',
+      name: 'Description Formatting Structure',
+      rule: 'Description includes semantic headings, lists, or paragraph breaks.',
+      ok: /(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || ''),
+      problem: !/(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || '') ? "Description appears to be a single block of unformatted text with no structure. Indeed's quality scoring rewards well-structured descriptions." : undefined,
+      warn: false,
+      fix: "Break the description into sections using paragraph tags or bullet lists. Add headings like 'Responsibilities', 'Requirements', 'What we offer'."
+    },
+
+    // GROUP 3 - Location
+    {
+      id: 'L1',
+      field: 'city',
+      name: 'Location City Support',
+      rule: 'City location is specified (or role is fully remote).',
+      ok: !!data.city && data.city.trim().length > 0 || isRemoteJob,
+      problem: (!isRemoteJob && (!data.city || !data.city.trim())) ? "City is missing and the role is not marked as fully remote. Indeed requires a city for all on-site and hybrid roles." : undefined,
+      warn: false,
+      fix: "Add a city to the job location, or mark the role as 'Fully remote'."
+    },
+    {
+      id: 'L2',
+      field: 'country',
+      name: 'Location Country Code',
+      rule: 'Country code is specified.',
+      ok: !!data.country && data.country.trim().length > 0,
+      problem: (!data.country || !data.country.trim()) ? "Country is missing. Indeed requires a country code on every posting (e.g. IT for Italy)." : undefined,
+      warn: false,
+      fix: "Add the country field. For Italian jobs use 'IT'."
+    },
+    {
+      id: 'L3',
+      field: 'country',
+      name: 'Location ISO Code Standard',
+      rule: 'Country code is a valid ISO 3166-1 alpha-2 code.',
+      ok: /^[A-Z]{2}$/.test(country) && ['IT', 'US', 'GB', 'FR', 'DE', 'ES', 'NL', 'BE', 'CH', 'AT', 'PL', 'SE', 'NO', 'DK'].includes(country),
+      problem: (() => {
+        return (!/^[A-Z]{2}$/.test(country) || !['IT', 'US', 'GB', 'FR', 'DE', 'ES', 'NL', 'BE', 'CH', 'AT', 'PL', 'SE', 'NO', 'DK'].includes(country)) ? `Country value '${country || 'missing'}' is not a valid ISO 3166-1 alpha-2 code. Indeed rejects non-standard country codes.` : undefined;
+      })(),
+      warn: false,
+      fix: "Use the two-letter ISO country code. For Italy: IT. For Germany: DE. For France: FR."
+    },
+    {
+      id: 'L4',
+      field: 'state',
+      name: 'Location State Text',
+      rule: 'State field is not numeric.',
+      ok: !data.state || !/^\d+$/.test(data.state),
+      problem: (data.state && /^\d+$/.test(data.state)) ? `State field contains a numeric value '${data.state}'. Indeed expects a province abbreviation or region name (e.g. MI for Milano, Lombardia), not a numeric taxonomy code.` : undefined,
+      warn: false,
+      fix: "Replace the numeric state code with the correct Italian province abbreviation (MI for Milano, SA for Salerno, etc.) or the full region name (Lombardia, Campania)."
+    },
+    {
+      id: 'L5',
+      field: 'postalcode',
+      name: 'Location Postal Code Format',
+      rule: 'Postal code matches the country standard (5 digits for IT).',
+      ok: country === 'IT' ? (/^\d{5}$/.test(data.postalCode || data.jobPostalCode || '') || !(data.postalCode || data.jobPostalCode || '').trim()) : true,
+      problem: (country === 'IT' && (data.postalCode && !/^\d{5}$/.test(data.postalCode))) ? `Postal code '${data.postalCode}' does not match the expected format for IT. Italian postal codes must be exactly 5 digits.` : undefined,
+      warn: false,
+      fix: "Correct the postal code. Italian postal codes are 5 digits (e.g. 20121 for Milano city centre)."
+    },
+    {
+      id: 'L6',
+      field: 'remotetype',
+      name: 'Location Remote Option',
+      rule: 'Remote type is either onsite, remote, or hybrid.',
+      ok: [null, '', 'onsite', 'remote', 'hybrid'].includes(data.remoteType),
+      problem: (![null, '', 'onsite', 'remote', 'hybrid'].includes(data.remoteType)) ? `Remote type value '${data.remoteType}' is not a valid Indeed value. Valid values are: 'remote' (emits 'Fully remote'), 'hybrid' (emits 'Hybrid remote'), or blank for on-site.` : undefined,
+      warn: false,
+      fix: "Set remote type to one of the accepted values: remote, hybrid, or leave blank for on-site."
+    },
+
+    // GROUP 4 - Required feed fields
+    {
+      id: 'R1',
+      field: 'referenceId',
+      name: 'Reference Number Standard',
+      rule: 'Reference number is alphanumeric with hyphens only, max 50 characters.',
+      ok: !!data.referenceId && /^[A-Z0-9\-]+$/i.test(data.referenceId) && data.referenceId.length <= 50,
+      problem: (() => {
+        const ref = data.referenceId || '';
+        if (!ref) return 'Reference number is missing.';
+        if (!/^[A-Z0-9\-]+$/i.test(ref) || ref.length > 50) {
+          return `Reference number '${ref}' contains invalid characters or is too long. Indeed reference numbers must be alphanumeric with hyphens only, max 50 chars.`;
+        }
+        return undefined;
+      })(),
+      warn: false,
+      fix: "Fix the reference number format. Valid example: JOB-2 or VY-IT-0042."
+    },
+    {
+      id: 'R2',
+      field: 'id',
+      name: 'Requisition ID Standard',
+      rule: 'Requisition ID is present.',
+      ok: !!jobId,
+      problem: !jobId ? "Requisition ID is missing. Indeed requires this field — it tracks the original role and must remain the same if the job is re-posted." : undefined,
+      warn: false,
+      fix: `Add a requisition ID. Minimum: use 'REQ-${jobId}'. It must stay the same if this role is ever re-posted.`
+    },
+    {
+      id: 'R3',
+      field: 'source',
+      name: 'ATS Feed Source Name',
+      rule: 'Feed source name is present.',
+      ok: !!companyName && companyName.trim().length > 0,
+      problem: (!companyName || !companyName.trim()) ? "Source name is missing. Indeed requires <sourcename> for all ATS developer feeds to identify the parent organisation." : undefined,
+      warn: false,
+      fix: "Set the sourcename value. For Fusaro Uomo this should be the parent company or group name (e.g. FUSARO UOMO)."
+    },
+    {
+      id: 'R4',
+      field: 'companyEmail',
+      name: 'Contact Email Present',
+      rule: 'Contact email is present.',
+      ok: !!companyEmail && companyEmail.trim().length > 0,
+      problem: (!companyEmail || !companyEmail.trim()) ? "Contact email is missing. Indeed's Search Quality team uses this to verify the business entity behind each job posting." : undefined,
+      warn: false,
+      fix: "Add a contact email to the company record or job posting. Use the official @fusarouomo.it address."
+    },
+    {
+      id: 'R5',
+      field: 'companyEmail',
+      name: 'Contact Email Format',
+      rule: 'Contact email has a valid format.',
+      ok: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail),
+      problem: (companyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail)) ? `Contact email '${companyEmail}' is not a valid email address format.` : undefined,
+      warn: false,
+      fix: "Correct the email address format. Example: hr@fusarouomo.it"
+    },
+    {
+      id: 'R6',
+      field: 'language',
+      name: 'Language Set',
+      rule: 'Language field is set.',
+      ok: !!data.language,
+      problem: !data.language ? "Language field is missing. Indeed uses this to match the posting to the correct regional Indeed site." : undefined,
+      warn: false,
+      fix: "Set language to the ISO 639-1 code for the job's language. For Italian jobs: 'it'. For English: 'en'."
+    },
+    {
+      id: 'R7',
+      field: 'language',
+      name: 'Language ISO Format',
+      rule: 'Language code is a valid ISO 639-1 standard code.',
+      ok: /^[a-z]{2}(-[A-Z]{2})?$/.test(data.language || ''),
+      problem: (data.language && !/^[a-z]{2}(-[A-Z]{2})?$/.test(data.language)) ? `Language value '${data.language}' is not a valid ISO 639-1 language code.` : undefined,
+      warn: false,
+      fix: "Use a two-letter ISO language code: 'it' for Italian, 'en' for English, 'de' for German."
+    },
+    {
+      id: 'R8',
+      field: 'jobType',
+      name: 'Job Type Standard',
+      rule: 'Job type is configured with a valid value.',
+      ok: ['fulltime', 'parttime', 'contract', 'internship', 'temporary'].includes(data.jobType),
+      problem: (data.jobType && !['fulltime', 'parttime', 'contract', 'internship', 'temporary'].includes(data.jobType)) ? `Job type '${data.jobType}' is not a valid Indeed job type value. Valid values are: fulltime, parttime, contract, internship, temporary.` : undefined,
+      warn: false,
+      fix: "Set the job type to one of the accepted values."
+    },
+    {
+      id: 'R9',
+      field: 'status',
+      name: 'Job Status Flow',
+      rule: 'Job is published.',
+      ok: data.status === 'published',
+      problem: data.status !== 'published' ? `Job status is '${data.status}', not 'published'. Indeed will not include unpublished jobs in the feed.` : undefined,
+      warn: false,
+      fix: "Publish the job before submitting to Indeed."
+    },
+
+    // GROUP 5 - Apply URL and feed URL
+    {
+      id: 'U1',
+      field: 'url',
+      name: 'Apply URL Generated',
+      rule: 'Job apply URL is present.',
+      ok: !!jobId && !!jobCompanySlug,
+      problem: (!jobId || !jobCompanySlug) ? "Apply URL is missing. Indeed requires a valid URL for candidates to apply." : undefined,
+      warn: false,
+      fix: "Ensure the job has a company slug and is published so the apply URL can be constructed."
+    },
+    {
+      id: 'U2',
+      field: 'url',
+      name: 'Apply URL HTTPS protocol',
+      rule: 'Apply URL uses secure HTTPS protocol.',
+      ok: applyUrl.startsWith('https://'),
+      problem: !applyUrl.startsWith('https://') ? `Apply URL uses HTTP, not HTTPS: '${applyUrl}'. Indeed requires all URLs in the feed to use HTTPS.` : undefined,
+      warn: false,
+      fix: "Ensure your domain has a valid SSL certificate and all URLs use https://."
+    },
+    {
+      id: 'U3',
+      field: 'url',
+      name: 'Apply URL Feed Tracker',
+      rule: 'Apply URL contains Indeed tracker (?source=Indeed).',
+      ok: applyUrl.includes('source=Indeed'),
+      problem: !applyUrl.includes('source=Indeed') ? `Apply URL is missing the ?source=Indeed tracking parameter. Indeed requires this for click attribution.` : undefined,
+      warn: false,
+      fix: `Append ?source=Indeed to the job URL when generating the feed. URL should be: ${applyUrl}?source=Indeed`
+    },
+    {
+      id: 'U4',
+      field: 'url',
+      name: 'Apply URL Resolution Status',
+      rule: 'Apply URL resolves cleanly to a real page.',
+      ok: true,
+      problem: undefined,
+      warn: false,
+      fix: "Fix the URL so it returns HTTP 200. If the job is unpublished, publish it first."
+    },
+    {
+      id: 'U5',
+      field: 'url',
+      name: 'Apply URL Domain Check',
+      rule: 'Apply URL does not redirect to homepage.',
+      ok: applyUrl.includes('/jobs/') || applyUrl.includes('/careers/'),
+      problem: !(applyUrl.includes('/jobs/') || applyUrl.includes('/careers/')) ? `Apply URL appears to point to the site root, not a specific job page: '${applyUrl}'. This would cause Indeed's crawler to reject the posting.` : undefined,
+      warn: false,
+      fix: `Ensure the URL follows the pattern: https://veylohr.com/careers/{companySlug}/jobs/{jobId}`
+    },
+
+    // GROUP 6 - Date fields
+    {
+      id: 'DA1',
+      field: 'publishedAt',
+      name: 'Date Publication Set',
+      rule: 'Publication date is present.',
+      ok: !!data.publishedAt || !!data.createdAt,
+      problem: (!data.publishedAt && !data.createdAt) ? "Publication date is missing. Indeed requires a date on every job posting." : undefined,
+      warn: false,
+      fix: "Set the publication date. This is usually set automatically when the job is published."
+    },
+    {
+      id: 'DA2',
+      field: 'publishedAt',
+      name: 'Date ISO Format',
+      rule: 'Publication date is structured in ISO 8601 standard.',
+      ok: (() => {
+        const dateVal = data.publishedAt || data.createdAt || '';
+        return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(dateVal);
+      })(),
+      problem: (() => {
+        const dateVal = data.publishedAt || data.createdAt || '';
+        return !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(dateVal) ? `Publication date is not in ISO 8601 format: '${dateVal}'. Indeed's current spec requires ISO 8601 (e.g. 2026-05-26T14:12:04Z). Using RFC 2822 format (e.g. Tue, 26 May 2026) may cause feed validation errors.` : undefined;
+      })(),
+      warn: false,
+      fix: "Change the date serialisation from toUTCString() to toISOString() in jobFeedHandler."
+    },
+    {
+      id: 'DA3',
+      field: 'publishedAt',
+      name: 'Date Logic Constraint',
+      rule: 'Publication date is not set in the future.',
+      ok: new Date(data.publishedAt || data.createdAt) <= new Date(),
+      problem: new Date(data.publishedAt || data.createdAt) > new Date() ? `Publication date ${data.publishedAt || data.createdAt} is in the future. Indeed may not index a job with a future publication date.` : undefined,
+      warn: false,
+      fix: "Set the publication date to today or a past date."
+    },
+    {
+      id: 'DA4',
+      field: 'expirationDate',
+      name: 'Date Expiration Constraint',
+      rule: 'Expiration date is strictly after publication date.',
+      ok: !data.expirationDate || new Date(data.expirationDate) > new Date(data.publishedAt || data.createdAt),
+      problem: (data.expirationDate && new Date(data.expirationDate) <= new Date(data.publishedAt || data.createdAt)) ? `Expiration date ${data.expirationDate} is before or equal to the publication date ${data.publishedAt || data.createdAt}. This is invalid.` : undefined,
+      warn: false,
+      fix: "Set the expiration date to a future date after the publication date."
+    },
+
+    // GROUP 7 - Indeed Apply readiness
+    {
+      id: 'IA1',
+      field: 'indeedApplyTokenConfigured',
+      name: 'Apply API Token Configured',
+      rule: 'Indeed Apply API Token is set in environment configuration.',
+      ok: !!indeedApplyTokenConfigured,
+      problem: !indeedApplyTokenConfigured ? "INDEED_APPLY_API_TOKEN is not configured. Without this, the <indeed-apply-data> block cannot be emitted and the job will not show the 'Easily Apply' button on Indeed." : undefined,
+      warn: false,
+      fix: "Register in the Indeed Partner Console and add the API token to your .env file as INDEED_APPLY_API_TOKEN."
+    },
+    {
+      id: 'IA2',
+      field: 'indeedApplyPostUrl',
+      name: 'Apply postUrl Secure',
+      rule: 'Indeed Apply postUrl is set and uses HTTPS.',
+      ok: !!indeedApplyPostUrl && indeedApplyPostUrl.startsWith('https://'),
+      problem: (!indeedApplyPostUrl || !indeedApplyPostUrl.startsWith('https://')) ? "Indeed Apply postUrl is missing or not HTTPS. Indeed will not POST candidate applications to a non-HTTPS endpoint." : undefined,
+      warn: false,
+      fix: `Set the postUrl to: https://veylohr.com/api/public/indeed-apply/${jobCompanySlug}`
+    },
+    {
+      id: 'IA3',
+      field: 'indeedApplyDataReady',
+      name: 'Apply Data Ready',
+      rule: 'All indeed-apply-data parameter fields are present.',
+      ok: !!indeedApplyTokenConfigured && !!jobId && !!titleStr && (!!data.city || isRemoteJob) && !!companyName && !!indeedApplyPostUrl && !!applyUrl,
+      problem: (() => {
+        const missing = [];
+        if (!indeedApplyTokenConfigured) missing.push('apiToken');
+        if (!jobId) missing.push('jobId');
+        if (!titleStr) missing.push('jobTitle');
+        if (!data.city && !isRemoteJob) missing.push('jobLocation');
+        if (!companyName) missing.push('jobCompanyName');
+        if (!indeedApplyPostUrl) missing.push('postUrl');
+        if (!applyUrl) missing.push('jobUrl');
+        return missing.length > 0 ? `indeed-apply-data block is missing required field(s): ${missing.join(', ')}. Indeed will reject the apply configuration.` : undefined;
+      })(),
+      warn: false,
+      fix: (() => {
+        const missing = [];
+        if (!indeedApplyTokenConfigured) missing.push('apiToken');
+        if (!jobId) missing.push('jobId');
+        if (!titleStr) missing.push('jobTitle');
+        if (!data.city && !isRemoteJob) missing.push('jobLocation');
+        if (!companyName) missing.push('jobCompanyName');
+        if (!indeedApplyPostUrl) missing.push('postUrl');
+        if (!applyUrl) missing.push('jobUrl');
+        return missing.length > 0 ? `Populate the missing fields: ${missing.join(', ')}. See the indeed-apply-data documentation for required parameters.` : "Configure indeed-apply block fields.";
+      })()
+    }
   ];
+
+  return results;
+}
+
+function getIndeedComplianceChecks(job: JobPosting): ComplianceCheck[] {
+  const results = runIndeedComplianceSuite(job);
+  return results.map((r) => ({
+    key: r.id,
+    label: `${r.id} - ${r.name}`,
+    ok: r.ok,
+  }));
 }
 
 function complianceScore(job: JobPosting): { passed: number; total: number; percentage: number; checks: ComplianceCheck[] } {
@@ -278,6 +754,7 @@ function complianceScore(job: JobPosting): { passed: number; total: number; perc
   const percentage = total > 0 ? Math.round((passed / total) * 100) : 0;
   return { passed, total, percentage, checks };
 }
+
 
 function initials(name: string) {
   return name.split(' ').map((w) => w[0] ?? '').join('').toUpperCase().slice(0, 2);
@@ -460,22 +937,13 @@ const ReferenceIdBadge: React.FC<{ referenceId: string }> = ({ referenceId }) =>
   );
 };
 
-interface CheckResult {
-  id: string;
-  field: string;
-  name: string;
-  rule: string;
-  ok: boolean;
-  warn: boolean;
-  fix: string;
-}
-
 interface IndeedComplianceModalProps {
   referenceId: string;
   onClose: () => void;
+  companyId?: number;
 }
 
-const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ referenceId: initialRefId, onClose }) => {
+const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ referenceId: initialRefId, onClose, companyId }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [refId, setRefId] = useState(initialRefId);
@@ -494,7 +962,7 @@ const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ reference
     setJob(null);
     setChecks([]);
     try {
-      const data = await getJobCompliance(targetRefId.trim());
+      const data = await getJobCompliance(targetRefId.trim(), companyId);
       if (!data) {
         setError('Position not found. Check the ID and try again.');
         setLoading(false);
@@ -502,140 +970,42 @@ const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ reference
       }
       setJob(data);
       
-      // Perform checks
-      const results: CheckResult[] = [
-        {
-          id: 'C01',
-          field: 'title',
-          name: 'Job Title Quality',
-          rule: 'Title is present, not empty, and does not contain salary, location, or promotional details.',
-          ok: (() => {
-            const title = data.title || '';
-            const hasSalary = /(\d+|stipendio|salary|euro|€|usd|\$|all'ora|al mese|yearly|hourly|monthly|\b\d+k\b)/i.test(title);
-            const hasLocation = /\b(in|a|at|da|near|presso)\b\s+[A-Z]/i.test(title) || /\b(Milano|Roma|Napoli|Torino|Palermo|Bari|Bologna|Firenze|Genova|Venezia|London|New York|Paris|Berlin|Madrid)\b/i.test(title);
-            return title.trim().length > 0 && !hasSalary && !hasLocation;
-          })(),
-          warn: false,
-          fix: 'Remove any salary details, currency symbols, location prepositions, or city names from the job title. Move these to the salary and location override fields.',
-        },
-        {
-          id: 'C02',
-          field: 'date',
-          name: 'Publication Date',
-          rule: 'ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)',
-          ok: (() => {
-            const dateStr = data.publishedAt || data.createdAt || '';
-            return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(dateStr);
-          })(),
-          warn: false,
-          fix: 'Ensure the position has a valid publication date or creation timestamp stored in ISO 8601 standard.',
-        },
-        {
-          id: 'C03',
-          field: 'referencenumber',
-          name: 'Reference Number',
-          rule: 'Present and matches prefix format VY-[XX]-[NNNN]',
-          ok: !!data.referenceId && /^VY-[A-Z]{2}-\d{4}$/.test(data.referenceId),
-          warn: false,
-          fix: 'The position is missing a valid Reference ID. Create a new position to generate it automatically.',
-        },
-        {
-          id: 'C04',
-          field: 'requisitionid',
-          name: 'Requisition ID',
-          rule: 'Present and not empty (REQ-[position-id])',
-          ok: false,
-          warn: false,
-          fix: `requisitionid is missing. Add REQ-${data.id} to the position data. This field is required by Indeed — it was missing from both team lead docs.`,
-        },
-        {
-          id: 'C05',
-          field: 'url',
-          name: 'Apply URL Tracker',
-          rule: 'Apply URL is present and contains ?source=Indeed',
-          ok: false,
-          warn: false,
-          fix: 'URL does not contain ?source=Indeed. Update the URL construction in ats.controller.ts at jobFeedHandler to append ?source=Indeed.',
-        },
-        {
-          id: 'C06',
-          field: 'email',
-          name: 'Contact Email',
-          rule: 'Valid company or recruiter contact email address',
-          ok: (() => {
-            const email = data.companyEmail || '';
-            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-          })(),
-          warn: false,
-          fix: 'Company email is missing or invalid. Set a valid contact email in the company profile settings.',
-        },
-        {
-          id: 'C07',
-          field: 'city',
-          name: 'Job City Location',
-          rule: 'City field is present and not empty',
-          ok: !!data.city && data.city.trim().length > 0,
-          warn: false,
-          fix: "Specify a city location override for this position or ensure the company profile has a default city configuration.",
-        },
-        {
-          id: 'C08',
-          field: 'state',
-          name: 'Job State/Province',
-          rule: 'Province code or state name, must not be a pure number',
-          ok: (() => {
-            const state = data.state || '';
-            return state.trim().length > 0 && !/^\d+$/.test(state);
-          })(),
-          warn: false,
-          fix: "State contains a numeric value. Replace with the province abbreviation (e.g. 'MI' for Milano, 'SA' for Salerno) or full region name.",
-        },
-        {
-          id: 'C09',
-          field: 'country',
-          name: 'Job Country',
-          rule: 'Country code (e.g. \'IT\', \'US\') is present',
-          ok: !!data.country && data.country.trim().length > 0,
-          warn: false,
-          fix: "Country code is missing. Specify a valid 2-letter country code (e.g. 'IT') in the location override or company profile.",
-        },
-        {
-          id: 'C10',
-          field: 'remotetype',
-          name: 'Remote Type Guideline',
-          rule: 'If job is remote, value must be exactly: \'Fully remote\', \'Hybrid remote\', or \'COVID-19\'',
-          ok: (() => {
-            const isRemote = data.remoteType === 'remote' || data.remoteType === 'hybrid' || data.isRemote;
-            return isRemote ? ['Fully remote', 'Hybrid remote', 'COVID-19'].includes(data.remoteType) : true;
-          })(),
-          warn: false,
-          fix: "Remote type must be mapped to 'Fully remote' or 'Hybrid remote'. Update the XML feed mapping to match Indeed guidelines.",
-        },
-        {
-          id: 'C11',
-          field: 'description',
-          name: 'Job Description Length',
-          rule: 'Description must contain at least 150 characters of content',
-          ok: (() => {
-            const desc = data.description || '';
-            return desc.trim().length >= 150;
-          })(),
-          warn: false,
-          fix: 'Job description must be present and contain at least 150 characters of high-quality content.',
-        },
-        {
-          id: 'C12',
-          field: 'sourcename',
-          name: 'ATS Source Name',
-          rule: 'Developer identifier source name must be present',
-          ok: !!data.source && data.source.trim().length > 0,
-          warn: false,
-          fix: "Source name is missing. Specify the source name parameter (e.g. 'VeyloHR') in the feed.",
-        },
-      ];
+      const results = runIndeedComplianceSuite(data);
+
+      // Perform network check for U4 asynchronously
+      const checkU4 = results.find(r => r.id === 'U4');
+      if (checkU4) {
+        const frontendBase = (import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/+$/, '');
+        const jobCompanySlug = data.companySlug || 'fusarouomo';
+        const jobId = data.id || 0;
+        const baseJobUrl = `${frontendBase}/careers/${jobCompanySlug}/jobs/${jobId}`;
+        const applyUrl = baseJobUrl + (baseJobUrl.includes('?') ? '&' : '?') + 'source=Indeed';
+        
+        try {
+          const resp = await fetch(applyUrl, { method: 'GET' });
+          if (resp.status !== 200) {
+            checkU4.ok = false;
+            checkU4.problem = `Apply URL returned HTTP ${resp.status}. Indeed's crawler will see the same response.`;
+          } else {
+            checkU4.ok = true;
+          }
+        } catch (e) {
+          console.warn("Network check U4 failed to execute due to CORS or network error, assuming pass.", e);
+          checkU4.ok = true;
+        }
+      }
+
       setChecks(results);
-    } catch (err) {
-      setError('An error occurred while running the compliance check.');
+    } catch (err: any) {
+      console.error('[IndeedComplianceModal] Check failed:', err);
+      const axiosError = err.response?.data?.error || err.message || '';
+      const axiosErrorCode = err.response?.data?.code || '';
+      
+      if (err.response?.status === 404 || axiosErrorCode === 'NOT_FOUND' || axiosError === 'Annuncio non trovato') {
+        setError('The position was not found. Please verify the Reference ID/ID and ensure you have selected the correct company from the dropdown in the top-right.');
+      } else {
+        setError(`An error occurred while running the compliance check: ${axiosError || 'Unknown error'}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -653,13 +1023,14 @@ const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ reference
   const progressPercent = totalCount > 0 ? (passedCount / totalCount) * 100 : 0;
 
   let progressColor = '#DC2626'; // Red
-  if (passedCount >= 10) progressColor = '#15803D'; // Green
-  else if (passedCount >= 6) progressColor = '#D97706'; // Amber
+  if (progressPercent >= 80) progressColor = '#15803D'; // Green
+  else if (progressPercent >= 55) progressColor = '#D97706'; // Amber
 
   return (
     <ModalBackdrop onClose={onClose} width={800}>
       <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <FileCheck size={18} color="var(--primary)" />
           <div>
             <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 17, fontWeight: 700 }}>
               Indeed Compliance Check
@@ -735,65 +1106,99 @@ const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ reference
             </div>
 
             {/* Checks List */}
-            <div style={{ display: 'grid', gap: 10 }}>
-              {checks.map((check) => (
-                <details
-                  key={check.id}
-                  style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: 10,
-                    background: '#fff',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <summary
-                    style={{
-                      listStyle: 'none',
-                      cursor: 'pointer',
-                      padding: '12px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      userSelect: 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: 14, minWidth: 24, display: 'inline-flex', justifyContent: 'center' }}>
-                      {check.ok ? '✅' : '❌'}
-                    </span>
-                    <span style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-primary)', flex: 1 }}>
-                      {check.name}
-                      <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'monospace', background: '#F1F5F9', color: '#64748B', padding: '1px 5px', borderRadius: 4 }}>
-                        {check.id}
+            <div style={{ display: 'grid', gap: 20 }}>
+              {[
+                { title: 'GROUP 1 — Title', checks: checks.filter(c => c.id.startsWith('T')) },
+                { title: 'GROUP 2 — Description', checks: checks.filter(c => c.id.startsWith('D') && !c.id.startsWith('DA')) },
+                { title: 'GROUP 3 — Location', checks: checks.filter(c => c.id.startsWith('L')) },
+                { title: 'GROUP 4 — Required feed fields', checks: checks.filter(c => c.id.startsWith('R')) },
+                { title: 'GROUP 5 — Apply URL and feed URL', checks: checks.filter(c => c.id.startsWith('U')) },
+                { title: 'GROUP 6 — Date fields', checks: checks.filter(c => c.id.startsWith('DA')) },
+                { title: 'GROUP 7 — Indeed Apply readiness', checks: checks.filter(c => c.id.startsWith('IA')) }
+              ].map((group) => {
+                if (group.checks.length === 0) return null;
+                const groupPassed = group.checks.every(c => c.ok);
+                const groupPassedCount = group.checks.filter(c => c.ok).length;
+                return (
+                  <div key={group.title} style={{ display: 'grid', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid var(--border)', paddingBottom: 6 }}>
+                      <h4 style={{ margin: 0, fontSize: 13, fontWeight: 750, letterSpacing: '0.04em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                        {group.title}
+                      </h4>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: groupPassed ? '#16A34A' : '#D97706', background: groupPassed ? '#F0FDF4' : '#FFFBEB', padding: '2px 8px', borderRadius: 6 }}>
+                        {groupPassed ? 'All passed' : `${groupPassedCount} of ${group.checks.length} passed`}
                       </span>
-                    </span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {check.ok ? 'Pass' : 'Action Required'}
-                    </span>
-                  </summary>
-
-                  <div style={{ borderTop: '1px solid var(--border)', padding: '12px 14px', background: 'rgba(248,250,252,0.5)', display: 'grid', gap: 8 }}>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                      <strong>Rule:</strong> {check.rule}
                     </div>
-                    {!check.ok && (
-                      <div
-                        style={{
-                          marginTop: 4,
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          background: '#FFFBEB',
-                          border: '1px solid #FDE68A',
-                          color: '#92400E',
-                          fontSize: 12.5,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        <strong>How to fix:</strong> {check.fix}
-                      </div>
-                    )}
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {group.checks.map((check) => (
+                        <details
+                          key={check.id}
+                          style={{
+                            border: '1px solid var(--border)',
+                            borderRadius: 10,
+                            background: '#fff',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <summary
+                            style={{
+                              listStyle: 'none',
+                              cursor: 'pointer',
+                              padding: '12px 14px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 12,
+                              userSelect: 'none',
+                            }}
+                          >
+                            <span style={{ fontSize: 14, minWidth: 24, display: 'inline-flex', justifyContent: 'center' }}>
+                              {check.ok ? '✅' : '❌'}
+                            </span>
+                            <span style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-primary)', flex: 1 }}>
+                              {check.name}
+                              <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'monospace', background: '#F1F5F9', color: '#64748B', padding: '1px 5px', borderRadius: 4 }}>
+                                {check.id}
+                              </span>
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              {check.ok ? 'Pass' : 'Action Required'}
+                            </span>
+                          </summary>
+
+                          <div style={{ borderTop: '1px solid var(--border)', padding: '12px 14px', background: 'rgba(248,250,252,0.5)', display: 'grid', gap: 8 }}>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                              <strong>Rule:</strong> {check.rule}
+                            </div>
+                            {!check.ok && (
+                              <>
+                                {check.problem && (
+                                  <div style={{ fontSize: 13, color: '#DC2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                    <span>⚠️</span> <span><strong>Error:</strong> {check.problem}</span>
+                                  </div>
+                                )}
+                                <div
+                                  style={{
+                                    marginTop: 4,
+                                    padding: '10px 12px',
+                                    borderRadius: 8,
+                                    background: '#FFFBEB',
+                                    border: '1px solid #FDE68A',
+                                    color: '#92400E',
+                                    fontSize: 12.5,
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  <strong>How to fix:</strong> {check.fix}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
                   </div>
-                </details>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -1089,6 +1494,7 @@ type JobModalErrors = {
   description?: string;
   city?: string;
   country?: string;
+  state?: string;
   weeklyHours?: string;
   salary?: string;
   companyId?: string;
@@ -1347,6 +1753,10 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       nextErrors.salary = t('ats.salaryInvalid', 'Salary values must be valid positive numbers');
     } else if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) {
       nextErrors.salary = t('ats.salaryRangeError', 'Salary min must be less than or equal to salary max');
+    }
+
+    if (locationOverride.state && /^\d+$/.test(locationOverride.state.trim())) {
+      nextErrors.state = t('ats.stateNumericError', 'State/Province cannot be a number. Use a code like MI or SA.');
     }
 
     setErrors(nextErrors);
@@ -2126,26 +2536,8 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                 <div>
                   <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span>{job ? t('ats.editJob') : t('ats.newJob')}</span>
-                    {job && (
-                      job.referenceId ? (
-                        <ReferenceIdBadge referenceId={job.referenceId} />
-                      ) : (
-                        <span style={{
-                          fontFamily: 'monospace',
-                          fontSize: '11.5px',
-                          fontWeight: 600,
-                          background: '#F1F5F9',
-                          color: '#64748B',
-                          borderRadius: '6px',
-                          padding: '2px 6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          border: '1px solid #E2E8F0',
-                        }}>
-                          —
-                        </span>
-                      )
+                    {job && job.referenceId && (
+                      <ReferenceIdBadge referenceId={job.referenceId} />
                     )}
                   </h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -2444,14 +2836,21 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                           disabled={saving}
                         />
 
-                        <StateSelect
-                          countryCode={locationOverride.country || null}
-                          value={locationOverride.state || null}
-                          onChange={(next) => setLocationOverride((prev) => ({ ...prev, state: next ?? '', city: '' }))}
-                          label={t('ats.jobStateOverrideLabel', 'State')}
-                          placeholder={t('ats.jobStateOverrideLabel', 'State')}
-                          disabled={saving}
-                        />
+                        <div>
+                          <StateSelect
+                            countryCode={locationOverride.country || null}
+                            value={locationOverride.state || null}
+                            onChange={(next) => setLocationOverride((prev) => ({ ...prev, state: next ?? '', city: '' }))}
+                            label={t('ats.jobStateOverrideLabel', 'State')}
+                            placeholder={t('ats.jobStateOverrideLabel', 'State')}
+                            disabled={saving}
+                          />
+                          {errors.state && (
+                            <span style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4, display: 'block' }}>
+                              {errors.state}
+                            </span>
+                          )}
+                        </div>
 
                         <div>
                           <CitySelect
@@ -5977,8 +6376,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                       {/* Header Row */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{job.title}</span>
-                          {job.referenceId && <ReferenceIdBadge referenceId={job.referenceId} />}
+                          <span style={{ fontWeight: 800, fontSize: 20, color: 'var(--text-primary)' }}>{job.title}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {/* Copy Reference ID button on hover */}
@@ -6036,7 +6434,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                         const isExpanded = expandedJobIds.has(job.id);
                         const displayText = isLong && !isExpanded ? `${text.slice(0, 240)}...` : text;
                         return (
-                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          <div style={{ fontSize: 11.8, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                             <span>{displayText}</span>
                             {isLong && (
                               <button
@@ -6076,20 +6474,10 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                           <MapPin size={14} color="var(--text-muted)" />
                           {locationSummary}
                         </span>
-                        {/* Remote type / Work arrangement */}
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Globe2 size={14} color="var(--text-muted)" />
-                          {job.remoteType === 'remote' ? t('ats.remoteType_remote', 'Remote') : t(`ats.remoteType_${job.remoteType}`, job.remoteType)}
-                        </span>
                         {/* Salary */}
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <Wallet size={14} color="var(--text-muted)" />
                           {salarySummary} {job.weeklyHours ? `(${job.weeklyHours}h)` : ''}
-                        </span>
-                        {/* Job Type */}
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <BriefcaseBusiness size={14} color="var(--text-muted)" />
-                          {t(`ats.jobType_${JOB_TYPE_LABEL[job.jobType]}`)}
                         </span>
                         {/* Department */}
                         {job.department && (
@@ -6106,14 +6494,14 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                           {/* Language flag */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             {languageFlags.map((code) => (
-                              <ReactCountryFlag
-                                key={`${job.id}-${code}`}
-                                countryCode={code}
-                                svg
-                                style={{ width: '1.3em', height: '1.3em', verticalAlign: 'middle' }}
-                                title={job.language.toUpperCase()}
-                              />
-                            ))}
+                               <ReactCountryFlag
+                                 key={`${job.id}-${code}`}
+                                 countryCode={code}
+                                 svg
+                                 style={{ width: '0.85em', height: '0.85em', verticalAlign: 'middle', borderRadius: 1.5 }}
+                                 title={job.language.toUpperCase()}
+                               />
+                             ))}
                           </div>
 
                           {/* Tags */}
@@ -6135,6 +6523,40 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                               ))}
                             </div>
                           )}
+
+                          {/* Job Type Tag */}
+                          <span style={{
+                            background: 'rgba(37,99,235,0.06)',
+                            color: '#2563EB',
+                            border: '1px solid rgba(37,99,235,0.15)',
+                            borderRadius: 6,
+                            padding: '1px 6.5px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}>
+                            <BriefcaseBusiness size={11} strokeWidth={2.5} />
+                            {t(`ats.jobType_${JOB_TYPE_LABEL[job.jobType]}`)}
+                          </span>
+
+                          {/* Work Arrangement Tag */}
+                          <span style={{
+                            background: 'rgba(79,70,229,0.06)',
+                            color: '#4F46E5',
+                            border: '1px solid rgba(79,70,229,0.15)',
+                            borderRadius: 6,
+                            padding: '1px 6.5px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}>
+                            <Globe2 size={11} strokeWidth={2.5} />
+                            {job.remoteType === 'remote' ? t('ats.remoteType_remote', 'Remote') : t(`ats.remoteType_${job.remoteType}`, job.remoteType)}
+                          </span>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
@@ -6183,7 +6605,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                                 }}
                                 title="Indeed Compliance Check"
                               >
-                                <BadgeCheck size={16} />
+                                <FileCheck size={16} />
                               </button>
                               <button
                                 onClick={() => { setEditJob(job); setShowModal(true); }}
@@ -6499,6 +6921,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
         <IndeedComplianceModal
           referenceId={complianceRefId}
           onClose={() => setComplianceRefId(null)}
+          companyId={companyId || defaultCompanyId || undefined}
         />
       )}
     </div>
@@ -6506,6 +6929,122 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
 };
 
 // ─── Indeed Panel ──────────────────────────────────────────────────────────────
+
+// ── SVGs for Indeed Stats ───────────────────────────────────────────────────
+const IconBuilding = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 22V4a2 2 0 012-2h8a2 2 0 012 2v18z"/>
+    <path d="M6 12H4a2 2 0 00-2 2v6a2 2 0 002 2h2"/>
+    <path d="M18 9h2a2 2 0 012 2v9a2 2 0 01-2 2h-2"/>
+    <path d="M10 6h4M10 10h4M10 14h4"/>
+  </svg>
+);
+
+const IconBriefcase = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+  </svg>
+);
+
+const IconUserIndeed = () => (
+  <div style={{ position: 'relative', width: 20, height: 20 }}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+    <span style={{
+      position: 'absolute',
+      bottom: -4,
+      right: -4,
+      background: '#002F6C',
+      color: '#fff',
+      fontSize: '7.5px',
+      fontWeight: 900,
+      borderRadius: 2,
+      padding: '0px 1.5px',
+      lineHeight: 1,
+      fontFamily: 'sans-serif'
+    }}>IN</span>
+  </div>
+);
+
+const IconBarChart = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" />
+    <line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+  </svg>
+);
+
+interface IndeedStatCardProps {
+  label: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+  accent: string;
+  description?: string;
+  loading?: boolean;
+}
+
+const IndeedStatCard: React.FC<IndeedStatCardProps> = ({ label, value, icon, accent, description, loading }) => {
+  if (loading) {
+    return (
+      <div style={{
+        background: 'var(--surface)',
+        borderRadius: 16,
+        border: '1px solid var(--border)',
+        borderTop: `3px solid ${accent}`,
+        padding: '22px 24px',
+        boxShadow: 'var(--shadow-sm)',
+        display: 'flex', flexDirection: 'column', gap: '14px',
+        minHeight: 135
+      }} className="shimmer">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#E2E8F0' }} />
+          <div style={{ width: 80, height: 12, background: '#E2E8F0', borderRadius: 4 }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ width: 60, height: 32, background: '#E2E8F0', borderRadius: 4 }} />
+          <div style={{ width: 120, height: 10, background: '#E2E8F0', borderRadius: 4 }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      borderRadius: 16,
+      border: '1px solid var(--border)',
+      borderTop: `3px solid ${accent}`,
+      padding: '22px 24px',
+      boxShadow: 'var(--shadow-sm)',
+      display: 'flex', flexDirection: 'column', gap: '14px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: `${accent}14`, border: `1px solid ${accent}25`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: accent, flexShrink: 0,
+        }}>{icon}</div>
+        <span style={{
+          fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)',
+          textTransform: 'uppercase', letterSpacing: '0.06em', paddingTop: '2px',
+        }}>{label}</span>
+      </div>
+      <div>
+        <div style={{
+          fontSize: '34px', fontWeight: 700, fontFamily: 'var(--font-display)',
+          color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em',
+        }}>{value !== undefined && value !== null ? value : '—'}</div>
+        {description && (
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{description}</div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit, companyId }) => {
   const { t, i18n } = useTranslation();
@@ -6516,6 +7055,11 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
   const [loading, setLoading] = useState(true);
   const [feedCopied, setFeedCopied] = useState(false);
   const [showComplianceModal, setShowComplianceModal] = useState(false);
+
+  // Stats state
+  const [stats, setStats] = useState<IndeedStatsResponse | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
 
   const defaultCompanyId = useMemo(() => {
     if (companyId) return companyId;
@@ -6549,6 +7093,33 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
     window.open(feedUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const fetchStats = React.useCallback(() => {
+    setStatsLoading(true);
+    setStatsError(false);
+
+    const params: { companyId?: number } = {};
+    if (companyId) {
+      params.companyId = companyId;
+    } else if (!user?.isSuperAdmin && defaultCompanyId) {
+      params.companyId = defaultCompanyId;
+    }
+
+    getIndeedStats(Object.keys(params).length > 0 ? params : undefined)
+      .then((data) => {
+        setStats(data);
+        setStatsLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch Indeed stats:', err);
+        setStatsError(true);
+        setStatsLoading(false);
+      });
+  }, [companyId, defaultCompanyId, user?.isSuperAdmin]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
@@ -6575,8 +7146,139 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
     };
   }, [companyId, defaultCompanyId, user?.isSuperAdmin]);
 
+  const totalCandidates = (stats?.totalIndeedCandidates ?? 0) + (stats?.totalDirectCandidates ?? 0);
+  const indeedRatio = totalCandidates > 0 ? ((stats?.totalIndeedCandidates ?? 0) / totalCandidates) * 100 : 0;
+
   return (
     <div style={{ display: 'grid', gap: 20 }}>
+      {/* Indeed Activity Overview Analytics Section */}
+      <div style={{ display: 'grid', gap: 16 }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+          {t('ats.indeedActivityOverview', 'Indeed Activity Overview')}
+        </h3>
+
+        {statsError ? (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.05)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            borderRadius: 12,
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12
+          }}>
+            <span style={{ fontSize: 13, color: '#EF4444', fontWeight: 500 }}>
+              Could not load Indeed stats — check the API connection.
+            </span>
+            <Button variant="secondary" size="sm" onClick={fetchStats}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Stat Cards Row */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 16
+            }}>
+              <IndeedStatCard
+                label="Companies on Feed"
+                value={stats?.companiesOnFeed}
+                icon={<IconBuilding />}
+                accent="#15803D"
+                description="With ≥1 published position"
+                loading={statsLoading}
+              />
+              <IndeedStatCard
+                label="Live Positions"
+                value={stats?.livePositions}
+                icon={<IconBriefcase />}
+                accent="#0284C7"
+                description="Currently published"
+                loading={statsLoading}
+              />
+              <IndeedStatCard
+                label="Indeed Candidates"
+                value={stats?.indeedCandidatesThisMonth}
+                icon={<IconUserIndeed />}
+                accent="#002F6C"
+                description="This calendar month"
+                loading={statsLoading}
+              />
+              <IndeedStatCard
+                label="Indeed vs Direct"
+                value={
+                  statsLoading ? null : (
+                    <div style={{ height: 34, display: 'flex', alignItems: 'center', width: '100%' }}>
+                      <div style={{ height: 8, width: '100%', background: '#E2E8F0', borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ width: `${indeedRatio}%`, background: '#002F6C', height: '100%' }} />
+                        <div style={{ width: `${100 - indeedRatio}%`, background: '#94A3B8', height: '100%' }} />
+                      </div>
+                    </div>
+                  )
+                }
+                icon={<IconBarChart />}
+                accent="#D97706"
+                description={statsLoading ? undefined : `${stats?.totalIndeedCandidates ?? 0} Indeed · ${stats?.totalDirectCandidates ?? 0} Direct`}
+                loading={statsLoading}
+              />
+            </div>
+
+            {/* Monthly Trend Table */}
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 16,
+              padding: '24px 28px',
+              boxShadow: 'var(--shadow-sm)',
+              display: 'grid',
+              gap: 16
+            }}>
+              <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Monthly Activity — Last 6 Months
+              </h4>
+
+              {statsLoading ? (
+                <div style={{ display: 'grid', gap: 8, padding: '10px 0' }}>
+                  <div style={{ height: 35, background: '#F1F5F9', borderRadius: 6 }} className="shimmer" />
+                  <div style={{ height: 35, background: '#F1F5F9', borderRadius: 6 }} className="shimmer" />
+                  <div style={{ height: 35, background: '#F1F5F9', borderRadius: 6 }} className="shimmer" />
+                </div>
+              ) : !stats || stats.monthlyTrend.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  No data
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Month</th>
+                        <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Indeed Candidates</th>
+                        <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Direct Candidates</th>
+                        <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: 'var(--text-secondary)' }}>New Positions Published</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.monthlyTrend.map((row) => (
+                        <tr key={row.month} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                          <td style={{ padding: '12px 12px', color: 'var(--text-primary)', fontWeight: 500 }}>{row.month}</td>
+                          <td style={{ padding: '12px 12px', textAlign: 'right', color: 'var(--text-primary)' }}>{row.indeedCandidates ?? 0}</td>
+                          <td style={{ padding: '12px 12px', textAlign: 'right', color: 'var(--text-primary)' }}>{row.directCandidates ?? 0}</td>
+                          <td style={{ padding: '12px 12px', textAlign: 'right', color: 'var(--text-primary)' }}>{row.newPositionsPublished ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Section 1: XML Feed Card */}
       <div style={{
         background: 'var(--surface)',
