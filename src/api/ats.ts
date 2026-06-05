@@ -629,6 +629,8 @@ export interface IndeedStatsResponse {
     directCandidates: number;
     newPositionsPublished: number;
   }>;
+  isIndeedApplyConfigured?: boolean;
+  companySlug?: string;
 }
 
 export async function getIndeedStats(params?: { companyId?: number }): Promise<IndeedStatsResponse> {
