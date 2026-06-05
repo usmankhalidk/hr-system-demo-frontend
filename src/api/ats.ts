@@ -1,11 +1,5 @@
 import apiClient from './client';
-
-export async function listInterviewers(companyId?: number): Promise<{ interviewers: any[] }> {
-  const params: Record<string, any> = {};
-  if (companyId != null) params.company_id = companyId;
-  const { data } = await apiClient.get('/ats/interviewers', { params });
-  return data.data;
-}
+import { Employee } from '../types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +69,7 @@ export interface JobPosting {
   status: JobStatus;
   source: string;
   indeedPostId: string | null;
+  referenceId: string | null;
   createdById: number | null;
   createdByName: string | null;
   createdBySurname: string | null;
@@ -401,12 +396,6 @@ export async function deleteCandidate(id: number): Promise<void> {
   await apiClient.delete(`/ats/candidates/${id}`);
 }
 
-export async function getCandidate(id: number): Promise<Candidate> {
-  const { data } = await apiClient.get(`/ats/candidates/${id}`);
-  return data.data.candidate as Candidate;
-}
-
-
 // ---------------------------------------------------------------------------
 // Candidate Comments
 // ---------------------------------------------------------------------------
@@ -555,14 +544,8 @@ export interface AllInterviewFeedbackComment {
   updatedAt: string;
 }
 
-function getAtsCompanyParams(params?: { companyId?: number }): { company_id: number } | undefined {
-  return params?.companyId ? { company_id: params.companyId } : undefined;
-}
-
 export async function getAllInterviewFeedbackComments(params?: { companyId?: number }): Promise<AllInterviewFeedbackComment[]> {
-  const { data } = await apiClient.get('/ats/interviews/feedback/all', {
-    params: getAtsCompanyParams(params),
-  });
+  const { data } = await apiClient.get('/ats/interviews/feedback/all', { params });
   return (data.data.comments ?? []) as AllInterviewFeedbackComment[];
 }
 
@@ -594,12 +577,12 @@ export async function sendInterviewEmail(
 // ---------------------------------------------------------------------------
 
 export async function getAlerts(params?: { companyId?: number }): Promise<HRAlert[]> {
-  const { data } = await apiClient.get('/ats/alerts', { params: getAtsCompanyParams(params) });
+  const { data } = await apiClient.get('/ats/alerts', { params });
   return (data.data.alerts ?? []) as HRAlert[];
 }
 
 export async function getRisks(params?: { companyId?: number }): Promise<JobRisk[]> {
-  const { data } = await apiClient.get('/ats/risks', { params: getAtsCompanyParams(params) });
+  const { data } = await apiClient.get('/ats/risks', { params });
   return (data.data.risks ?? []) as JobRisk[];
 }
 
@@ -614,4 +597,45 @@ export async function previewJobTranslation(payload: {
   const { data } = await apiClient.post('/ats/translate-preview', payload);
   return data.data as { translatedText: string; targetLanguage: 'en'; provider: string };
 }
+
+export async function getJobCompliance(identifier: string, companyId?: number): Promise<any> {
+  const { data } = await apiClient.get(`/ats/jobs/${identifier}/compliance`, {
+    params: companyId ? { company_id: companyId } : undefined
+  });
+  return data.data.job;
+}
+
+export async function listInterviewers(companyId?: number): Promise<{ interviewers: Employee[] }> {
+  const { data } = await apiClient.get('/ats/interviewers', {
+    params: companyId ? { companyId } : undefined,
+  });
+  return data.data as { interviewers: Employee[] };
+}
+
+export async function getCandidate(id: number): Promise<Candidate> {
+  const { data } = await apiClient.get(`/ats/candidates/${id}`);
+  return data.data.candidate as Candidate;
+}
+
+export interface IndeedStatsResponse {
+  companiesOnFeed: number;
+  livePositions: number;
+  indeedCandidatesThisMonth: number;
+  totalIndeedCandidates: number;
+  totalDirectCandidates: number;
+  monthlyTrend: Array<{
+    month: string;
+    indeedCandidates: number;
+    directCandidates: number;
+    newPositionsPublished: number;
+  }>;
+  isIndeedApplyConfigured?: boolean;
+  companySlug?: string;
+}
+
+export async function getIndeedStats(params?: { companyId?: number }): Promise<IndeedStatsResponse> {
+  const { data } = await apiClient.get('/ats/indeed-stats', { params });
+  return data.data as IndeedStatsResponse;
+}
+
 

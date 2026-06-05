@@ -44,6 +44,8 @@ import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import { useAuth } from '../../context/AuthContext';
 import { buildCandidateProfile, type CandidateApplicationProfile } from '../ats/candidateProfile';
 import DocumentPreviewModal from '../ats/DocumentPreviewModal';
+import CareersFooter from '../../components/careers/CareersFooter';
+import CookieConsentBanner from '../../components/legal/CookieConsentBanner';
 import './publicCareers.css';
 
 type UiLanguage = 'it' | 'en';
@@ -1294,7 +1296,21 @@ export default function PublicJobDetailPage() {
 
                 <label className="careers-checkbox">
                   <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} required />
-                  {copy.privacyConsent}
+                  {uiLanguage === 'it' ? (
+                    <>
+                      Acconsento al trattamento dei miei dati personali in conformità con l'
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline', marginLeft: '4px' }}>
+                        Informativa sulla Privacy
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      I consent to processing of my personal data in accordance with the{' '}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                        Privacy Policy
+                      </a>
+                    </>
+                  )}
                 </label>
 
                 {submitMessage && (
@@ -1661,7 +1677,21 @@ export default function PublicJobDetailPage() {
 
                   <label className="careers-checkbox">
                     <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} required />
-                    {copy.privacyConsent}
+                    {uiLanguage === 'it' ? (
+                      <>
+                        Acconsento al trattamento dei miei dati personali in conformità con l'
+                        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline', marginLeft: '4px' }}>
+                          Informativa sulla Privacy
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        I consent to processing of my personal data in accordance with the{' '}
+                        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                          Privacy Policy
+                        </a>
+                      </>
+                    )}
                   </label>
 
                   {submitMessage && <div className={`careers-submit-message ${submitSuccess ? 'success' : ''}`}>{submitMessage}</div>}
@@ -1688,6 +1718,8 @@ export default function PublicJobDetailPage() {
             onClose={() => setShowResumePreview(false)}
           />
         )}
+        <CareersFooter />
+        <CookieConsentBanner />
       </div>
     </div>
   );

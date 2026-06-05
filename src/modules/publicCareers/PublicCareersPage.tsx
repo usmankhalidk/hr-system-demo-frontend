@@ -22,6 +22,8 @@ import { getCompanyLogoUrl } from '../../api/client';
 import { getPublicJobsCatalog, PublicCompany, PublicJob, PublicStoreOption } from '../../api/publicCareers';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import CareersFooter from '../../components/careers/CareersFooter';
+import CookieConsentBanner from '../../components/legal/CookieConsentBanner';
 import './publicCareers.css';
 
 type UiLanguage = 'it' | 'en';
@@ -386,6 +388,11 @@ export default function PublicCareersPage() {
     return new Map(companies.map((company) => [company.id, company]));
   }, [companies]);
 
+  const currentCompany = useMemo(() => {
+    if (!companySlug) return null;
+    return companies[0] ?? null;
+  }, [companySlug, companies]);
+
   const filteredJobs = useMemo(() => {
     const query = filters.search.trim().toLowerCase();
     const salaryMin = filters.salaryMin.trim() === '' ? null : Number.parseInt(filters.salaryMin, 10);
@@ -521,8 +528,28 @@ export default function PublicCareersPage() {
             </div>
           </div>
 
-          <h1 className="careers-title">{copy.title}</h1>
-          <p className="careers-subtitle">{copy.subtitle}</p>
+          {currentCompany ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '14px 0 10px' }}>
+              {currentCompany.logoFilename && (
+                <div className="careers-company-logo" style={{ width: 64, height: 64, borderRadius: 16, border: '2px solid rgba(201,151,58,0.3)', flexShrink: 0 }}>
+                  <img src={getCompanyLogoUrl(currentCompany.logoFilename) ?? undefined} alt={currentCompany.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              )}
+              <div>
+                <h1 className="careers-title" style={{ margin: 0, fontSize: 'clamp(1.8rem, 3.5vw, 3rem)' }}>
+                  {uiLanguage === 'it' ? `Lavora con noi in ${currentCompany.name}` : `Careers at ${currentCompany.name}`}
+                </h1>
+                <p className="careers-subtitle" style={{ marginTop: 4 }}>
+                  {uiLanguage === 'it' ? `Esplora le posizioni aperte in ${currentCompany.name} e unisciti al nostro team.` : `Explore open job opportunities and grow your career with ${currentCompany.name}.`}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="careers-title">{copy.title}</h1>
+              <p className="careers-subtitle">{copy.subtitle}</p>
+            </>
+          )}
 
           <div className="careers-stat-grid">
             <article className="careers-stat-card"><BriefcaseBusiness size={18} /><div><strong>{jobs.length}</strong><span>{copy.openRoles}</span></div></article>
@@ -599,20 +626,22 @@ export default function PublicCareersPage() {
               return (
                 <article key={job.id} className="careers-job-card">
                   <div className="careers-job-head-row">
-                    <div className="careers-company-pill">
-                      <div className="careers-company-logo">
-                        {logoUrl ? <img src={logoUrl} alt={job.companyName} /> : <span>{initials(job.companyName)}</span>}
+                    {!companySlug && (
+                      <div className="careers-company-pill">
+                        <div className="careers-company-logo">
+                          {logoUrl ? <img src={logoUrl} alt={job.companyName} /> : <span>{initials(job.companyName)}</span>}
+                        </div>
+                        <div>
+                          <strong style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.companyName}</span>
+                            {companyCountryCode ? (
+                              <ReactCountryFlag countryCode={companyCountryCode} svg style={{ width: '0.95em', height: '0.95em', borderRadius: 2 }} />
+                            ) : null}
+                          </strong>
+                          {groupLabel ? <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupLabel}</span> : null}
+                        </div>
                       </div>
-                      <div>
-                        <strong style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.companyName}</span>
-                          {companyCountryCode ? (
-                            <ReactCountryFlag countryCode={companyCountryCode} svg style={{ width: '0.95em', height: '0.95em', borderRadius: 2 }} />
-                          ) : null}
-                        </strong>
-                        {groupLabel ? <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupLabel}</span> : null}
-                      </div>
-                    </div>
+                    )}
                     <div className="careers-job-head-right">
                       <div className="careers-job-time-badge">
                         <CalendarClock size={12} />
@@ -813,6 +842,8 @@ export default function PublicCareersPage() {
           </div>
         </div>
       )}
+      <CareersFooter />
+      <CookieConsentBanner />
     </div>
   );
 }

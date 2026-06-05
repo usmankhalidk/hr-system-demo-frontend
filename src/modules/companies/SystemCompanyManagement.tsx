@@ -1380,7 +1380,7 @@ export default function SystemCompanyManagement() {
                 </div>
 
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {t('companies.bannerHint', 'Consigliato formato panoramico; massimo 4MB')}
+                  {t('companies.bannerHint', 'Consigliato formato panoramico; massimo 12MB')}
                 </span>
               </div>
             </>

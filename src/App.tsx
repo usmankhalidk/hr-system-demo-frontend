@@ -50,6 +50,9 @@ const EmailSettingsPage = lazy(() => import('./modules/email/EmailSettingsPage')
 const ReportsPage = lazy(() => import('./modules/reports/ReportsPage'));
 const PublicCareersPage = lazy(() => import('./modules/publicCareers/PublicCareersPage'));
 const PublicJobDetailPage = lazy(() => import('./modules/publicCareers/PublicJobDetailPage'));
+const PrivacyPolicyPage = lazy(() => import('./pages/legal/PrivacyPolicyPage'));
+const TermsOfServicePage = lazy(() => import('./pages/legal/TermsOfServicePage'));
+const CookiePolicyPage = lazy(() => import('./pages/legal/CookiePolicyPage'));
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up
@@ -93,6 +96,9 @@ function AppRoutes() {
       <Route path="/careers/:companySlug" element={<PublicCareersPage />} />
       <Route path="/careers/jobs/:jobId" element={<PublicJobDetailPage />} />
       <Route path="/careers/:companySlug/jobs/:jobId" element={<PublicJobDetailPage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms" element={<TermsOfServicePage />} />
+      <Route path="/cookie-policy" element={<CookiePolicyPage />} />
 
       <Route path="/" element={
         <ProtectedRoute>
