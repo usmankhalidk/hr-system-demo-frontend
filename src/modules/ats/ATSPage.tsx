@@ -7061,6 +7061,13 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
 
+  // Integration status states
+  const [feedStatus, setFeedStatus] = useState<'LOADING' | 'ACTIVE' | 'ERROR'>('LOADING');
+  const [feedLastUpdated, setFeedLastUpdated] = useState<string | null>(null);
+  const [botTestStatus, setBotTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [botTestResult, setBotTestResult] = useState<string | null>(null);
+  const [apiRefExpanded, setApiRefExpanded] = useState(false);
+
   const defaultCompanyId = useMemo(() => {
     if (companyId) return companyId;
     if (targetCompanyId) return targetCompanyId;
@@ -7121,6 +7128,54 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
   }, [fetchStats]);
 
   useEffect(() => {
+    if (!feedUrl) {
+      setFeedStatus('ERROR');
+      return;
+    }
+    setFeedStatus('LOADING');
+    fetch(feedUrl)
+      .then((res) => {
+        if (res.ok && res.headers.get('Content-Type')?.includes('xml')) {
+          setFeedStatus('ACTIVE');
+          const lastModified = res.headers.get('Last-Modified') || res.headers.get('Date') || new Date().toUTCString();
+          setFeedLastUpdated(lastModified);
+        } else {
+          setFeedStatus('ERROR');
+        }
+      })
+      .catch(() => {
+        setFeedStatus('ERROR');
+      });
+  }, [feedUrl]);
+
+  const handleTestBotView = async () => {
+    setBotTestStatus('testing');
+    setBotTestResult(null);
+    try {
+      const companySlug = stats?.companySlug || 'fusaro-uomo';
+      const targetUrl = `${window.location.origin}/careers/${companySlug}`;
+      const testUrl = `${getApiBaseUrl()}/ats/test-ssr?url=${encodeURIComponent(targetUrl)}`;
+      
+      const response = await fetch(testUrl, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        }
+      });
+      const data = await response.json();
+      if (data.success && data.data?.isSsrWorking) {
+        setBotTestStatus('success');
+        setBotTestResult('PASS: Bot renders full careers list page.');
+      } else {
+        setBotTestStatus('failed');
+        setBotTestResult('FAIL: Returns empty shell. SSR middleware is disabled or not configured in Nginx.');
+      }
+    } catch (err: any) {
+      setBotTestStatus('failed');
+      setBotTestResult(`ERROR: ${err.message}`);
+    }
+  };
+
+  useEffect(() => {
     let mounted = true;
     setLoading(true);
     
@@ -7151,6 +7206,231 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
+      {/* Integration Status Section */}
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 16,
+        padding: '24px 28px',
+        display: 'grid',
+        gap: 16,
+        boxShadow: 'var(--shadow-sm)'
+      }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+          Integration Status
+        </h3>
+        
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 16
+        }}>
+          {/* Card 1: XML Feed */}
+          <div style={{
+            background: 'var(--background)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>XML Feed</span>
+              <span style={{
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: 99,
+                background: feedStatus === 'ACTIVE' ? 'rgba(16,185,129,0.1)' : feedStatus === 'LOADING' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)',
+                color: feedStatus === 'ACTIVE' ? '#10B981' : feedStatus === 'LOADING' ? '#F59E0B' : '#EF4444'
+              }}>
+                {feedStatus}
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={feedUrl || ''}>
+                URL: {feedUrl || 'Not set'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                Updated: {feedLastUpdated ? new Date(feedLastUpdated).toLocaleString() : 'N/A'}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Indeed Apply Webhook */}
+          <div style={{
+            background: 'var(--background)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Indeed Apply Webhook</span>
+              <span style={{
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: 99,
+                background: stats?.isIndeedApplyConfigured ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+                color: stats?.isIndeedApplyConfigured ? '#10B981' : '#F59E0B'
+              }}>
+                {stats?.isIndeedApplyConfigured ? 'CONFIGURED' : 'NOT CONFIGURED'}
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                POST: {feedUrl ? `${getApiBaseUrl()}/public/indeed-apply/${stats?.companySlug || 'all'}` : 'N/A'}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: SSR (Bot Visibility) */}
+          <div style={{
+            background: 'var(--background)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>SSR Bot Visibility</span>
+              <button
+                onClick={handleTestBotView}
+                disabled={botTestStatus === 'testing'}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  background: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  cursor: botTestStatus === 'testing' ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {botTestStatus === 'testing' ? 'Testing...' : 'Test Bot View'}
+              </button>
+            </div>
+            <div>
+              <div style={{
+                fontSize: 11,
+                color: botTestStatus === 'success' ? '#10B981' : botTestStatus === 'failed' ? '#EF4444' : 'var(--text-muted)',
+                fontWeight: botTestStatus !== 'idle' ? 600 : 400
+              }}>
+                {botTestResult || 'Click to run simulation fetch.'}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Screener Questions */}
+          <div style={{
+            background: 'var(--background)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Screener Questions</span>
+              <span style={{
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: 99,
+                background: 'rgba(245,158,11,0.1)',
+                color: '#F59E0B'
+              }}>
+                STUB
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                GET: {feedUrl ? `${getApiBaseUrl()}/public/indeed-apply-questions/${stats?.companySlug || 'all'}/:jobId` : 'N/A'}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>
+                Post-approval — configure after feed is accepted
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Collapsible API Reference */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <button
+            onClick={() => setApiRefExpanded(!apiRefExpanded)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent)',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: 0
+            }}
+          >
+            {apiRefExpanded ? '▼ Hide API Reference' : '▶ Show API Reference'}
+          </button>
+          
+          {apiRefExpanded && (
+            <div style={{ overflowX: 'auto', marginTop: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-secondary)' }}>Method</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-secondary)' }}>Endpoint</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-secondary)' }}>Purpose</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-secondary)' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600, color: '#10B981' }}>GET</td>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>/api/ats/feed/:slug/jobs.xml</td>
+                    <td style={{ padding: '6px 8px' }}>XML job feed</td>
+                    <td style={{ padding: '6px 8px', color: '#10B981', fontWeight: 600 }}>Active</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600, color: '#2563EB' }}>POST</td>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>/api/public/indeed-apply/:slug</td>
+                    <td style={{ padding: '6px 8px' }}>Application webhook</td>
+                    <td style={{ padding: '6px 8px', color: '#10B981', fontWeight: 600 }}>Active</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600, color: '#10B981' }}>GET</td>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>/api/public/indeed-apply-questions/:slug/:jobId</td>
+                    <td style={{ padding: '6px 8px' }}>Screener stub</td>
+                    <td style={{ padding: '6px 8px', color: '#F59E0B', fontWeight: 600 }}>Stub</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600, color: '#10B981' }}>GET</td>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>/api/ats/indeed-stats</td>
+                    <td style={{ padding: '6px 8px' }}>Analytics data</td>
+                    <td style={{ padding: '6px 8px', color: '#10B981', fontWeight: 600 }}>Active</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '6px 8px', fontWeight: 600, color: '#10B981' }}>GET</td>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>/api/ats/jobs/:id/compliance</td>
+                    <td style={{ padding: '6px 8px' }}>41-rule compliance check</td>
+                    <td style={{ padding: '6px 8px', color: '#10B981', fontWeight: 600 }}>Active</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Indeed Activity Overview Analytics Section */}
       <div style={{ display: 'grid', gap: 16 }}>
         <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
