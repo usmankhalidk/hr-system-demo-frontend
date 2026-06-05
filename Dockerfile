@@ -43,6 +43,13 @@ server {\n\
     proxy_set_header Host $host;\n\
     proxy_set_header X-Real-IP $remote_addr;\n\
   }\n\
+  # Proxy /sitemap.xml to the backend container\n\
+  location = /sitemap.xml {\n\
+    proxy_pass http://backend:3001/sitemap.xml;\n\
+    proxy_http_version 1.1;\n\
+    proxy_set_header Host $host;\n\
+    proxy_set_header X-Real-IP $remote_addr;\n\
+  }\n\
   # Hashed assets and static files: serve directly\n\
   location ~* \\.(?:js|css|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf)$ {\n\
     expires 1y;\n\

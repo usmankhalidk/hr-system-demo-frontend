@@ -22,6 +22,8 @@ import { getCompanyLogoUrl } from '../../api/client';
 import { getPublicJobsCatalog, PublicCompany, PublicJob, PublicStoreOption } from '../../api/publicCareers';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import CareersFooter from '../../components/careers/CareersFooter';
+import CookieConsentBanner from '../../components/legal/CookieConsentBanner';
 import './publicCareers.css';
 
 type UiLanguage = 'it' | 'en';
@@ -840,6 +842,8 @@ export default function PublicCareersPage() {
           </div>
         </div>
       )}
+      <CareersFooter />
+      <CookieConsentBanner />
     </div>
   );
 }
