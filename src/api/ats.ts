@@ -638,4 +638,47 @@ export async function getIndeedStats(params?: { companyId?: number }): Promise<I
   return data.data as IndeedStatsResponse;
 }
 
+export interface ScreenerQuestion {
+  id?: number;
+  job_id: number;
+  company_id: number;
+  question_text: string;
+  question_type: 'radio' | 'checkbox' | 'text' | 'number';
+  options: any;
+  is_knockout: boolean;
+  knockout_value: string | null;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function listScreenerQuestions(jobId: number, companyId?: number): Promise<ScreenerQuestion[]> {
+  const { data } = await apiClient.get(`/ats/jobs/${jobId}/screener-questions`, {
+    params: companyId ? { company_id: companyId } : undefined
+  });
+  return data.data.questions as ScreenerQuestion[];
+}
+
+export async function createScreenerQuestion(jobId: number, question: Omit<ScreenerQuestion, 'id'>, companyId?: number): Promise<ScreenerQuestion> {
+  const { data } = await apiClient.post(`/ats/jobs/${jobId}/screener-questions`, {
+    ...question,
+    company_id: companyId
+  });
+  return data.data.question as ScreenerQuestion;
+}
+
+export async function updateScreenerQuestion(jobId: number, qId: number, question: Partial<ScreenerQuestion>, companyId?: number): Promise<ScreenerQuestion> {
+  const { data } = await apiClient.put(`/ats/jobs/${jobId}/screener-questions/${qId}`, {
+    ...question,
+    company_id: companyId
+  });
+  return data.data.question as ScreenerQuestion;
+}
+
+export async function deleteScreenerQuestion(jobId: number, qId: number, companyId?: number): Promise<void> {
+  await apiClient.delete(`/ats/jobs/${jobId}/screener-questions/${qId}`, {
+    params: companyId ? { company_id: companyId } : undefined
+  });
+}
+
 

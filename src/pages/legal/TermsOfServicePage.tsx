@@ -1,29 +1,36 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 
 export default function TermsOfServicePage() {
+  const { i18n } = useTranslation();
+  const lang = i18n.language === 'en' ? 'en' : 'it';
+
   return (
     <div style={{ background: 'var(--background)', minHeight: '100vh', padding: '40px 20px', fontFamily: 'var(--font-body)' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <a 
-          href="/careers" 
-          style={{ 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            color: 'var(--primary)', 
-            fontWeight: 600, 
-            fontSize: '14px', 
-            marginBottom: '32px', 
-            textDecoration: 'none',
-            transition: 'color 0.2s'
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--primary)')}
-        >
-          <ArrowLeft size={16} />
-          Torna alle Careers / Back to Careers
-        </a>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          <a 
+            href="/careers" 
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              color: 'var(--primary)', 
+              fontWeight: 600, 
+              fontSize: '14px', 
+              textDecoration: 'none',
+              transition: 'color 0.2s'
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--primary)')}
+          >
+            <ArrowLeft size={16} />
+            {lang === 'it' ? 'Torna alle Careers' : 'Back to Careers'}
+          </a>
+          <LanguageSwitcher variant="pill" />
+        </div>
 
         <div style={{ 
           background: 'var(--surface)', 
@@ -32,74 +39,75 @@ export default function TermsOfServicePage() {
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow)'
         }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>
-            Termini di Servizio
+          <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '28px', fontWeight: 800, marginBottom: '24px' }}>
+            {lang === 'it' ? 'Termini di Servizio' : 'Terms of Service'}
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '15px', marginBottom: '32px', fontWeight: 500 }}>
-            Terms of Service (English translation below)
-          </p>
 
           {/* Italian Version */}
-          <section lang="it" style={{ marginBottom: '40px', borderBottom: '1px solid var(--border-light)', paddingBottom: '40px' }}>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              <strong>Ultimo aggiornamento: 4 Giugno 2026</strong>
-            </p>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-              Benvenuto nel portale Careers di Fusaro Uomo. Utilizzando questo portale per consultare gli annunci di lavoro e inviare la tua candidatura, accetti i presenti Termini di Servizio.
-            </p>
-            
-            <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-              1. Utilizzo del Portale
-            </h3>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-              Il portale è destinato a candidati reali in cerca di impiego presso Fusaro Uomo. È vietato l'invio di dati falsi, incompleti o fuorvianti. È vietato qualsiasi tentativo di alterare il funzionamento tecnico del sistema.
-            </p>
+          {lang === 'it' && (
+            <section lang="it" style={{ color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                <strong>Ultimo aggiornamento: 8 Giugno 2026</strong>
+              </p>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
+                Benvenuto nel portale Careers di <strong>Fusaro Uomo S.r.l.</strong> Utilizzando questo portale per consultare gli annunci di lavoro e inviare la tua candidatura, accetti i presenti Termini di Servizio.
+              </p>
+              
+              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
+                1. Utilizzo del Portale
+              </h3>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
+                Il portale è destinato esclusivamente a candidati reali in cerca di impiego presso Fusaro Uomo S.r.l. È severamente vietato l'invio di dati falsi, incompleti o fuorvianti. È vietato qualsiasi tentativo di alterare o manomettere la funzionalità tecnica del sistema.
+              </p>
 
-            <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-              2. Candidature
-            </h3>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-              L'invio di una candidatura non costituisce alcuna offerta formale di impiego né garantisce un colloquio conoscitivo. Il team recruiting valuterà le risposte a propria discrezione.
-            </p>
+              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
+                2. Candidature e Selezione
+              </h3>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
+                L'invio di una candidatura non costituisce alcuna offerta formale di impiego né garantisce l'avvio di colloqui conoscitivi. Il nostro team di recruiting valuterà le candidature a propria discrezione, contattando esclusivamente i profili ritenuti idonei per le posizioni aperte.
+              </p>
 
-            <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-              3. Proprietà Intellettuale
-            </h3>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-              Tutti i contenuti presenti sul portale (loghi, testi, descrizioni delle posizioni) sono di proprietà esclusiva di Fusaro Uomo e non possono essere riutilizzati o diffusi senza autorizzazione.
-            </p>
-          </section>
+              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
+                3. Proprietà Intellettuale
+              </h3>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
+                Tutti i contenuti presenti sul portale (loghi, marchi, testi, descrizioni delle posizioni aperte, codice sorgente e design) sono di proprietà esclusiva di Fusaro Uomo S.r.l. e sono protetti dalle leggi vigenti sul diritto d'autore. Non possono essere riprodotti o diffusi senza preventiva autorizzazione scritta.
+              </p>
+            </section>
+          )}
 
           {/* English Version */}
-          <section lang="en" style={{ color: 'var(--text-secondary)' }}>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              <strong>Last Updated: June 4, 2026</strong>
-            </p>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px', fontStyle: 'italic' }}>
-              Welcome to the Careers portal of Fusaro Uomo. By using this portal to view job openings and submit your application, you agree to these Terms of Service.
-            </p>
-            
-            <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-              1. Portal Usage
-            </h3>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-              This portal is intended for genuine job seekers looking for employment opportunities at Fusaro Uomo. Submitting false, incomplete, or misleading data is strictly prohibited, as is any attempt to interfere with the technical operations of the system.
-            </p>
+          {lang === 'en' && (
+            <section lang="en" style={{ color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                <strong>Last Updated: June 8, 2026</strong>
+              </p>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
+                Welcome to the Careers portal of <strong>Fusaro Uomo S.r.l.</strong> By using this portal to view job openings and submit your application, you agree to these Terms of Service.
+              </p>
+              
+              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
+                1. Portal Usage
+              </h3>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
+                This portal is intended solely for genuine job seekers looking for employment opportunities at Fusaro Uomo S.r.l. Submitting false, incomplete, or misleading data is strictly prohibited, as is any attempt to interfere with the technical operations or security of the system.
+              </p>
 
-            <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-              2. Applications
-            </h3>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-              Submitting an application does not constitute a formal offer of employment nor does it guarantee an interview. The recruiting team will evaluate candidate submissions at their sole discretion.
-            </p>
+              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
+                2. Applications and Selection
+              </h3>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
+                Submitting an application does not constitute a formal offer of employment nor does it guarantee an interview. The recruiting team will evaluate candidate submissions at their sole discretion and will contact only those candidates selected for further stages.
+              </p>
 
-            <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-              3. Intellectual Property
-            </h3>
-            <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-              All contents displayed on this portal (logos, texts, job descriptions) are the exclusive property of Fusaro Uomo and may not be reused or distributed without prior written consent.
-            </p>
-          </section>
+              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
+                3. Intellectual Property
+              </h3>
+              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
+                All contents displayed on this portal (logos, trademarks, texts, job descriptions, source code, and design layouts) are the exclusive property of Fusaro Uomo S.r.l. and are protected by copyright laws. They may not be copied, reproduced, or distributed without prior written consent.
+              </p>
+            </section>
+          )}
         </div>
       </div>
     </div>
