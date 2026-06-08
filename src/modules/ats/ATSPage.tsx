@@ -7872,6 +7872,7 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
     }
   };
 
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
