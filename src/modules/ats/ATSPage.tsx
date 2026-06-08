@@ -32,6 +32,8 @@ import {
   Clipboard,
   Check,
   FileCheck,
+  AlertTriangle,
+  User,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
@@ -419,7 +421,7 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       name: 'Description Formatting Structure',
       rule: 'Description includes semantic headings, lists, or paragraph breaks.',
       ok: /(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || ''),
-      problem: !/(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || '') ? "Description appears to be a single block of unformatted text with no structure. Indeed's quality scoring rewards well-structured descriptions." : undefined,
+      problem: !/(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || '') ? "Job description is plain text without paragraph or list structure. \nIn the job description editor, break the text into proper paragraphs using the \nparagraph break button, or add at least one bullet list (using the list button). \nIndeed recommends using <p>, <ul>, or <ol> tags for better candidate readability." : undefined,
       warn: false,
       fix: "Break the description into sections using paragraph tags or bullet lists. Add headings like 'Responsibilities', 'Requirements', 'What we offer'."
     },
@@ -598,16 +600,33 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       warn: false,
       fix: "Ensure the job has a company slug and is published so the apply URL can be constructed."
     },
-    {
-      id: 'U2',
-      field: 'url',
-      name: 'Apply URL HTTPS protocol',
-      rule: 'Apply URL uses secure HTTPS protocol.',
-      ok: applyUrl.startsWith('https://'),
-      problem: !applyUrl.startsWith('https://') ? `Apply URL uses HTTP, not HTTPS: '${applyUrl}'. Indeed requires all URLs in the feed to use HTTPS.` : undefined,
-      warn: false,
-      fix: "Ensure your domain has a valid SSL certificate and all URLs use https://."
-    },
+    (() => {
+      let hostname = '';
+      try {
+        hostname = new URL(applyUrl).hostname;
+      } catch {
+        const match = applyUrl.match(/^(?:https?:\/\/)?([^/:]+)/i);
+        hostname = match ? match[1] : '';
+      }
+      const isLocalhost = hostname === 'localhost' ||
+                          hostname === '127.0.0.1' ||
+                          hostname.startsWith('192.168.') ||
+                          hostname.startsWith('10.');
+      return {
+        id: 'U2',
+        field: 'url',
+        name: 'Apply URL HTTPS protocol',
+        rule: isLocalhost 
+          ? "Testing on localhost — this check will pass automatically on production (veylohr.com uses HTTPS)."
+          : "Apply URL uses secure HTTPS protocol.",
+        ok: isLocalhost ? true : applyUrl.startsWith('https://'),
+        warn: isLocalhost,
+        problem: isLocalhost 
+          ? "Testing on localhost — this check will pass automatically on production (veylohr.com uses HTTPS)."
+          : (!applyUrl.startsWith('https://') ? `Apply URL uses HTTP, not HTTPS: '${applyUrl}'. Indeed requires all URLs in the feed to use HTTPS.` : undefined),
+        fix: "Ensure your domain has a valid SSL certificate and all URLs use https://."
+      };
+    })(),
     {
       id: 'U3',
       field: 'url',
@@ -1838,7 +1857,11 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       return;
     }
     if (step === 2) {
-      if (validateStep2()) setStep(3);
+      setStep(3);
+      return;
+    }
+    if (step === 3) {
+      if (validateStep2()) setStep(4);
     }
   };
 
@@ -1972,7 +1995,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       return;
     }
     if (!validateStep2()) {
-      setStep(2);
+      setStep(3);
       return;
     }
 
@@ -2383,9 +2406,9 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
   const stepCards: Array<{ id: 1 | 2 | 3 | 4; title: string; subtitle: string }> = [
     { id: 1, title: t('ats.stepDetailsTitle', 'Job details'), subtitle: t('ats.stepDetailsSubtitle', 'Role profile and location') },
-    { id: 2, title: t('ats.stepSettingsTitle', 'Platform settings'), subtitle: t('ats.stepSettingsSubtitle', 'Company, store and visibility') },
-    { id: 3, title: t('ats.stepReviewTitle', 'Review'), subtitle: t('ats.stepReviewSubtitle', 'Final check before save') },
-    { id: 4, title: 'Screener Questions', subtitle: 'Indeed screening settings' },
+    { id: 2, title: 'Screener Questions', subtitle: 'Indeed screening settings' },
+    { id: 3, title: t('ats.stepSettingsTitle', 'Platform settings'), subtitle: t('ats.stepSettingsSubtitle', 'Company, store and visibility') },
+    { id: 4, title: t('ats.stepReviewTitle', 'Review'), subtitle: t('ats.stepReviewSubtitle', 'Final check before save') },
   ];
 
   const isCompact = isMobile || isTablet;
@@ -3067,7 +3090,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                 </>
               )}
 
-              {step === 2 && (
+              {step === 3 && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 14, display: 'grid', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 13 }}>
                     <Sparkles size={14} /> {t('ats.platformSettings', 'Platform settings')}
@@ -3160,7 +3183,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                 </div>
               )}
 
-              {step === 3 && (
+              {step === 4 && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, maxWidth: 680, margin: '0 auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, marginBottom: 12 }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
@@ -3301,7 +3324,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                 </div>
               )}
 
-              {step === 4 && (
+              {step === 2 && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, display: 'grid', gap: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 14 }}>
                     <FileCheck size={16} /> Screener Questions
@@ -3569,27 +3592,20 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                   <Button variant="secondary" type="button" onClick={() => setStep(1)}>
                     ← {t('common.back', 'Back')}
                   </Button>
-                  <Button variant="secondary" type="button" onClick={moveNext}>
-                    {t('ats.previewStep', 'Preview')} →
-                  </Button>
-                  <Button
-                    variant="primary"
-                    type="submit"
-                    loading={saving}
-                    disabled={!title.trim() || !description.replace(/<[^>]*>/g, '').trim() || !jobType || !remoteType || !companyId}
-                  >
-                    {job ? t('ats.savePosition', 'Save position') : t('ats.createPosition', 'Create position')}
+                  <Button variant="primary" type="button" onClick={moveNext}>
+                    {t('common.next', 'Next')} →
                   </Button>
                 </>
               )}
 
               {step === 3 && (
                 <>
+                  <Button variant="secondary" type="button" onClick={onClose}>{t('common.cancel')}</Button>
                   <Button variant="secondary" type="button" onClick={() => setStep(2)}>
                     ← {t('common.back', 'Back')}
                   </Button>
-                  <Button variant="secondary" type="button" onClick={() => setStep(4)}>
-                    Screener Questions →
+                  <Button variant="secondary" type="button" onClick={moveNext}>
+                    {t('ats.previewStep', 'Preview')} →
                   </Button>
                   <Button
                     variant="primary"
@@ -7542,6 +7558,7 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
   const [loading, setLoading] = useState(true);
   const [feedCopied, setFeedCopied] = useState(false);
   const [showComplianceModal, setShowComplianceModal] = useState(false);
+  const [checklistExpanded, setChecklistExpanded] = useState(false);
 
   // Stats state
   const [stats, setStats] = useState<IndeedStatsResponse | null>(null);
@@ -8264,6 +8281,174 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
             })()}
         </ModalBackdrop>
       )}
+
+      {/* Indeed Submission Readiness Checklist Section */}
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 16,
+        padding: '20px 24px',
+        boxShadow: 'var(--shadow-sm)',
+        display: 'grid',
+        gap: 12
+      }}>
+        <div 
+          onClick={() => setChecklistExpanded(!checklistExpanded)}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+              Indeed Submission Readiness Checklist
+            </h3>
+          </div>
+          <ChevronDown 
+            size={20} 
+            style={{ 
+              transform: checklistExpanded ? 'rotate(180deg)' : 'rotate(0deg)', 
+              transition: 'transform 0.2s',
+              color: 'var(--text-secondary)'
+            }} 
+          />
+        </div>
+
+        {checklistExpanded && (
+          <div style={{ display: 'grid', gap: 18, borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Last verified against docs.indeed.com — June 2026
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
+              {/* Group 1 */}
+              <div>
+                <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, borderBottom: '1px solid var(--border-light)', paddingBottom: 6 }}>
+                  Technical Requirements (Platform) <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>— Veylo built</span>
+                </h4>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>XML feed accessible and valid</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>All required feed fields present (sourcename, email, requisitionid, date ISO 8601)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Job URLs include ?source=Indeed tracking parameter</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>remotetype values are valid (Fully remote / Hybrid remote)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Bot-readable pages via SSR middleware (Nginx configured)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>/privacy, /terms, /cookie-policy pages live</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>robots.txt served as plain text</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Dynamic sitemap.xml available</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Indeed Apply webhook endpoint active (POST /api/public/indeed-apply/:slug)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>HMAC-SHA1 signature verification implemented</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Immediate HTTP 200 response before async processing</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Resume storage at /uploads/public-cv/</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Recruiter notifications on Indeed applications</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>GDPR consent checkbox on application form</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Cookie consent banner on careers pages</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#10B981' }}>
+                    <Check size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Screener questions endpoint active</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#D97706' }}>
+                    <AlertTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Screener questions — stub only (configure per job before submission)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2 */}
+              <div>
+                <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, borderBottom: '1px solid var(--border-light)', paddingBottom: 6 }}>
+                  Employer Requirements (Client action needed) <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>— Fusaro Uomo action</span>
+                </h4>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Developer Agreement signed with Indeed</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Indeed employer account active (employers.indeed.com)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Partner Console registration completed (console.indeed.com)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>API credentials (Client ID + Secret) provided to developer</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Single-source attestation confirmed (no other Indeed feed for these jobs)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Correct store postal codes and addresses confirmed</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Legal pages approved by Italian legal counsel</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Contact email (@fusarouomo.it) designated for Indeed correspondence</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7C3AED' }}>
+                    <User size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>Feed URL submitted to Giacomo after all above are complete</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

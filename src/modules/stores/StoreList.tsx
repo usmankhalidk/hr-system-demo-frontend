@@ -20,7 +20,8 @@ import { Select } from '../../components/ui/Select';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { LocationFieldGroup } from '../../components/location';
 import { TimezoneOptionContent } from '../../components/timezone/TimezoneOptionContent';
-import { Eye, EyeOff, RefreshCw, Link as LinkIcon, Unlink, Database, CheckCircle, XCircle, Search } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, Link as LinkIcon, Unlink, Database, CheckCircle, XCircle, Search, X, Filter } from 'lucide-react';
+import { StoreFilterModal, StoreFilterValues } from './StoreFilterModal';
 import {
   getBrowserTimeZone,
   getPreferredTimezoneForCountry,
@@ -155,6 +156,13 @@ export function StoreList() {
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filters, setFilters] = useState<StoreFilterValues>({
+    company_id: '',
+    status: '',
+    country: '',
+  });
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
@@ -216,6 +224,87 @@ export function StoreList() {
   const [createdStoreId, setCreatedStoreId] = useState<number | null>(null);
   const [refreshingInternalDb, setRefreshingInternalDb] = useState(false);
   const [refreshingExternalDb, setRefreshingExternalDb] = useState(false);
+
+  const filteredStores = useMemo(() => {
+    return stores.filter((store) => {
+      if (search.trim()) {
+        const query = search.toLowerCase().trim();
+        const nameMatch = store.name.toLowerCase().includes(query);
+        const codeMatch = store.code.toLowerCase().includes(query);
+        const cityMatch = store.city?.toLowerCase().includes(query);
+        const companyMatch = store.companyName?.toLowerCase().includes(query);
+        if (!nameMatch && !codeMatch && !cityMatch && !companyMatch) {
+          return false;
+        }
+      }
+      if (filters.company_id && String(store.companyId) !== filters.company_id) {
+        return false;
+      }
+      if (filters.status) {
+        const isStoreActive = store.isActive;
+        if (filters.status === 'active' && !isStoreActive) return false;
+        if (filters.status === 'inactive' && isStoreActive) return false;
+      }
+      if (filters.country && store.country !== filters.country) {
+        return false;
+      }
+      return true;
+    });
+  }, [stores, search, filters]);
+
+  const statusOptions = useMemo<SelectOption[]>(() => [
+    { value: 'active', label: t('common.active', 'Active') },
+    { value: 'inactive', label: t('common.inactive', 'Inactive') },
+  ], [t]);
+
+  const countryOptions = useMemo<SelectOption[]>(() => {
+    const uniqueCountries = Array.from(new Set(stores.map((s) => s.country).filter((c): c is string => !!c)));
+    return uniqueCountries.map((c) => ({
+      value: c,
+      label: getCountryDisplayName(c) || c,
+    }));
+  }, [stores]);
+
+  const showCompanyFilter = (isAdminOrHr || isSuperAdmin) && companies.length > 0;
+
+  const hasActiveFilters = !!(filters.company_id || filters.status || filters.country);
+
+  const activeFilterTags = useMemo(() => {
+    const tags: Array<{ key: string; label: string; value: string }> = [];
+    if (filters.company_id) {
+      const company = companies.find((c) => String(c.id) === filters.company_id);
+      if (company) {
+        tags.push({ key: 'company_id', label: t('stores.filterCompany', 'Company'), value: company.name });
+      }
+    }
+    if (filters.status) {
+      tags.push({
+        key: 'status',
+        label: t('stores.filterStatus', 'Status'),
+        value: filters.status === 'active' ? t('common.active', 'Active') : t('common.inactive', 'Inactive'),
+      });
+    }
+    if (filters.country) {
+      tags.push({ key: 'country', label: t('stores.filterCountry', 'Country'), value: getCountryDisplayName(filters.country) || filters.country });
+    }
+    return tags;
+  }, [filters, companies, t]);
+
+  const removeFilter = (key: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: '',
+    }));
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      company_id: '',
+      status: '',
+      country: '',
+    });
+    setSearch('');
+  };
 
   const browserTimezone = useMemo(() => getBrowserTimeZone(), []);
 
@@ -940,14 +1029,193 @@ export function StoreList() {
           </h1>
           {!loading && (
             <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-              {stores.length > 0
-                ? t('common.showingResults', { from: 1, to: stores.length, total: stores.length })
+              {filteredStores.length > 0
+                ? t('common.showingResults', { from: 1, to: filteredStores.length, total: filteredStores.length })
                 : t('common.noData')}
             </p>
           )}
         </div>
         {isAdminOrHr && (
           <Button onClick={openNewForm}>{t('stores.newStore')}</Button>
+        )}
+      </div>
+
+      {/* Filter bar */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+          marginBottom: "18px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            alignItems: "center",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            padding: "10px 12px",
+            boxShadow: "var(--shadow-xs)",
+          }}
+        >
+          {/* Universal Search Input */}
+          <div style={{ flex: 1, position: "relative" }}>
+            <Search
+              size={18}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-muted)",
+                pointerEvents: "none",
+              }}
+            />
+            <Input
+              placeholder={t('stores.searchPlaceholder', 'Search stores by name, code, or city...')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                paddingLeft: "40px",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                fontSize: "14px",
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilterModal(true)}
+            style={{
+              background: hasActiveFilters
+                ? "linear-gradient(135deg, var(--accent) 0%, #B48719 100%)"
+                : "var(--surface)",
+              color: hasActiveFilters ? "#fff" : "var(--text-secondary)",
+              border: hasActiveFilters ? "none" : "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: 600,
+              fontFamily: "var(--font-body)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexShrink: 0,
+              transition: "all 0.2s",
+              boxShadow: hasActiveFilters ? "0 2px 8px rgba(139,105,20,0.24)" : "none",
+              position: "relative",
+              height: '42px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <Filter size={16} strokeWidth={2.5} />
+            {t("common.filters", "Filters")}
+            {activeFilterTags.length > 0 && (
+              <span
+                style={{
+                  background: "#fff",
+                  color: "var(--accent)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  padding: "2px 6px",
+                  borderRadius: "999px",
+                  minWidth: "18px",
+                  textAlign: "center",
+                }}
+              >
+                {activeFilterTags.length}
+              </span>
+            )}
+          </button>
+
+          {/* Reset Filters Button */}
+          {(hasActiveFilters || search) && (
+            <button
+              onClick={resetFilters}
+              style={{
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                padding: "10px 14px",
+                fontSize: "13px",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                fontFamily: "var(--font-body)",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                flexShrink: 0,
+                transition: "border-color 0.15s, color 0.15s",
+                height: '42px',
+                boxSizing: 'border-box'
+              }}
+              title={t("stores.resetFilters", "Reset all filters")}
+            >
+              <X size={16} />
+              {!isMobile && t("common.reset", "Reset")}
+            </button>
+          )}
+        </div>
+
+        {/* Active Filter Tags */}
+        {activeFilterTags.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              padding: "0 4px",
+            }}
+          >
+            {activeFilterTags.map((tag) => (
+              <div
+                key={tag.key}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "linear-gradient(135deg, rgba(139,105,20,0.08) 0%, rgba(180,135,25,0.08) 100%)",
+                  border: "1px solid rgba(139,105,20,0.25)",
+                  borderRadius: "8px",
+                  padding: "6px 10px 6px 12px",
+                  fontSize: "12px",
+                  color: "var(--text-primary)",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--accent)" }}>
+                  {tag.label}:
+                </span>
+                <span style={{ color: "var(--text-secondary)" }}>
+                  {tag.value}
+                </span>
+                <button
+                  onClick={() => removeFilter(tag.key)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "2px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--text-muted)",
+                    borderRadius: "4px",
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                  title={t("stores.removeFilter", "Remove filter")}
+                >
+                  <X size={14} strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -961,7 +1229,7 @@ export function StoreList() {
 
       <Table<Store>
         columns={columns}
-        data={stores}
+        data={filteredStores}
         loading={loading}
         emptyText={t('stores.noStores')}
         headerBackground="var(--primary)"
@@ -2368,6 +2636,17 @@ export function StoreList() {
           </p>
         </div>
       </Modal>
+
+      <StoreFilterModal
+        open={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApply={setFilters}
+        initialFilters={filters}
+        companyOptions={companyOptions}
+        statusOptions={statusOptions}
+        countryOptions={countryOptions}
+        showCompanyFilter={showCompanyFilter}
+      />
     </div>
   );
 }
