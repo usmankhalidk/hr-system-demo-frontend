@@ -67,6 +67,11 @@ import {
   getAlerts, getRisks, getAllInterviewFeedbackComments,
   previewJobTranslation,
   getIndeedStats,
+  listScreenerQuestions,
+  createScreenerQuestion,
+  updateScreenerQuestion,
+  deleteScreenerQuestion,
+  type ScreenerQuestion,
   JobPosting, Candidate, Interview, HRAlert, JobRisk, AllInterviewFeedbackComment,
   InterviewFeedbackComment, InterviewNotificationLog,
   CandidateStatus, JobStatus, JobLanguage, JobType, RemoteType, IndeedStatsResponse,
@@ -1455,6 +1460,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
 
 // ─── Job form modal ────────────────────────────────────────────────────────────
 
+interface UIQuestion {
+  id?: number;
+  tempId?: string;
+  question_text: string;
+  question_type: 'radio' | 'checkbox' | 'text' | 'number';
+  options: string[];
+  is_knockout: boolean;
+  knockout_value: string;
+  display_order: number;
+  isDeleted?: boolean;
+}
+
 interface JobModalProps {
   job?: JobPosting | null;
   stores: Store[];
@@ -1484,6 +1501,7 @@ interface JobModalProps {
     salaryMax: number | null;
     salaryPeriod: string | null;
     targetRole: string | null;
+    screenerQuestions?: UIQuestion[];
   }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
@@ -1611,7 +1629,47 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { isMobile, isTablet } = useBreakpoint();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [questions, setQuestions] = useState<UIQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+  useEffect(() => {
+    if (!job?.id) {
+      setQuestions([]);
+      return;
+    }
+    setLoadingQuestions(true);
+    listScreenerQuestions(job.id, job.companyId)
+      .then((res) => {
+        const mapped = res.map((q) => {
+          let opts: string[] = [];
+          if (q.options) {
+            if (typeof q.options === 'string') {
+              try { opts = JSON.parse(q.options); } catch { opts = []; }
+            } else if (Array.isArray(q.options)) {
+              opts = q.options.map(o => typeof o === 'string' ? o : (o.value || o.label || ''));
+            }
+          }
+          return {
+            id: q.id,
+            question_text: q.question_text,
+            question_type: q.question_type,
+            options: opts,
+            is_knockout: q.is_knockout,
+            knockout_value: q.knockout_value ?? '',
+            display_order: q.display_order,
+          };
+        });
+        setQuestions(mapped);
+      })
+      .catch((err) => {
+        console.error('Failed to load screener questions', err);
+      })
+      .finally(() => {
+        setLoadingQuestions(false);
+      });
+  }, [job]);
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [title, setTitle] = useState(job?.title ?? '');
   const [description, setDescription] = useState(job?.description ?? '');
@@ -1784,6 +1842,129 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
     }
   };
 
+  const sortedQuestions = useMemo(() => {
+    return questions
+      .filter((q) => !q.isDeleted)
+      .sort((a, b) => a.display_order - b.display_order);
+  }, [questions]);
+
+  const addQuestionRow = () => {
+    setQuestions((prev) => [
+      ...prev,
+      {
+        tempId: Math.random().toString(36).substring(2, 9),
+        question_text: '',
+        question_type: 'text',
+        options: [],
+        is_knockout: false,
+        knockout_value: '',
+        display_order: prev.filter((q) => !q.isDeleted).length,
+      },
+    ]);
+  };
+
+  const removeQuestionRow = (index: number) => {
+    if (!confirm(t('ats.confirmDeleteQuestion', 'Are you sure you want to delete this question?'))) return;
+    const target = sortedQuestions[index];
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if ((q.id && q.id === target.id) || (q.tempId && q.tempId === target.tempId)) {
+          return { ...q, isDeleted: true };
+        }
+        return q;
+      })
+    );
+  };
+
+  const updateQuestionField = (index: number, field: keyof UIQuestion, value: any) => {
+    const target = sortedQuestions[index];
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if ((q.id && q.id === target.id) || (q.tempId && q.tempId === target.tempId)) {
+          const updated = { ...q, [field]: value };
+          if (field === 'question_type') {
+            updated.options = value === 'radio' || value === 'checkbox' ? ['', ''] : [];
+            updated.is_knockout = false;
+            updated.knockout_value = '';
+          }
+          return updated;
+        }
+        return q;
+      })
+    );
+  };
+
+  const addOptionField = (qIndex: number) => {
+    const target = sortedQuestions[qIndex];
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if ((q.id && q.id === target.id) || (q.tempId && q.tempId === target.tempId)) {
+          return { ...q, options: [...q.options, ''] };
+        }
+        return q;
+      })
+    );
+  };
+
+  const removeOptionField = (qIndex: number, optIndex: number) => {
+    const target = sortedQuestions[qIndex];
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if ((q.id && q.id === target.id) || (q.tempId && q.tempId === target.tempId)) {
+          const nextOptions = q.options.filter((_, idx) => idx !== optIndex);
+          let nextKnockoutValue = q.knockout_value;
+          if (q.is_knockout && q.knockout_value === q.options[optIndex]) {
+            nextKnockoutValue = '';
+          }
+          return { ...q, options: nextOptions, knockout_value: nextKnockoutValue };
+        }
+        return q;
+      })
+    );
+  };
+
+  const updateOptionField = (qIndex: number, optIndex: number, value: string) => {
+    const target = sortedQuestions[qIndex];
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if ((q.id && q.id === target.id) || (q.tempId && q.tempId === target.tempId)) {
+          const nextOptions = [...q.options];
+          const oldVal = nextOptions[optIndex];
+          nextOptions[optIndex] = value;
+          let nextKnockoutValue = q.knockout_value;
+          if (q.is_knockout && q.knockout_value === oldVal) {
+            nextKnockoutValue = value;
+          }
+          return { ...q, options: nextOptions, knockout_value: nextKnockoutValue };
+        }
+        return q;
+      })
+    );
+  };
+
+  const moveQuestion = (index: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= sortedQuestions.length) return;
+
+    const q1 = sortedQuestions[index];
+    const q2 = sortedQuestions[targetIdx];
+
+    const order1 = q1.display_order;
+    const order2 = q2.display_order;
+
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if ((q.id && q.id === q1.id) || (q.tempId && q.tempId === q1.tempId)) {
+          return { ...q, display_order: order2 };
+        }
+        if ((q.id && q.id === q2.id) || (q.tempId && q.tempId === q2.tempId)) {
+          return { ...q, display_order: order1 };
+        }
+        return q;
+      })
+    );
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!validateStep1()) {
@@ -1817,6 +1998,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       salaryMax: parseOptionalInt(salaryMaxInput),
       salaryPeriod: salaryPeriod || null,
       targetRole: targetRole || null,
+      screenerQuestions: questions,
     });
   };
 
@@ -2199,10 +2381,11 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
     ];
   }, [t]);
 
-  const stepCards: Array<{ id: 1 | 2 | 3; title: string; subtitle: string }> = [
+  const stepCards: Array<{ id: 1 | 2 | 3 | 4; title: string; subtitle: string }> = [
     { id: 1, title: t('ats.stepDetailsTitle', 'Job details'), subtitle: t('ats.stepDetailsSubtitle', 'Role profile and location') },
     { id: 2, title: t('ats.stepSettingsTitle', 'Platform settings'), subtitle: t('ats.stepSettingsSubtitle', 'Company, store and visibility') },
     { id: 3, title: t('ats.stepReviewTitle', 'Review'), subtitle: t('ats.stepReviewSubtitle', 'Final check before save') },
+    { id: 4, title: 'Screener Questions', subtitle: 'Indeed screening settings' },
   ];
 
   const isCompact = isMobile || isTablet;
@@ -3117,6 +3300,257 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                   </div>
                 </div>
               )}
+
+              {step === 4 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: '#fff', padding: 16, display: 'grid', gap: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1f2937', fontWeight: 700, fontSize: 14 }}>
+                    <FileCheck size={16} /> Screener Questions
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)' }}>
+                    These questions appear to candidates on Indeed before they apply. Indeed recommends max 20 questions.
+                  </p>
+
+                  {loadingQuestions ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+                      <div className="spinner" style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid rgba(201,151,58,0.2)', borderTopColor: '#C9973A', animation: 'spin 1s linear infinite' }} />
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 14 }}>
+                      {sortedQuestions.map((q, qIndex) => {
+                        return (
+                          <div key={q.id ? `q-id-${q.id}` : `q-temp-${q.tempId}`} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 14, background: '#fdfdfd', display: 'grid', gap: 10, position: 'relative' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              {/* Display Order Controls */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => moveQuestion(qIndex, 'up')}
+                                  disabled={qIndex === 0}
+                                  style={{ background: 'none', border: 'none', cursor: qIndex === 0 ? 'not-allowed' : 'pointer', fontSize: 12, color: qIndex === 0 ? '#cbd5e1' : '#64748b' }}
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveQuestion(qIndex, 'down')}
+                                  disabled={qIndex === sortedQuestions.length - 1}
+                                  style={{ background: 'none', border: 'none', cursor: qIndex === sortedQuestions.length - 1 ? 'not-allowed' : 'pointer', fontSize: 12, color: qIndex === sortedQuestions.length - 1 ? '#cbd5e1' : '#64748b' }}
+                                >
+                                  ▼
+                                </button>
+                              </div>
+
+                              {/* Question Text Input */}
+                              <div style={{ flex: 1 }}>
+                                <input
+                                  type="text"
+                                  className="field-input"
+                                  value={q.question_text}
+                                  onChange={(e) => updateQuestionField(qIndex, 'question_text', e.target.value)}
+                                  placeholder="e.g. Do you have experience in..."
+                                  style={{
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    padding: '8px 12px',
+                                    fontSize: 13.5,
+                                    borderRadius: 'var(--radius)',
+                                    border: '1px solid var(--border)',
+                                    outline: 'none',
+                                    background: '#fff'
+                                  }}
+                                />
+                              </div>
+
+                              {/* Question Type Selector */}
+                              <div style={{ width: 150 }}>
+                                <select
+                                  className="field-input"
+                                  value={q.question_type}
+                                  onChange={(e) => updateQuestionField(qIndex, 'question_type', e.target.value as any)}
+                                  style={{
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    padding: '8px 12px',
+                                    fontSize: 13.5,
+                                    borderRadius: 'var(--radius)',
+                                    border: '1px solid var(--border)',
+                                    outline: 'none',
+                                    background: '#fff'
+                                  }}
+                                >
+                                  <option value="text">Text</option>
+                                  <option value="number">Number</option>
+                                  <option value="radio">Multiple Choice (Radio)</option>
+                                  <option value="checkbox">Checkbox</option>
+                                </select>
+                              </div>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => removeQuestionRow(qIndex)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: '#B91C1C',
+                                  cursor: 'pointer',
+                                  padding: 6,
+                                  borderRadius: 6,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                                title="Delete Question"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+
+                            {/* Options Builder for radio/checkbox */}
+                            {(q.question_type === 'radio' || q.question_type === 'checkbox') && (
+                              <div style={{ paddingLeft: 24, display: 'grid', gap: 6 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Options:</div>
+                                {q.options.map((opt, optIndex) => (
+                                  <div key={`opt-${optIndex}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <input
+                                      type="text"
+                                      className="field-input"
+                                      value={opt}
+                                      onChange={(e) => updateOptionField(qIndex, optIndex, e.target.value)}
+                                      placeholder={`Option ${optIndex + 1}`}
+                                      style={{
+                                        width: '100%',
+                                        maxWidth: 300,
+                                        boxSizing: 'border-box',
+                                        padding: '6px 10px',
+                                        fontSize: 12.5,
+                                        borderRadius: 'var(--radius)',
+                                        border: '1px solid var(--border)',
+                                        outline: 'none',
+                                        background: '#fff'
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeOptionField(qIndex, optIndex)}
+                                      style={{ border: 'none', background: 'transparent', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => addOptionField(qIndex)}
+                                  style={{
+                                    width: 'fit-content',
+                                    fontSize: 12,
+                                    padding: '4px 8px',
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(201,151,58,0.42)',
+                                    background: 'rgba(201,151,58,0.1)',
+                                    color: '#8a6318',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4
+                                  }}
+                                >
+                                  <Plus size={12} /> Add option
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Knockout settings */}
+                            <div style={{ paddingLeft: 24, display: 'flex', alignItems: 'center', gap: 14, marginTop: 4 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5, color: 'var(--text-primary)' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={q.is_knockout}
+                                  onChange={(e) => updateQuestionField(qIndex, 'is_knockout', e.target.checked)}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                                Reject if answered:
+                              </label>
+                              {q.is_knockout && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  {q.question_type === 'radio' || q.question_type === 'checkbox' ? (
+                                    <select
+                                      className="field-input"
+                                      value={q.knockout_value}
+                                      onChange={(e) => updateQuestionField(qIndex, 'knockout_value', e.target.value)}
+                                      style={{
+                                        boxSizing: 'border-box',
+                                        padding: '4px 8px',
+                                        fontSize: 12.5,
+                                        borderRadius: 'var(--radius)',
+                                        border: '1px solid var(--border)',
+                                        outline: 'none',
+                                        background: '#fff',
+                                        minWidth: 150
+                                      }}
+                                    >
+                                      <option value="">Select option...</option>
+                                      {q.options.filter(Boolean).map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      className="field-input"
+                                      value={q.knockout_value}
+                                      onChange={(e) => updateQuestionField(qIndex, 'knockout_value', e.target.value)}
+                                      placeholder={q.question_type === 'number' ? 'e.g. 5' : 'e.g. no'}
+                                      style={{
+                                        boxSizing: 'border-box',
+                                        padding: '4px 8px',
+                                        fontSize: 12.5,
+                                        borderRadius: 'var(--radius)',
+                                        border: '1px solid var(--border)',
+                                        outline: 'none',
+                                        background: '#fff',
+                                        minWidth: 200
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={addQuestionRow}
+                        style={{
+                          width: 'fit-content',
+                          fontSize: 13,
+                          padding: '6px 12px',
+                          borderRadius: 'var(--radius)',
+                          border: '1px solid rgba(201,151,58,0.5)',
+                          background: 'rgba(201,151,58,0.15)',
+                          color: '#8a6318',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <Plus size={14} /> Add Question
+                      </button>
+                    </div>
+                  )}
+
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    Tip: Indeed shows max 20 questions. More than 20 significantly reduces candidate applications.
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 4, minHeight: 44 }}>
@@ -3152,10 +3586,34 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
               {step === 3 && (
                 <>
                   <Button variant="secondary" type="button" onClick={() => setStep(2)}>
-                    {t('common.edit', 'Edit')}
+                    ← {t('common.back', 'Back')}
                   </Button>
-                  <Button variant="primary" type="button" onClick={onClose}>
-                    {t('common.close', 'Close')}
+                  <Button variant="secondary" type="button" onClick={() => setStep(4)}>
+                    Screener Questions →
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    loading={saving}
+                    disabled={!title.trim() || !description.replace(/<[^>]*>/g, '').trim() || !jobType || !remoteType || !companyId}
+                  >
+                    {job ? t('ats.savePosition', 'Save position') : t('ats.createPosition', 'Create position')}
+                  </Button>
+                </>
+              )}
+
+              {step === 4 && (
+                <>
+                  <Button variant="secondary" type="button" onClick={() => setStep(3)}>
+                    ← {t('common.back', 'Back')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    loading={saving}
+                    disabled={!title.trim() || !description.replace(/<[^>]*>/g, '').trim() || !jobType || !remoteType || !companyId}
+                  >
+                    {job ? t('ats.savePosition', 'Save position') : t('ats.createPosition', 'Create position')}
                   </Button>
                 </>
               )}
@@ -6042,9 +6500,11 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
     salaryMax: number | null;
     salaryPeriod: string | null;
     targetRole: string | null;
+    screenerQuestions?: UIQuestion[];
   }) => {
     setSaving(true);
     try {
+      let jobId = editJob?.id;
       if (editJob) {
         const updated = await updateJob(editJob.id, {
           title: payload.title,
@@ -6097,9 +6557,36 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
           salaryPeriod: payload.salaryPeriod ?? undefined,
           targetRole: payload.targetRole ?? undefined,
         });
+        jobId = created.id;
         setJobs((prev) => [created, ...prev]);
         showToast(t('ats.jobCreated'), 'success');
       }
+
+      if (jobId && payload.screenerQuestions) {
+        const companyIdVal = payload.companyId;
+        for (const q of payload.screenerQuestions) {
+          const questionData = {
+            job_id: jobId,
+            company_id: companyIdVal,
+            question_text: q.question_text,
+            question_type: q.question_type,
+            options: q.options,
+            is_knockout: q.is_knockout,
+            knockout_value: q.knockout_value || null,
+            display_order: q.display_order,
+          };
+          if (q.isDeleted) {
+            if (q.id) {
+              await deleteScreenerQuestion(jobId, q.id, companyIdVal);
+            }
+          } else if (q.id) {
+            await updateScreenerQuestion(jobId, q.id, questionData, companyIdVal);
+          } else {
+            await createScreenerQuestion(jobId, questionData, companyIdVal);
+          }
+        }
+      }
+
       await fetch();
       setShowModal(false); setEditJob(null);
     } catch (err) {
