@@ -523,7 +523,47 @@ export default function PublicCareersPage() {
         <div className="careers-hero-inner">
           <div className="careers-top-actions">
             <span className="careers-kicker">{copy.kicker}</span>
-            <div className="careers-top-actions-right">
+            <div className="careers-top-actions-right" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <a
+                href="https://it.indeed.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                title={uiLanguage === 'it' ? 'Candidati facilmente tramite Indeed' : 'Apply easily via Indeed'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  border: '1px solid rgba(13, 33, 55, 0.15)',
+                  background: '#ffffff',
+                  textDecoration: 'none',
+                  color: '#4b5563',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)',
+                  height: '24px',
+                  boxSizing: 'border-box',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(201, 151, 58, 0.45)';
+                  e.currentTarget.style.boxShadow = '0 4px 10px rgba(201, 151, 58, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(13, 33, 55, 0.15)';
+                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.03)';
+                }}
+              >
+                <span>
+                  {uiLanguage === 'it' ? 'Candidati facilmente tramite' : 'Apply easily via'}
+                </span>
+                <img
+                  src="https://www.indeed.com/images/indeed-logo.svg"
+                  alt="Indeed"
+                  style={{ height: '12px', width: 'auto', display: 'block', verticalAlign: 'middle' }}
+                />
+              </a>
               <LanguageSwitcher />
             </div>
           </div>
