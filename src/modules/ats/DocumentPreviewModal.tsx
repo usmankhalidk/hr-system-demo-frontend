@@ -12,10 +12,20 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
   const fileExtension = filename.split('.').pop()?.toLowerCase();
   const isPDF = fileExtension === 'pdf';
   const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExtension || '');
-  const shouldInlinePreview = isPDF || isImage;
+  const isDoc = fileExtension === 'doc' || fileExtension === 'docx';
+  const isTxt = fileExtension === 'txt';
+  const isRtf = fileExtension === 'rtf';
+  const shouldInlinePreview = isPDF || isImage || isDoc || isTxt || isRtf;
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [docHtml, setDocHtml] = useState<string | null>(null);
+  const [txtContent, setTxtContent] = useState<string | null>(null);
+  const [rtfMeta, setRtfMeta] = useState<{ name: string; size?: number } | null>(null);
+
   const [loading, setLoading] = useState<boolean>(shouldInlinePreview);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const lang = localStorage.getItem('hr_lang') === 'en' ? 'en' : 'it';
 
   const resolvedUrl = useMemo(() => {
     if (/^(https?:|blob:|data:)/i.test(url)) return url;
@@ -31,66 +41,98 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
     if (!shouldInlinePreview) {
       setLoading(false);
       setPreviewUrl(null);
+      setDocHtml(null);
+      setTxtContent(null);
+      setRtfMeta(null);
       setLoadError(null);
       return;
     }
 
-    if (/^(blob:|data:)/i.test(resolvedUrl)) {
+    const isLocalBlob = /^(blob:|data:)/i.test(resolvedUrl);
+    if (isLocalBlob && (isPDF || isImage)) {
       setLoading(false);
       setPreviewUrl(resolvedUrl);
+      setDocHtml(null);
+      setTxtContent(null);
+      setRtfMeta(null);
       setLoadError(null);
       return;
     }
 
     let active = true;
-    let objectUrl: string | null = null;
     setLoading(true);
     setLoadError(null);
 
     const token = localStorage.getItem('hr_token') || sessionStorage.getItem('hr_token') || '';
-    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers: HeadersInit = (token && !isLocalBlob) ? { Authorization: `Bearer ${token}` } : {};
 
     fetch(resolvedUrl, { headers })
       .then(async (res) => {
         if (!res.ok) {
-          // Provide more detailed HTTP error messages
           const statusText = res.statusText || 'Unknown Error';
           let errorDetail = `HTTP ${res.status} - ${statusText}`;
-          
           if (res.status === 401) {
             errorDetail = 'Authentication required (401) - Please log in again';
           } else if (res.status === 403) {
             errorDetail = 'Access forbidden (403) - You do not have permission to view this file';
           } else if (res.status === 404) {
             errorDetail = 'File not found (404) - The file may have been deleted or moved';
-          } else if (res.status === 500) {
-            errorDetail = 'Server error (500) - Please try again later';
           }
-          
           throw new Error(errorDetail);
         }
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('text/html')) {
-          throw new Error('Server returned HTML instead of file - This may indicate an authentication redirect or server misconfiguration');
+
+        if (isPDF || isImage) {
+          const blob = await res.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          if (active) {
+            setPreviewUrl(objectUrl);
+          }
+          return () => {
+            URL.revokeObjectURL(objectUrl);
+          };
+        } else if (isDoc) {
+          const arrayBuffer = await res.arrayBuffer();
+          let mammothLib = (window as any).mammoth;
+          if (!mammothLib) {
+            await new Promise<void>((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js';
+              script.onload = () => {
+                mammothLib = (window as any).mammoth;
+                resolve();
+              };
+              script.onerror = () => reject(new Error('Failed to load Word document viewer helper library from CDN'));
+              document.head.appendChild(script);
+            });
+          }
+          if (mammothLib) {
+            const mammothResult = await mammothLib.convertToHtml({ arrayBuffer });
+            if (active) {
+              setDocHtml(mammothResult.value);
+            }
+          } else {
+            throw new Error('Word document parser is not loaded.');
+          }
+        } else if (isTxt) {
+          const text = await res.text();
+          if (active) {
+            setTxtContent(text);
+          }
+        } else if (isRtf) {
+          const blob = await res.blob();
+          if (active) {
+            setRtfMeta({ name: filename, size: blob.size });
+          }
         }
-        const blob = await res.blob();
-        objectUrl = URL.createObjectURL(blob);
-        if (active) setPreviewUrl(objectUrl);
       })
       .catch((err: any) => {
         if (active) {
           setPreviewUrl(null);
-          let errMsg = err?.message || String(err || 'Unknown error occurred');
-          
-          // Handle network errors
-          if (err?.name === 'TypeError' && errMsg.includes('Failed to fetch')) {
-            errMsg = 'Network error - Unable to reach the server. Check your connection or CORS configuration.';
-          }
-          
-          setLoadError(errMsg);
-          // Log to console so developers can inspect network/cors/auth issues
-          // eslint-disable-next-line no-console
-          console.error('Document preview failed:', { url: resolvedUrl, error: errMsg, originalError: err });
+          setDocHtml(null);
+          setTxtContent(null);
+          setRtfMeta(null);
+          setLoadError(err?.message || String(err || 'Preview generation failed'));
+          console.error('Preview error:', err);
         }
       })
       .finally(() => {
@@ -99,9 +141,8 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
 
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [resolvedUrl, shouldInlinePreview]);
+  }, [resolvedUrl, shouldInlinePreview, filename, isPDF, isImage, isDoc, isTxt, isRtf]);
 
   return createPortal(
     <div
@@ -260,6 +301,57 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
               }}
             />
           )}
+          {!loading && !loadError && isDoc && docHtml && (
+            <div 
+              style={{
+                width: '100%',
+                height: '100%',
+                padding: '40px',
+                background: '#fff',
+                overflow: 'auto',
+                color: '#334155',
+                lineHeight: 1.6,
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+              dangerouslySetInnerHTML={{ __html: docHtml }}
+            />
+          )}
+          {!loading && !loadError && isTxt && txtContent !== null && (
+            <pre 
+              style={{
+                width: '100%',
+                height: '100%',
+                padding: '40px',
+                background: '#fff',
+                overflow: 'auto',
+                color: '#334155',
+                fontFamily: 'monospace',
+                fontSize: '13px',
+                whiteSpace: 'pre-wrap',
+                margin: 0,
+                boxSizing: 'border-box'
+              }}
+            >
+              {txtContent}
+            </pre>
+          )}
+          {!loading && !loadError && isRtf && (
+            <div style={{ padding: 40, textAlign: 'center', background: '#fff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                {lang === 'it' ? 'Anteprima RTF non disponibile' : 'RTF preview not available'}
+              </div>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                {lang === 'it' 
+                  ? 'Il file è stato caricato correttamente.' 
+                  : 'Your file has been uploaded successfully.'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {filename} ({rtfMeta?.size ? `${(rtfMeta.size / 1024).toFixed(1)} KB` : ''})
+              </div>
+            </div>
+          )}
           {!loading && !loadError && !shouldInlinePreview && (
             <div style={{ padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
@@ -288,7 +380,7 @@ export default function DocumentPreviewModal({ url, filename, onClose }: Documen
         </div>
         
         {/* Footer with actions */}
-        {(isPDF || isImage) && (
+        {(isPDF || isImage || isDoc || isTxt || isRtf) && (
           <div
             style={{
               padding: '12px 20px',

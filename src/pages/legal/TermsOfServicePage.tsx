@@ -1,11 +1,85 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
+import { getPublicLegalDocument, LegalDocument } from '../../api/publicCareers';
 
 export default function TermsOfServicePage() {
   const { i18n } = useTranslation();
-  const lang = i18n.language === 'en' ? 'en' : 'it';
+  const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
+  const params = new URLSearchParams(window.location.search);
+  const companyName = params.get('companyName') || 'Fusaro Uomo S.r.l.';
+
+  const [doc, setDoc] = useState<LegalDocument | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    getPublicLegalDocument('terms', lang)
+      .then((data) => {
+        if (isMounted) {
+          setDoc(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load terms of service from DB:', err);
+        if (isMounted) setLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [lang]);
+
+  const convertMarkdownToHtml = (md: string) => {
+    if (!md) return '';
+
+    let html = md
+      .replace(/\{\{companyName\}\}/g, companyName);
+
+    // If it is already HTML, skip markdown conversion
+    const isHtml = /<[a-z][\s\S]*>/i.test(md);
+    if (isHtml) {
+      return html;
+    }
+
+    // Replace headers: ### Heading -> <h4>Heading</h4>
+    html = html.replace(/^### (.*?)$/gm, '<h4 style="color: var(--primary); margin-top: 20px; margin-bottom: 10px; font-weight: 700; font-size: 16px;">$1</h4>');
+    html = html.replace(/^## (.*?)$/gm, '<h3 style="color: var(--primary); margin-top: 24px; margin-bottom: 12px; font-weight: 700; font-size: 18px;">$1</h3>');
+    html = html.replace(/^# (.*?)$/gm, '<h2 style="color: var(--primary); margin-top: 28px; margin-bottom: 14px; font-weight: 800; font-size: 20px;">$1</h2>');
+
+    // Replace horizontal rules: --- -> <hr />
+    html = html.replace(/^---$/gm, '<hr style="border: 0; border-top: 1px solid var(--border); margin: 24px 0;" />');
+
+    // Replace bullet lists: - Item -> <li>Item</li>
+    html = html.replace(/^[-*] (.*?)$/gm, '<li style="margin-bottom: 6px;">$1</li>');
+    
+    // Wrap lists in ul tags
+    html = html.replace(/((?:<li style="margin-bottom: 6px;">.*?<\/li>\s*)+)/g, '<ul style="padding-left: 20px; margin-bottom: 16px; line-height: 1.7; color: var(--text-secondary);">$1</ul>');
+
+    // Replace bold: **text** -> <strong>text</strong>
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+
+    // Replace italic: *text* -> <em>text</em>
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+
+    // Paragraphs split by double newline
+    const blocks = html.split(/\n\s*\n/);
+    const parsedBlocks = blocks.map(block => {
+      const trimmed = block.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('<h') || trimmed.startsWith('<ul') || trimmed.startsWith('<hr') || trimmed.startsWith('<div')) {
+        return trimmed;
+      }
+      const withBreaks = trimmed.replace(/\n/g, '<br />');
+      return `<p style="margin-bottom: 16px; line-height: 1.7; color: var(--text-secondary);">${withBreaks}</p>`;
+    });
+
+    return parsedBlocks.join('\n');
+  };
 
   return (
     <div style={{ background: 'var(--background)', minHeight: '100vh', padding: '40px 20px', fontFamily: 'var(--font-body)' }}>
@@ -39,74 +113,67 @@ export default function TermsOfServicePage() {
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow)'
         }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '28px', fontWeight: 800, marginBottom: '24px' }}>
-            {lang === 'it' ? 'Termini di Servizio' : 'Terms of Service'}
-          </h1>
-
-          {/* Italian Version */}
-          {lang === 'it' && (
-            <section lang="it" style={{ color: 'var(--text-secondary)' }}>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                <strong>Ultimo aggiornamento: 8 Giugno 2026</strong>
-              </p>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-                Benvenuto nel portale Careers di <strong>Fusaro Uomo S.r.l.</strong> Utilizzando questo portale per consultare gli annunci di lavoro e inviare la tua candidatura, accetti i presenti Termini di Servizio.
-              </p>
-              
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-                1. Utilizzo del Portale
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
-                Il portale è destinato esclusivamente a candidati reali in cerca di impiego presso Fusaro Uomo S.r.l. È severamente vietato l'invio di dati falsi, incompleti o fuorvianti. È vietato qualsiasi tentativo di alterare o manomettere la funzionalità tecnica del sistema.
-              </p>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-                2. Candidature e Selezione
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
-                L'invio di una candidatura non costituisce alcuna offerta formale di impiego né garantisce l'avvio di colloqui conoscitivi. Il nostro team di recruiting valuterà le candidature a propria discrezione, contattando esclusivamente i profili ritenuti idonei per le posizioni aperte.
-              </p>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-                3. Proprietà Intellettuale
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
-                Tutti i contenuti presenti sul portale (loghi, marchi, testi, descrizioni delle posizioni aperte, codice sorgente e design) sono di proprietà esclusiva di Fusaro Uomo S.r.l. e sono protetti dalle leggi vigenti sul diritto d'autore. Non possono essere riprodotti o diffusi senza preventiva autorizzazione scritta.
-              </p>
-            </section>
-          )}
-
-          {/* English Version */}
-          {lang === 'en' && (
-            <section lang="en" style={{ color: 'var(--text-secondary)' }}>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                <strong>Last Updated: June 8, 2026</strong>
-              </p>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                Welcome to the Careers portal of <strong>Fusaro Uomo S.r.l.</strong> By using this portal to view job openings and submit your application, you agree to these Terms of Service.
-              </p>
-              
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-                1. Portal Usage
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                This portal is intended solely for genuine job seekers looking for employment opportunities at Fusaro Uomo S.r.l. Submitting false, incomplete, or misleading data is strictly prohibited, as is any attempt to interfere with the technical operations or security of the system.
-              </p>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-                2. Applications and Selection
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                Submitting an application does not constitute a formal offer of employment nor does it guarantee an interview. The recruiting team will evaluate candidate submissions at their sole discretion and will contact only those candidates selected for further stages.
-              </p>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-                3. Intellectual Property
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                All contents displayed on this portal (logos, trademarks, texts, job descriptions, source code, and design layouts) are the exclusive property of Fusaro Uomo S.r.l. and are protected by copyright laws. They may not be copied, reproduced, or distributed without prior written consent.
-              </p>
-            </section>
+          {loading ? (
+            <div style={{ padding: '60px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '24px',
+                height: '24px',
+                border: '2px solid rgba(201,151,58,0.1)',
+                borderTop: '2px solid var(--accent)',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                {lang === 'it' ? 'Caricamento termini...' : 'Loading terms...'}
+              </span>
+            </div>
+          ) : (
+            <>
+              <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '28px', fontWeight: 800, marginBottom: '24px' }}>
+                {doc?.title || (lang === 'it' ? 'Termini di Servizio' : 'Terms of Service')}
+              </h1>
+              <section 
+                lang={lang} 
+                className="legal-content-section"
+                style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: '1.7' }}
+                dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(doc?.content || '') }}
+              />
+              <style>{`
+                .legal-content-section p {
+                  margin-bottom: 16px;
+                  line-height: 1.7;
+                  font-size: 15px;
+                }
+                .legal-content-section h3 {
+                  color: var(--primary);
+                  margin-top: 24px;
+                  margin-bottom: 12px;
+                  font-weight: 700;
+                  font-size: 18px;
+                  font-family: var(--font-display);
+                }
+                .legal-content-section ul, .legal-content-section ol {
+                  margin-bottom: 16px;
+                  padding-left: 20px;
+                  list-style-type: disc;
+                }
+                .legal-content-section li {
+                  margin-bottom: 6px;
+                  line-height: 1.7;
+                  font-size: 15px;
+                }
+                .legal-content-section hr {
+                  margin: 16px 0;
+                  border: 0;
+                  border-top: 1px solid var(--border);
+                }
+              `}</style>
+              {!doc && (
+                <p style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                  {lang === 'it' ? 'Termini di Servizio non disponibili.' : 'Terms of Service not available.'}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { updateUserLocale } from '../../api/notifications';
+import { useAuth } from '../../context/AuthContext';
 
 interface LanguageSwitcherProps {
   /** 'pill' = compact flag+code for header, 'full' = full label for sidebar */
@@ -27,12 +28,16 @@ const FLAG_EN = () => (
 
 export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ variant = 'pill' }) => {
   const { i18n } = useTranslation();
-  const current = i18n.language === 'en' ? 'en' : 'it';
+  const { user } = useAuth();
+  const current = i18n.language?.startsWith('en') ? 'en' : 'it';
 
   const toggle = () => {
     const next = current === 'it' ? 'en' : 'it';
     i18n.changeLanguage(next);
-    updateUserLocale(next).catch(() => undefined);
+    localStorage.setItem('hr_lang', next);
+    if (user) {
+      updateUserLocale(next).catch(() => undefined);
+    }
   };
 
   if (variant === 'pill') {
@@ -54,7 +59,10 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ variant = 'p
               key={lang}
               onClick={() => {
                 i18n.changeLanguage(lang);
-                updateUserLocale(lang).catch(() => undefined);
+                localStorage.setItem('hr_lang', lang);
+                if (user) {
+                  updateUserLocale(lang).catch(() => undefined);
+                }
               }}
               title={lang === 'it' ? 'Italiano' : 'English'}
               style={{

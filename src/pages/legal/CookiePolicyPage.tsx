@@ -1,11 +1,87 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
+import { getPublicLegalDocument, LegalDocument } from '../../api/publicCareers';
 
 export default function CookiePolicyPage() {
   const { i18n } = useTranslation();
-  const lang = i18n.language === 'en' ? 'en' : 'it';
+  const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
+  const params = new URLSearchParams(window.location.search);
+  const companyName = params.get('companyName') || 'Fusaro Uomo S.r.l.';
+  const companyEmail = params.get('companyEmail') || 'diletta@fusarouomo.it';
+
+  const [doc, setDoc] = useState<LegalDocument | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    getPublicLegalDocument('cookie', lang)
+      .then((data) => {
+        if (isMounted) {
+          setDoc(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load cookie policy from DB:', err);
+        if (isMounted) setLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [lang]);
+
+  const convertMarkdownToHtml = (md: string) => {
+    if (!md) return '';
+
+    let html = md
+      .replace(/\{\{companyName\}\}/g, companyName)
+      .replace(/\{\{companyEmail\}\}/g, companyEmail);
+
+    // If it is already HTML, skip markdown conversion
+    const isHtml = /<[a-z][\s\S]*>/i.test(md);
+    if (isHtml) {
+      return html;
+    }
+
+    // Replace headers: ### Heading -> <h4>Heading</h4>
+    html = html.replace(/^### (.*?)$/gm, '<h4 style="color: var(--primary); margin-top: 20px; margin-bottom: 10px; font-weight: 700; font-size: 16px;">$1</h4>');
+    html = html.replace(/^## (.*?)$/gm, '<h3 style="color: var(--primary); margin-top: 24px; margin-bottom: 12px; font-weight: 700; font-size: 18px;">$1</h3>');
+    html = html.replace(/^# (.*?)$/gm, '<h2 style="color: var(--primary); margin-top: 28px; margin-bottom: 14px; font-weight: 800; font-size: 20px;">$1</h2>');
+
+    // Replace horizontal rules: --- -> <hr />
+    html = html.replace(/^---$/gm, '<hr style="border: 0; border-top: 1px solid var(--border); margin: 24px 0;" />');
+
+    // Replace bullet lists: - Item -> <li>Item</li>
+    html = html.replace(/^[-*] (.*?)$/gm, '<li style="margin-bottom: 6px;">$1</li>');
+    
+    // Wrap lists in ul tags
+    html = html.replace(/((?:<li style="margin-bottom: 6px;">.*?<\/li>\s*)+)/g, '<ul style="padding-left: 20px; margin-bottom: 16px; line-height: 1.7; color: var(--text-secondary);">$1</ul>');
+
+    // Replace bold: **text** -> <strong>text</strong>
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+
+    // Replace italic: *text* -> <em>text</em>
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+
+    // Paragraphs split by double newline
+    const blocks = html.split(/\n\s*\n/);
+    const parsedBlocks = blocks.map(block => {
+      const trimmed = block.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('<h') || trimmed.startsWith('<ul') || trimmed.startsWith('<hr') || trimmed.startsWith('<div')) {
+        return trimmed;
+      }
+      const withBreaks = trimmed.replace(/\n/g, '<br />');
+      return `<p style="margin-bottom: 16px; line-height: 1.7; color: var(--text-secondary);">${withBreaks}</p>`;
+    });
+
+    return parsedBlocks.join('\n');
+  };
 
   return (
     <div style={{ background: 'var(--background)', minHeight: '100vh', padding: '40px 20px', fontFamily: 'var(--font-body)' }}>
@@ -39,102 +115,67 @@ export default function CookiePolicyPage() {
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow)'
         }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '28px', fontWeight: 800, marginBottom: '24px' }}>
-            {lang === 'it' ? 'Informativa sui Cookie' : 'Cookie Policy'}
-          </h1>
-
-          {/* Italian Version */}
-          {lang === 'it' && (
-            <section lang="it" style={{ color: 'var(--text-secondary)' }}>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                <strong>Ultimo aggiornamento: 8 Giugno 2026</strong>
-              </p>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-                Il portale Careers di <strong>Fusaro Uomo S.r.l.</strong> utilizza cookie e tecnologie simili per migliorare l'esperienza di navigazione ed analizzare l'uso del nostro portale.
-              </p>
-              
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-                1. Cosa sono i Cookie
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
-                I cookie sono piccoli file di testo salvati sul tuo dispositivo durante la visita del sito. Consentono di memorizzare preferenze di navigazione (come la lingua selezionata) e informazioni sulle sessioni per agevolare le interazioni successive.
-              </p>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-                2. Tipologie di Cookie Utilizzati
-              </h3>
-              <p style={{ marginBottom: '12px', lineHeight: 1.7 }}>
-                Utilizziamo le seguenti tipologie di cookie:
-              </p>
-              <ul style={{ paddingLeft: '20px', marginBottom: '16px', lineHeight: 1.7 }}>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Cookie Tecnici (Necessari):</strong> Indispensabili per consentire la navigazione del sito e il funzionamento di base del portale (es. mantenimento della sessione di compilazione della candidatura).
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Cookie Analitici:</strong> Utilizzati in forma anonima e aggregata per raccogliere informazioni statistiche sulle visite al sito (es. quante visualizzazioni ha ricevuto un annuncio di lavoro).
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Cookie di Profilazione e Marketing:</strong> Utilizzati per tracciare la navigazione dell'utente e creare profili pubblicitari personalizzati. <em>Nota: Fusaro Uomo S.r.l. non utilizza cookie di profilazione proprietari o di terze parti a scopo pubblicitario sul portale Careers.</em>
-                </li>
-              </ul>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '18px', fontWeight: 700 }}>
-                3. Gestione e Consenso dei Cookie
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
-                Puoi scegliere di disabilitare o bloccare i cookie tramite le impostazioni del tuo browser web. Tuttavia, tieni presente che la disattivazione dei cookie tecnici essenziali potrebbe compromettere la corretta visualizzazione delle pagine o il caricamento e l'invio del modulo di candidatura.
-              </p>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7 }}>
-                Per domande o richieste in merito al trattamento dei dati personali legati ai cookie, puoi scrivere a: <a href="mailto:diletta@fusarouomo.it" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>diletta@fusarouomo.it</a>.
-              </p>
-            </section>
-          )}
-
-          {/* English Version */}
-          {lang === 'en' && (
-            <section lang="en" style={{ color: 'var(--text-secondary)' }}>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                <strong>Last Updated: June 8, 2026</strong>
-              </p>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                The Careers portal of <strong>Fusaro Uomo S.r.l.</strong> uses cookies and similar technologies to improve your browsing experience and analyze the usage of our portal.
-              </p>
-              
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-                1. What are Cookies
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                Cookies are small text files saved on your device during your visit to the website. They allow the storage of browsing preferences (such as selected language) and session details to facilitate subsequent interactions.
-              </p>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-                2. Types of Cookies Used
-              </h3>
-              <p style={{ marginBottom: '12px', lineHeight: 1.7, fontSize: '14px' }}>
-                We use the following types of cookies:
-              </p>
-              <ul style={{ paddingLeft: '20px', marginBottom: '16px', fontSize: '14px', lineHeight: 1.7 }}>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Technical Cookies (Necessary):</strong> Essential for enabling website navigation and basic portal operations (e.g., maintaining the session during application submittal).
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Analytical Cookies:</strong> Used anonymously to track website performance and compile aggregate visit statistics (e.g., how many views a job post receives).
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Marketing & Profiling Cookies:</strong> Used to track user navigation and build personalized advertising profiles. <em>Note: Fusaro Uomo S.r.l. does not deploy proprietary or third-party marketing cookies on this recruitment portal.</em>
-                </li>
-              </ul>
-
-              <h3 style={{ color: 'var(--primary)', marginTop: '24px', marginBottom: '12px', fontSize: '16px', fontWeight: 700 }}>
-                3. Managing Cookie Preferences
-              </h3>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                You can choose to disable or block cookies through your web browser settings. However, please note that disabling essential technical cookies might affect the correct rendering of the pages or the completion and submission of the job application form.
-              </p>
-              <p style={{ marginBottom: '16px', lineHeight: 1.7, fontSize: '14px' }}>
-                For any questions regarding our cookie usage, please contact us at: <a href="mailto:diletta@fusarouomo.it" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>diletta@fusarouomo.it</a>.
-              </p>
-            </section>
+          {loading ? (
+            <div style={{ padding: '60px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '24px',
+                height: '24px',
+                border: '2px solid rgba(201,151,58,0.1)',
+                borderTop: '2px solid var(--accent)',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                {lang === 'it' ? 'Caricamento cookie policy...' : 'Loading cookie policy...'}
+              </span>
+            </div>
+          ) : (
+            <>
+              <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '28px', fontWeight: 800, marginBottom: '24px' }}>
+                {doc?.title || (lang === 'it' ? 'Informativa sui Cookie' : 'Cookie Policy')}
+              </h1>
+              <section 
+                lang={lang} 
+                className="legal-content-section"
+                style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: '1.7' }}
+                dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(doc?.content || '') }}
+              />
+              <style>{`
+                .legal-content-section p {
+                  margin-bottom: 16px;
+                  line-height: 1.7;
+                  font-size: 15px;
+                }
+                .legal-content-section h3 {
+                  color: var(--primary);
+                  margin-top: 24px;
+                  margin-bottom: 12px;
+                  font-weight: 700;
+                  font-size: 18px;
+                  font-family: var(--font-display);
+                }
+                .legal-content-section ul, .legal-content-section ol {
+                  margin-bottom: 16px;
+                  padding-left: 20px;
+                  list-style-type: disc;
+                }
+                .legal-content-section li {
+                  margin-bottom: 6px;
+                  line-height: 1.7;
+                  font-size: 15px;
+                }
+                .legal-content-section hr {
+                  margin: 16px 0;
+                  border: 0;
+                  border-top: 1px solid var(--border);
+                }
+              `}</style>
+              {!doc && (
+                <p style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                  {lang === 'it' ? 'Informativa sui cookie non disponibile.' : 'Cookie policy not available.'}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

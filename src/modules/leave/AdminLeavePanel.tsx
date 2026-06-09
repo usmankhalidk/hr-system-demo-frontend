@@ -205,6 +205,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   };
 
   const [empError, setEmpError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Load employees once
   useEffect(() => {
@@ -217,7 +218,17 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
       });
   }, [t]);
 
-  // Load balances when employees or year changes
+  const filteredEmployees = useMemo(() => {
+    if (!searchQuery.trim()) return employees;
+    const query = searchQuery.toLowerCase();
+    return employees.filter(emp => {
+      const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
+      const reverseName = `${emp.surname} ${emp.name}`.toLowerCase();
+      return fullName.includes(query) || reverseName.includes(query);
+    });
+  }, [employees, searchQuery]);
+
+  // Load balances when filtered employees or year changes
   const loadBalances = useCallback(async (emps: Array<{ id: number; name: string; surname: string; avatarFilename?: string | null }>, selectedYear: number) => {
     if (emps.length === 0) return;
     setLoading(true);
@@ -237,10 +248,12 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   }, []);
 
   useEffect(() => {
-    if (employees.length > 0) {
-      loadBalances(employees, year);
+    if (filteredEmployees.length > 0) {
+      loadBalances(filteredEmployees, year);
+    } else {
+      setBalances({});
     }
-  }, [employees, year, loadBalances]);
+  }, [filteredEmployees, year, loadBalances]);
 
   function openEdit(emp: { id: number; name: string; surname: string }) {
     const empBalances = balances[emp.id] ?? [];
@@ -293,8 +306,8 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
     try {
       const result = await importLeaveBalances(importFile);
       setImportResult(result);
-      if (result.imported > 0 && employees.length > 0) {
-        loadBalances(employees, year);
+      if (result.imported > 0 && filteredEmployees.length > 0) {
+        loadBalances(filteredEmployees, year);
       }
     } catch (err: any) {
       const errMsg = err?.response?.data?.error ?? err?.message ?? t('common.error');
@@ -398,21 +411,75 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
-      {/* Year selector */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <label style={{ ...labelStyle, marginBottom: 0 }}>{t('leave.balance_year')}</label>
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          style={selectStyle}
-        >
-          {yearOptions.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+      {/* Year & Search & Export/Import Row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <label style={{ ...labelStyle, marginBottom: 0 }}>{t('leave.balance_year')}</label>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            style={selectStyle}
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Search bar inside section at top */}
+        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+          <svg 
+            width="14" 
+            height="14" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            style={{ color: 'var(--text-muted)', position: 'absolute', left: 10 }}
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('leave.search_employee_placeholder', 'Cerca dipendente...')}
+            style={{
+              padding: '8px 12px 8px 32px',
+              borderRadius: 8,
+              border: '1.5px solid #d1d5db',
+              background: '#ffffff',
+              color: '#111827',
+              fontSize: 13,
+              outline: 'none',
+              width: '240px',
+              transition: 'border-color 0.15s ease'
+            }}
+            onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: 2
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+
         {loading && (
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
         )}
+
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             onClick={() => handleExport()}
@@ -463,7 +530,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
       )}
 
       {/* Table */}
-      {!loading && employees.length === 0 ? (
+      {!loading && filteredEmployees.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '56px 32px', color: 'var(--text-secondary)' }}>
           {t('leave.balance_no_data')}
         </div>
@@ -492,7 +559,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                 </tr>
               </thead>
               <tbody>
-                {employees.slice(0, 50).map((emp) => {
+                {filteredEmployees.slice(0, 50).map((emp) => {
                   const avatarUrl = getAvatarUrl(emp.avatarFilename ?? null);
                   const initials = initialsForPerson(emp.name, emp.surname);
                   const fallbackColor = avatarColorFromName(`${emp.name ?? ''} ${emp.surname ?? ''}`.trim() || String(emp.id));
