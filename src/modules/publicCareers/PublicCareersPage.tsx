@@ -518,8 +518,9 @@ export default function PublicCareersPage() {
   };
 
   return (
-    <div className="careers-shell">
-      <section className="careers-hero">
+    <div className="careers-shell" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ flex: 1 }}>
+        <section className="careers-hero">
         <div className="careers-hero-inner">
           <div className="careers-top-actions">
             <span className="careers-kicker">{copy.kicker}</span>
@@ -882,6 +883,7 @@ export default function PublicCareersPage() {
           </div>
         </div>
       )}
+      </div>
       <CareersFooter />
       <CookieConsentBanner />
     </div>

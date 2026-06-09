@@ -937,8 +937,8 @@ export default function PublicJobDetailPage() {
   }
 
   return (
-    <div className="careers-detail-shell">
-      <div className="careers-detail-wrapper">
+    <div className="careers-detail-shell" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div className="careers-detail-wrapper" style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <Link className="careers-detail-back" to={careersBackPath}>
             <ArrowLeft size={14} />
@@ -998,7 +998,7 @@ export default function PublicJobDetailPage() {
         </section>
 
         <div className="careers-detail-grid">
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gap: 10, alignSelf: 'start' }}>
             <section className="careers-detail-card">
               <h2>{copy.roleOverview}</h2>
               {languageMismatch && (
@@ -1340,20 +1340,6 @@ export default function PublicJobDetailPage() {
               </div>
             </section>
 
-            <section className="careers-detail-card">
-              <h3>{copy.companySnapshot}</h3>
-              <div className="careers-facts-grid">
-                <div><strong>{copy.company}</strong><span>{companyName}</span></div>
-                <div><strong>{copy.group}</strong><span>{companyMeta?.groupName ?? copy.notSpecified}</span></div>
-                <div><strong>{copy.openRoles}</strong><span>{companyMeta?.openRolesCount ?? copy.notSpecified}</span></div>
-                <div><strong>{copy.profile}</strong><span>{companyMeta?.slug ?? copy.notSpecified}</span></div>
-                <div>
-                  <strong>{copy.owner}</strong>
-                  <span>{`${companyMeta?.ownerName ?? ''} ${companyMeta?.ownerSurname ?? ''}`.trim() || copy.notSpecified}</span>
-                </div>
-              </div>
-            </section>
-
             {job.storeId && (
               <section className="careers-detail-card">
                 <h3>{copy.storeContext}</h3>
@@ -1381,50 +1367,6 @@ export default function PublicJobDetailPage() {
                 </div>
               </section>
             )}
-
-            <section className="careers-detail-card">
-              <h3>{copy.hiringTeam}</h3>
-
-              {job.postedBy && (
-                <div className="careers-hiring-list" style={{ marginBottom: 2 }}>
-                  <article className="careers-hiring-item">
-                    <div className="careers-hiring-avatar">
-                      {getPublicAvatarUrl(job.postedBy.avatarFilename)
-                        ? <img src={getPublicAvatarUrl(job.postedBy.avatarFilename) ?? ''} alt={formatPersonName(job.postedBy)} />
-                        : toInitials(formatPersonName(job.postedBy))}
-                    </div>
-                    <div>
-                      <strong>{formatPersonName(job.postedBy)}</strong>
-                      <span>{formatRole(job.postedBy.role, uiLanguage)} - {copy.postingOwner}</span>
-                    </div>
-                  </article>
-                </div>
-              )}
-
-              {hiringTeam.length > 0 ? (
-                <div className="careers-hiring-list">
-                  {hiringTeam.map((contact) => {
-                    const avatarUrl = getPublicAvatarUrl(contact.avatarFilename);
-                    const name = formatPersonName(contact);
-                    return (
-                      <article key={contact.id} className="careers-hiring-item">
-                        <div className="careers-hiring-avatar">
-                          {avatarUrl ? <img src={avatarUrl} alt={name} /> : toInitials(name)}
-                        </div>
-                        <div>
-                          <strong>{name}</strong>
-                          <span>{formatRole(contact.role, uiLanguage)}{contact.storeName ? ` - ${contact.storeName}` : ''}</span>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="careers-login-gate">
-                  <p>{copy.noHiringContacts}</p>
-                </div>
-              )}
-            </section>
 
             <section className="careers-detail-card">
               <h3>{copy.securityTitle}</h3>
@@ -1718,9 +1660,9 @@ export default function PublicJobDetailPage() {
             onClose={() => setShowResumePreview(false)}
           />
         )}
-        <CareersFooter />
-        <CookieConsentBanner />
       </div>
+      <CareersFooter />
+      <CookieConsentBanner />
     </div>
   );
 }
