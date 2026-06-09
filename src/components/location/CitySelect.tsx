@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import CustomSelect, { SelectOption } from '../ui/CustomSelect';
-import { getCities, CityOption } from '../../api/location';
+import { getCities, CityOption, getStates } from '../../api/location';
 
 interface CitySelectProps {
   countryCode: string | null;
@@ -41,19 +41,33 @@ export function CitySelect({
     let mounted = true;
     setLoading(true);
 
-    getCities(countryCode, stateCode)
-      .then((data) => {
+    const loadCities = async () => {
+      try {
+        let resolvedStateCode = stateCode;
+        if (stateCode && stateCode.trim().length > 0) {
+          // If stateCode looks like a state name, find its code by loading states first
+          const statesList = await getStates(countryCode);
+          const matchedState = statesList.find(s => 
+            s.label.toLowerCase() === stateCode.toLowerCase() ||
+            s.value.toLowerCase() === stateCode.toLowerCase()
+          );
+          if (matchedState) {
+            resolvedStateCode = matchedState.value;
+          }
+        }
+
+        const data = await getCities(countryCode, resolvedStateCode);
         if (!mounted) return;
         setCities(data);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Failed to load cities:', err);
         if (mounted) setCities([]);
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadCities();
 
     return () => {
       mounted = false;

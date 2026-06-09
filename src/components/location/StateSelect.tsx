@@ -60,7 +60,7 @@ export function StateSelect({
 
   const options = useMemo<SelectOption[]>(() => {
     return states
-      .map((state) => ({ value: state.value, label: state.label }))
+      .map((state) => ({ value: state.label, label: state.label }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [states]);
 
@@ -71,9 +71,21 @@ export function StateSelect({
   useEffect(() => {
     if (!value) return;
     if (loading) return; // Wait until options are loaded before validating
+
+    // If options contains value (already name string), we're good
     if (options.some((option) => option.value === value)) return;
+
+    // Otherwise, check if the value is actually the state code/id (e.g. "72")
+    const matchedState = states.find((s) => s.value === value);
+    if (matchedState) {
+      // Auto-correct to name string!
+      onChangeRef.current(matchedState.label);
+      return;
+    }
+
+    // If it doesn't match either, then it's invalid
     onChangeRef.current(null);
-  }, [value, options, loading]);
+  }, [value, options, states, loading]);
 
   const isDisabled = disabled || !countryCode || options.length === 0 || loading;
 

@@ -204,6 +204,33 @@ function normalizeCountryCode(value: string | null | undefined): string {
   return COUNTRY_NAME_TO_CODE[raw.toLowerCase()] ?? '';
 }
 
+const italianProvinceCode = (cityName: string, stateName: string): string => {
+  const cityMap: Record<string, string> = {
+    'napoli': 'NA', 'naples': 'NA',
+    'salerno': 'SA',
+    'milano': 'MI', 'milan': 'MI',
+    'roma': 'RM', 'rome': 'RM',
+    'torino': 'TO', 'turin': 'TO',
+    'firenze': 'FI', 'florence': 'FI',
+    'bologna': 'BO',
+    'venezia': 'VE', 'venice': 'VE',
+    'genova': 'GE', 'genoa': 'GE',
+    'bari': 'BA',
+    'palermo': 'PA',
+    'catania': 'CT',
+    'modena': 'MO',
+    'verona': 'VR',
+    'padova': 'PD',
+    'trieste': 'TS',
+    'brescia': 'BS',
+    'messina': 'ME',
+  };
+  const cityKey = cityName?.toLowerCase().trim();
+  if (cityMap[cityKey]) return cityMap[cityKey];
+  // Fallback: take first 2 letters of state name uppercased
+  return stateName?.substring(0, 2).toUpperCase() || stateName;
+};
+
 function countryNameFromCode(value: string | null | undefined): string {
   const code = normalizeCountryCode(value);
   if (!code) return '-';
@@ -242,7 +269,7 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
   // Resolve fallbacks for listing payloads
   const companyEmail = data.companyEmail || 'hr@fusarouomo.it';
   const indeedApplyTokenConfigured = data.indeedApplyTokenConfigured !== undefined ? data.indeedApplyTokenConfigured : true;
-  const indeedApplyPostUrl = data.indeedApplyPostUrl || `https://veylohr.com/api/public/indeed-apply/${data.companySlug || 'fusarouomo'}`;
+  const indeedApplyPostUrl = data.indeedApplyPostUrl || `${import.meta.env.VITE_PUBLIC_URL || window.location.origin}/api/public/indeed-apply/${data.companySlug || 'fusarouomo'}`;
   const companyName = data.companyName || 'FUSARO UOMO';
   const jobId = data.id || 0;
 
@@ -1893,10 +1920,6 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       nextErrors.salary = t('ats.salaryRangeError', 'Salary min must be less than or equal to salary max');
     }
 
-    if (locationOverride.state && /^\d+$/.test(locationOverride.state.trim())) {
-      nextErrors.state = t('ats.stateNumericError', 'State/Province cannot be a number. Use a code like MI or SA.');
-    }
-
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -3125,6 +3148,16 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                           {errors.state && (
                             <span style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4, display: 'block' }}>
                               {errors.state}
+                            </span>
+                          )}
+                          {!errors.state && locationOverride.state && /^\d+$/.test(locationOverride.state.trim()) && (
+                            <span style={{ color: '#d97706', fontSize: 11, marginTop: 4, display: 'block', fontWeight: 500 }}>
+                              ⚠️ {t('ats.stateNumericWarning', 'Province code will be auto-corrected on save')}
+                            </span>
+                          )}
+                          {locationOverride.country === 'IT' && (
+                            <span style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 4, display: 'block', lineHeight: '1.4' }}>
+                              {t('ats.stateItalyHelper', "Per l'Italia, inserisci il codice provincia: NA (Napoli), MI (Milano), SA (Salerno), RM (Roma). Il sistema converte automaticamente.")}
                             </span>
                           )}
                         </div>
@@ -6699,6 +6732,11 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
     setSaving(true);
     try {
       let jobId = editJob?.id;
+      let stateValue = payload.locationOverride.state || '';
+      if (payload.locationOverride.country === 'IT') {
+        stateValue = italianProvinceCode(payload.locationOverride.city, stateValue);
+      }
+
       if (editJob) {
         const updated = await updateJob(editJob.id, {
           title: payload.title,
@@ -6712,7 +6750,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
           isRemote: payload.remoteType === 'remote',
           remoteType: payload.remoteType,
           jobCity: payload.remoteType === 'remote' ? null : (payload.locationOverride.city || null),
-          jobState: payload.remoteType === 'remote' ? null : (payload.locationOverride.state || null),
+          jobState: payload.remoteType === 'remote' ? null : (stateValue || null),
           jobCountry: payload.remoteType === 'remote' ? null : (payload.locationOverride.country || null),
           jobPostalCode: payload.remoteType === 'remote' ? null : (payload.locationOverride.postalCode || null),
           jobAddress: payload.remoteType === 'remote' ? null : (payload.locationOverride.address || null),
@@ -6739,7 +6777,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
           isRemote: payload.remoteType === 'remote',
           remoteType: payload.remoteType,
           jobCity: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.city || undefined),
-          jobState: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.state || undefined),
+          jobState: payload.remoteType === 'remote' ? undefined : (stateValue || undefined),
           jobCountry: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.country || undefined),
           jobPostalCode: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.postalCode || undefined),
           jobAddress: payload.remoteType === 'remote' ? undefined : (payload.locationOverride.address || undefined),
