@@ -207,12 +207,16 @@ describe('ShiftDrawer — create mode', () => {
     // prefillUserId pre-fills user_id='5' in form state before async loads
     renderDrawer({ shift: null, onClose, prefillUserId: 5 });
 
-    // Wait for the store option to render, then select it
-    await screen.findByRole('option', { name: 'Roma Store' });
-    const storeSelect = screen.getAllByRole('combobox').find(
-      (el) => (el as HTMLSelectElement).querySelector('option[value="2"]') !== null,
-    ) as HTMLSelectElement;
-    fireEvent.change(storeSelect, { target: { value: '2' } });
+    // Wait for the store button to load and become enabled
+    const storeBtn = screen.getByText('— Seleziona negozio —');
+    await waitFor(() => {
+      expect(storeBtn).not.toBeDisabled();
+    });
+    fireEvent.click(storeBtn);
+
+    // Click the Roma Store option in the dropdown list
+    const storeOption = await screen.findByText('Roma Store');
+    fireEvent.click(storeOption);
 
     // Fill start_time and end_time via TimePicker stubs
     const timeInputs = screen.getAllByRole('textbox');

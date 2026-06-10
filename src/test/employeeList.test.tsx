@@ -135,7 +135,7 @@ describe('EmployeeList', () => {
 
     // EmployeeList sets loading=true initially; the Table or content area shows a spinner or nothing
     // We check that the page title is shown (always present)
-    expect(screen.getByText(/dipendenti|employees/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/dipendenti|employees/i)[0]).toBeInTheDocument();
   });
 
   it('renders employee rows after data loads', async () => {

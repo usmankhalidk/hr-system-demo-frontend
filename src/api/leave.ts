@@ -17,7 +17,9 @@ export type LeaveStatus =
   | 'HR rejected'
   | 'approved'
   | 'rejected'
-  | 'cancelled';
+  | 'cancelled'
+  | 'admin_approved'
+  | 'admin approved';
 
 export interface LeaveRequest {
   id: number;

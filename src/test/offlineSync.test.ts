@@ -14,16 +14,47 @@ vi.mock('../api/client', () => ({
   },
 }));
 
-import { useOfflineSync } from '../hooks/useOfflineSync';
+import React from 'react';
+import { useOfflineSync, OfflineSyncProvider } from '../context/OfflineSyncContext';
 import { ToastProvider } from '../context/ToastContext';
 
-const QUEUE_KEY = 'hr_offline_queue';
+const TestWrapper = ({ children }: { children: React.ReactNode }) => (
+  React.createElement(ToastProvider, null,
+    React.createElement(OfflineSyncProvider, null, children)
+  )
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
+// Mock IndexedDB module
+let mockOfflineQueue: any[] = [];
+let mockDailyState: any = null;
+
+vi.mock('../utils/indexedDB', () => ({
+  addOfflineEvent: vi.fn().mockImplementation(async (event) => {
+    const id = mockOfflineQueue.length + 1;
+    const item = { ...event, id };
+    mockOfflineQueue.push(item);
+    return id;
+  }),
+  getOfflineEvents: vi.fn().mockImplementation(async () => {
+    return [...mockOfflineQueue];
+  }),
+  deleteOfflineEvents: vi.fn().mockImplementation(async (ids: number[]) => {
+    mockOfflineQueue = mockOfflineQueue.filter(item => !ids.includes(item.id));
+  }),
+  getPersistedDailyAttendanceState: vi.fn().mockImplementation(() => {
+    return mockDailyState;
+  }),
+  persistDailyAttendanceState: vi.fn().mockImplementation((userId, state) => {
+    mockDailyState = state;
+  }),
+}));
+
+import { getOfflineEvents } from '../utils/indexedDB';
 
 describe('useOfflineSync', () => {
   beforeEach(() => {
-    localStorage.clear();
+    mockOfflineQueue = [];
+    mockDailyState = null;
     mockPost.mockReset();
     vi.useFakeTimers();
     // Default: online
@@ -31,42 +62,45 @@ describe('useOfflineSync', () => {
   });
 
   afterEach(() => {
-    localStorage.clear();
     vi.useRealTimers();
   });
 
   // ── Enqueue ─────────────────────────────────────────────────────────────────
 
-  it('enqueue() persists an event to localStorage with a _clientId', () => {
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+  it('enqueue() persists an event to IndexedDB with a client_uuid', async () => {
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
 
-    act(() => {
-      result.current.enqueue({
+    await act(async () => {
+      await result.current.enqueue({
         event_type: 'checkin',
         unique_id:  'EMP001',
         event_time: '2024-01-01T09:00:00.000Z',
       });
     });
 
-    const stored = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]');
+    const stored = await getOfflineEvents();
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ event_type: 'checkin', unique_id: 'EMP001' });
-    expect(typeof stored[0]._clientId).toBe('string');
-    expect(stored[0]._clientId.length).toBeGreaterThan(0);
+    expect(typeof stored[0].client_uuid).toBe('string');
+    expect(stored[0].client_uuid.length).toBeGreaterThan(0);
   });
 
-  it('queueLength updates reactively after enqueue()', () => {
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+  it('queueLength updates reactively after enqueue()', async () => {
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
 
+    // Wait for hook initialization
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(result.current.queueLength).toBe(0);
 
-    act(() => {
-      result.current.enqueue({ event_type: 'checkin',  unique_id: 'EMP001', event_time: new Date().toISOString() });
+    await act(async () => {
+      await result.current.enqueue({ event_type: 'checkin',  unique_id: 'EMP001', event_time: new Date().toISOString() });
     });
     expect(result.current.queueLength).toBe(1);
 
-    act(() => {
-      result.current.enqueue({ event_type: 'checkout', unique_id: 'EMP001', event_time: new Date().toISOString() });
+    await act(async () => {
+      await result.current.enqueue({ event_type: 'checkout', unique_id: 'EMP001', event_time: new Date().toISOString() });
     });
     expect(result.current.queueLength).toBe(2);
   });
@@ -74,13 +108,13 @@ describe('useOfflineSync', () => {
   // ── Online / offline detection ───────────────────────────────────────────────
 
   it('isOnline reflects navigator.onLine initial state (true)', () => {
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
     expect(result.current.isOnline).toBe(true);
   });
 
   it('isOnline is false when navigator.onLine starts as false', () => {
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
     expect(result.current.isOnline).toBe(false);
   });
 
@@ -88,12 +122,24 @@ describe('useOfflineSync', () => {
 
   it('does NOT send _clientId to the server', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
-    mockPost.mockResolvedValueOnce({ data: { data: { synced: 1, failed: 0, errors: [] } } });
+    mockPost.mockImplementation(async (url, data) => {
+      const uuids = data.events.map((e: any) => e.client_uuid);
+      return {
+        data: {
+          data: {
+            synced: uuids.length,
+            failed: 0,
+            errors: [],
+            syncedUuids: uuids,
+          }
+        }
+      };
+    });
 
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
 
-    act(() => {
-      result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
+    await act(async () => {
+      await result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
     });
 
     Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true });
@@ -111,12 +157,24 @@ describe('useOfflineSync', () => {
   it('calls POST /attendance/sync and clears queue when window "online" event fires', async () => {
     // Start offline so drainQueue isn't called on mount
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
-    mockPost.mockResolvedValueOnce({ data: { data: { synced: 1, failed: 0, errors: [] } } });
+    mockPost.mockImplementation(async (url, data) => {
+      const uuids = data.events.map((e: any) => e.client_uuid);
+      return {
+        data: {
+          data: {
+            synced: uuids.length,
+            failed: 0,
+            errors: [],
+            syncedUuids: uuids,
+          }
+        }
+      };
+    });
 
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
 
-    act(() => {
-      result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
+    await act(async () => {
+      await result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
     });
     expect(result.current.queueLength).toBe(1);
 
@@ -132,17 +190,18 @@ describe('useOfflineSync', () => {
       expect.objectContaining({ events: expect.any(Array) }),
     );
     expect(result.current.queueLength).toBe(0);
-    expect(JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]')).toHaveLength(0);
+    const stored = await getOfflineEvents();
+    expect(stored).toHaveLength(0);
   });
 
   it('preserves queue if sync POST fails', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
     mockPost.mockRejectedValueOnce(new Error('Network error'));
 
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
 
-    act(() => {
-      result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP999', event_time: new Date().toISOString() });
+    await act(async () => {
+      await result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP999', event_time: new Date().toISOString() });
     });
     expect(result.current.queueLength).toBe(1);
 
@@ -154,7 +213,7 @@ describe('useOfflineSync', () => {
     });
 
     // Queue must still be intact
-    const stored = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]');
+    const stored = await getOfflineEvents();
     expect(stored).toHaveLength(1);
   });
 
@@ -164,10 +223,10 @@ describe('useOfflineSync', () => {
     let resolvePost!: (v: unknown) => void;
     mockPost.mockReturnValueOnce(new Promise((res) => { resolvePost = res; }));
 
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
 
-    act(() => {
-      result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
+    await act(async () => {
+      await result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
     });
 
     Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true });
@@ -182,7 +241,17 @@ describe('useOfflineSync', () => {
 
     // Now resolve the post
     await act(async () => {
-      resolvePost({ data: { data: { synced: 1, failed: 0, errors: [] } } });
+      const uuids = mockOfflineQueue.map(e => e.client_uuid);
+      resolvePost({
+        data: {
+          data: {
+            synced: uuids.length,
+            failed: 0,
+            errors: [],
+            syncedUuids: uuids,
+          }
+        }
+      });
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -192,14 +261,27 @@ describe('useOfflineSync', () => {
 
   it('uses exponential backoff for retries', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
+    
     mockPost
       .mockRejectedValueOnce(new Error('fail 1'))
       .mockRejectedValueOnce(new Error('fail 2'))
-      .mockResolvedValueOnce({ data: { data: { synced: 1, failed: 0, errors: [] } } });
+      .mockImplementationOnce(async (url, data) => {
+        const uuids = data.events.map((e: any) => e.client_uuid);
+        return {
+          data: {
+            data: {
+              synced: uuids.length,
+              failed: 0,
+              errors: [],
+              syncedUuids: uuids,
+            }
+          }
+        };
+      });
 
-    const { result } = renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
-    act(() => {
-      result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
+    const { result } = renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
+    await act(async () => {
+      await result.current.enqueue({ event_type: 'checkin', unique_id: 'EMP001', event_time: new Date().toISOString() });
     });
 
     Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true });
@@ -231,15 +313,27 @@ describe('useOfflineSync', () => {
   it('prunes events older than 24 h before syncing', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
 
-    // Seed localStorage with a stale event (25 h ago)
+    // Seed mock queue with a stale event (25 h ago)
     const staleTime = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
-    localStorage.setItem(QUEUE_KEY, JSON.stringify([
-      { event_type: 'checkin', unique_id: 'EMP001', event_time: staleTime, _clientId: 'stale-1' },
-    ]));
+    mockOfflineQueue = [
+      { event_type: 'checkin', unique_id: 'EMP001', event_time: staleTime, client_uuid: 'stale-1', id: 1 }
+    ];
 
-    mockPost.mockResolvedValue({ data: { data: { synced: 0, failed: 0, errors: [] } } });
+    mockPost.mockImplementation(async (url, data) => {
+      const uuids = data.events.map((e: any) => e.client_uuid);
+      return {
+        data: {
+          data: {
+            synced: uuids.length,
+            failed: 0,
+            errors: [],
+            syncedUuids: uuids,
+          }
+        }
+      };
+    });
 
-    renderHook(() => useOfflineSync(), { wrapper: ToastProvider });
+    renderHook(() => useOfflineSync(), { wrapper: TestWrapper });
 
     Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true });
     await act(async () => {
@@ -249,6 +343,7 @@ describe('useOfflineSync', () => {
 
     // Stale event should have been pruned — nothing sent to server
     expect(mockPost).not.toHaveBeenCalled();
-    expect(JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]')).toHaveLength(0);
+    const stored = await getOfflineEvents();
+    expect(stored).toHaveLength(0);
   });
 });

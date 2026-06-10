@@ -54,6 +54,16 @@ const IconShield = () => (
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
 );
+const IconScale = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m16 16 3-8 3 8c-.87.65-2.24.75-3 .75s-2.13-.1-3-.75Z" />
+    <path d="m2 16 3-8 3 8c-.87.65-2.24.75-3 .75s-2.13-.1-3-.75Z" />
+    <path d="M7 21h10" />
+    <path d="M12 2v19" />
+    <path d="M12 7h10" />
+    <path d="M12 7H2" />
+  </svg>
+);
 const IconPerson = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
@@ -231,7 +241,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell />, permissionKey: 'notifiche' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, superAdminOnly: true },
-      { labelKey: 'nav.legalDocuments', path: '/impostazioni/legal', icon: <IconShield />, superAdminOnly: true },
+      { labelKey: 'nav.legalDocuments', path: '/impostazioni/legal', icon: <IconScale />, superAdminOnly: true },
       { labelKey: 'nav.externalAffluence', path: '/integrazioni/database-esterno', icon: <IconDatabase />, superAdminOnly: true },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.automazioni', path: '/automazioni', icon: <IconZap />, permissionKey: 'automazioni' },
@@ -256,7 +266,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
       { labelKey: 'nav.notifications', path: '/notifiche', icon: <IconBell />, permissionKey: 'notifiche' },
       { labelKey: 'nav.messaggi', path: '/hr-chat', icon: <IconMessage />, permissionKey: 'messaggi' },
       { labelKey: 'nav.email', path: '/impostazioni/email', icon: <IconMail />, superAdminOnly: true },
-      { labelKey: 'nav.legalDocuments', path: '/impostazioni/legal', icon: <IconShield />, superAdminOnly: true },
+      { labelKey: 'nav.legalDocuments', path: '/impostazioni/legal', icon: <IconScale />, superAdminOnly: true },
       { labelKey: 'nav.permissions', path: '/impostazioni/permessi', icon: <IconShield />, permissionKey: 'gestione_accessi' },
       { labelKey: 'nav.automazioni', path: '/automazioni', icon: <IconZap />, permissionKey: 'automazioni' },
       { labelKey: 'nav.reports', path: '/reports', icon: <IconReports />, permissionKey: 'report' },
@@ -264,7 +274,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
     ],
     area_manager: [
       { labelKey: 'nav.dashboard', path: '/', icon: <IconDashboard /> },
-      { labelKey: 'nav.companies', path: '/aziende', icon: <IconBuilding /> },
       { labelKey: 'nav.stores', path: '/negozi', icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.terminals', path: '/terminali', icon: <IconTerminal />, permissionKey: 'terminali' },
       { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },

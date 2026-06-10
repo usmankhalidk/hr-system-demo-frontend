@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '../i18n/config';
+import { ToastProvider } from '../context/ToastContext';
 
 // ── Mock recordCheckin ────────────────────────────────────────────────────────
 const mockRecordCheckin = vi.fn();
@@ -21,17 +22,50 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
+// ── Mock useOfflineSync to avoid IndexedDB dependencies ───────────────────────
+const mockGetTodayOfflineState = vi.fn().mockResolvedValue({
+  hasShift: true,
+  hasLeave: false,
+  checkedIn: false,
+  breakStarted: false,
+  breakEnded: false,
+  checkedOut: false,
+});
+const mockEnqueue = vi.fn();
+
+const mockOfflineSyncValue = {
+  enqueue: mockEnqueue,
+  isOnline: true,
+  getTodayOfflineState: mockGetTodayOfflineState,
+};
+
+vi.mock('../context/OfflineSyncContext', () => ({
+  useOfflineSync: () => mockOfflineSyncValue,
+  OfflineSyncProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// ── Mock indexedDB utils ──────────────────────────────────────────────────────
+vi.mock('../utils/indexedDB', () => ({
+  persistDailyAttendanceState: vi.fn().mockResolvedValue(undefined),
+  getDailyAttendanceState: vi.fn().mockResolvedValue(null),
+}));
+
 import ScanPage from '../modules/attendance/ScanPage';
+import { OfflineSyncProvider } from '../context/OfflineSyncContext';
 
 // ── Render helper: places ScanPage at /presenze/scan with given search string ──
 function renderScan(search = '') {
   return render(
     <I18nextProvider i18n={i18n}>
-      <MemoryRouter initialEntries={[`/presenze/scan${search}`]}>
-        <Routes>
-          <Route path="/presenze/scan" element={<ScanPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ToastProvider>
+        <OfflineSyncProvider>
+          <MemoryRouter initialEntries={[`/presenze/scan${search}`]}>
+            <Routes>
+              <Route path="/presenze/scan" element={<ScanPage />} />
+            </Routes>
+          </MemoryRouter>
+        </OfflineSyncProvider>
+      </ToastProvider>
     </I18nextProvider>
   );
 }
@@ -97,9 +131,12 @@ describe('ScanPage — employee with token', () => {
 
     renderScan('?token=abc123');
 
-    // Click the first action button (CHECK-IN)
-    const buttons = screen.getAllByRole('button');
-    fireEvent.click(buttons[0]);
+    // Wait for the button to be enabled after initial state load
+    const checkinBtn = await screen.findByTestId('scan-action-checkin');
+    await waitFor(() => {
+      expect(checkinBtn).not.toBeDisabled();
+    });
+    fireEvent.click(checkinBtn);
 
     await waitFor(() => {
       // The error message for NO_ACTIVE_SHIFT should appear
@@ -116,8 +153,11 @@ describe('ScanPage — employee with token', () => {
 
     renderScan('?token=abc123');
 
-    const buttons = screen.getAllByRole('button');
-    fireEvent.click(buttons[0]);
+    const checkinBtn = await screen.findByTestId('scan-action-checkin');
+    await waitFor(() => {
+      expect(checkinBtn).not.toBeDisabled();
+    });
+    fireEvent.click(checkinBtn);
 
     await waitFor(() => {
       const errorEl = screen.queryByText(/qr.*invalid|token.*invalido|qr.*scaduto|expired/i);
@@ -132,8 +172,11 @@ describe('ScanPage — employee with token', () => {
 
     renderScan('?token=abc123');
 
-    const buttons = screen.getAllByRole('button');
-    fireEvent.click(buttons[0]);
+    const checkinBtn = await screen.findByTestId('scan-action-checkin');
+    await waitFor(() => {
+      expect(checkinBtn).not.toBeDisabled();
+    });
+    fireEvent.click(checkinBtn);
 
     await waitFor(() => {
       // Success screen renders a checkmark character ✓

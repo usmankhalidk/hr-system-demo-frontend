@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ReactCountryFlag from 'react-country-flag';
-import { ArrowRight, Building2, Users, Store, Plus, Layers, Smartphone, HardDrive, CalendarClock } from 'lucide-react';
+import { ArrowRight, Building2, Users, Store, Plus, Layers, Smartphone, HardDrive, CalendarClock, Search } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useAuth } from '../../context/AuthContext';
@@ -302,6 +302,9 @@ export default function SystemCompanyManagement() {
   const { user } = useAuth();
 
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [search, setSearch] = useState('');
+  const [selectedGroupId, setSelectedGroupId] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
   const [companyGroups, setCompanyGroups] = useState<Array<{ id: number; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -370,6 +373,27 @@ export default function SystemCompanyManagement() {
   }, [formProfile.country, timezoneValues]);
 
   const locale = i18n.language?.startsWith('it') ? 'it-IT' : 'en-GB';
+
+  const filteredCompanies = useMemo(() => {
+    return companies.filter((c) => {
+      const query = search.toLowerCase().trim();
+      const matchesSearch = !query ||
+        c.name.toLowerCase().includes(query) ||
+        (c.companyEmail && c.companyEmail.toLowerCase().includes(query)) ||
+        (c.registrationNumber && c.registrationNumber.toLowerCase().includes(query)) ||
+        (c.city && c.city.toLowerCase().includes(query));
+
+      const matchesGroup = selectedGroupId === 'all' ||
+        (selectedGroupId === 'standalone' && c.groupId == null) ||
+        (selectedGroupId !== 'standalone' && String(c.groupId) === selectedGroupId);
+
+      const matchesStatus = selectedStatus === 'all' ||
+        (selectedStatus === 'active' && c.isActive === true) ||
+        (selectedStatus === 'inactive' && c.isActive === false);
+
+      return matchesSearch && matchesGroup && matchesStatus;
+    });
+  }, [companies, search, selectedGroupId, selectedStatus]);
 
   const countryLabel = useMemo(() => {
     const code = formProfile.country.trim().toUpperCase();
@@ -766,12 +790,93 @@ export default function SystemCompanyManagement() {
         </div>
       )}
 
+      {/* ── Search and Filter Bar ── */}
+      {companies.length > 0 && (
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'center',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '12px',
+          boxShadow: 'var(--shadow-sm)',
+          flexWrap: 'wrap',
+          marginTop: -4,
+        }}>
+          {/* Universal Search Input */}
+          <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+            <Search size={18} style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-muted)',
+              pointerEvents: 'none',
+            }} />
+            <Input
+              placeholder={t('companies.searchPlaceholder', 'Cerca per nome, email, p.iva o città...')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                paddingLeft: '40px',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                fontSize: '14px',
+                width: '100%',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          {/* Group Filter */}
+          <div style={{ minWidth: 160 }}>
+            <Select
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                fontSize: '14px',
+                width: '100%',
+              }}
+            >
+              <option value="all">{t('companies.filterAllGroups', 'Tutti i gruppi')}</option>
+              <option value="standalone">{t('companies.optionStandalone', 'Autonoma')}</option>
+              {companyGroups.map(g => (
+                <option key={g.id} value={String(g.id)}>{g.name}</option>
+              ))}
+            </Select>
+          </div>
+
+          {/* Status Filter */}
+          <div style={{ minWidth: 140 }}>
+            <Select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                fontSize: '14px',
+                width: '100%',
+              }}
+            >
+              <option value="all">{t('companies.filterAllStatuses', 'Tutti gli stati')}</option>
+              <option value="active">{t('companies.filterActive', 'Attive')}</option>
+              <option value="inactive">{t('companies.filterDeactivated', 'Disattivate')}</option>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {/* ── Company cards ── */}
       {companies.length === 0 ? (
         <Alert variant="info" title={t('common.noData')}>{t('companies.errorLoad')}</Alert>
+      ) : filteredCompanies.length === 0 ? (
+        <Alert variant="info" title={t('common.noResults', 'Nessun risultato')}>{t('companies.noResultsMatchingFilters', 'Nessuna azienda corrisponde ai filtri selezionati.')}</Alert>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
-          {companies.map((c) => {
+          {filteredCompanies.map((c) => {
             const avatarColor = getAvatarColor(c.name);
             const initials = getInitials(c.name);
             const groupName = companyGroups.find((g) => g.id === c.groupId)?.name;

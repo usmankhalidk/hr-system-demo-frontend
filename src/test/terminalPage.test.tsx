@@ -30,7 +30,7 @@ const mockEnqueue = vi.fn();
 let mockIsOnline = true;
 let mockQueueLength = 0;
 
-vi.mock('../hooks/useOfflineSync', () => ({
+vi.mock('../context/OfflineSyncContext', () => ({
   useOfflineSync: () => ({
     enqueue: mockEnqueue,
     queueLength: mockQueueLength,
