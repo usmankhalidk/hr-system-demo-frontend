@@ -655,15 +655,13 @@ export default function ShiftsPage() {
                     {t('shifts.affluence_btn')}
                   </button>
                 )}
-                {!isStoreManager && (
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => { setEditingShift(null); setDrawerOpen(true); }}
-                  >
-                    <IconPlus />
-                    {t('shifts.newShift', 'Nuovo turno')}
-                  </button>
-                )}
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { setEditingShift(null); setPrefillUserId(undefined); setPrefillDate(undefined); setDrawerOpen(true); }}
+                >
+                  <IconPlus />
+                  {t('shifts.newShift', 'Nuovo turno')}
+                </button>
               </>
             )}
           </div>
@@ -1307,10 +1305,11 @@ export default function ShiftsPage() {
               padding: '16px 0',
             }}>
               {/* New Shift */}
-              {!isStoreManager && (
                 <button
                   onClick={() => {
                     setEditingShift(null);
+                    setPrefillUserId(undefined);
+                    setPrefillDate(undefined);
                     setDrawerOpen(true);
                     setMobileMenuOpen(false);
                   }}
@@ -1353,7 +1352,6 @@ export default function ShiftsPage() {
                     </div>
                   </div>
                 </button>
-              )}
 
               {/* Templates */}
               <button

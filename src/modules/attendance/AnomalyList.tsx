@@ -11,7 +11,7 @@ interface Anomaly {
   userAvatarFilename?: string | null;
   storeName: string;
   date: string;
-  anomalyType: 'late_arrival' | 'no_show' | 'long_break' | 'early_exit' | 'overtime';
+  anomalyType: 'late_arrival' | 'no_show' | 'long_break' | 'early_exit' | 'overtime' | 'missing_checkout';
   severity: 'low' | 'medium' | 'high';
   details: string;
   detailsKey?: string;
@@ -25,6 +25,7 @@ interface Props {
   storeId?: number;
   userId?: number;
   search?: string;
+  compact?: boolean;
 }
 
 // ── SVG Icons ──────────────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ const ANOMALY_META: Record<string, { Icon: () => JSX.Element; color: string; bg:
   long_break:   { Icon: IconPause,   color: '#7c3aed', bg: 'rgba(124,58,237,0.08)',  border: 'rgba(124,58,237,0.20)' },
   early_exit:   { Icon: IconLogOut,  color: '#0369a1', bg: 'rgba(3,105,161,0.08)',   border: 'rgba(3,105,161,0.20)' },
   overtime:     { Icon: IconOvertime, color: '#c2410c', bg: 'rgba(194,65,12,0.08)',  border: 'rgba(194,65,12,0.20)' },
+  missing_checkout: { Icon: IconLogOut, color: '#be123c', bg: 'rgba(190,18,60,0.08)', border: 'rgba(190,18,60,0.20)' },
 };
 
 const SOURCE_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -111,13 +113,20 @@ function getAvatarColor(name: string): string {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
-export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search }: Props) {
+export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search, compact: propCompact }: Props) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
   const { isMobile, isTablet } = useBreakpoint();
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    if (propCompact !== undefined) {
+      setCompact(propCompact);
+    }
+  }, [propCompact]);
 
   const rangeExceeds14Days = (() => {
     const from = new Date(dateFrom);
@@ -241,12 +250,12 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
       <div style={{
         display: 'grid',
         gridTemplateColumns: isMobile
-          ? 'repeat(2, 1fr)'
-          : `${pad} repeat(5, 1fr) ${pad}`,
+          ? 'repeat(2, minmax(0, 1fr))'
+          : 'repeat(6, minmax(0, 1fr))',
         gap: isMobile ? 8 : 12,
         marginBottom: isMobile ? 16 : 24,
+        padding: isMobile ? '0 16px' : `0 ${pad}`,
       }}>
-        {isMobile ? null : <div />}
         {Object.entries(ANOMALY_META).map(([type, meta]) => {
           const count = countByType[type] ?? 0;
           const { Icon } = meta;
@@ -280,13 +289,14 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                 fontSize: isMobile ? 9 : 10, fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: '0.8px',
                 color: count > 0 ? meta.color : 'var(--text-muted)',
+                wordBreak: 'break-word',
+                whiteSpace: 'normal',
               }}>
                 {t(`attendance.anomaly_${type}`)}
               </div>
             </div>
           );
         })}
-        {isMobile ? null : <div />}
       </div>
 
       {/* ── Mobile: card list ──────────────────────────────────────────────── */}
@@ -391,15 +401,53 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
         /* ── Desktop / tablet: table ──────────────────────────────────────── */
         <div style={{
           background: 'var(--surface)',
-          borderTop: '1px solid var(--border)',
-          borderBottom: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-sm)',
           overflow: 'hidden',
+          margin: `0 ${pad}`,
         }}>
+          {propCompact === undefined && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              padding: '8px 16px',
+              borderBottom: '1px solid var(--border-light)',
+              background: 'var(--surface-warm)',
+              gap: 8,
+            }}>
+              <button
+                onClick={() => setCompact(!compact)}
+                title={compact ? t('attendance.normalView', 'Visualizzazione normale') : t('attendance.compactView', 'Visualizzazione compatta')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  border: '1px solid var(--border)',
+                  background: compact ? 'var(--accent-light)' : 'var(--surface)',
+                  color: compact ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+                <span>{compact ? t('attendance.compact', 'Compatto') : t('attendance.normal', 'Normale')}</span>
+              </button>
+            </div>
+          )}
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
               <thead>
-                <tr style={{ background: 'var(--surface-warm)' }}>
-                  <th style={{ width: pad }}></th>
+                <tr style={{ background: '#0d2137' }}>
                   {[
                     { label: t('shifts.employee'),        icon: <IconUser /> },
                     { label: t('common.store'),            icon: <IconStore /> },
@@ -408,20 +456,20 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                     { label: t('attendance.col_severity'), icon: null },
                     { label: t('attendance.col_origin', 'Origin'),   icon: null },
                     { label: t('attendance.col_details'),  icon: null },
-                  ].map(({ label, icon }) => (
+                  ].map(({ label, icon }, i) => (
                     <th key={label} style={{
-                      padding: '10px 16px', textAlign: 'left',
-                      fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                      padding: compact ? '8px 16px' : '12px 16px', textAlign: 'left',
+                      fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
                       textTransform: 'uppercase', letterSpacing: '1.2px',
-                      borderBottom: '1px solid var(--border)',
+                      borderBottom: '1px solid rgba(255,255,255,0.1)',
+                      ...(i === 0 ? { paddingLeft: 24 } : {}),
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        {icon && <span style={{ opacity: 0.6 }}>{icon}</span>}
+                        {icon && <span style={{ opacity: 0.8 }}>{icon}</span>}
                         {label}
                       </div>
                     </th>
                   ))}
-                  <th style={{ width: pad }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -438,14 +486,13 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                     >
-                      <td></td>
-                      <td style={{ padding: '11px 16px' }}>
+                      <td style={{ padding: compact ? '6px 16px 6px 24px' : '11px 16px 11px 24px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                           <div style={{
-                            width: 30, height: 30, borderRadius: '50%',
+                            width: compact ? 24 : 30, height: compact ? 24 : 30, borderRadius: '50%',
                             background: a.userAvatarFilename ? 'transparent' : avatarBg, color: '#fff',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 10, fontWeight: 700, flexShrink: 0,
+                            fontSize: compact ? 9 : 10, fontWeight: 700, flexShrink: 0,
                             fontFamily: 'var(--font-display)', overflow: 'hidden',
                           }}>
                             {a.userAvatarFilename ? (
@@ -453,28 +500,28 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                             ) : initials}
                           </div>
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
+                            <div style={{ fontSize: compact ? 12 : 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
                               {a.userName} {a.userSurname}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <td style={{ padding: compact ? '6px 16px' : '11px 16px', fontSize: compact ? 12 : 13, color: 'var(--text-secondary)' }}>
                         {a.storeName}
                       </td>
-                      <td style={{ padding: '11px 16px' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>
+                      <td style={{ padding: compact ? '6px 16px' : '11px 16px' }}>
+                        <div style={{ fontSize: compact ? 12 : 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>
                           {new Date(a.date + 'T12:00:00').toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: compact ? 10 : 11, color: 'var(--text-muted)' }}>
                           {new Date(a.date + 'T12:00:00').toLocaleDateString(locale, { weekday: 'short' })}
                         </div>
                       </td>
-                      <td style={{ padding: '11px 16px' }}>
+                      <td style={{ padding: compact ? '6px 16px' : '11px 16px' }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
-                          padding: '5px 10px', borderRadius: 'var(--radius-sm)',
-                          fontSize: 11, fontWeight: 700, letterSpacing: '0.4px',
+                          padding: compact ? '2px 8px' : '5px 10px', borderRadius: 'var(--radius-sm)',
+                          fontSize: compact ? 10 : 11, fontWeight: 700, letterSpacing: '0.4px',
                           background: meta.bg, color: meta.color,
                           border: `1px solid ${meta.border}`,
                           textTransform: 'uppercase',
@@ -483,11 +530,11 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                           {t(`attendance.anomaly_${a.anomalyType}`)}
                         </span>
                       </td>
-                      <td style={{ padding: '11px 16px' }}>
+                      <td style={{ padding: compact ? '6px 16px' : '11px 16px' }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 5,
-                          padding: '4px 10px', borderRadius: 20,
-                          fontSize: 11, fontWeight: 700,
+                          padding: compact ? '2px 8px' : '4px 10px', borderRadius: 20,
+                          fontSize: compact ? 10 : 11, fontWeight: 700,
                           background: sevMeta.bg, color: sevMeta.color,
                           border: `1px solid ${sevMeta.border}`,
                           textTransform: 'uppercase', letterSpacing: '0.4px',
@@ -496,14 +543,14 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                           {t(`attendance.severity_${a.severity}`)}
                         </span>
                       </td>
-                      <td style={{ padding: '11px 16px' }}>
+                      <td style={{ padding: compact ? '6px 16px' : '11px 16px' }}>
                         {a.checkinSource ? (() => {
                           const sm = SOURCE_META[a.checkinSource] ?? { label: '?', color: '#64748b', bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.25)' };
                           return (
                             <span style={{
                               display: 'inline-flex', alignItems: 'center', gap: 4,
-                              padding: '3px 8px', borderRadius: 4,
-                              fontSize: 10, fontWeight: 800, letterSpacing: '0.8px',
+                              padding: compact ? '1px 6px' : '3px 8px', borderRadius: 4,
+                              fontSize: compact ? 9 : 10, fontWeight: 800, letterSpacing: '0.8px',
                               textTransform: 'uppercase',
                               background: sm.bg, color: sm.color, border: `1px solid ${sm.border}`,
                               ...(a.checkinSource === 'sync' ? { outline: `2px solid ${sm.border}`, outlineOffset: '1px' } : {}),
@@ -512,13 +559,12 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
                             </span>
                           );
                         })() : (
-                          <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>—</span>
+                          <span style={{ fontSize: compact ? 10 : 11, color: 'var(--text-disabled)' }}>—</span>
                         )}
                       </td>
-                      <td style={{ padding: '11px 16px', fontSize: 12, color: 'var(--text-muted)', maxWidth: 260, lineHeight: 1.5 }}>
+                      <td style={{ padding: compact ? '6px 16px' : '11px 16px', fontSize: compact ? 11 : 12, color: 'var(--text-muted)', maxWidth: 260, lineHeight: 1.5 }}>
                         {a.detailsKey ? t(a.detailsKey, a.detailsParams) : a.details}
                       </td>
-                      <td></td>
                     </tr>
                   );
                 })}
@@ -527,7 +573,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search 
           </div>
 
           <div style={{
-            padding: '10px 16px',
+            padding: '12px 24px',
             borderTop: '1px solid var(--border)',
             background: 'var(--surface-warm)',
             display: 'flex', alignItems: 'center', gap: 6,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, CheckCheck, Clock3, FileText, Palmtree, Thermometer, Trash2, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCheck, Clock3, FileText, Palmtree, Thermometer, Trash2, XCircle, User, Store, Shield, Calendar, Clock, Settings } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
   getLeaveRequests,
@@ -46,6 +46,8 @@ const STATUS_META: Record<LeaveStatus, { bg: string; color: string }> = {
   approved:                        { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
   rejected:                        { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
   cancelled:                       { bg: 'rgba(0,0,0,0.05)',       color: '#6b7280' },
+  admin_approved:                  { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
+  'admin approved':                { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
 };
 
 function StatusBadge({ status }: { status: LeaveStatus }) {
@@ -205,6 +207,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   };
 
   const [empError, setEmpError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Load employees once
   useEffect(() => {
@@ -217,7 +220,17 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
       });
   }, [t]);
 
-  // Load balances when employees or year changes
+  const filteredEmployees = useMemo(() => {
+    if (!searchQuery.trim()) return employees;
+    const query = searchQuery.toLowerCase();
+    return employees.filter(emp => {
+      const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
+      const reverseName = `${emp.surname} ${emp.name}`.toLowerCase();
+      return fullName.includes(query) || reverseName.includes(query);
+    });
+  }, [employees, searchQuery]);
+
+  // Load balances when filtered employees or year changes
   const loadBalances = useCallback(async (emps: Array<{ id: number; name: string; surname: string; avatarFilename?: string | null }>, selectedYear: number) => {
     if (emps.length === 0) return;
     setLoading(true);
@@ -237,10 +250,12 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   }, []);
 
   useEffect(() => {
-    if (employees.length > 0) {
-      loadBalances(employees, year);
+    if (filteredEmployees.length > 0) {
+      loadBalances(filteredEmployees, year);
+    } else {
+      setBalances({});
     }
-  }, [employees, year, loadBalances]);
+  }, [filteredEmployees, year, loadBalances]);
 
   function openEdit(emp: { id: number; name: string; surname: string }) {
     const empBalances = balances[emp.id] ?? [];
@@ -293,8 +308,8 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
     try {
       const result = await importLeaveBalances(importFile);
       setImportResult(result);
-      if (result.imported > 0 && employees.length > 0) {
-        loadBalances(employees, year);
+      if (result.imported > 0 && filteredEmployees.length > 0) {
+        loadBalances(filteredEmployees, year);
       }
     } catch (err: any) {
       const errMsg = err?.response?.data?.error ?? err?.message ?? t('common.error');
@@ -398,21 +413,75 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
 
   return (
     <div style={{ padding: '20px 32px' }}>
-      {/* Year selector */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <label style={{ ...labelStyle, marginBottom: 0 }}>{t('leave.balance_year')}</label>
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          style={selectStyle}
-        >
-          {yearOptions.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+      {/* Year & Search & Export/Import Row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <label style={{ ...labelStyle, marginBottom: 0 }}>{t('leave.balance_year')}</label>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            style={selectStyle}
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Search bar inside section at top */}
+        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+          <svg 
+            width="14" 
+            height="14" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            style={{ color: 'var(--text-muted)', position: 'absolute', left: 10 }}
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('leave.search_employee_placeholder', 'Cerca dipendente...')}
+            style={{
+              padding: '8px 12px 8px 32px',
+              borderRadius: 8,
+              border: '1.5px solid #d1d5db',
+              background: '#ffffff',
+              color: '#111827',
+              fontSize: 13,
+              outline: 'none',
+              width: '240px',
+              transition: 'border-color 0.15s ease'
+            }}
+            onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: 2
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+
         {loading && (
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
         )}
+
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             onClick={() => handleExport()}
@@ -463,7 +532,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
       )}
 
       {/* Table */}
-      {!loading && employees.length === 0 ? (
+      {!loading && filteredEmployees.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '56px 32px', color: 'var(--text-secondary)' }}>
           {t('leave.balance_no_data')}
         </div>
@@ -492,7 +561,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                 </tr>
               </thead>
               <tbody>
-                {employees.slice(0, 50).map((emp) => {
+                {filteredEmployees.slice(0, 50).map((emp) => {
                   const avatarUrl = getAvatarUrl(emp.avatarFilename ?? null);
                   const initials = initialsForPerson(emp.name, emp.surname);
                   const fallbackColor = avatarColorFromName(`${emp.name ?? ''} ${emp.surname ?? ''}`.trim() || String(emp.id));
@@ -898,6 +967,51 @@ export default function AdminLeavePanel() {
   const [filterType, setFilterType]     = useState('');
   const [filterStoreId, setFilterStoreId] = useState('');
   const [search, setSearch]             = useState('');
+
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  // Temporary filter states
+  const [tempStoreId, setTempStoreId] = useState(filterStoreId);
+  const [tempStatus, setTempStatus] = useState(filterStatus);
+  const [tempType, setTempType] = useState(filterType);
+  const [tempDateFrom, setTempDateFrom] = useState(dateFrom);
+  const [tempDateTo, setTempDateTo] = useState(dateTo);
+
+  const openFilterModal = () => {
+    setTempStoreId(filterStoreId);
+    setTempStatus(filterStatus);
+    setTempType(filterType);
+    setTempDateFrom(dateFrom);
+    setTempDateTo(dateTo);
+    setShowFilterModal(true);
+  };
+
+  const applyFilters = () => {
+    setFilterStoreId(tempStoreId);
+    setFilterStatus(tempStatus);
+    setFilterType(tempType);
+    setDateFrom(tempDateFrom);
+    setDateTo(tempDateTo);
+    setShowFilterModal(false);
+  };
+
+  const resetAllFilters = () => {
+    setTempStoreId('');
+    setTempStatus('');
+    setTempType('');
+    setTempDateFrom(monthStart);
+    setTempDateTo(monthEnd);
+  };
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filterStatus) count++;
+    if (filterType) count++;
+    if (filterStoreId) count++;
+    if (dateFrom && dateFrom !== monthStart) count++;
+    if (dateTo && dateTo !== monthEnd) count++;
+    return count;
+  }, [filterStatus, filterType, filterStoreId, dateFrom, dateTo, monthStart, monthEnd]);
 
   // ── Create modal ───────────────────────────────────────────────────────────
   const [createOpen, setCreateOpen]     = useState(false);
@@ -1561,45 +1675,76 @@ export default function AdminLeavePanel() {
           </div>
 
           {panelTab === 'requests' && (
-            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                placeholder={t('common.search')}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ ...filterControlStyle, flex: '1 1 180px', minWidth: 150, cursor: 'text' }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 180px', minWidth: 150 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#6f5a41', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateFrom')}</span>
-                <div style={{ flex: 1 }}><DatePicker value={dateFrom} onChange={setDateFrom} /></div>
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+              {/* Search input */}
+              <div style={{ flex: 1, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 12, top: 9, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder={t('common.search', 'Cerca...')}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: 36,
+                    borderRadius: 8,
+                    border: '1.5px solid #dfd2c2',
+                    padding: '0 12px 0 34px',
+                    background: '#fffdfa',
+                    color: '#374151',
+                    fontSize: 13,
+                    outline: 'none',
+                    transition: 'all 0.15s',
+                  }}
+                />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 180px', minWidth: 150 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#6f5a41', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>{t('attendance.dateTo')}</span>
-                <div style={{ flex: 1 }}><DatePicker value={dateTo} onChange={setDateTo} /></div>
-              </div>
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...filterControlStyle, flex: '1 1 170px', minWidth: 140 }}>
-                <option value="">{t('leave.admin_filter_all_status')}</option>
-                <option value="pending">{t('leave.status_pending')}</option>
-                <option value="store manager approved">{t('leave.status_store_manager_approved')}</option>
-                <option value="area manager approved">{t('leave.status_area_manager_approved')}</option>
-                <option value="HR approved">{t('leave.status_hr_approved')}</option>
-                <option value="approved">{t('leave.status_approved')}</option>
-                <option value="rejected">{t('leave.status_rejected')}</option>
-                <option value="cancelled">{t('leave.status_cancelled')}</option>
-              </select>
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...filterControlStyle, flex: '1 1 150px', minWidth: 120 }}>
-                <option value="">{t('leave.admin_filter_all_types')}</option>
-                <option value="vacation">{t('leave.type_vacation')}</option>
-                <option value="sick">{t('leave.type_sick')}</option>
-              </select>
-              <select value={filterStoreId} onChange={(e) => setFilterStoreId(e.target.value)} style={{ ...filterControlStyle, flex: '1 1 190px', minWidth: 150 }}>
-                <option value="">{t('leave.admin_filter_all_stores', 'All stores')}</option>
-                {[...stores]
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((store) => (
-                    <option key={store.id} value={String(store.id)}>{store.name}</option>
-                  ))}
-              </select>
+
+              {/* Filter Button */}
+              <button
+                onClick={openFilterModal}
+                style={{
+                  background: activeFiltersCount > 0
+                    ? 'linear-gradient(135deg, var(--accent) 0%, #B48719 100%)'
+                    : '#fffdfa',
+                  color: activeFiltersCount > 0 ? '#fff' : 'var(--text-secondary)',
+                  border: activeFiltersCount > 0 ? 'none' : '1px solid #dfd2c2',
+                  borderRadius: 8,
+                  padding: '0 14px',
+                  height: 36,
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  flexShrink: 0,
+                  transition: 'all 0.2s',
+                  boxShadow: activeFiltersCount > 0 ? '0 2px 8px rgba(139,105,20,0.24)' : 'none',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                <span>{t('employees.filters', 'Filtri')}</span>
+                {activeFiltersCount > 0 && (
+                  <span style={{
+                    background: activeFiltersCount > 0 ? '#fff' : 'var(--accent)',
+                    color: activeFiltersCount > 0 ? 'var(--accent)' : '#fff',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    padding: '1px 5px',
+                    borderRadius: '999px',
+                    marginLeft: '2px',
+                  }}>
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
               {loading && <span style={{ fontSize: 12, color: '#6f5a41' }}>{t('common.loading')}</span>}
             </div>
           )}
@@ -1642,24 +1787,27 @@ export default function AdminLeavePanel() {
                     <thead>
                       <tr style={{ background: 'var(--primary)' }}>
                         {[
-                          t('leave.col_employee'),
-                          t('leave.col_role', 'Role'),
-                          t('leave.col_store', 'Store'),
-                          t('leave.type_label'),
-                          t('leave.col_period'),
-                          t('leave.col_days'),
-                          t('leave.col_status'),
-                          t('leave.col_action_time', 'Last action'),
-                          t('common.actions'),
+                          { text: t('leave.col_employee'), icon: <User size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('leave.col_role', 'Role'), icon: <Shield size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('leave.col_store', 'Store'), icon: <Store size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('leave.type_label'), icon: <Palmtree size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('leave.col_period'), icon: <Calendar size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('leave.col_days'), icon: <Clock size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('leave.col_status'), icon: <CheckCheck size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('leave.col_action_time', 'Last action'), icon: <Clock3 size={12} style={{ marginRight: 6 }} /> },
+                          { text: t('common.actions'), icon: <Settings size={12} style={{ marginRight: 6 }} /> },
                         ].map((h, i) => (
-                          <th key={`${h}-${i}`} style={{
+                          <th key={`${h.text}-${i}`} style={{
                             padding: '10px 16px', textAlign: 'left',
                             fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.84)',
                             textTransform: 'uppercase', letterSpacing: '1.5px',
                             borderBottom: '1px solid rgba(255,255,255,0.22)',
                             ...(i === 0 ? { paddingLeft: 20 } : {}),
                           }}>
-                            {h}
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              {h.icon}
+                              <span>{h.text}</span>
+                            </div>
                           </th>
                         ))}
                       </tr>
@@ -1761,7 +1909,9 @@ export default function AdminLeavePanel() {
                                 </span>
                                 <span style={{ minWidth: 0 }}>
                                   <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {storeMeta.storeName}
+                                    {storeMeta.storeName && storeMeta.storeName.length > 14
+                                      ? `${storeMeta.storeName.substring(0, 14)}...`
+                                      : storeMeta.storeName}
                                   </span>
                                   <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {storeMeta.companyName}
@@ -2292,6 +2442,282 @@ export default function AdminLeavePanel() {
             </div>
           </div>
         </div>
+      )}
+
+      {showFilterModal && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(13,33,55,0.48)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setShowFilterModal(false)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: '16px',
+              width: 'min(520px, 92vw)',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.22)',
+              overflow: 'hidden',
+              border: '1px solid var(--border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Accent stripe */}
+            <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%)' }} />
+
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '8px',
+                    background: 'linear-gradient(135deg, #8B6914 0%, #B48719 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                  </svg>
+                </div>
+                <div>
+                  <h2
+                    style={{
+                      fontSize: '17px',
+                      fontWeight: 700,
+                      color: 'var(--text)',
+                      fontFamily: 'var(--font-display)',
+                      margin: 0,
+                      letterSpacing: '-0.02em',
+                    }}
+                  >
+                    {t('leave.filterTitle', 'Filtra richieste')}
+                  </h2>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                    {t('leave.filterSubtitle', 'Affina la ricerca delle richieste di ferie e permessi')}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  fontSize: '24px',
+                  lineHeight: 1,
+                  padding: '4px 8px',
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Store filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
+                  {t('common.store', 'Negozio')}
+                </label>
+                <select
+                  value={tempStoreId}
+                  onChange={(e) => setTempStoreId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    padding: '0 10px',
+                    background: 'var(--background)',
+                    color: 'var(--text)',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                >
+                  <option value="">{t('common.all')} {t('common.store', 'store').toLowerCase()}</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.companyName ? `${s.name} (${s.companyName})` : s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Leave Type filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
+                  {t('leave.type_label', 'Tipo')}
+                </label>
+                <select
+                  value={tempType}
+                  onChange={(e) => setTempType(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    padding: '0 10px',
+                    background: 'var(--background)',
+                    color: 'var(--text)',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                >
+                  <option value="">{t('common.all')} {t('leave.type_label', 'type').toLowerCase()}</option>
+                  <option value="vacation">{t('leave.type_vacation', 'Ferie')}</option>
+                  <option value="sick">{t('leave.type_sick', 'Malattia')}</option>
+                </select>
+              </div>
+
+              {/* Status filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
+                  {t('leave.col_status', 'Stato')}
+                </label>
+                <select
+                  value={tempStatus}
+                  onChange={(e) => setTempStatus(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    padding: '0 10px',
+                    background: 'var(--background)',
+                    color: 'var(--text)',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                >
+                  <option value="">{t('common.all')}</option>
+                  <option value="pending">{t('leave.status_pending')}</option>
+                  <option value="store manager approved">{t('leave.status_store_manager_approved')}</option>
+                  <option value="store manager rejected">{t('leave.status_store_manager_rejected')}</option>
+                  <option value="area manager approved">{t('leave.status_area_manager_approved')}</option>
+                  <option value="area manager rejected">{t('leave.status_area_manager_rejected')}</option>
+                  <option value="HR approved">{t('leave.status_hr_approved')}</option>
+                  <option value="HR rejected">{t('leave.status_hr_rejected')}</option>
+                  <option value="approved">{t('leave.status_approved')}</option>
+                  <option value="rejected">{t('leave.status_rejected')}</option>
+                  <option value="cancelled">{t('leave.status_cancelled')}</option>
+                </select>
+              </div>
+
+              {/* Date pickers (row) */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    {t('attendance.dateFrom', 'Dal')}
+                  </label>
+                  <DatePicker
+                    value={tempDateFrom}
+                    onChange={(val) => setTempDateFrom(val ?? '')}
+                    disablePortal={true}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    {t('attendance.dateTo', 'Al')}
+                  </label>
+                  <DatePicker
+                    value={tempDateTo}
+                    onChange={(val) => setTempDateTo(val ?? '')}
+                    align="right"
+                    disablePortal={true}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '14px 24px',
+                borderTop: '1px solid var(--border)',
+                background: 'var(--surface-warm)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '10px',
+                flexShrink: 0,
+              }}
+            >
+              <button
+                onClick={resetAllFilters}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-secondary)',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {t('employees.resetFilters', 'Reset all')}
+              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setShowFilterModal(false)}
+                  style={{
+                    padding: '9px 20px',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {t('common.cancel', 'Annulla')}
+                </button>
+                <button
+                  onClick={applyFilters}
+                  style={{
+                    padding: '9px 20px',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, var(--accent) 0%, #B48719 100%)',
+                    color: '#fff',
+                    boxShadow: '0 2px 8px rgba(139,105,20,0.24)',
+                  }}
+                >
+                  {t('employees.applyFilters', 'Applica filtri')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

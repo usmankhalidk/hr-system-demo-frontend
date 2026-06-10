@@ -43,6 +43,9 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast();
   const { t } = useTranslation();
 
+  const retryDelayRef = useRef(1000);
+  const retryTimeoutRef = useRef<any>(null);
+
   const refreshQueueLength = useCallback(async () => {
     try {
       const events = await getOfflineEvents();
@@ -55,6 +58,11 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const drainQueue = useCallback(async () => {
     if (syncingRef.current || !navigator.onLine) return;
     
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
     let events: OfflineAttendanceEvent[] = [];
     try {
       events = await getOfflineEvents();
@@ -63,17 +71,37 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (events.length === 0) {
-      setQueueLength(0);
+    // Prune events older than 24 hours
+    const now = Date.now();
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    const staleEvents = events.filter(e => {
+      const t = new Date(e.event_time).getTime();
+      return isNaN(t) || t < cutoff;
+    });
+    const validEvents = events.filter(e => {
+      const t = new Date(e.event_time).getTime();
+      return !isNaN(t) && t >= cutoff;
+    });
+
+    if (staleEvents.length > 0) {
+      const staleIds = staleEvents.map(e => e.id).filter((id): id is number => id !== undefined);
+      if (staleIds.length > 0) {
+        console.log(`[OfflineSync] Pruning ${staleIds.length} stale events older than 24 hours.`);
+        await deleteOfflineEvents(staleIds);
+      }
+    }
+
+    if (validEvents.length === 0) {
+      await refreshQueueLength();
       return;
     }
 
-    console.log(`[OfflineSync] Found ${events.length} pending events. Starting background sync...`);
+    console.log(`[OfflineSync] Found ${validEvents.length} pending events. Starting background sync...`);
     syncingRef.current = true;
     setIsSyncing(true);
     
     try {
-      let remaining = [...events];
+      let remaining = [...validEvents];
       let totalSynced = 0;
       console.log(`[OfflineSync] Processing queue of ${remaining.length} items in batches of ${BATCH_SIZE}...`);
       while (remaining.length > 0) {
@@ -131,6 +159,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       console.log(`[OfflineSync] Sync sequence finished. Synced ${totalSynced} items total.`);
       setLastSyncTime(Date.now());
       await refreshQueueLength();
+      retryDelayRef.current = 1000; // Reset backoff delay on success
       
       if (totalSynced > 0) {
         showToast(
@@ -152,6 +181,13 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       } else {
         showToast(`Network Error: Ensure your phone can reach ${window.location.host}`, 'warning');
       }
+
+      // Schedule retry with exponential backoff
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = setTimeout(() => {
+        void drainQueue();
+      }, retryDelayRef.current);
+      retryDelayRef.current = retryDelayRef.current * 2;
     } finally {
       syncingRef.current = false;
       setIsSyncing(false);
@@ -263,6 +299,9 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
     };
   }, [drainQueue, refreshQueueLength, showToast]);
 

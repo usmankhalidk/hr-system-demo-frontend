@@ -22,6 +22,8 @@ const STATUS_COLORS: Record<LeaveStatus, { bg: string; color: string }> = {
   approved:                        { bg: 'var(--accent-light)',     color: 'var(--accent)' },
   rejected:                        { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
   cancelled:                       { bg: 'rgba(0,0,0,0.05)',        color: 'var(--text-muted)' },
+  admin_approved:                  { bg: 'var(--accent-light)',     color: 'var(--accent)' },
+  'admin approved':                { bg: 'var(--accent-light)',     color: 'var(--accent)' },
 };
 
 export function StatusBadge({ req }: { req: LeaveRequest }) {
@@ -602,10 +604,10 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
 
                 {/* Action buttons — approvers */}
                 {showActions &&
-                  req.status !== 'approved' &&
+                  !req.status.includes('approved') &&
                   !req.status.includes('rejected') &&
                   req.status !== 'cancelled' &&
-                  (user?.role === 'admin' || (user?.role === 'hr' && req.status !== 'HR approved') || req.currentApproverRole === effectiveApproverRole) && (
+                  (user?.isSuperAdmin || req.currentApproverRole === effectiveApproverRole) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button
                       onClick={() => handleApprove(req.id)}

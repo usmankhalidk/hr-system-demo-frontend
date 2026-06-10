@@ -66,8 +66,8 @@ describe('LeaveApprovalList super admin override', () => {
       </ToastProvider>,
     );
 
-    expect(screen.queryByText('leave.action_approve')).toBeNull();
-    expect(screen.queryByText('leave.action_reject')).toBeNull();
+    expect(screen.getByText('leave.action_approve')).toBeTruthy();
+    expect(screen.getByText('leave.action_reject')).toBeTruthy();
   });
 
   it('hides approve/reject when not super admin and currentApproverRole mismatches', () => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { Shift, CreateShiftPayload, createShift, updateShift, deleteShift } from '../../api/shifts';
+import { Shift, CreateShiftPayload, createShift, updateShift, deleteShift, listTemplates, ShiftTemplate } from '../../api/shifts';
 import { getEmployees, type EmployeeListParams } from '../../api/employees';
 import { getStores } from '../../api/stores';
 import { getEmployeeTransferSchedule, type TransferAssignment } from '../../api/transfers';
@@ -13,6 +13,17 @@ import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
 import { Badge } from '../../components/ui/Badge';
 import { Store as StoreIcon } from 'lucide-react';
+
+interface ShiftPattern {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  breakType?: 'fixed' | 'flexible';
+  breakStart?: string;
+  breakEnd?: string;
+  breakMinutes?: number;
+  notes?: string;
+}
 
 interface ShiftDrawerProps {
   open: boolean;
@@ -140,6 +151,69 @@ export default function ShiftDrawer({
   const storePickerRef = useRef<HTMLDivElement | null>(null);
   const isStoreManager = user?.role === 'store_manager';
 
+  const [availablePatterns, setAvailablePatterns] = useState<ShiftPattern[]>([]);
+  const [selectedPatternIndex, setSelectedPatternIndex] = useState<string>('');
+
+  const getPatternKey = (p: {
+    startTime: string;
+    endTime: string;
+    breakType?: string | null;
+    breakStart?: string | null;
+    breakEnd?: string | null;
+    breakMinutes?: number | string | null;
+  }) => {
+    const t5 = (t: string | null | undefined) => (t ?? '').slice(0, 5);
+    const bt = p.breakType === 'flexible' ? 'flexible' : (p.breakStart || p.breakEnd) ? 'fixed' : 'none';
+    const bs = bt === 'fixed' ? t5(p.breakStart) : '';
+    const be = bt === 'fixed' ? t5(p.breakEnd) : '';
+    const bm = bt === 'flexible' ? String(p.breakMinutes ?? '') : '';
+    return `${t5(p.startTime)}|${t5(p.endTime)}|${bt}|${bs}|${be}|${bm}`;
+  };
+
+  const getPatternLabel = (p: ShiftPattern, t: any) => {
+    const t5 = (time: string) => time.slice(0, 5);
+    const bt = p.breakType === 'flexible' ? 'flexible' : (p.breakStart || p.breakEnd) ? 'fixed' : 'none';
+    let breakLabel = '';
+    if (bt === 'flexible') {
+      breakLabel = `, ${t('shifts.form.breakType_flexible', 'Pausa flessibile')}: ${p.breakMinutes} min`;
+    } else if (bt === 'fixed') {
+      breakLabel = `, ${t('shifts.form.breakType_fixed', 'Pausa fissa')}: ${t5(p.breakStart!)} - ${t5(p.breakEnd!)}`;
+    } else {
+      breakLabel = `, ${t('shifts.form.breakType_none', 'Nessuna pausa')}`;
+    }
+    return `${t5(p.startTime)} - ${t5(p.endTime)}${breakLabel}`;
+  };
+
+  const handlePatternChange = (key: string) => {
+    setSelectedPatternIndex(key);
+    if (!key) {
+      setForm(prev => ({
+        ...prev,
+        start_time: '',
+        end_time: '',
+        break_type: 'none',
+        break_start: '',
+        break_end: '',
+        break_minutes: '',
+      }));
+      return;
+    }
+    const found = availablePatterns.find(p => getPatternKey(p) === key);
+    if (found) {
+      const t5 = (t: string | null | undefined) => (t ?? '').slice(0, 5);
+      const bt = found.breakType === 'flexible' ? 'flexible' : (found.breakStart || found.breakEnd) ? 'fixed' : 'none';
+      setForm(prev => ({
+        ...prev,
+        start_time: t5(found.startTime),
+        end_time: t5(found.endTime),
+        break_type: bt,
+        break_start: bt === 'fixed' ? t5(found.breakStart) : '',
+        break_end: bt === 'fixed' ? t5(found.breakEnd) : '',
+        break_minutes: bt === 'flexible' && found.breakMinutes != null ? String(found.breakMinutes) : '',
+      }));
+    }
+  };
+
   const selectedEmployee = employees.find((emp) => emp.id === Number(form.user_id));
   const selectedEmployeeFullName = selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.surname}`.trim() : '';
   const selectedStoreIdNum = form.store_id ? Number(form.store_id) : null;
@@ -156,18 +230,25 @@ export default function ShiftDrawer({
     ?? null;
   const storeSelectionMismatch = expectedStoreId != null && selectedStoreIdNum != null && selectedStoreIdNum !== expectedStoreId;
 
-  const normalizedEmployeeQuery = employeeQuery.trim().toLowerCase();
-  const filteredEmployees = normalizedEmployeeQuery
-    ? employees.filter((emp) => {
-      const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
-      return (
-        fullName.includes(normalizedEmployeeQuery)
-        || `${emp.surname} ${emp.name}`.toLowerCase().includes(normalizedEmployeeQuery)
-        || emp.email.toLowerCase().includes(normalizedEmployeeQuery)
-        || emp.role.toLowerCase().includes(normalizedEmployeeQuery)
-      );
-    })
-    : employees;
+  const filteredEmployees = React.useMemo(() => {
+    let list = employees;
+    if (form.store_id) {
+      list = list.filter((emp) => String(emp.storeId) === form.store_id);
+    }
+    const normalizedEmployeeQuery = employeeQuery.trim().toLowerCase();
+    if (normalizedEmployeeQuery) {
+      return list.filter((emp) => {
+        const fullName = `${emp.name} ${emp.surname}`.toLowerCase();
+        return (
+          fullName.includes(normalizedEmployeeQuery)
+          || `${emp.surname} ${emp.name}`.toLowerCase().includes(normalizedEmployeeQuery)
+          || emp.email.toLowerCase().includes(normalizedEmployeeQuery)
+          || emp.role.toLowerCase().includes(normalizedEmployeeQuery)
+        );
+      });
+    }
+    return list;
+  }, [employees, employeeQuery, form.store_id]);
 
   async function loadEmployeesByPages(baseParams: Omit<EmployeeListParams, 'page' | 'limit'>): Promise<Employee[]> {
     const limit = 100;
@@ -197,7 +278,11 @@ export default function ShiftDrawer({
       merged.set(emp.id, emp);
     }
 
-    return Array.from(merged.values()).sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`));
+    let mergedList = Array.from(merged.values()).sort((a, b) => `${a.name} ${a.surname}`.localeCompare(`${b.name} ${b.surname}`));
+    if (isStoreManager && user?.storeId) {
+      mergedList = mergedList.filter((emp) => emp.storeId != null && String(emp.storeId) === String(user.storeId));
+    }
+    return mergedList;
   }
 
   function validateForm(f: FormState): FormErrors {
@@ -287,13 +372,78 @@ export default function ShiftDrawer({
       .then(([allEmployees, storeData]) => {
         if (!mounted) return;
         setEmployees(allEmployees);
-        setStores(storeData);
+
+        let filteredStores = storeData;
+        if (isStoreManager && user?.storeId) {
+          filteredStores = storeData.filter((s) => String(s.id) === String(user.storeId));
+        }
+        setStores(filteredStores);
+
+        // Auto-preselect store and first employee for Store Manager when creating a new shift.
+        // Use the *loaded* store id (from filteredStores) rather than user?.storeId so that
+        // form.store_id is guaranteed to match an entry in the stores dropdown.
+        if (!shift && isStoreManager) {
+          const resolvedStoreId = filteredStores.length > 0
+            ? String(filteredStores[0].id)
+            : String(user?.storeId ?? '');
+          if (!prefillUserId && allEmployees.length > 0) {
+            const firstEmp = allEmployees[0];
+            setForm((prev) => ({
+              ...prev,
+              user_id: String(firstEmp.id),
+              store_id: resolvedStoreId,
+            }));
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              store_id: resolvedStoreId,
+            }));
+          }
+        }
       })
       .catch(() => {
         if (!mounted) return;
         setEmployees([]);
         setStores([]);
       });
+
+    if (isStoreManager && user?.storeId) {
+      listTemplates(user.storeId)
+        .then((data) => {
+          if (!mounted) return;
+          const patternsMap = new Map<string, ShiftPattern>();
+          for (const tmpl of data.templates) {
+            const patterns = (tmpl.templateData as any)?.shifts ?? [];
+            for (const p of patterns) {
+              const key = getPatternKey(p);
+              patternsMap.set(key, p);
+            }
+          }
+          let patternsList = Array.from(patternsMap.values());
+          if (shift && !shift.isOffDay) {
+            const shiftPattern: ShiftPattern = {
+              dayOfWeek: -1,
+              startTime: shift.startTime,
+              endTime: shift.endTime,
+              breakType: shift.breakType,
+              breakStart: shift.breakStart ?? undefined,
+              breakEnd: shift.breakEnd ?? undefined,
+              breakMinutes: shift.breakMinutes ?? undefined,
+            };
+            const currentKey = getPatternKey(shiftPattern);
+            if (!patternsList.some((p) => getPatternKey(p) === currentKey)) {
+              patternsList.push(shiftPattern);
+            }
+          }
+          setAvailablePatterns(patternsList);
+        })
+        .catch(() => {
+          if (!mounted) return;
+          setAvailablePatterns([]);
+        });
+    } else {
+      setAvailablePatterns([]);
+    }
 
     if (shift) {
       // API returns HH:MM:SS — slice to HH:MM so TimePicker and backend both accept it
@@ -320,12 +470,24 @@ export default function ShiftDrawer({
         notes: shift.notes ?? '',
         status: shift.status,
       });
+      if (isStoreManager) {
+        setSelectedPatternIndex(getPatternKey({
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          breakType: shift.breakType,
+          breakStart: shift.breakStart,
+          breakEnd: shift.breakEnd,
+          breakMinutes: shift.breakMinutes,
+        }));
+      }
     } else {
       setForm({
         ...EMPTY_FORM,
         date: prefillDate ?? '',
         user_id: prefillUserId ? String(prefillUserId) : '',
+        store_id: isStoreManager ? String(user?.storeId ?? '') : '',
       });
+      setSelectedPatternIndex('');
     }
     setError(null);
     setOverlapConflict(false);
@@ -337,7 +499,7 @@ export default function ShiftDrawer({
     setStorePickerOpen(false);
 
     return () => { mounted = false; };
-  }, [open, shift, prefillDate, prefillUserId, user?.role]);
+  }, [open, shift, prefillDate, prefillUserId, user?.role, user?.storeId]);
 
   useEffect(() => {
     if (!open || shift || !form.user_id || !form.date) {
@@ -365,12 +527,25 @@ export default function ShiftDrawer({
   }, [open, shift, form.user_id, form.date]);
 
   useEffect(() => {
-    if (!open || shift || storeTouchedManually || !form.user_id) return;
+    if (!open || shift || storeTouchedManually || !form.user_id || isStoreManager) return;
     if (expectedStoreId == null) return;
     const expectedStore = String(expectedStoreId);
     if (form.store_id === expectedStore) return;
     setForm((prev) => ({ ...prev, store_id: expectedStore }));
-  }, [open, shift, storeTouchedManually, form.user_id, form.store_id, expectedStoreId]);
+  }, [open, shift, storeTouchedManually, form.user_id, form.store_id, expectedStoreId, isStoreManager]);
+
+  // Keep store preselected for Store Manager in all conditions for new shifts
+  useEffect(() => {
+    if (!open || shift || !isStoreManager || stores.length === 0) return;
+    // Use the loaded store id to guarantee a match with the dropdown entries
+    const storeIdStr = stores.length === 1
+      ? String(stores[0].id)
+      : String(user?.storeId ?? '');
+    if (!storeIdStr) return;
+    if (form.store_id !== storeIdStr) {
+      setForm((prev) => ({ ...prev, store_id: storeIdStr }));
+    }
+  }, [open, shift, isStoreManager, stores, user?.storeId, form.store_id]);
 
   useEffect(() => {
     if (!employeePickerOpen && !storePickerOpen) return;
@@ -390,7 +565,7 @@ export default function ShiftDrawer({
   function selectEmployee(employeeId: string) {
     setStoreTouchedManually(false);
     setActiveTransferForDate(null);
-    setForm((prev) => ({ ...prev, user_id: employeeId, store_id: '' }));
+    setForm((prev) => ({ ...prev, user_id: employeeId, store_id: isStoreManager ? String(user?.storeId ?? '') : '' }));
     setEmployeePickerOpen(false);
     setEmployeeQuery('');
     if (formErrors.user_id) {
@@ -623,7 +798,7 @@ export default function ShiftDrawer({
               <div ref={employeePickerRef} style={{ position: 'relative' }}>
                 <button
                   type="button"
-                  onClick={() => !isStoreManager && setEmployeePickerOpen((openState) => !openState)}
+                  onClick={() => !shift && setEmployeePickerOpen((openState) => !openState)}
                   style={{
                     ...fInput,
                     minHeight: 42,
@@ -631,12 +806,12 @@ export default function ShiftDrawer({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 10,
-                    cursor: isStoreManager ? 'not-allowed' : 'pointer',
+                    cursor: shift ? 'not-allowed' : 'pointer',
                     textAlign: 'left',
-                    background: isStoreManager ? 'var(--surface-warm)' : 'var(--surface)',
-                    opacity: isStoreManager ? 0.8 : 1,
+                    background: shift ? 'var(--surface-warm)' : 'var(--surface)',
+                    opacity: shift ? 0.8 : 1,
                   }}
-                  disabled={isStoreManager}
+                  disabled={Boolean(shift)}
                 >
                   {selectedEmployee ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
@@ -851,7 +1026,6 @@ export default function ShiftDrawer({
                 <button
                   type="button"
                   onClick={() => {
-                    if (isStoreManager) return;
                     setEmployeePickerOpen(false);
                     setStorePickerOpen((prev) => !prev);
                   }}
@@ -864,11 +1038,11 @@ export default function ShiftDrawer({
                     gap: 10,
                     padding: selectedStore ? '6px 10px' : '0 12px',
                     textAlign: 'left',
-                    cursor: (stores.length === 0 || isStoreManager) ? 'not-allowed' : 'pointer',
-                    background: isStoreManager ? 'var(--surface-warm)' : 'var(--surface)',
-                    opacity: (stores.length === 0 || isStoreManager) ? 0.68 : 1,
+                    cursor: (stores.length === 0) ? 'not-allowed' : 'pointer',
+                    background: 'var(--surface)',
+                    opacity: (stores.length === 0) ? 0.68 : 1,
                   }}
-                  disabled={stores.length === 0 || isStoreManager}
+                  disabled={stores.length === 0}
                 >
                   {selectedStore ? (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
@@ -1092,7 +1266,7 @@ export default function ShiftDrawer({
                   setForm((p) => ({ ...p, date: v }));
                 }}
                 disablePortal={true}
-                disabled={isStoreManager}
+                disabled={Boolean(shift)}
               />
             </div>
 
@@ -1197,260 +1371,297 @@ export default function ShiftDrawer({
 
             {!form.is_off_day && (
               <div style={{ marginTop: 20 }}>
-                {/* ─── Section: Orario ────────────── */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 12 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                    {t('shifts.sectionOrario')}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-                  <TimePicker
-                    label={t('shifts.form.startTime')}
-                    value={form.start_time}
-                    onChange={(v) => {
-                      setForm((p) => ({ ...p, start_time: v }));
-                      setFormErrors((fe) => { const n = { ...fe }; delete n.start_time; return n; });
-                    }}
-                    error={formErrors.start_time}
-                    required
-                    disabled={isStoreManager}
-                  />
-                  <TimePicker
-                    label={t('shifts.form.endTime')}
-                    value={form.end_time}
-                    onChange={(v) => {
-                      setForm((p) => ({ ...p, end_time: v }));
-                      setFormErrors((fe) => { const n = { ...fe }; delete n.end_time; return n; });
-                    }}
-                    error={formErrors.end_time}
-                    required
-                    disabled={isStoreManager}
-                  />
-                </div>
-
-                {/* ─── Section: Pausa ─────────────── */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  marginTop: 18, marginBottom: 12,
-                }}>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-                    color: 'var(--text-muted)', whiteSpace: 'nowrap',
-                  }}>
-                    {t('shifts.sectionBreak')}
-                  </span>
-                  <span style={{
-                    fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
-                    background: 'var(--surface-warm)', border: '1px solid var(--border)',
-                    borderRadius: 4, padding: '1px 5px', fontWeight: 500,
-                  }}>
-                    {t('common.optionalAbbr', 'Opz.')}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
-                  {(['none', 'fixed', 'flexible'] as const).map((bt) => {
-                    const active = form.break_type === bt;
-                    const breakTypeLabel = bt === 'none'
-                      ? t('shifts.form.breakType_none', 'No break')
-                      : t(`shifts.form.breakType_${bt}`);
-                    return (
-                      <button
-                        key={bt}
-                        type="button"
-                        onClick={() => {
-                          if (isStoreManager) return;
-                          setForm((p) => ({
-                            ...p,
-                            break_type: bt,
-                            break_start: bt === 'fixed' ? p.break_start : '',
-                            break_end: bt === 'fixed' ? p.break_end : '',
-                            break_minutes: bt === 'flexible' ? p.break_minutes : '',
-                          }));
-                          setFormErrors((fe) => {
-                            const n = { ...fe };
-                            delete n.break_start;
-                            delete n.break_end;
-                            delete n.break_minutes;
-                            return n;
-                          });
-                        }}
-                        style={{
-                          borderRadius: 10,
-                          border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                          background: active ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
-                          color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                          padding: '8px 6px',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          cursor: isStoreManager ? 'not-allowed' : 'pointer',
-                          lineHeight: 1.25,
-                        }}
-                        disabled={isStoreManager}
-                      >
-                        {breakTypeLabel}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {form.break_type === 'flexible' ? (
-                  <div style={{ marginBottom: 4 }}>
-                    <label style={fLabel}>
-                      {t('shifts.form.breakMinutes')}
-                      <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
-                    </label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="number"
-                        min={1}
-                        max={480}
-                        placeholder="30"
-                        value={form.break_minutes}
-                        onChange={(e) => {
-                          setForm((p) => ({ ...p, break_minutes: e.target.value }));
-                          setFormErrors((fe) => { const n = { ...fe }; delete n.break_minutes; return n; });
-                        }}
-                        onFocus={focusHandler}
-                        onBlur={blurHandler}
-                        style={{ ...fInput, width: 100 }}
-                        disabled={isStoreManager}
-                      />
-                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.breakMinutesUnit')}</span>
-                    </div>
-                    {formErrors.break_minutes && (
-                      <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.break_minutes}</div>
+                {isStoreManager ? (
+                  <div style={{ ...fieldRow, marginBottom: 20 }}>
+                    <label style={fLabel}>{t('shifts.form.templateShift', 'Turno da template')}</label>
+                    <select
+                      value={selectedPatternIndex}
+                      onChange={(e) => handlePatternChange(e.target.value)}
+                      style={{
+                        ...fInput,
+                        border: formErrors.start_time || formErrors.end_time ? '1.5px solid var(--danger)' : '1.5px solid var(--border)',
+                      }}
+                    >
+                      <option value="">{t('shifts.form.selectTemplateShift', 'Seleziona un turno...')}</option>
+                      {availablePatterns.map((p) => {
+                        const key = getPatternKey(p);
+                        return (
+                          <option key={key} value={key}>
+                            {getPatternLabel(p, t)}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {formErrors.start_time && (
+                      <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>
+                        {formErrors.start_time}
+                      </div>
                     )}
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                      {t('shifts.form.breakFlexHint')}
-                    </div>
-                  </div>
-                ) : form.break_type === 'fixed' ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-                    <TimePicker
-                      label={t('shifts.form.breakStart')}
-                      value={form.break_start}
-                      onChange={(v) => {
-                        setForm((p) => ({ ...p, break_start: v }));
-                        setFormErrors((fe) => { const n = { ...fe }; delete n.break_start; return n; });
-                      }}
-                      error={formErrors.break_start}
-                      disabled={isStoreManager}
-                    />
-                    <TimePicker
-                      label={t('shifts.form.breakEnd')}
-                      value={form.break_end}
-                      onChange={(v) => {
-                        setForm((p) => ({ ...p, break_end: v }));
-                        setFormErrors((fe) => { const n = { ...fe }; delete n.break_end; return n; });
-                      }}
-                      error={formErrors.break_end}
-                      disabled={isStoreManager}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                    {t('shifts.form.breakNoneHint', 'No break will be assigned to this shift.')}
-                  </div>
-                )}
-
-                {/* ─── Section: Turno spezzato ─────── */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  marginTop: 18, marginBottom: 12,
-                }}>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-                    color: 'var(--text-muted)', whiteSpace: 'nowrap',
-                  }}>
-                    {t('shifts.sectionSplit')}
-                  </span>
-                  <span style={{
-                    fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
-                    background: 'var(--surface-warm)', border: '1px solid var(--border)',
-                    borderRadius: 4, padding: '1px 5px', fontWeight: 500,
-                  }}>
-                    {t('common.optionalAbbr', 'Opz.')}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-                </div>
-
-                <div
-                  role="switch"
-                  aria-checked={form.is_split}
-                  tabIndex={0}
-                  onClick={() => {
-                    if (isStoreManager) return;
-                    const next = !form.is_split;
-                    setForm((prev) => ({ ...prev, is_split: next }));
-                    if (!next) {
-                      setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (isStoreManager) return;
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      e.preventDefault();
-                      const next = !form.is_split;
-                      setForm((prev) => ({ ...prev, is_split: next }));
-                      if (!next) {
-                        setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
-                      }
-                    }
-                  }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: isStoreManager ? 'not-allowed' : 'pointer', marginBottom: form.is_split ? 12 : 20, outline: 'none', userSelect: 'none', opacity: isStoreManager ? 0.7 : 1 }}
-                >
-                  <div
-                    style={{
-                      position: 'relative', width: 38, height: 22,
-                      background: form.is_split ? 'var(--accent)' : 'var(--border)',
-                      borderRadius: 11, transition: 'background 0.2s', flexShrink: 0,
-                    }}
-                  >
-                    <div style={{
-                      position: 'absolute', top: 3, left: form.is_split ? 19 : 3,
-                      width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    }} />
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: form.is_split ? 'var(--primary)' : 'var(--text-secondary)' }}>
-                      {form.is_split ? t('shifts.form.splitEnabled') : t('shifts.form.splitDisabled')}
-                    </span>
-                    {!form.is_split && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                        {t('shifts.form.splitHint')}
+                    {availablePatterns.length === 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 6 }}>
+                        {t('shifts.noTemplatesConfigured', 'Nessun turno configurato nei template per questo negozio.')}
                       </div>
                     )}
                   </div>
-                </div>
+                ) : (
+                  <>
+                    {/* ─── Section: Orario ────────────── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 12 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {t('shifts.sectionOrario')}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                    </div>
 
-                {form.is_split && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-                    <TimePicker
-                      label={t('shifts.form.splitStart2')}
-                      value={form.split_start2}
-                      onChange={(v) => {
-                        setForm((p) => ({ ...p, split_start2: v }));
-                        setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                      <TimePicker
+                        label={t('shifts.form.startTime')}
+                        value={form.start_time}
+                        onChange={(v) => {
+                          setForm((p) => ({ ...p, start_time: v }));
+                          setFormErrors((fe) => { const n = { ...fe }; delete n.start_time; return n; });
+                        }}
+                        error={formErrors.start_time}
+                        required
+                        disabled={isStoreManager}
+                      />
+                      <TimePicker
+                        label={t('shifts.form.endTime')}
+                        value={form.end_time}
+                        onChange={(v) => {
+                          setForm((p) => ({ ...p, end_time: v }));
+                          setFormErrors((fe) => { const n = { ...fe }; delete n.end_time; return n; });
+                        }}
+                        error={formErrors.end_time}
+                        required
+                        disabled={isStoreManager}
+                      />
+                    </div>
+
+                    {/* ─── Section: Pausa ─────────────── */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      marginTop: 18, marginBottom: 12,
+                    }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                        color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                      }}>
+                        {t('shifts.sectionBreak')}
+                      </span>
+                      <span style={{
+                        fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
+                        background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                        borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                      }}>
+                        {t('common.optionalAbbr', 'Opz.')}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+                      {(['none', 'fixed', 'flexible'] as const).map((bt) => {
+                        const active = form.break_type === bt;
+                        const breakTypeLabel = bt === 'none'
+                          ? t('shifts.form.breakType_none', 'No break')
+                          : t(`shifts.form.breakType_${bt}`);
+                        return (
+                          <button
+                            key={bt}
+                            type="button"
+                            onClick={() => {
+                              if (isStoreManager) return;
+                              setForm((p) => ({
+                                ...p,
+                                break_type: bt,
+                                break_start: bt === 'fixed' ? p.break_start : '',
+                                break_end: bt === 'fixed' ? p.break_end : '',
+                                break_minutes: bt === 'flexible' ? p.break_minutes : '',
+                              }));
+                              setFormErrors((fe) => {
+                                const n = { ...fe };
+                                delete n.break_start;
+                                delete n.break_end;
+                                delete n.break_minutes;
+                                return n;
+                              });
+                            }}
+                            style={{
+                              borderRadius: 10,
+                              border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                              background: active ? 'rgba(201,151,58,0.1)' : 'var(--surface)',
+                              color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                              padding: '8px 6px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: isStoreManager ? 'not-allowed' : 'pointer',
+                              lineHeight: 1.25,
+                            }}
+                            disabled={isStoreManager}
+                          >
+                            {breakTypeLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {form.break_type === 'flexible' ? (
+                      <div style={{ marginBottom: 4 }}>
+                        <label style={fLabel}>
+                          {t('shifts.form.breakMinutes')}
+                          <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({t('common.optional')})</span>
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="number"
+                            min={1}
+                            max={480}
+                            placeholder="30"
+                            value={form.break_minutes}
+                            onChange={(e) => {
+                              setForm((p) => ({ ...p, break_minutes: e.target.value }));
+                              setFormErrors((fe) => { const n = { ...fe }; delete n.break_minutes; return n; });
+                            }}
+                            onFocus={focusHandler}
+                            onBlur={blurHandler}
+                            style={{ ...fInput, width: 100 }}
+                            disabled={isStoreManager}
+                          />
+                          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('shifts.form.breakMinutesUnit')}</span>
+                        </div>
+                        {formErrors.break_minutes && (
+                          <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{formErrors.break_minutes}</div>
+                        )}
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                          {t('shifts.form.breakFlexHint')}
+                        </div>
+                      </div>
+                    ) : form.break_type === 'fixed' ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                        <TimePicker
+                          label={t('shifts.form.breakStart')}
+                          value={form.break_start}
+                          onChange={(v) => {
+                            setForm((p) => ({ ...p, break_start: v }));
+                            setFormErrors((fe) => { const n = { ...fe }; delete n.break_start; return n; });
+                          }}
+                          error={formErrors.break_start}
+                          disabled={isStoreManager}
+                        />
+                        <TimePicker
+                          label={t('shifts.form.breakEnd')}
+                          value={form.break_end}
+                          onChange={(v) => {
+                            setForm((p) => ({ ...p, break_end: v }));
+                            setFormErrors((fe) => { const n = { ...fe }; delete n.break_end; return n; });
+                          }}
+                          error={formErrors.break_end}
+                          disabled={isStoreManager}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                        {t('shifts.form.breakNoneHint', 'No break will be assigned to this shift.')}
+                      </div>
+                    )}
+
+                    {/* ─── Section: Turno spezzato ─────── */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      marginTop: 18, marginBottom: 12,
+                    }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                        color: 'var(--text-muted)', whiteSpace: 'nowrap',
+                      }}>
+                        {t('shifts.sectionSplit')}
+                      </span>
+                      <span style={{
+                        fontSize: 10, color: 'var(--text-disabled, var(--text-muted))',
+                        background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                        borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                      }}>
+                        {t('common.optionalAbbr', 'Opz.')}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                    </div>
+
+                    <div
+                      role="switch"
+                      aria-checked={form.is_split}
+                      tabIndex={0}
+                      onClick={() => {
+                        if (isStoreManager) return;
+                        const next = !form.is_split;
+                        setForm((prev) => ({ ...prev, is_split: next }));
+                        if (!next) {
+                          setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
+                        }
                       }}
-                      error={formErrors.split_start2}
-                      disabled={isStoreManager}
-                    />
-                    <TimePicker
-                      label={t('shifts.form.splitEnd2')}
-                      value={form.split_end2}
-                      onChange={(v) => {
-                        setForm((p) => ({ ...p, split_end2: v }));
-                        setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
+                      onKeyDown={(e) => {
+                        if (isStoreManager) return;
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault();
+                          const next = !form.is_split;
+                          setForm((prev) => ({ ...prev, is_split: next }));
+                          if (!next) {
+                            setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; delete n.split_end2; return n; });
+                          }
+                        }
                       }}
-                      error={formErrors.split_end2}
-                      disabled={isStoreManager}
-                    />
-                  </div>
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: isStoreManager ? 'not-allowed' : 'pointer', marginBottom: form.is_split ? 12 : 20, outline: 'none', userSelect: 'none', opacity: isStoreManager ? 0.7 : 1 }}
+                    >
+                      <div
+                        style={{
+                          position: 'relative', width: 38, height: 22,
+                          background: form.is_split ? 'var(--accent)' : 'var(--border)',
+                          borderRadius: 11, transition: 'background 0.2s', flexShrink: 0,
+                        }}
+                      >
+                        <div style={{
+                          position: 'absolute', top: 3, left: form.is_split ? 19 : 3,
+                          width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        }} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: form.is_split ? 'var(--primary)' : 'var(--text-secondary)' }}>
+                          {form.is_split ? t('shifts.form.splitEnabled') : t('shifts.form.splitDisabled')}
+                        </span>
+                        {!form.is_split && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                            {t('shifts.form.splitHint')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {form.is_split && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+                        <TimePicker
+                          label={t('shifts.form.splitStart2')}
+                          value={form.split_start2}
+                          onChange={(v) => {
+                            setForm((p) => ({ ...p, split_start2: v }));
+                            setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
+                          }}
+                          error={formErrors.split_start2}
+                          disabled={isStoreManager}
+                        />
+                        <TimePicker
+                          label={t('shifts.form.splitEnd2')}
+                          value={form.split_end2}
+                          onChange={(v) => {
+                            setForm((p) => ({ ...p, split_end2: v }));
+                            setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
+                          }}
+                          error={formErrors.split_end2}
+                          disabled={isStoreManager}
+                        />
+                      </div>
+                    )}
+
+                  </>
                 )}
 
                 {/* ─── Section: Stato ─────────────── */}
@@ -1501,7 +1712,7 @@ export default function ShiftDrawer({
               </label>
               <textarea value={form.notes} onChange={set('notes')} rows={3}
                 style={{ ...fInput, resize: 'vertical', lineHeight: 1.5 }}
-                disabled={isStoreManager} />
+                disabled={false} />
             </div>
           </div>{/* end scrollable fields */}
 
@@ -1512,7 +1723,7 @@ export default function ShiftDrawer({
             display: 'flex', gap: 8, justifyContent: 'flex-end',
             flexShrink: 0,
           }}>
-            {!isStoreManager && shift && (
+            {shift && (
               <button
                 type="button"
                 className="btn btn-danger"

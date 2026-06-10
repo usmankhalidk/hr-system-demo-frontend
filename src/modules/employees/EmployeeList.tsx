@@ -77,7 +77,7 @@ function truncateText(value: string | null | undefined, max: number): string {
 export function EmployeeList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, allowedCompanyIds } = useAuth();
+  const { user, allowedCompanyIds = [] } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [showNewForm, setShowNewForm] = useState(false);

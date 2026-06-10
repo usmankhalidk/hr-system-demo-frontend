@@ -47,6 +47,7 @@ const AutomationsPage = lazy(() => import('./modules/automations/AutomationsPage
 const DeviceRegistrationPage = lazy(() => import('./modules/device/DeviceRegistrationPage'));
 const HrDeviceResetPage = lazy(() => import('./modules/device/HrDeviceResetPage'));
 const EmailSettingsPage = lazy(() => import('./modules/email/EmailSettingsPage'));
+const LegalDocumentsAdminPage = lazy(() => import('./modules/legal/LegalDocumentsAdminPage'));
 const ReportsPage = lazy(() => import('./modules/reports/ReportsPage'));
 const PublicCareersPage = lazy(() => import('./modules/publicCareers/PublicCareersPage'));
 const PublicJobDetailPage = lazy(() => import('./modules/publicCareers/PublicJobDetailPage'));
@@ -143,13 +144,13 @@ function AppRoutes() {
       } />
 
       <Route path="/aziende" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
+        <ProtectedRoute roles={['admin', 'hr']}>
           <Layout title={t('nav.companies')}><SystemCompanyManagement /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/aziende/:slug" element={
-        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
+        <ProtectedRoute roles={['admin', 'hr']}>
           <Layout title={t('nav.companies')}><CompanyDetail /></Layout>
         </ProtectedRoute>
       } />
@@ -282,6 +283,12 @@ function AppRoutes() {
       <Route path="/impostazioni/email" element={
         <ProtectedRoute roles={['admin', 'hr']} superAdminOnly={true}>
           <Layout title={t('nav.email')}><EmailSettingsPage /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/impostazioni/legal" element={
+        <ProtectedRoute superAdminOnly={true}>
+          <Layout title={t('nav.legalDocuments', 'Pagine Legali')}><LegalDocumentsAdminPage /></Layout>
         </ProtectedRoute>
       } />
 

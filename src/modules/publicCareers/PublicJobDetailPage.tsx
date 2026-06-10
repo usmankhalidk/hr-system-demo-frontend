@@ -179,6 +179,10 @@ const COPY: Record<UiLanguage, {
   replyAction: string;
   loginToActionPrefix: string;
   loginToActionSuffix: string;
+  additionalInfoTitle: string;
+  additionalInfoSubtitle: string;
+  gdprNotice: string;
+  availableStartDateLabel: string;
 }> = {
   en: {
     missingJobId: 'Missing job identifier in URL.',
@@ -215,7 +219,7 @@ const COPY: Record<UiLanguage, {
     phonePlaceholder: 'Phone number (optional)',
     linkedinPlaceholder: 'LinkedIn URL (optional)',
     coverLetterPlaceholder: 'Cover letter (optional)',
-    cvLabel: 'CV/Resume (PDF, DOC, DOCX, max 5MB) *',
+    cvLabel: 'CV/Resume (PDF, DOC, DOCX, TXT, RTF, max 5MB) *',
     privacyConsent: 'I consent to processing of my personal data',
     submitting: 'Submitting...',
     submitApplication: 'Submit application',
@@ -254,7 +258,7 @@ const COPY: Record<UiLanguage, {
     recruitingTeam: 'Recruiting Team',
     recruiting: 'Recruiting',
     attachCvError: 'Please attach your CV before submitting.',
-    invalidCvFormatError: 'Supported file formats: PDF, DOC, DOCX.',
+    invalidCvFormatError: 'Unsupported format. Please use: PDF, Word (.doc/.docx), plain text (.txt) or RTF.',
     cvSizeError: 'The CV file size must be 5MB or less.',
     privacyRequiredError: 'You must accept the privacy notice to submit your application.',
     coverLetterTooLongError: 'Cover letter must be 1000 characters or less.',
@@ -266,6 +270,10 @@ const COPY: Record<UiLanguage, {
     replyAction: 'reply in discussion',
     loginToActionPrefix: 'Please login to',
     loginToActionSuffix: 'You can still read this role and submit the application form.',
+    additionalInfoTitle: 'Additional information (optional)',
+    additionalInfoSubtitle: 'This information is optional and does not affect your application review.',
+    gdprNotice: 'ℹ We only collect information necessary to evaluate your application. Additional details are optional under EU Regulation 2016/679 (GDPR).',
+    availableStartDateLabel: 'Available start date',
   },
   it: {
     missingJobId: 'ID posizione mancante nell\'URL.',
@@ -302,7 +310,7 @@ const COPY: Record<UiLanguage, {
     phonePlaceholder: 'Numero di telefono (opzionale)',
     linkedinPlaceholder: 'URL LinkedIn (opzionale)',
     coverLetterPlaceholder: 'Lettera di presentazione (opzionale)',
-    cvLabel: 'CV (PDF, DOC, DOCX, max 5MB) *',
+    cvLabel: 'CV (PDF, DOC, DOCX, TXT, RTF, max 5MB) *',
     privacyConsent: 'Acconsento al trattamento dei miei dati personali',
     submitting: 'Invio in corso...',
     submitApplication: 'Invia candidatura',
@@ -341,7 +349,7 @@ const COPY: Record<UiLanguage, {
     recruitingTeam: 'Team Recruiting',
     recruiting: 'Recruiting',
     attachCvError: 'Allega il tuo CV prima dell\'invio.',
-    invalidCvFormatError: 'Formati supportati: PDF, DOC, DOCX.',
+    invalidCvFormatError: 'Formato non supportato. Usa: PDF, Word (.doc, .docx), testo (.txt) o RTF.',
     cvSizeError: 'La dimensione del CV deve essere massimo 5MB.',
     privacyRequiredError: 'Devi accettare l\'informativa privacy per inviare la candidatura.',
     coverLetterTooLongError: 'La lettera di presentazione deve essere massimo 1000 caratteri.',
@@ -353,6 +361,10 @@ const COPY: Record<UiLanguage, {
     replyAction: 'rispondere nella discussione',
     loginToActionPrefix: 'Effettua il login per',
     loginToActionSuffix: 'Puoi comunque leggere il ruolo e inviare la candidatura.',
+    additionalInfoTitle: 'Informazioni aggiuntive (opzionale)',
+    additionalInfoSubtitle: 'Questi dati sono facoltativi e non influenzano la valutazione della candidatura.',
+    gdprNotice: 'ℹ Raccogliamo solo le informazioni necessarie per valutare la tua candidatura. I dati aggiuntivi sono facoltativi ai sensi del Regolamento UE 2016/679 (GDPR).',
+    availableStartDateLabel: 'Data di inizio desiderata',
   },
 };
 
@@ -578,6 +590,7 @@ export default function PublicJobDetailPage() {
     ownerSurname: string | null;
     ownerAvatarFilename: string | null;
     openRolesCount: number;
+    companyEmail: string | null;
   } | null>(null);
   const [hiringTeam, setHiringTeam] = useState<PublicHiringContact[]>([]);
 
@@ -615,6 +628,7 @@ export default function PublicJobDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
 
   const [saved, setSaved] = useState(false);
   const [liked, setLiked] = useState(false);
@@ -654,6 +668,7 @@ export default function PublicJobDetailPage() {
           ownerSurname: data.company.ownerSurname ?? null,
           ownerAvatarFilename: data.company.ownerAvatarFilename ?? null,
           openRolesCount: data.company.openRolesCount ?? 0,
+          companyEmail: data.company.companyEmail ?? null,
         });
         setJob(data.job);
         setHiringTeam(data.hiringTeam ?? []);
@@ -798,7 +813,7 @@ export default function PublicJobDetailPage() {
       return;
     }
 
-    if (!/\.(pdf|doc|docx)$/i.test(resume.name)) {
+    if (!/\.(pdf|doc|docx|txt|rtf)$/i.test(resume.name)) {
       setSubmitMessage(copy.invalidCvFormatError);
       return;
     }
@@ -1116,184 +1131,281 @@ export default function PublicJobDetailPage() {
               </p>
 
               <form onSubmit={handleSubmit} className="careers-form-grid">
+                {/* Section 1 — Required fields (always visible, no heading needed) */}
                 <div
-                  className="careers-form-row"
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                     gap: 12,
+                    padding: 16,
+                    borderRadius: 16,
+                    border: '1px solid rgba(13,33,55,0.18)',
+                    background: 'rgba(248,250,252,0.8)',
                   }}
                 >
-                  <input
-                    className="careers-form-input"
-                    value={firstName}
-                    onChange={(event) => setFirstName(event.target.value)}
-                    placeholder={copy.firstNamePlaceholder}
-                    autoComplete="given-name"
-                  />
-                  <input
-                    className="careers-form-input"
-                    value={lastName}
-                    onChange={(event) => setLastName(event.target.value)}
-                    placeholder={copy.lastNamePlaceholder}
-                    autoComplete="family-name"
-                  />
-                </div>
-
-                <div
-                  className="careers-form-row"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: 12,
-                  }}
-                >
-                  <input
-                    className="careers-form-input"
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder={copy.emailPlaceholder}
-                    required
-                    autoComplete="email"
-                  />
-                  <input
-                    className="careers-form-input"
-                    type="tel"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    placeholder={copy.phonePlaceholder}
-                    autoComplete="tel"
-                  />
-                </div>
-
-                <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(201,151,58,0.28)', background: 'rgba(201,151,58,0.06)' }}>
-                  <div style={{ display: 'grid', gap: 4 }}>
-                    <h4 style={{ margin: 0, fontSize: 15, color: '#6B4A06' }}>{uiLanguage === 'it' ? 'Profilo candidato' : 'Candidate profile'}</h4>
-                    <p style={{ margin: 0, color: '#7C5A14', fontSize: 12.5, lineHeight: 1.5 }}>
-                      {uiLanguage === 'it'
-                        ? 'Completa questi dati per trasferire il candidato più facilmente alla fase di assunzione.'
-                        : 'Complete these details so the candidate can move into hiring without losing profile data.'}
-                    </p>
-                  </div>
-
-                  <div className="careers-form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div
+                    className="careers-form-row"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: 12,
+                    }}
+                  >
                     <input
                       className="careers-form-input"
-                      value={appProfile.availability}
-                      onChange={(event) => setAppProfile((prev) => ({ ...prev, availability: event.target.value }))}
-                      placeholder={uiLanguage === 'it' ? 'Disponibilità / ore settimanali' : 'Availability / weekly hours'}
+                      value={firstName}
+                      onChange={(event) => setFirstName(event.target.value)}
+                      placeholder={copy.firstNamePlaceholder}
+                      autoComplete="given-name"
                       required
                     />
                     <input
                       className="careers-form-input"
-                      value={appProfile.nationality}
-                      onChange={(event) => setAppProfile((prev) => ({ ...prev, nationality: event.target.value }))}
-                      placeholder={uiLanguage === 'it' ? 'Nazionalità' : 'Nationality'}
-                      required
-                    />
-                    <CustomSelect
-                      value={appProfile.gender || null}
-                      onChange={(value) => setAppProfile((prev) => ({ ...prev, gender: value || '' }))}
-                      options={genderOptions}
-                      placeholder={uiLanguage === 'it' ? 'Genere' : 'Gender'}
-                      isClearable={false}
-                      searchable={false}
-                    />
-                    <DatePicker
-                      value={appProfile.dateOfBirth}
-                      onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
-                      label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
-                      initialViewYear={new Date().getFullYear() - 30}
-                      placement="bottom"
-                      disablePortal
-                    />
-                    <DatePicker
-                      value={appProfile.applicationDate}
-                      onChange={(value) => setAppProfile((prev) => ({ ...prev, applicationDate: value }))}
-                      label={uiLanguage === 'it' ? 'Data candidatura' : 'Application date'}
-                      placement="bottom"
-                      disablePortal
-                    />
-                    <input
-                      className="careers-form-input"
-                      value={appProfile.currentEmployer}
-                      onChange={(event) => setAppProfile((prev) => ({ ...prev, currentEmployer: event.target.value }))}
-                      placeholder={uiLanguage === 'it' ? 'Azienda attuale' : 'Current employer'}
-                      required
-                    />
-                    <input
-                      className="careers-form-input"
-                      value={appProfile.currentRole}
-                      onChange={(event) => setAppProfile((prev) => ({ ...prev, currentRole: event.target.value }))}
-                      placeholder={uiLanguage === 'it' ? 'Ruolo attuale' : 'Current role'}
+                      value={lastName}
+                      onChange={(event) => setLastName(event.target.value)}
+                      placeholder={copy.lastNamePlaceholder}
+                      autoComplete="family-name"
                       required
                     />
                   </div>
 
-                  <LocationFieldGroup
-                    value={{
-                      country: appProfile.country,
-                      state: appProfile.state,
-                      city: appProfile.city,
+                  <div
+                    className="careers-form-row"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: 12,
                     }}
-                    onChange={(location) => setAppProfile((prev) => ({
-                      ...prev,
-                      country: location.country,
-                      state: location.state,
-                      city: location.city,
-                    }))}
-                    includeAddress={false}
-                    includePostalCode={false}
-                    includePhone={false}
-                    labels={{
-                      country: uiLanguage === 'it' ? 'Paese' : 'Country',
-                      state: uiLanguage === 'it' ? 'Regione / Stato' : 'State / Region',
-                      city: uiLanguage === 'it' ? 'Città' : 'City',
-                    }}
-                  />
-                </section>
+                  >
+                    <input
+                      className="careers-form-input"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder={copy.emailPlaceholder}
+                      required
+                      autoComplete="email"
+                    />
+                    <input
+                      className="careers-form-input"
+                      type="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      placeholder={copy.phonePlaceholder}
+                      autoComplete="tel"
+                    />
+                  </div>
 
-                <input
-                  className="careers-form-input"
-                  type="url"
-                  value={linkedinUrl}
-                  onChange={(event) => setLinkedinUrl(event.target.value)}
-                  placeholder={copy.linkedinPlaceholder}
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-
-                <textarea
-                  className="careers-form-textarea"
-                  value={coverLetter}
-                  onChange={(event) => setCoverLetter(event.target.value)}
-                  placeholder={copy.coverLetterPlaceholder}
-                  maxLength={1000}
-                  rows={5}
-                />
-                <div className="careers-form-help">{coverLetter.length}/1000</div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gap: 8,
-                    padding: 14,
-                    borderRadius: 12,
-                    border: '1px dashed rgba(201,151,58,0.45)',
-                    background: 'rgba(201,151,58,0.06)',
-                  }}
-                >
-                  <label style={{ fontSize: 12.5, color: '#374151', fontWeight: 700 }}>
-                    {copy.cvLabel}
-                  </label>
                   <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,application/pdf"
-                    onChange={(event) => setResume(event.target.files?.[0] ?? null)}
-                    required
+                    className="careers-form-input"
+                    type="url"
+                    value={linkedinUrl}
+                    onChange={(event) => setLinkedinUrl(event.target.value)}
+                    placeholder={copy.linkedinPlaceholder}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
 
+                {/* Section 2 — CV/Resume file input */}
+                <div style={{ display: 'grid', gap: 8, padding: 14, borderRadius: 12, border: '1px dashed rgba(201,151,58,0.45)', background: 'rgba(201,151,58,0.06)' }}>
+                  <label style={{ fontSize: 12.5, color: '#374151', fontWeight: 700 }}>{copy.cvLabel}</label>
+                  {!resume ? (
+                    <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" onChange={handleResumeChange} required />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(201,151,58,0.3)', background: '#fff' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #C9973A, #B5852E)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                          {resume.name.split('.').pop()?.toUpperCase()}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resume.name}</div>
+                          <div style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span>{(resume.size / 1024).toFixed(1)} KB</span>
+                            <span style={{ color: '#d1d5db' }}>|</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowResumePreview(true)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: '#c9973a',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                textDecoration: 'underline',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {uiLanguage === 'it' ? 'Anteprima' : 'Preview'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowResumePreview(true)}
+                          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(201,151,58,0.4)', background: 'rgba(201,151,58,0.1)', color: '#8A5A07', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {uiLanguage === 'it' ? 'Visualizza' : 'View'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setResume(null); setResumePreviewUrl(null); }}
+                          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(220,38,38,0.3)', background: 'rgba(220,38,38,0.08)', color: '#991B1B', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {uiLanguage === 'it' ? 'Rimuovi' : 'Remove'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 3 — Cover Letter (optional) */}
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <textarea
+                    className="careers-form-textarea"
+                    value={coverLetter}
+                    onChange={(event) => setCoverLetter(event.target.value)}
+                    placeholder={copy.coverLetterPlaceholder}
+                    maxLength={1000}
+                    rows={5}
+                  />
+                  <div className="careers-form-help">{coverLetter.length}/1000</div>
+                </div>
+
+                {/* GDPR Helper Notice above collapsible toggle */}
+                <div style={{ fontSize: '12.5px', color: '#64748b', padding: '0 4px', lineHeight: 1.4 }}>
+                  {copy.gdprNotice}
+                </div>
+
+                {/* Section 4 — Collapsible additional information */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdditionalInfo(!showAdditionalInfo)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(13, 33, 55, 0.12)',
+                      background: '#ffffff',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                        {copy.additionalInfoTitle}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>
+                        {copy.additionalInfoSubtitle}
+                      </span>
+                    </div>
+                    <span style={{
+                      fontSize: '14px',
+                      color: '#64748b',
+                      transform: showAdditionalInfo ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s ease',
+                      display: 'inline-block',
+                      marginLeft: '12px',
+                    }}>
+                      ▼
+                    </span>
+                  </button>
+
+                  {showAdditionalInfo && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 12,
+                        padding: 16,
+                        borderRadius: 16,
+                        border: '1px solid rgba(201,151,58,0.28)',
+                        background: 'rgba(201,151,58,0.06)',
+                        marginTop: 4,
+                      }}
+                    >
+                      <div className="careers-form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                        <input
+                          className="careers-form-input"
+                          value={appProfile.availability}
+                          onChange={(event) => setAppProfile((prev) => ({ ...prev, availability: event.target.value }))}
+                          placeholder={uiLanguage === 'it' ? 'Disponibilità / ore settimanali' : 'Availability / weekly hours'}
+                        />
+                        <input
+                          className="careers-form-input"
+                          value={appProfile.nationality}
+                          onChange={(event) => setAppProfile((prev) => ({ ...prev, nationality: event.target.value }))}
+                          placeholder={uiLanguage === 'it' ? 'Nazionalità' : 'Nationality'}
+                        />
+                        <CustomSelect
+                          value={appProfile.gender || null}
+                          onChange={(value) => setAppProfile((prev) => ({ ...prev, gender: value || '' }))}
+                          options={genderOptions}
+                          placeholder={uiLanguage === 'it' ? 'Genere' : 'Gender'}
+                          isClearable={false}
+                          searchable={false}
+                        />
+                        <DatePicker
+                          value={appProfile.dateOfBirth}
+                          onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                          label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
+                          initialViewYear={new Date().getFullYear() - 30}
+                          placement="bottom"
+                          disablePortal
+                        />
+                        <DatePicker
+                          value={appProfile.applicationDate}
+                          onChange={(value) => setAppProfile((prev) => ({ ...prev, applicationDate: value }))}
+                          label={uiLanguage === 'it' ? 'Data candidatura' : 'Application date'}
+                          placement="bottom"
+                          disablePortal
+                        />
+                        <input
+                          className="careers-form-input"
+                          value={appProfile.currentEmployer}
+                          onChange={(event) => setAppProfile((prev) => ({ ...prev, currentEmployer: event.target.value }))}
+                          placeholder={uiLanguage === 'it' ? 'Azienda attuale' : 'Current employer'}
+                        />
+                        <input
+                          className="careers-form-input"
+                          value={appProfile.currentRole}
+                          onChange={(event) => setAppProfile((prev) => ({ ...prev, currentRole: event.target.value }))}
+                          placeholder={uiLanguage === 'it' ? 'Ruolo attuale' : 'Current role'}
+                        />
+                      </div>
+
+                      <LocationFieldGroup
+                        value={{
+                          country: appProfile.country,
+                          state: appProfile.state,
+                          city: appProfile.city,
+                        }}
+                        onChange={(location) => setAppProfile((prev) => ({
+                          ...prev,
+                          country: location.country,
+                          state: location.state,
+                          city: location.city,
+                        }))}
+                        includeAddress={false}
+                        includePostalCode={false}
+                        includePhone={false}
+                        labels={{
+                          country: uiLanguage === 'it' ? 'Paese' : 'Country',
+                          state: uiLanguage === 'it' ? 'Regione / Stato' : 'State / Region',
+                          city: uiLanguage === 'it' ? 'Città' : 'City',
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 5 — GDPR consent checkbox */}
                 <label className="careers-checkbox">
                   <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} required />
                   {uiLanguage === 'it' ? (
@@ -1410,17 +1522,8 @@ export default function PublicJobDetailPage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="careers-form-grid">
-                  {/* Basic Information Section */}
+                  {/* Section 1 — Required fields (always visible, no heading needed) */}
                   <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(13,33,55,0.18)', background: 'rgba(248,250,252,0.8)' }}>
-                    <div style={{ display: 'grid', gap: 4 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, color: '#0f172a', fontWeight: 700 }}>{uiLanguage === 'it' ? 'Informazioni di base' : 'Basic Information'}</h4>
-                      <p style={{ margin: 0, color: '#64748b', fontSize: 12.5, lineHeight: 1.5 }}>
-                        {uiLanguage === 'it'
-                          ? 'Nome, cognome e contatti principali.'
-                          : 'Name, surname and primary contact details.'}
-                      </p>
-                    </div>
-
                     <div className="careers-form-row">
                       <input 
                         className="careers-form-input" 
@@ -1471,120 +1574,12 @@ export default function PublicJobDetailPage() {
                     />
                   </section>
 
-                  {/* Personal Details Section */}
-                  <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(59,130,246,0.22)', background: 'rgba(239,246,255,0.6)' }}>
-                    <div style={{ display: 'grid', gap: 4 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, color: '#1e40af', fontWeight: 700 }}>{uiLanguage === 'it' ? 'Dettagli personali' : 'Personal Details'}</h4>
-                      <p style={{ margin: 0, color: '#3b82f6', fontSize: 12.5, lineHeight: 1.5 }}>
-                        {uiLanguage === 'it'
-                          ? 'Informazioni anagrafiche e personali.'
-                          : 'Demographic and personal information.'}
-                      </p>
-                    </div>
-
-                    <div className="careers-form-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
-                      <DatePicker
-                        value={appProfile.dateOfBirth}
-                        onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
-                        label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
-                        initialViewYear={new Date().getFullYear() - 30}
-                        placement="bottom"
-                        disablePortal
-                      />
-                      <input
-                        className="careers-form-input"
-                        type="text"
-                        value={appProfile.nationality}
-                        onChange={(event) => setAppProfile((prev) => ({ ...prev, nationality: event.target.value }))}
-                        placeholder={uiLanguage === 'it' ? 'Nazionalità' : 'Nationality'}
-                        required
-                      />
-                    </div>
-
-                    <div className="careers-form-row">
-                      <CustomSelect
-                        value={appProfile.gender || null}
-                        onChange={(value) => setAppProfile((prev) => ({ ...prev, gender: value || '' }))}
-                        options={genderOptions}
-                        placeholder={uiLanguage === 'it' ? 'Genere' : 'Gender'}
-                        isClearable={false}
-                        searchable={false}
-                      />
-                      <CustomSelect
-                        value={appProfile.maritalStatus || null}
-                        onChange={(value) => setAppProfile((prev) => ({ ...prev, maritalStatus: value || '' }))}
-                        options={maritalStatusOptions}
-                        placeholder={uiLanguage === 'it' ? 'Stato civile' : 'Marital status'}
-                        isClearable={false}
-                        searchable={false}
-                      />
-                    </div>
-
-                    <LocationFieldGroup
-                      value={{ country: appProfile.country, state: appProfile.state, city: appProfile.city }}
-                      onChange={(location) => setAppProfile((prev) => ({ ...prev, country: location.country, state: location.state, city: location.city }))}
-                      includeAddress={false}
-                      includePostalCode={false}
-                      includePhone={false}
-                      labels={{
-                        country: uiLanguage === 'it' ? 'Paese' : 'Country',
-                        state: uiLanguage === 'it' ? 'Regione / Stato' : 'State / Region',
-                        city: uiLanguage === 'it' ? 'Città' : 'City',
-                      }}
-                    />
-
-                    <input
-                      className="careers-form-input"
-                      type="text"
-                      value={appProfile.address || ''}
-                      onChange={(event) => setAppProfile((prev) => ({ ...prev, address: event.target.value }))}
-                      placeholder={uiLanguage === 'it' ? 'Indirizzo' : 'Address'}
-                    />
-
-                    <div className="careers-form-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
-                      <DatePicker
-                        value={appProfile.startDate}
-                        onChange={(value) => setAppProfile((prev) => ({ ...prev, startDate: value }))}
-                        label={uiLanguage === 'it' ? 'Data di inizio desiderata' : 'Start Date'}
-                        placement="bottom"
-                        disablePortal
-                      />
-                      <input
-                        className="careers-form-input"
-                        type="text"
-                        value={appProfile.postalCode || ''}
-                        onChange={(event) => setAppProfile((prev) => ({ ...prev, postalCode: event.target.value }))}
-                        placeholder={uiLanguage === 'it' ? 'Codice postale' : 'Postal code'}
-                        required
-                      />
-                    </div>
-                  </section>
-
-                  {/* Other Information Section */}
-                  <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(139,92,246,0.22)', background: 'rgba(245,243,255,0.6)' }}>
-                    <div style={{ display: 'grid', gap: 4 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, color: '#6b21a8', fontWeight: 700 }}>{uiLanguage === 'it' ? 'Altre informazioni' : 'Other Information'}</h4>
-                      <p style={{ margin: 0, color: '#7c3aed', fontSize: 12.5, lineHeight: 1.5 }}>
-                        {uiLanguage === 'it'
-                          ? 'Lettera di presentazione e documenti.'
-                          : 'Cover letter and documents.'}
-                      </p>
-                    </div>
-
-                    <textarea
-                      className="careers-form-textarea"
-                      value={coverLetter}
-                      onChange={(event) => setCoverLetter(event.target.value)}
-                      placeholder={copy.coverLetterPlaceholder}
-                      maxLength={1000}
-                      rows={5}
-                    />
-                    <div className="careers-form-help">{coverLetter.length}/1000</div>
-
+                  {/* Section 2 & 3 — CV/Resume and Cover Letter */}
+                  <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(13,33,55,0.14)', background: '#fff' }}>
                     <div style={{ display: 'grid', gap: 8, padding: 14, borderRadius: 12, border: '1px dashed rgba(201,151,58,0.45)', background: 'rgba(201,151,58,0.06)' }}>
                       <label style={{ fontSize: 12.5, color: '#374151', fontWeight: 700 }}>{copy.cvLabel}</label>
                       {!resume ? (
-                        <input type="file" accept=".pdf,.doc,.docx,application/pdf" onChange={handleResumeChange} required />
+                        <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" onChange={handleResumeChange} required />
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(201,151,58,0.3)', background: '#fff' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -1593,7 +1588,26 @@ export default function PublicJobDetailPage() {
                             </div>
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resume.name}</div>
-                              <div style={{ fontSize: 11, color: '#64748b' }}>{(resume.size / 1024).toFixed(1)} KB</div>
+                              <div style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span>{(resume.size / 1024).toFixed(1)} KB</span>
+                                <span style={{ color: '#d1d5db' }}>|</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowResumePreview(true)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    color: '#c9973a',
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {uiLanguage === 'it' ? 'Anteprima' : 'Preview'}
+                                </button>
+                              </div>
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -1615,7 +1629,142 @@ export default function PublicJobDetailPage() {
                         </div>
                       )}
                     </div>
+
+                    <textarea
+                      className="careers-form-textarea"
+                      value={coverLetter}
+                      onChange={(event) => setCoverLetter(event.target.value)}
+                      placeholder={copy.coverLetterPlaceholder}
+                      maxLength={1000}
+                      rows={5}
+                    />
+                    <div className="careers-form-help">{coverLetter.length}/1000</div>
                   </section>
+
+                  {/* GDPR Helper Notice */}
+                  <div style={{ fontSize: '12.5px', color: '#64748b', padding: '0 4px', lineHeight: 1.4 }}>
+                    {copy.gdprNotice}
+                  </div>
+
+                  {/* Section 4 — Collapsible additional information */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdditionalInfo(!showAdditionalInfo)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(13, 33, 55, 0.12)',
+                        background: '#ffffff',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                          {copy.additionalInfoTitle}
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                          {copy.additionalInfoSubtitle}
+                        </span>
+                      </div>
+                      <span style={{
+                        fontSize: '14px',
+                        color: '#64748b',
+                        transform: showAdditionalInfo ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                        display: 'inline-block',
+                        marginLeft: '12px',
+                      }}>
+                        ▼
+                      </span>
+                    </button>
+
+                    {showAdditionalInfo && (
+                      <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(59,130,246,0.22)', background: 'rgba(239,246,255,0.6)', marginTop: 4 }}>
+                        <div className="careers-form-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
+                          <DatePicker
+                            value={appProfile.dateOfBirth}
+                            onChange={(value) => setAppProfile((prev) => ({ ...prev, dateOfBirth: value }))}
+                            label={uiLanguage === 'it' ? 'Data di nascita' : 'Date of birth'}
+                            initialViewYear={new Date().getFullYear() - 30}
+                            placement="bottom"
+                            disablePortal
+                          />
+                          <input
+                            className="careers-form-input"
+                            type="text"
+                            value={appProfile.nationality}
+                            onChange={(event) => setAppProfile((prev) => ({ ...prev, nationality: event.target.value }))}
+                            placeholder={uiLanguage === 'it' ? 'Nazionalità' : 'Nationality'}
+                          />
+                        </div>
+
+                        <div className="careers-form-row">
+                          <CustomSelect
+                            value={appProfile.gender || null}
+                            onChange={(value) => setAppProfile((prev) => ({ ...prev, gender: value || '' }))}
+                            options={genderOptions}
+                            placeholder={uiLanguage === 'it' ? 'Genere' : 'Gender'}
+                            isClearable={false}
+                            searchable={false}
+                          />
+                          <CustomSelect
+                            value={appProfile.maritalStatus || null}
+                            onChange={(value) => setAppProfile((prev) => ({ ...prev, maritalStatus: value || '' }))}
+                            options={maritalStatusOptions}
+                            placeholder={uiLanguage === 'it' ? 'Stato civile' : 'Marital status'}
+                            isClearable={false}
+                            searchable={false}
+                          />
+                        </div>
+
+                        <LocationFieldGroup
+                          value={{ country: appProfile.country, state: appProfile.state, city: appProfile.city }}
+                          onChange={(location) => setAppProfile((prev) => ({ ...prev, country: location.country, state: location.state, city: location.city }))}
+                          includeAddress={false}
+                          includePostalCode={false}
+                          includePhone={false}
+                          labels={{
+                            country: uiLanguage === 'it' ? 'Paese' : 'Country',
+                            state: uiLanguage === 'it' ? 'Regione / Stato' : 'State / Region',
+                            city: uiLanguage === 'it' ? 'Città' : 'City',
+                          }}
+                        />
+
+                        <input
+                          className="careers-form-input"
+                          type="text"
+                          value={appProfile.address || ''}
+                          onChange={(event) => setAppProfile((prev) => ({ ...prev, address: event.target.value }))}
+                          placeholder={uiLanguage === 'it' ? 'Indirizzo' : 'Address'}
+                        />
+
+                        <div className="careers-form-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
+                          <DatePicker
+                            value={appProfile.startDate}
+                            onChange={(value) => setAppProfile((prev) => ({ ...prev, startDate: value }))}
+                            label={copy.availableStartDateLabel}
+                            placement="bottom"
+                            disablePortal
+                          />
+                          <input
+                            className="careers-form-input"
+                            type="text"
+                            value={appProfile.postalCode || ''}
+                            onChange={(event) => setAppProfile((prev) => ({ ...prev, postalCode: event.target.value }))}
+                            placeholder={uiLanguage === 'it' ? 'Codice postale' : 'Postal code'}
+                          />
+                        </div>
+                      </section>
+                    )}
+                  </div>
 
                   <label className="careers-checkbox">
                     <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} required />
@@ -1661,7 +1810,7 @@ export default function PublicJobDetailPage() {
           />
         )}
       </div>
-      <CareersFooter />
+      <CareersFooter companyName={companyName} companyEmail={companyMeta?.companyEmail || undefined} />
       <CookieConsentBanner />
     </div>
   );

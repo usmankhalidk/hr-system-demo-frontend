@@ -230,6 +230,62 @@ export default function GroupRoleVisibilityPanel() {
         </div>
       )}
 
+      {/* Unified Companies list under selection */}
+      {groupId != null && (
+        <div style={{
+          padding: '12px 20px',
+          borderBottom: '1px solid var(--border-light)',
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'nowrap',
+          overflowX: 'auto',
+          background: 'var(--surface-warm)',
+          alignItems: 'center',
+          scrollbarWidth: 'none',
+          WebkitOverflowScrolling: 'touch',
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 4, flexShrink: 0 }}>
+            {isIsolatedSelection 
+              ? t('permissions.groupVisibility.isolatedCompanies', { defaultValue: 'Isolated Companies:' })
+              : t('permissions.groupVisibility.groupCompanies', { defaultValue: 'Group Companies:' })}
+          </span>
+          {selectedCompanies.length === 0 ? (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {isIsolatedSelection
+                ? t('permissions.groupVisibility.noIsolatedCompanies', { defaultValue: 'No isolated companies found.' })
+                : t('permissions.groupVisibility.noCompaniesInGroup', { defaultValue: 'No companies linked to this group yet.' })}
+            </span>
+          ) : (
+            selectedCompanies.map((company) => (
+              <span
+                key={company.id}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-primary)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  flexShrink: 0
+                }}
+              >
+                <span style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: company.isActive ? '#22C55E' : '#9CA3AF'
+                }} />
+                {company.name}
+              </span>
+            ))
+          )}
+        </div>
+      )}
+
       {/* Visibility toggles */}
       {groupId == null ? (
         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
@@ -299,13 +355,13 @@ export default function GroupRoleVisibilityPanel() {
                 borderTop: '1px solid var(--border-light)',
                 display: 'flex',
                 gap: 6,
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
                 width: '100%',
+                paddingBottom: '6px'
               }}>
                 {(() => {
-                  const displayCompanies = localVisibility[key]
-                    ? selectedCompanies
-                    : selectedCompanies.filter((c) => c.id === user?.companyId);
+                  const displayCompanies = selectedCompanies;
 
                   if (displayCompanies.length === 0) {
                     return (
@@ -333,6 +389,7 @@ export default function GroupRoleVisibilityPanel() {
                           color: roleActive ? '#166534' : 'var(--text-secondary)',
                           fontSize: 11,
                           fontWeight: 600,
+                          flexShrink: 0
                         }}
                       >
                         <span>{company.name}</span>

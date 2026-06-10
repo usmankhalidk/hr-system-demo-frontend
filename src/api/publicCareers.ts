@@ -19,6 +19,7 @@ export interface PublicCompany {
   ownerSurname?: string | null;
   ownerAvatarFilename?: string | null;
   openRolesCount?: number;
+  companyEmail?: string | null;
 }
 
 export interface PublicHiringContact {
@@ -232,4 +233,24 @@ export async function applyToPublicJob(params: {
       'Content-Type': 'multipart/form-data',
     },
   });
+}
+
+export interface LegalDocument {
+  id: number;
+  documentKey: string;
+  language: string;
+  title: string;
+  content: string;
+  updatedAt: string;
+  updatedByName: string | null;
+}
+
+export async function getPublicLegalDocument(key: string, lang = 'it'): Promise<LegalDocument> {
+  const { data } = await apiClient.get(`/public/legal-documents/${key}`, { params: { lang } });
+  return data.data.document as LegalDocument;
+}
+
+export async function updateLegalDocument(key: string, params: { language: string; title: string; content: string }): Promise<LegalDocument> {
+  const { data } = await apiClient.put(`/public/legal-documents/${key}`, params);
+  return data.data.document as LegalDocument;
 }

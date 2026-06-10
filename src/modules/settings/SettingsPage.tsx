@@ -52,6 +52,27 @@ const IconClock = () => (
   </svg>
 );
 
+const ArrowIcon = ({ open }: { open: boolean }) => (
+  <svg 
+    width="16" 
+    height="16" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2.5" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    style={{ 
+      transition: 'transform 0.2s ease', 
+      transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+      color: 'var(--text-muted)',
+      flexShrink: 0
+    }}
+  >
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
 // ── Notification Settings Panel ────────────────────────────────────────────
 
 const ALL_EVENT_KEYS = [
@@ -82,6 +103,7 @@ const NotificationSettingsPanel: React.FC = () => {
   const [settings, setSettings] = useState<NotificationSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,95 +147,110 @@ const NotificationSettingsPanel: React.FC = () => {
       borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
       boxShadow: 'var(--shadow-sm)',
     }}>
-      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: 'var(--accent)' }}><IconBell /></span>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-            {t('documents.settingsNotifications')}
-          </h3>
-        </div>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-          {t('documents.settingsNotificationsDesc')}
-        </p>
-        {/* Summary bar */}
-        {!loading && (
-          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border-light)', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', borderRadius: 2,
-                background: 'var(--accent)',
-                width: `${progressPct}%`,
-                transition: 'width 0.3s',
-              }} />
-            </div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-              {t('documents.notifSummary', { enabled: enabledCount, total: totalCount })}
-            </span>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ 
+          padding: '16px 20px', 
+          borderBottom: isOpen ? '1px solid var(--border-light)' : 'none',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'pointer',
+          userSelect: 'none'
+        }}
+      >
+        <div style={{ flex: 1, marginRight: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <span style={{ color: 'var(--accent)' }}><IconBell /></span>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+              {t('documents.settingsNotifications')}
+            </h3>
           </div>
-        )}
-      </div>
-      <div style={{ padding: '8px 20px 16px' }}>
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
-            {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 36, borderRadius: 6 }} />)}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {EVENT_CATEGORY_DEFS.map((cat, catIdx) => (
-              <div key={cat.labelKey} style={{ marginTop: catIdx === 0 ? 8 : 16 }}>
-                {/* Category header */}
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+            {t('documents.settingsNotificationsDesc')}
+          </p>
+          {isOpen && !loading && (
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border-light)', overflow: 'hidden' }}>
                 <div style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                  textTransform: 'uppercase', color: 'var(--text-muted)',
-                  padding: '0 10px', marginBottom: 4,
-                }}>
-                  {t(cat.labelKey)}
-                </div>
-                {/* Event rows */}
-                {cat.keys.map(key => {
-                  const enabled = isEnabled(key);
-                  const isToggling = toggling === key;
-                  return (
-                    <div key={key} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '7px 10px', borderRadius: 6,
-                      background: 'transparent',
-                      transition: 'background 0.12s',
-                    }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <span style={{ fontSize: 13, color: enabled ? 'var(--text-primary)' : 'var(--text-muted)', transition: 'color 0.2s' }}>
-                        {eventLabel(key, t)}
-                      </span>
-                      <button
-                        disabled={isToggling}
-                        onClick={() => handleToggle(key, enabled)}
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
-                      >
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center',
-                          width: 40, height: 22, borderRadius: 11,
-                          background: enabled ? 'var(--accent)' : '#9ca3af',
-                          transition: 'background 0.2s', position: 'relative',
-                        }}>
-                          <span style={{
-                            position: 'absolute', top: 2, width: 18, height: 18,
-                            left: enabled ? 20 : 2,
-                            borderRadius: '50%', background: '#fff',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                            transition: 'left 0.2s',
-                          }} />
-                        </span>
-                      </button>
-                    </div>
-                  );
-                })}
+                  height: '100%', borderRadius: 2,
+                  background: 'var(--accent)',
+                  width: `${progressPct}%`,
+                  transition: 'width 0.3s',
+                }} />
               </div>
-            ))}
-          </div>
-        )}
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                {t('documents.notifSummary', { enabled: enabledCount, total: totalCount })}
+              </span>
+            </div>
+          )}
+        </div>
+        <ArrowIcon open={isOpen} />
       </div>
+      {isOpen && (
+        <div style={{ padding: '8px 20px 16px' }}>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+              {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 36, borderRadius: 6 }} />)}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {EVENT_CATEGORY_DEFS.map((cat, catIdx) => (
+                <div key={cat.labelKey} style={{ marginTop: catIdx === 0 ? 8 : 16 }}>
+                  {/* Category header */}
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', color: 'var(--text-muted)',
+                    padding: '0 10px', marginBottom: 4,
+                  }}>
+                    {t(cat.labelKey)}
+                  </div>
+                  {/* Event rows */}
+                  {cat.keys.map(key => {
+                    const enabled = isEnabled(key);
+                    const isToggling = toggling === key;
+                    return (
+                      <div key={key} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '7px 10px', borderRadius: 6,
+                        background: 'transparent',
+                        transition: 'background 0.12s',
+                      }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <span style={{ fontSize: 13, color: enabled ? 'var(--text-primary)' : 'var(--text-muted)', transition: 'color 0.2s' }}>
+                          {eventLabel(key, t)}
+                        </span>
+                        <button
+                          disabled={isToggling}
+                          onClick={() => handleToggle(key, enabled)}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
+                        >
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center',
+                            width: 40, height: 22, borderRadius: 11,
+                            background: enabled ? 'var(--accent)' : '#9ca3af',
+                            transition: 'background 0.2s', position: 'relative',
+                          }}>
+                            <span style={{
+                              position: 'absolute', top: 2, width: 18, height: 18,
+                              left: enabled ? 20 : 2,
+                              borderRadius: '50%', background: '#fff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                              transition: 'left 0.2s',
+                            }} />
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -233,6 +270,7 @@ const AutomationSettingsPanel: React.FC = () => {
   const [settings, setSettings] = useState<AutomationSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -263,86 +301,102 @@ const AutomationSettingsPanel: React.FC = () => {
       borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
       boxShadow: 'var(--shadow-sm)',
     }}>
-      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: 'var(--accent)' }}><IconClock /></span>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-            {t('documents.settingsAutomation')}
-          </h3>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ 
+          padding: '16px 20px', 
+          borderBottom: isOpen ? '1px solid var(--border-light)' : 'none',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'pointer',
+          userSelect: 'none'
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <span style={{ color: 'var(--accent)' }}><IconClock /></span>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+              {t('documents.settingsAutomation')}
+            </h3>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+            {t('documents.settingsAutomationDesc')}
+          </p>
         </div>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-          {t('documents.settingsAutomationDesc')}
-        </p>
+        <ArrowIcon open={isOpen} />
       </div>
-      <div style={{ padding: '16px 20px' }}>
-        {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 96, borderRadius: 10 }} />)}
-          </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: 12,
-          }}>
-            {settings.map(s => {
-              const isToggling = toggling === s.jobKey;
-              return (
-                <div key={s.jobKey} style={{
-                  background: s.enabled ? 'var(--surface)' : 'var(--background)',
-                  border: `1.5px solid ${s.enabled ? 'var(--border)' : 'var(--border-light)'}`,
-                  borderRadius: 10, padding: '14px 16px',
-                  display: 'flex', flexDirection: 'column', gap: 10,
-                  opacity: s.enabled ? 1 : 0.65,
-                  transition: 'all 0.2s',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3, lineHeight: 1.35 }}>
-                        {jobName(s.jobKey, t)}
-                      </div>
-                      {jobSchedule(s.jobKey, t) && (
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {jobSchedule(s.jobKey, t)}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      disabled={isToggling}
-                      onClick={() => handleToggle(s.jobKey, s.enabled)}
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1, flexShrink: 0 }}
-                    >
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center',
-                        width: 40, height: 22, borderRadius: 11,
-                        background: s.enabled ? 'var(--accent)' : '#9ca3af',
-                        transition: 'background 0.2s', position: 'relative',
-                      }}>
-                        <span style={{
-                          position: 'absolute', top: 2, width: 18, height: 18,
-                          left: s.enabled ? 20 : 2,
-                          borderRadius: '50%', background: '#fff',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                          transition: 'left 0.2s',
-                        }} />
-                      </span>
-                    </button>
-                  </div>
-                  <div style={{
-                    fontSize: 11, padding: '3px 8px', borderRadius: 5,
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    background: s.enabled ? 'rgba(21,128,61,0.08)' : 'rgba(107,114,128,0.08)',
-                    color: s.enabled ? '#15803D' : 'var(--text-muted)',
-                    width: 'fit-content',
+      {isOpen && (
+        <div style={{ padding: '16px 20px' }}>
+          {loading ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+              {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 96, borderRadius: 10 }} />)}
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: 12,
+            }}>
+              {settings.map(s => {
+                const isToggling = toggling === s.jobKey;
+                return (
+                  <div key={s.jobKey} style={{
+                    background: s.enabled ? 'var(--surface)' : 'var(--background)',
+                    border: `1.5px solid ${s.enabled ? 'var(--border)' : 'var(--border-light)'}`,
+                    borderRadius: 10, padding: '14px 16px',
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                    opacity: s.enabled ? 1 : 0.65,
+                    transition: 'all 0.2s',
                   }}>
-                    {s.enabled ? `● ${t('documents.jobActive')}` : `○ ${t('documents.jobInactive')}`}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3, lineHeight: 1.35 }}>
+                          {jobName(s.jobKey, t)}
+                        </div>
+                        {jobSchedule(s.jobKey, t) && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {jobSchedule(s.jobKey, t)}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        disabled={isToggling}
+                        onClick={() => handleToggle(s.jobKey, s.enabled)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1, flexShrink: 0 }}
+                      >
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          width: 40, height: 22, borderRadius: 11,
+                          background: s.enabled ? 'var(--accent)' : '#9ca3af',
+                          transition: 'background 0.2s', position: 'relative',
+                        }}>
+                          <span style={{
+                            position: 'absolute', top: 2, width: 18, height: 18,
+                            left: s.enabled ? 20 : 2,
+                            borderRadius: '50%', background: '#fff',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                            transition: 'left 0.2s',
+                          }} />
+                        </span>
+                      </button>
+                    </div>
+                    <div style={{
+                      fontSize: 11, padding: '3px 8px', borderRadius: 5,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: s.enabled ? 'rgba(21,128,61,0.08)' : 'rgba(107,114,128,0.08)',
+                      color: s.enabled ? '#15803D' : 'var(--text-muted)',
+                      width: 'fit-content',
+                    }}>
+                      {s.enabled ? `● ${t('documents.jobActive')}` : `○ ${t('documents.jobInactive')}`}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -363,6 +417,19 @@ const SettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    timezone: true,
+    leaveBalance: false,
+    leaveVisibility: false,
+  });
+
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   const timezoneOptions = useMemo<SelectOption[]>(() => {
     return getTimezoneOptionValues([detectedTimezone, selectedTimezone])
@@ -438,43 +505,59 @@ const SettingsPage: React.FC = () => {
         position: 'relative', zIndex: 5,
         boxShadow: 'var(--shadow-sm)',
       }}>
-        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-            <span style={{ color: '#1D4ED8' }}><Globe2 size={16} /></span>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-              {t('settings.sectionTimezone', 'Timezone')}
-            </h3>
+        <div 
+          onClick={() => toggleSection('timezone')}
+          style={{ 
+            padding: '16px 20px', 
+            borderBottom: openSections.timezone ? '1px solid var(--border-light)' : 'none',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <span style={{ color: '#1D4ED8' }}><Globe2 size={16} /></span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                {t('settings.sectionTimezone', 'Timezone')}
+              </h3>
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('settings.sectionTimezoneDesc', 'Timezone is auto-detected from your current region and can be changed for display.')}
+            </p>
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-            {t('settings.sectionTimezoneDesc', 'Timezone is auto-detected from your current region and can be changed for display.')}
-          </p>
+          <ArrowIcon open={openSections.timezone} />
         </div>
-        <div style={{ padding: 20, display: 'grid', gap: 10 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-            <span style={{ fontWeight: 700 }}>{t('settings.currentTimezone', 'Current timezone')}:</span>
-            <span style={{ padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(29,78,216,0.28)', background: 'rgba(219,234,254,0.5)', color: '#1E40AF', fontWeight: 700 }}>
-              {selectedTimezone || detectedTimezone} ({currentTimezoneOffset})
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              ({t('settings.detectedTimezone', 'Auto-detected')}: {detectedTimezone})
-            </span>
-          </div>
+        {openSections.timezone && (
+          <div style={{ padding: 20, display: 'grid', gap: 10 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+              <span style={{ fontWeight: 700 }}>{t('settings.currentTimezone', 'Current timezone')}:</span>
+              <span style={{ padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(29,78,216,0.28)', background: 'rgba(219,234,254,0.5)', color: '#1E40AF', fontWeight: 700 }}>
+                {selectedTimezone || detectedTimezone} ({currentTimezoneOffset})
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                ({t('settings.detectedTimezone', 'Auto-detected')}: {detectedTimezone})
+              </span>
+            </div>
 
-          <div style={{ maxWidth: 420 }}>
-            <CustomSelect
-              value={selectedTimezone}
-              onChange={(value) => {
-                if (value) setSelectedTimezone(value);
-              }}
-              options={timezoneOptions}
-              placeholder={t('settings.chooseTimezone', 'Choose timezone')}
-              searchable
-              searchPlaceholder={t('settings.timezoneSearchPlaceholder', 'Search timezone...')}
-              noOptionsMessage={t('settings.timezoneNoResults', 'No timezone found')}
-              isClearable={false}
-            />
+            <div style={{ maxWidth: 420 }}>
+              <CustomSelect
+                value={selectedTimezone}
+                onChange={(value) => {
+                  if (value) setSelectedTimezone(value);
+                }}
+                options={timezoneOptions}
+                placeholder={t('settings.chooseTimezone', 'Choose timezone')}
+                searchable
+                searchPlaceholder={t('settings.timezoneSearchPlaceholder', 'Search timezone...')}
+                noOptionsMessage={t('settings.timezoneNoResults', 'No timezone found')}
+                isClearable={false}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Leave Balance Management (admin + hr) */}
@@ -484,18 +567,34 @@ const SettingsPage: React.FC = () => {
         borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 24,
         boxShadow: 'var(--shadow-sm)',
       }}>
-        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-            <span style={{ color: '#0284C7' }}><IconBalances /></span>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-              {t('settings.sectionLeaveBalance')}
-            </h3>
+        <div 
+          onClick={() => toggleSection('leaveBalance')}
+          style={{ 
+            padding: '16px 20px', 
+            borderBottom: openSections.leaveBalance ? '1px solid var(--border-light)' : 'none',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <span style={{ color: '#0284C7' }}><IconBalances /></span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                {t('settings.sectionLeaveBalance')}
+              </h3>
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('settings.sectionLeaveBalanceDesc')}
+            </p>
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-            {t('settings.sectionLeaveBalanceDesc')}
-          </p>
+          <ArrowIcon open={openSections.leaveBalance} />
         </div>
-        <BalancesTab showFlash={(msg) => setSaveMsg(msg)} />
+        {openSections.leaveBalance && (
+          <BalancesTab showFlash={(msg) => setSaveMsg(msg)} />
+        )}
       </div>
 
       {/* Leave Visibility Toggle (admin only) */}
@@ -506,58 +605,77 @@ const SettingsPage: React.FC = () => {
           borderRadius: 'var(--radius-lg)', overflow: 'hidden',
           boxShadow: 'var(--shadow-sm)', marginBottom: 24,
         }}>
-          <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-              <span style={{ color: '#15803D' }}><IconEye /></span>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                {t('settings.sectionLeave')}
-              </h3>
+          <div 
+            onClick={() => toggleSection('leaveVisibility')}
+            style={{ 
+              padding: '16px 20px', 
+              borderBottom: openSections.leaveVisibility ? '1px solid var(--border-light)' : 'none',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                <span style={{ color: '#15803D' }}><IconEye /></span>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  {t('settings.sectionLeave')}
+                </h3>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+                {t('settings.sectionLeaveDesc')}
+              </p>
             </div>
+            <ArrowIcon open={openSections.leaveVisibility} />
           </div>
-          <div style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
-                {t('settings.leaveBalanceVisibility')}
+          {openSections.leaveVisibility && (
+            <div style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
+                  {t('settings.leaveBalanceVisibility')}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {t('settings.leaveBalanceVisibilityDesc')}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {t('settings.leaveBalanceVisibilityDesc')}
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: showLeaveBalance ? '#15803D' : '#9ca3af' }}>
-                {showLeaveBalance ? t('settings.visibilityOn') : t('settings.visibilityOff')}
-              </span>
-              {loading ? (
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
-              ) : (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={showLeaveBalance}
-                  disabled={saving}
-                  onClick={handleToggle}
-                  style={{ background: 'none', border: 'none', padding: 0, cursor: saving ? 'not-allowed' : 'pointer' }}
-                >
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center',
-                    width: 52, height: 28, borderRadius: 14,
-                    background: showLeaveBalance ? '#15803D' : '#9ca3af',
-                    opacity: saving ? 0.6 : 1,
-                    transition: 'background 0.2s',
-                    position: 'relative',
-                  }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: showLeaveBalance ? '#15803D' : '#9ca3af' }}>
+                  {showLeaveBalance ? t('settings.visibilityOn') : t('settings.visibilityOff')}
+                </span>
+                {loading ? (
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</span>
+                ) : (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showLeaveBalance}
+                    disabled={saving}
+                    onClick={handleToggle}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: saving ? 'not-allowed' : 'pointer' }}
+                  >
                     <span style={{
-                      position: 'absolute', top: 3, width: 22, height: 22,
-                      left: showLeaveBalance ? 27 : 3,
-                      borderRadius: '50%', background: '#fff',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                      transition: 'left 0.2s',
-                    }} />
-                  </span>
-                </button>
-              )}
+                      display: 'inline-flex', alignItems: 'center',
+                      width: 52, height: 28, borderRadius: 14,
+                      background: showLeaveBalance ? '#15803D' : '#9ca3af',
+                      opacity: saving ? 0.6 : 1,
+                      transition: 'background 0.2s',
+                      position: 'relative',
+                    }}>
+                      <span style={{
+                        position: 'absolute', top: 3, width: 22, height: 22,
+                        left: showLeaveBalance ? 27 : 3,
+                        borderRadius: '50%', background: '#fff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        transition: 'left 0.2s',
+                      }} />
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 

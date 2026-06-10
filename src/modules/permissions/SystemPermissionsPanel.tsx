@@ -189,8 +189,14 @@ const SystemPermissionsPanel: React.FC = () => {
 
       {/* Company Tabs */}
       {companies.length > 1 && (
-        <div style={{ marginBottom: 20, overflowX: 'auto' }}>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{
+          marginBottom: 20,
+          overflowX: 'auto',
+          scrollbarWidth: 'none',
+          WebkitOverflowScrolling: 'touch',
+          paddingBottom: '6px'
+        }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap' }}>
             {companies.map((company) => {
               const isSelected = company.id === selectedCompanyId;
               return (
@@ -210,6 +216,7 @@ const SystemPermissionsPanel: React.FC = () => {
                     whiteSpace: 'nowrap',
                     fontFamily: 'var(--font-body)',
                     boxShadow: isSelected ? '0 2px 8px rgba(13,33,55,0.18)' : 'none',
+                    flexShrink: 0
                   }}
                 >
                   {company.name}

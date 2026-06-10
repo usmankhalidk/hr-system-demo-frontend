@@ -1,6 +1,21 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
-export default function CareersFooter() {
+interface CareersFooterProps {
+  companyName?: string;
+  companyEmail?: string;
+}
+
+export default function CareersFooter({ companyName, companyEmail }: CareersFooterProps) {
+  const { i18n } = useTranslation();
+  const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
+  const displayCompany = companyName || 'Fusaro Uomo';
+
+  const queryParams = new URLSearchParams();
+  if (companyName) queryParams.set('companyName', companyName);
+  if (companyEmail) queryParams.set('companyEmail', companyEmail || '');
+  const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
   return (
     <footer style={{
       background: 'var(--surface-warm)',
@@ -21,28 +36,28 @@ export default function CareersFooter() {
         gap: '16px'
       }} className="flex-col-mobile">
         <div>
-          <span>&copy; 2026 Fusaro Uomo. Powered by </span>
+          <span>&copy; 2026 {displayCompany}. Powered by </span>
           <a href="https://veylohr.com" style={{ color: 'var(--primary)', fontWeight: 600 }}>Veylo HR</a>
         </div>
         <div style={{ display: 'flex', gap: '24px' }}>
           <a 
-            href="/privacy" 
+            href={`/privacy${queryString}`} 
             style={{ color: 'var(--text-secondary)', transition: 'color 0.2s', textDecoration: 'none' }} 
             onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'} 
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >
-            Privacy Policy
+            {lang === 'it' ? 'Informativa Privacy' : 'Privacy Policy'}
           </a>
           <a 
-            href="/terms" 
+            href={`/terms${queryString}`} 
             style={{ color: 'var(--text-secondary)', transition: 'color 0.2s', textDecoration: 'none' }} 
             onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'} 
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >
-            Termini di Servizio
+            {lang === 'it' ? 'Termini di Servizio' : 'Terms of Service'}
           </a>
           <a 
-            href="/cookie-policy" 
+            href={`/cookie-policy${queryString}`} 
             style={{ color: 'var(--text-secondary)', transition: 'color 0.2s', textDecoration: 'none' }} 
             onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'} 
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}

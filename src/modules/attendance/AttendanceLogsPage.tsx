@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { listAttendanceEvents, AttendanceEvent, EventType, AttendanceListParams } from '../../api/attendance';
@@ -67,6 +68,7 @@ export default function AttendanceLogsPage() {
   const [total, setTotal]         = useState(0);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  const [compact, setCompact]     = useState(false);
 
   // ── Search Debounce ────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState('');
@@ -278,6 +280,95 @@ export default function AttendanceLogsPage() {
   const [filterEmployees, setFilterEmployees] = useState<Array<{ id: number; name: string; surname: string; storeId: number | null }>>([]);
   const [filterStores, setFilterStores] = useState<Array<{ id: number; name: string; companyName?: string }>>([]);
 
+  // Filter Modal & Temp States
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [tempStoreId, setTempStoreId] = useState('');
+  const [tempUserId, setTempUserId] = useState('');
+  const [tempDateFrom, setTempDateFrom] = useState('');
+  const [tempDateTo, setTempDateTo] = useState('');
+
+  const openFilterModal = () => {
+    setTempStoreId(filterStoreId);
+    setTempUserId(filterUserId);
+    setTempDateFrom(dateFrom);
+    setTempDateTo(dateTo);
+    setShowFilterModal(true);
+  };
+
+  const applyFilters = () => {
+    setFilterStoreId(tempStoreId);
+    setFilterUserId(tempUserId);
+    setDateFrom(tempDateFrom);
+    setDateTo(tempDateTo);
+    setShowFilterModal(false);
+  };
+
+  const activeFilterTags = useMemo(() => {
+    const tags = [];
+    if (filterStoreId) {
+      const storeObj = filterStores.find(s => String(s.id) === filterStoreId);
+      tags.push({
+        key: 'store',
+        label: t('common.store', 'Negozio'),
+        value: storeObj ? storeObj.name : filterStoreId,
+      });
+    }
+    if (filterUserId) {
+      const empObj = filterEmployees.find(e => String(e.id) === filterUserId);
+      tags.push({
+        key: 'employee',
+        label: t('employees.colName', 'Dipendente'),
+        value: empObj ? `${empObj.name} ${empObj.surname}` : filterUserId,
+      });
+    }
+    if (dateFrom !== weekAgo || dateTo !== today) {
+      tags.push({
+        key: 'date',
+        label: t('common.date', 'Periodo'),
+        value: `${dateFrom} → ${dateTo}`,
+      });
+    }
+    if (eventType) {
+      const labelKey = EVENT_TYPE_LABEL_KEYS[eventType] ?? 'attendance.checkin';
+      tags.push({
+        key: 'eventType',
+        label: t('attendance.eventType', 'Tipo Evento'),
+        value: t(labelKey),
+      });
+    }
+    return tags;
+  }, [filterStoreId, filterUserId, dateFrom, dateTo, eventType, filterStores, filterEmployees, weekAgo, today, t]);
+
+  const hasActiveFilters = activeFilterTags.length > 0;
+
+  const removeFilter = (key: string) => {
+    if (key === 'store') {
+      setFilterStoreId('');
+    } else if (key === 'employee') {
+      setFilterUserId('');
+    } else if (key === 'date') {
+      setDateFrom(weekAgo);
+      setDateTo(today);
+    } else if (key === 'eventType') {
+      setEventType('');
+    }
+  };
+
+  const resetAllFilters = () => {
+    setFilterStoreId('');
+    setFilterUserId('');
+    setDateFrom(weekAgo);
+    setDateTo(today);
+    setEventType('');
+    setSearchInput('');
+  };
+
+  const filteredEmployeesForSelect = useMemo(() => {
+    if (!tempStoreId) return filterEmployees;
+    const sId = parseInt(tempStoreId, 10);
+    return filterEmployees.filter(e => e.storeId === sId);
+  }, [tempStoreId, filterEmployees]);
+
   const loadFilterEmployees = useCallback(async (storeId?: number) => {
     try {
       const res = await getEmployees({ limit: 500, status: 'active', ...(storeId ? { storeId } : {}) });
@@ -397,7 +488,7 @@ export default function AttendanceLogsPage() {
       <div style={{ 
         background: 'var(--primary)', 
         padding: heroPad,
-        borderRadius: isMobile ? '16px' : '24px',
+        borderRadius: 'var(--radius-lg)',
         marginBottom: 20
       }}>
 
@@ -545,41 +636,41 @@ export default function AttendanceLogsPage() {
         </div>
       </div>
 
-      {/* ── Filter bar ────────────────────────────────────────────────────── */}
+      {/* ── Toolbar Row ─────────────────────────────────────────────────── */}
       <div style={{
-        margin: isMobile ? '0 0 16px' : '0 0 20px',
+        margin: '0 0 16px 0',
         padding: filterPad,
         background: 'var(--surface)',
         border: '1px solid var(--border)',
-        borderRadius: isMobile ? 16 : 24, // Matching hero section radius
-        display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
-        alignItems: isMobile ? 'flex-start' : 'center',
-        gap: isMobile ? 10 : 12,
-        flexWrap: isMobile ? undefined : 'wrap',
+        borderRadius: 'var(--radius-lg)',
         position: 'relative',
         zIndex: 20,
         boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
       }}>
-
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: 12,
           width: '100%',
-          flexWrap: isMobile ? 'wrap' : undefined,
         }}>
-          <div style={{ flex: isMobile ? '1 1 100%' : 1.5 }}>
+          {/* Search input */}
+          <div style={{ flex: 1, position: 'relative' }}>
+            <div style={{ position: 'absolute', left: 14, top: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </div>
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={t('employees.searchPlaceholder', { defaultValue: 'Search by name, surname or ID...' })}
+              placeholder={t('employees.searchPlaceholder', { defaultValue: 'Cerca dipendente...' })}
               style={{
                 width: '100%',
                 height: 42,
                 borderRadius: 12,
                 border: '1px solid var(--border)',
-                padding: '0 16px',
+                padding: '0 16px 0 42px',
                 background: 'var(--background)',
                 color: 'var(--text)',
                 fontSize: 14,
@@ -588,148 +679,230 @@ export default function AttendanceLogsPage() {
               }}
             />
           </div>
-          <div style={{ flex: 1 }}>
-            <CustomSelect
-              value={filterStoreId}
-              onChange={(val) => {
-                const nextStoreId = val ?? '';
-                setFilterStoreId(nextStoreId);
-                setFilterUserId('');
-                void loadFilterEmployees(nextStoreId ? parseInt(nextStoreId, 10) : undefined);
-              }}
-              options={[
-                { value: '', label: `${t('common.all')} ${t('common.store').toLowerCase()}` },
-                ...filterStores.map(s => ({
-                  value: String(s.id),
-                  label: s.companyName ? `${s.name} (${s.companyName})` : s.name
-                }))
-              ]}
-              placeholder={`${t('common.all')} ${t('common.store').toLowerCase()}`}
-              searchable
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <CustomSelect
-              value={filterUserId}
-              onChange={(val) => setFilterUserId(val ?? '')}
-              options={[
-                { value: '', label: `${t('common.all')} ${t('employees.colName').toLowerCase()}` },
-                ...filterEmployees.map(e => ({
-                  value: String(e.id),
-                  label: `${e.name} ${e.surname}`
-                }))
-              ]}
-              placeholder={`${t('common.all')} ${t('employees.colName').toLowerCase()}`}
-              searchable
-            />
-          </div>
+
+          {/* Filter Button */}
+          <button
+            onClick={openFilterModal}
+            style={{
+              background: hasActiveFilters
+                ? 'linear-gradient(135deg, var(--accent) 0%, #B48719 100%)'
+                : 'var(--surface)',
+              color: hasActiveFilters ? '#fff' : 'var(--text-secondary)',
+              border: hasActiveFilters ? 'none' : '1px solid var(--border)',
+              borderRadius: 12,
+              padding: '0 18px',
+              height: 42,
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexShrink: 0,
+              transition: 'all 0.2s',
+              boxShadow: hasActiveFilters ? '0 2px 8px rgba(139,105,20,0.24)' : 'none',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span>{t('employees.filters', 'Filtri')}</span>
+            {activeFilterTags.length > 0 && (
+              <span style={{
+                background: hasActiveFilters ? '#fff' : 'var(--accent)',
+                color: hasActiveFilters ? 'var(--accent)' : '#fff',
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: '999px',
+                marginLeft: '4px',
+              }}>
+                {activeFilterTags.length}
+              </span>
+            )}
+          </button>
+
+          {/* Compact / Expand Button */}
+          <button
+            onClick={() => setCompact(!compact)}
+            title={compact ? t('attendance.normalView', 'Visualizzazione normale') : t('attendance.compactView', 'Visualizzazione compatta')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '0 16px',
+              height: 42,
+              borderRadius: 12,
+              border: '1px solid var(--border)',
+              background: compact ? 'var(--accent-light)' : 'var(--surface)',
+              color: compact ? 'var(--accent)' : 'var(--text-secondary)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+            <span style={{ display: isMobile ? 'none' : 'inline' }}>
+              {compact ? t('attendance.compact', 'Compatto') : t('attendance.normal', 'Normale')}
+            </span>
+          </button>
         </div>
 
+        {/* Loading indicator desktop */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          width: '100%',
-          flexWrap: isMobile ? 'wrap' : undefined,
-          paddingTop: 8,
-          borderTop: '1px solid var(--border-light)',
-        }}>
-          <span style={{
-            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-            textTransform: 'uppercase', letterSpacing: '1.2px', flexShrink: 0,
-          }}>
-            {t('attendance.dateFrom')}
-          </span>
-          <div style={{ flex: 1 }}>
-            <DatePicker 
-              value={dateFrom} 
-              onChange={setDateFrom} 
-              disablePortal={true}
-            />
-          </div>
-          <span style={{
-            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-            textTransform: 'uppercase', letterSpacing: '1.2px', flexShrink: 0,
-          }}>
-            {t('attendance.dateTo')}
-          </span>
-          <div style={{ flex: 1 }}>
-            <DatePicker 
-              value={dateTo} 
-              onChange={setDateTo} 
-              align="right"
-              disablePortal={true}
-            />
-          </div>
-          <span style={{
-            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-            textTransform: 'uppercase', letterSpacing: '1.2px', flexShrink: 0,
-          }}>
-            {t('shifts.week')}
-          </span>
-          <div style={{ flex: 1.2 }}>
-            <WeekPicker
-              value={''}
-              onChange={(w) => {
-                const range = isoWeekToDateRange(w);
-                if (range) { setDateFrom(range.from); setDateTo(range.to); }
-              }}
-              placeholder={t('shifts.weekPickerHint')}
-              align="right"
-              disablePortal={true}
-            />
-          </div>
-        </div>
-
-        {/* Event type pills */}
-        <div style={{
-          display: 'flex', gap: 6, alignItems: 'center',
-          flexWrap: isMobile ? undefined : 'wrap',
-          overflowX: isMobile ? 'auto' : undefined,
-          width: isMobile ? '100%' : undefined,
-          paddingBottom: isMobile ? 2 : 0,
-        }}>
-          {!isMobile && <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />}
-          {eventTypeOptions.map(({ value, labelKey }) => {
-            const meta   = value ? EVENT_META[value] : null;
-            const active = eventType === value;
-            return (
-              <button
-                key={value}
-                className="att-type-btn"
-                onClick={() => setEventType(value)}
-                style={{
-                  padding: '5px 11px', borderRadius: 20, flexShrink: 0,
-                  border: `1.5px solid ${active ? (meta?.dot ?? 'var(--accent)') : 'var(--border)'}`,
-                  background: active ? (meta ? meta.bg : 'var(--accent-light)') : 'transparent',
-                  color: active ? (meta?.color ?? 'var(--accent)') : 'var(--text-secondary)',
-                  fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                  transition: 'all 0.15s', letterSpacing: 0.3,
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  outline: 'none', whiteSpace: 'nowrap',
-                }}
-              >
-                {meta && <span style={{ fontSize: 11 }}>{meta.icon}</span>}
-                {t(labelKey)}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Loading indicator desktop - Using a fixed-height container to prevent shift */}
-        <div style={{ 
-          position: 'absolute', right: isMobile ? 12 : 24, top: isMobile ? 12 : 18,
-          height: 20, display: 'flex', alignItems: 'center', pointerEvents: 'none'
+          position: 'absolute',
+          right: 24,
+          bottom: -24,
+          height: 20,
+          display: 'flex',
+          alignItems: 'center',
+          pointerEvents: 'none',
+          zIndex: 10,
         }}>
           {loading && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, animation: 'rowIn 0.2s ease' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: 'var(--accent)', display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                display: 'inline-block',
                 animation: 'spin 0.8s linear infinite',
               }} />
               {t('common.loading')}
             </div>
           )}
         </div>
+      </div>
+
+      {/* Active Filter Tags */}
+      {hasActiveFilters && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          alignItems: 'center',
+          margin: '0 0 16px 0',
+        }}>
+          {activeFilterTags.map((tag) => (
+            <div
+              key={tag.key}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'linear-gradient(135deg, rgba(139,105,20,0.08) 0%, rgba(180,135,25,0.08) 100%)',
+                border: '1px solid rgba(139,105,20,0.25)',
+                borderRadius: '8px',
+                padding: '6px 10px 6px 12px',
+                fontSize: '12px',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
+                {tag.label}:
+              </span>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {tag.value}
+              </span>
+              <button
+                onClick={() => removeFilter(tag.key)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-muted)',
+                  borderRadius: '4px',
+                  transition: 'background 0.15s, color 0.15s',
+                }}
+                title={t('employees.removeFilter', 'Rimuovi filtro')}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={resetAllFilters}
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'border-color 0.15s, color 0.15s',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            <span>{t('employees.reset', 'Resetta')}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Event type pills row */}
+      <div style={{
+        display: 'flex',
+        gap: 6,
+        alignItems: 'center',
+        margin: '0 0 16px 0',
+        flexWrap: isMobile ? undefined : 'wrap',
+        overflowX: isMobile ? 'auto' : undefined,
+        width: isMobile ? '100%' : undefined,
+        paddingBottom: isMobile ? 2 : 0,
+      }}>
+        {eventTypeOptions.map(({ value, labelKey }) => {
+          const meta   = value ? EVENT_META[value] : null;
+          const active = eventType === value;
+          return (
+            <button
+              key={value}
+              className="att-type-btn"
+              onClick={() => setEventType(active ? '' : value)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 20,
+                flexShrink: 0,
+                border: `1.5px solid ${active ? (meta?.dot ?? 'var(--accent)') : 'var(--border)'}`,
+                background: active ? (meta ? meta.bg : 'var(--accent-light)') : 'transparent',
+                color: active ? (meta?.color ?? 'var(--accent)') : 'var(--text-secondary)',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                letterSpacing: 0.3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                outline: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {meta && <span style={{ fontSize: 11 }}>{meta.icon}</span>}
+              {t(labelKey)}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
@@ -892,11 +1065,13 @@ export default function AttendanceLogsPage() {
             /* ── Desktop / tablet: table ────────────────────────────────── */
             <div style={{
               background: 'var(--surface)',
-              borderRadius: isMobile ? 16 : 24, // Matching top section radius
+              borderRadius: 'var(--radius-lg)',
               border: '1px solid var(--border)',
               overflow: 'hidden',
               boxShadow: 'var(--shadow-sm)',
             }}>
+
+
               {!loading && events.length === 0 ? (
                 <div style={{ padding: '56px 32px', textAlign: 'center' }}>
                   <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.25 }}>⏱</div>
@@ -911,21 +1086,58 @@ export default function AttendanceLogsPage() {
                     <thead>
                       <tr style={{ background: '#0d2137' }}>
                         {[
-                          t('employees.colName'),
-                          t('common.store'),
-                          t('attendance.eventType'),
-                          t('common.date'),
-                          t('attendance.source'),
-                          ...(canEdit ? [t('common.actions')] : []),
-                        ].map((h, i) => (
-                          <th key={`${h}-${i}`} style={{
-                            padding: isTablet ? '12px 12px' : '14px 16px',
+                          { text: t('employees.colName'), icon: (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                            </svg>
+                          )},
+                          { text: t('common.store'), icon: (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                              <polyline points="9 22 9 12 15 12 15 22" />
+                            </svg>
+                          )},
+                          { text: t('attendance.eventType'), icon: (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                          )},
+                          { text: t('common.date'), icon: (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                          )},
+                          { text: t('attendance.source'), icon: (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                              <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                              <line x1="12" y1="18" x2="12.01" y2="18" />
+                            </svg>
+                          )},
+                          ...(canEdit ? [{ text: t('common.actions'), icon: (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                              <circle cx="12" cy="12" r="3" />
+                              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                            </svg>
+                          )}] : []),
+                        ].map((col, i) => (
+                          <th key={`${col.text}-${i}`} style={{
+                            padding: compact ? '8px 12px' : (isTablet ? '12px 12px' : '14px 16px'),
                             textAlign: 'left',
-                            fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
+                            fontSize: compact ? 9 : 10, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
                             textTransform: 'uppercase', letterSpacing: '1.5px',
                             borderBottom: '1px solid rgba(255,255,255,0.1)',
                             ...(i === 0 ? { paddingLeft: 24 } : {}),
-                          }}>{h}</th>
+                          }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                              {col.icon}
+                              <span>{col.text}</span>
+                            </div>
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -947,22 +1159,22 @@ export default function AttendanceLogsPage() {
                             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                           >
-                            <td style={{ padding: '11px 16px 11px 0' }}>
+                            <td style={{ padding: compact ? '6px 12px 6px 0' : '11px 16px 11px 0' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                                 <div style={{
-                                  width: 4, alignSelf: 'stretch', borderRadius: '0 2px 2px 0',
-                                  background: meta.dot, flexShrink: 0, marginRight: 12,
+                                  width: compact ? 3 : 4, alignSelf: 'stretch', borderRadius: '0 2px 2px 0',
+                                  background: meta.dot, flexShrink: 0, marginRight: compact ? 8 : 12,
                                 }} />
                                 <div style={{
-                                  width: 32, height: 32, borderRadius: '50%',
+                                  width: compact ? 24 : 32, height: compact ? 24 : 32, borderRadius: '50%',
                                   background: meta.bg, color: meta.color,
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: 12, fontWeight: 800, marginRight: 12, flexShrink: 0,
+                                  fontSize: compact ? 10 : 12, fontWeight: 800, marginRight: compact ? 8 : 12, flexShrink: 0,
                                   border: `1px solid ${meta.dot}33`,
                                 }}>
                                   {ev.userName?.charAt(0)}{ev.userSurname?.charAt(0)}
                                 </div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
+                                <div style={{ fontSize: compact ? 12 : 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
                                   {(() => {
                                      const fullName = `${ev.userName} ${ev.userSurname}`;
                                      const words = fullName.trim().split(/\s+/);
@@ -971,18 +1183,18 @@ export default function AttendanceLogsPage() {
                                 </div>
                               </div>
                             </td>
-                            <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                            <td style={{ padding: compact ? '6px 12px' : '11px 16px', fontSize: compact ? 12 : 13, color: 'var(--text-secondary)' }}>
                               {(() => {
                                  const sName = ev.storeName || '';
                                  const words = sName.trim().split(/\s+/);
                                  return words.length > 3 ? words.slice(0, 3).join(' ') + '...' : sName;
                               })()}
                             </td>
-                            <td style={{ padding: '11px 16px' }}>
+                            <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
                               <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 5,
-                                padding: '4px 11px', borderRadius: 20,
-                                fontSize: 11, fontWeight: 800, letterSpacing: '0.8px',
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                padding: compact ? '2px 8px' : '4px 11px', borderRadius: 20,
+                                fontSize: compact ? 10 : 11, fontWeight: 800, letterSpacing: '0.8px',
                                 background: meta.bg, color: meta.color,
                                 textTransform: 'uppercase', border: `1px solid ${meta.dot}33`,
                               }}>
@@ -990,25 +1202,25 @@ export default function AttendanceLogsPage() {
                                 {t(labelKey)}
                               </span>
                             </td>
-                            <td style={{ padding: '11px 16px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                            <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 8 }}>
+                                <span style={{ fontSize: compact ? 12 : 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
                                   {dt.date}
                                 </span>
                                 <span style={{
-                                  fontSize: 13, fontWeight: 700, color: '#9b7a32',
+                                  fontSize: compact ? 11 : 13, fontWeight: 700, color: '#9b7a32',
                                   fontVariantNumeric: 'tabular-nums',
-                                  background: 'rgba(155, 122, 50, 0.08)', padding: '2px 8px',
+                                  background: 'rgba(155, 122, 50, 0.08)', padding: compact ? '1px 6px' : '2px 8px',
                                   borderRadius: 6, border: '1px solid rgba(155, 122, 50, 0.2)',
                                 }}>
                                   {dt.time}
                                 </span>
                               </div>
                             </td>
-                            <td style={{ padding: '11px 16px' }}>
+                            <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
                               <span style={{
-                                display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                                fontSize: 10, fontWeight: 800, letterSpacing: '1px',
+                                display: 'inline-block', padding: compact ? '1px 6px' : '2px 8px', borderRadius: 4,
+                                fontSize: compact ? 9 : 10, fontWeight: 800, letterSpacing: '1px',
                                 background: `${srcBadge.color}18`, color: srcBadge.color,
                                 border: `1px solid ${srcBadge.color}30`,
                                 fontFamily: 'monospace',
@@ -1017,38 +1229,52 @@ export default function AttendanceLogsPage() {
                               </span>
                             </td>
                             {canEdit && (
-                              <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: compact ? '6px 12px' : '11px 16px', whiteSpace: 'nowrap' }}>
                                 <div style={{ display: 'flex', gap: 6 }}>
                                   <button
                                     onClick={() => openEditModal(ev)}
-                                    title={t('attendance.editEvent')}
+                                    title={t('attendance.editEvent', 'Modifica evento')}
                                     style={{
-                                      padding: '4px 10px', borderRadius: 6,
+                                      padding: compact ? '4px 6px' : '6px 8px', borderRadius: 6,
                                       border: '1px solid rgba(13,33,55,0.25)',
                                       background: 'rgba(13,33,55,0.06)',
-                                      color: 'var(--primary)', fontSize: 11, fontWeight: 700,
+                                      color: 'var(--primary)',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
                                       cursor: 'pointer', transition: 'all 0.15s',
                                     }}
                                     onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(13,33,55,0.14)'; }}
                                     onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(13,33,55,0.06)'; }}
                                   >
-                                    {t('common.edit')}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M12 20h9"></path>
+                                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                    </svg>
                                   </button>
                                   {canDelete && (
                                     <button
                                       onClick={() => setDeletingEvent(ev)}
-                                      title={t('attendance.deleteEvent')}
+                                      title={t('attendance.deleteEvent', 'Elimina evento')}
                                       style={{
-                                        padding: '4px 10px', borderRadius: 6,
+                                        padding: compact ? '4px 6px' : '6px 8px', borderRadius: 6,
                                         border: '1px solid rgba(220,38,38,0.25)',
                                         background: 'rgba(220,38,38,0.06)',
-                                        color: '#dc2626', fontSize: 11, fontWeight: 700,
+                                        color: '#dc2626',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
                                         cursor: 'pointer', transition: 'all 0.15s',
                                       }}
                                       onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.14)'; }}
                                       onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.06)'; }}
                                     >
-                                      {t('common.delete')}
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                      </svg>
                                     </button>
                                   )}
                                 </div>
@@ -1677,6 +1903,260 @@ export default function AttendanceLogsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showFilterModal && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(13,33,55,0.48)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setShowFilterModal(false)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: '16px',
+              width: 'min(520px, 92vw)',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.22)',
+              overflow: 'hidden',
+              border: '1px solid var(--border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Accent stripe */}
+            <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%)' }} />
+
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '8px',
+                    background: 'linear-gradient(135deg, #8B6914 0%, #B48719 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                  </svg>
+                </div>
+                <div>
+                  <h2
+                    style={{
+                      fontSize: '17px',
+                      fontWeight: 700,
+                      color: 'var(--text)',
+                      fontFamily: 'var(--font-display)',
+                      margin: 0,
+                      letterSpacing: '-0.02em',
+                    }}
+                  >
+                    {t('attendance.logsFilterTitle', 'Filtra presenze')}
+                  </h2>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                    {t('attendance.logsFilterSubtitle', 'Affina la ricerca degli eventi')}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  fontSize: '24px',
+                  lineHeight: 1,
+                  padding: '4px 8px',
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Store filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
+                  {t('common.store', 'Negozio')}
+                </label>
+                <CustomSelect
+                  value={tempStoreId || null}
+                  onChange={(val) => {
+                    setTempStoreId(val ?? '');
+                    setTempUserId('');
+                  }}
+                  options={[
+                    { value: '', label: t('common.all', 'Tutti') + ' ' + t('common.store').toLowerCase() },
+                    ...filterStores.map(s => ({
+                      value: String(s.id),
+                      label: s.companyName ? `${s.name} (${s.companyName})` : s.name
+                    }))
+                  ]}
+                  placeholder={t('common.all', 'Tutti') + ' ' + t('common.store').toLowerCase()}
+                  searchable
+                />
+              </div>
+
+              {/* Employee filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
+                  {t('employees.colName', 'Dipendente')}
+                </label>
+                <CustomSelect
+                  value={tempUserId || null}
+                  onChange={(val) => setTempUserId(val ?? '')}
+                  options={[
+                    { value: '', label: t('common.all', 'Tutti') + ' ' + t('employees.colName').toLowerCase() },
+                    ...filteredEmployeesForSelect.map(e => ({
+                      value: String(e.id),
+                      label: `${e.name} ${e.surname}`
+                    }))
+                  ]}
+                  placeholder={t('common.all', 'Tutti') + ' ' + t('employees.colName').toLowerCase()}
+                  searchable
+                />
+              </div>
+
+              {/* Date pickers (row) */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    {t('attendance.dateFrom', 'Dal')}
+                  </label>
+                  <DatePicker
+                    value={tempDateFrom}
+                    onChange={setTempDateFrom}
+                    disablePortal={true}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    {t('attendance.dateTo', 'Al')}
+                  </label>
+                  <DatePicker
+                    value={tempDateTo}
+                    onChange={setTempDateTo}
+                    align="right"
+                    disablePortal={true}
+                  />
+                </div>
+              </div>
+
+              {/* Week Picker */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  {t('shifts.week', 'Seleziona Settimana')}
+                </label>
+                <WeekPicker
+                  value={''}
+                  onChange={(w) => {
+                    const range = isoWeekToDateRange(w);
+                    if (range) {
+                      setTempDateFrom(range.from);
+                      setTempDateTo(range.to);
+                    }
+                  }}
+                  placeholder={t('shifts.weekPickerHint', 'Scegli settimana...')}
+                  disablePortal={true}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '14px 24px',
+                borderTop: '1px solid var(--border)',
+                background: 'var(--surface-warm)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '10px',
+                flexShrink: 0,
+              }}
+            >
+              <button
+                onClick={() => {
+                  setTempStoreId('');
+                  setTempUserId('');
+                  setTempDateFrom(weekAgo);
+                  setTempDateTo(today);
+                }}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-secondary)',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {t('employees.resetFilters', 'Reset all')}
+              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setShowFilterModal(false)}
+                  style={{
+                    padding: '9px 20px',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {t('common.cancel', 'Annulla')}
+                </button>
+                <button
+                  onClick={applyFilters}
+                  style={{
+                    padding: '9px 20px',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, var(--accent) 0%, #B48719 100%)',
+                    color: '#fff',
+                    boxShadow: '0 2px 8px rgba(139,105,20,0.24)',
+                  }}
+                >
+                  {t('employees.applyFilters', 'Applica filtri')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

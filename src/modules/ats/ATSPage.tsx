@@ -35,6 +35,8 @@ import {
   FileCheck,
   AlertTriangle,
   User,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
@@ -2556,6 +2558,27 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
       ? t('ats.hiringVisibilityClosed', 'Posting is archived for hiring. It is hidden from careers listings and not accepting new applicants.')
       : t('ats.hiringVisibilityDraft', 'Internal draft only. Publish this position to expose it to careers and the feed.');
 
+  // Indeed Readiness calculation
+  const isIndeedCheck1Pass = title.trim() !== '' && title.length < 100 && !/hiring|urgente|subito/i.test(title);
+  const isIndeedCheck2Pass = (description || '').includes('<p>') && ((description || '').includes('<ul>') || (description || '').includes('<ol>'));
+  const isIndeedCheck3Pass = (locationOverride.city || '').trim() !== '' && 
+                             /^[A-Z]{2}$/.test((locationOverride.state || '').trim()) && 
+                             (locationOverride.postalCode || '').trim() !== '';
+  const isIndeedCheck4Pass = parseFloat(salaryMinInput) > 0;
+  const isIndeedCheck5Pass = questions.length > 0;
+
+  const indeedScore = (isIndeedCheck1Pass ? 1 : 0) + 
+                      (isIndeedCheck2Pass ? 1 : 0) + 
+                      (isIndeedCheck3Pass ? 1 : 0) + 
+                      (isIndeedCheck4Pass ? 1 : 0) + 
+                      (isIndeedCheck5Pass ? 1 : 0);
+
+  const indeedProgressGradient = indeedScore <= 2
+    ? 'linear-gradient(90deg, #F87171, #EF4444)'
+    : indeedScore === 3
+      ? 'linear-gradient(90deg, #EAC26E, #C9973A)'
+      : 'linear-gradient(90deg, #4ADE80, #22C55E)';
+
   return (
     <ModalBackdrop onClose={onClose} closeOnBackdropClick={Boolean(job)} width={1140}>
 
@@ -2716,7 +2739,149 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                 <div style={{ height: 7, borderRadius: 999, background: 'rgba(148,163,184,0.4)', overflow: 'hidden' }}>
                   <div style={{ width: `${formCompletion}%`, height: '100%', background: 'linear-gradient(90deg, #EAC26E, #C9973A)' }} />
                 </div>
+              </div>
 
+              {/* Indeed Readiness Section */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 10, display: 'grid', gap: 7 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7 }}>
+                  <span style={{ color: '#CBD5E1', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                    Indeed Readiness
+                  </span>
+                  <span style={{ color: '#F8FAFC', fontSize: 11, fontWeight: 700 }}>
+                    {indeedScore}/5
+                  </span>
+                </div>
+                
+                <div style={{ height: 4, borderRadius: 99, background: 'rgba(234, 194, 110, 0.1)', overflow: 'hidden' }}>
+                  <div style={{ width: `${(indeedScore / 5) * 100}%`, height: '100%', background: indeedProgressGradient, borderRadius: 99, transition: 'all 0.3s ease' }} />
+                </div>
+
+                <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+                  {/* Check 1 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck1Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck1Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Titolo valido
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Title valid
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 2 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck2Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck2Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Descrizione strutturata
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Description structured
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 3 */}
+                  <div 
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}
+                    title={!isIndeedCheck3Pass ? "Inserisci città, codice provincia (es. NA, MI) e CAP / Enter city, province code (e.g. NA, MI) and ZIP" : undefined}
+                  >
+                    {isIndeedCheck3Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck3Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Posizione completa
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Location complete
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 4 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck4Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck4Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Retribuzione indicata
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Salary provided
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 5 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck5Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck5Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Domande di screening
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Screener questions
+                      </span>
+                      {!isIndeedCheck5Pass && (
+                        <span 
+                          onClick={() => setStep(3)}
+                          style={{ 
+                            fontSize: '11px', 
+                            color: '#F8D98B', 
+                            cursor: 'pointer', 
+                            textDecoration: 'underline',
+                            marginTop: 2,
+                            fontWeight: 600,
+                            display: 'inline-block'
+                          }}
+                        >
+                          → Step 3 (Screening questions)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 6, display: 'grid', gap: 2, paddingLeft: 8 }}>
+                  {indeedScore === 5 && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#4ADE80' }}>
+                      Pronto per Indeed ✓ <span style={{ fontSize: '10px', color: 'rgba(74,222,128,0.7)', fontWeight: 400 }}>(Ready for Indeed)</span>
+                    </span>
+                  )}
+                  {indeedScore === 4 && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#EAC26E' }}>
+                      Quasi pronto — 1 verifica mancante <span style={{ fontSize: '10px', color: 'rgba(234,194,110,0.7)', fontWeight: 400 }}>(Almost ready — 1 check missing)</span>
+                    </span>
+                  )}
+                  {indeedScore < 4 && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#F87171' }}>
+                      {5 - indeedScore} verifiche mancanti <span style={{ fontSize: '10px', color: 'rgba(248,113,113,0.7)', fontWeight: 400 }}>({5 - indeedScore} checks missing)</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 10, display: 'grid', gap: 5 }}>
                 <div style={{ display: 'grid', gap: 5, marginTop: 2 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}>
                     <StoreIcon size={12} color="#CBD5E1" />
@@ -7403,46 +7568,50 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
         />
       )}
 
-      {showLinksModal && (
-        <ModalBackdrop onClose={() => setShowLinksModal(false)} width={680}>
-          {/* Modal Header */}
-          <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 17, fontWeight: 700 }}>
-                {t('ats.careersPageLinksTitle', 'Careers Page Links')}
-              </h3>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                {t('ats.careersPageLinksSubtitle', 'Share these links with candidates or embed them on your website')}
-              </p>
+      {showLinksModal && (() => {
+        const activeCompany = companies.find(c => c.id === (companyId || defaultCompanyId));
+        const isStandalone = !activeCompany || !activeCompany.groupId;
+        return (
+          <ModalBackdrop onClose={() => setShowLinksModal(false)} width={isStandalone ? 440 : 680}>
+            {/* Modal Header */}
+            <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 17, fontWeight: 700 }}>
+                  {t('ats.careersPageLinksTitle', 'Careers Page Links')}
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                  {t('ats.careersPageLinksSubtitle', 'Share these links with candidates or embed them on your website')}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLinksModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}
+              >
+                ×
+              </button>
             </div>
-            <button
-              onClick={() => setShowLinksModal(false)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}
-            >
-              ×
-            </button>
-          </div>
 
-          {/* Modal Body */}
-          <div style={{ padding: '20px 22px', display: 'grid', gap: 16 }}>
-            {/* Two Cards Row */}
-            <div style={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: 16
-            }}>
-              {/* Card 1: General Portal */}
+            {/* Modal Body */}
+            <div style={{ padding: '20px 22px', display: 'grid', gap: 16 }}>
+              {/* Two Cards Row */}
               <div style={{
-                flex: 1,
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                padding: 16,
-                background: 'var(--surface)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: 12
+                flexDirection: isMobile ? 'column' : 'row',
+                gap: 16
               }}>
+                {/* Card 1: General Portal */}
+                {!isStandalone && (
+                  <div style={{
+                    flex: 1,
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: 16,
+                    background: 'var(--surface)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 12
+                  }}>
                 <div style={{ display: 'grid', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{
@@ -7516,6 +7685,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Card 2: Company Page */}
               <div style={{
@@ -7634,7 +7804,8 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
             </Button>
           </div>
         </ModalBackdrop>
-      )}
+        );
+      })()}
 
       {complianceRefId !== null && (
         <IndeedComplianceModal

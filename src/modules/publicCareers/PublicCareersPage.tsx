@@ -578,10 +578,16 @@ export default function PublicCareersPage() {
               )}
               <div>
                 <h1 className="careers-title" style={{ margin: 0, fontSize: 'clamp(1.8rem, 3.5vw, 3rem)' }}>
-                  {uiLanguage === 'it' ? `Lavora con noi in ${currentCompany.name}` : `Careers at ${currentCompany.name}`}
+                  <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400, fontSize: '0.65em' }}>
+                    {uiLanguage === 'it' ? 'Lavora con noi in' : 'Careers at'}
+                  </span>
+                  {' '}
+                  <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>
+                    {currentCompany.name}
+                  </span>
                 </h1>
                 <p className="careers-subtitle" style={{ marginTop: 4 }}>
-                  {uiLanguage === 'it' ? `Esplora le posizioni aperte in ${currentCompany.name} e unisciti al nostro team.` : `Explore open job opportunities and grow your career with ${currentCompany.name}.`}
+                  {(currentCompany as any).description || (uiLanguage === 'it' ? 'Scopri le opportunità di carriera disponibili nel nostro team.' : 'Discover the career opportunities available in our team.')}
                 </p>
               </div>
             </div>
@@ -592,12 +598,31 @@ export default function PublicCareersPage() {
             </>
           )}
 
-          <div className="careers-stat-grid">
-            <article className="careers-stat-card"><BriefcaseBusiness size={18} /><div><strong>{jobs.length}</strong><span>{copy.openRoles}</span></div></article>
-            <article className="careers-stat-card"><Building2 size={18} /><div><strong>{companies.length}</strong><span>{copy.activeCompanies}</span></div></article>
-            <article className="careers-stat-card"><StoreIcon size={18} /><div><strong>{stores.length}</strong><span>{copy.stores}</span></div></article>
-            <article className="careers-stat-card"><Globe2 size={18} /><div><strong>{remoteRoles}</strong><span>{copy.fullyRemoteRoles}</span></div></article>
-          </div>
+          {currentCompany ? (
+            <div className="careers-stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+              <article className="careers-stat-card">
+                <BriefcaseBusiness size={18} />
+                <div>
+                  <strong>{jobs.length}</strong>
+                  <span>{uiLanguage === 'it' ? 'posizioni aperte' : 'open positions'}</span>
+                </div>
+              </article>
+              <article className="careers-stat-card">
+                <StoreIcon size={18} />
+                <div>
+                  <strong>{stores.length}</strong>
+                  <span>{uiLanguage === 'it' ? 'stores' : 'stores'}</span>
+                </div>
+              </article>
+            </div>
+          ) : (
+            <div className="careers-stat-grid">
+              <article className="careers-stat-card"><BriefcaseBusiness size={18} /><div><strong>{jobs.length}</strong><span>{copy.openRoles}</span></div></article>
+              <article className="careers-stat-card"><Building2 size={18} /><div><strong>{companies.length}</strong><span>{copy.activeCompanies}</span></div></article>
+              <article className="careers-stat-card"><StoreIcon size={18} /><div><strong>{stores.length}</strong><span>{copy.stores}</span></div></article>
+              <article className="careers-stat-card"><Globe2 size={18} /><div><strong>{remoteRoles}</strong><span>{copy.fullyRemoteRoles}</span></div></article>
+            </div>
+          )}
         </div>
       </section>
 
@@ -884,7 +909,7 @@ export default function PublicCareersPage() {
         </div>
       )}
       </div>
-      <CareersFooter />
+      <CareersFooter companyName={currentCompany?.name} companyEmail={currentCompany?.companyEmail || undefined} />
       <CookieConsentBanner />
     </div>
   );

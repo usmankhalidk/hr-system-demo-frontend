@@ -871,6 +871,27 @@ function StatusPill({
   );
 }
 
+const ArrowIcon = ({ open }: { open: boolean }) => (
+  <svg 
+    width="16" 
+    height="16" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2.5" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    style={{ 
+      transition: 'transform 0.2s ease', 
+      transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+      color: 'var(--text-muted)',
+      flexShrink: 0
+    }}
+  >
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
 export default function ExternalAffluencePage() {
   const { i18n } = useTranslation();
   const { showToast } = useToast();
@@ -883,8 +904,17 @@ export default function ExternalAffluencePage() {
   const tIt = useMemo(() => i18n.getFixedT('it'), [i18n]);
   const isLocalRuntime = useMemo(() => {
     if (typeof window === 'undefined') return false;
-    return isLocalHostname(window.location.hostname);
+    return (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      /\b192\.168\.\d+\.\d+\b/.test(window.location.hostname) ||
+      /\b10\.\d+\.\d+\.\d+\b/.test(window.location.hostname)
+    );
   }, []);
+
+  const [step1Open, setStep1Open] = useState(false);
+  const [step2Open, setStep2Open] = useState(false);
+  const [step3Open, setStep3Open] = useState(false);
 
   const getLocaleFieldLabel = (
     tableName: string,
@@ -2177,17 +2207,26 @@ export default function ExternalAffluencePage() {
       </section>
 
       <section style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Link2 size={16} color="var(--primary)" />
-          <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.step1Title}</h3>
-        </div>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{tx.step1Hint}</p>
-
-        {step1Error && (
-          <div style={{ border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 10, padding: 10, fontSize: 13 }}>
-            <strong>{tx.stepError}: </strong>{step1Error}
+        <div 
+          onClick={() => setStep1Open(!step1Open)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Link2 size={16} color="var(--primary)" />
+            <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.step1Title}</h3>
           </div>
-        )}
+          <ArrowIcon open={step1Open} />
+        </div>
+
+        {step1Open && (
+          <>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{tx.step1Hint}</p>
+
+            {step1Error && (
+              <div style={{ border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 10, padding: 10, fontSize: 13 }}>
+                <strong>{tx.stepError}: </strong>{step1Error}
+              </div>
+            )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 10 }}>
           <div ref={companyPickerRef} style={{ position: 'relative', display: 'grid', gap: 4 }}>
@@ -2738,20 +2777,31 @@ export default function ExternalAffluencePage() {
             </table>
           </div>
         </div>
+          </>
+        )}
       </section>
 
       <section style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Database size={16} color="var(--primary)" />
-          <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.step2Title}</h3>
-        </div>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{tx.step2Hint}</p>
-
-        {step2Error && (
-          <div style={{ border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 10, padding: 10, fontSize: 13 }}>
-            <strong>{tx.stepError}: </strong>{step2Error}
+        <div 
+          onClick={() => setStep2Open(!step2Open)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Database size={16} color="var(--primary)" />
+            <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.step2Title}</h3>
           </div>
-        )}
+          <ArrowIcon open={step2Open} />
+        </div>
+
+        {step2Open && (
+          <>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{tx.step2Hint}</p>
+
+            {step2Error && (
+              <div style={{ border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 10, padding: 10, fontSize: 13 }}>
+                <strong>{tx.stepError}: </strong>{step2Error}
+              </div>
+            )}
 
         {!selectedStoreMapping && selectedStore && (
           <div style={{ border: '1px solid var(--warning-border)', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: 10, padding: 10, fontSize: 13 }}>
@@ -2909,20 +2959,31 @@ export default function ExternalAffluencePage() {
             </div>
           </>
         )}
+          </>
+        )}
       </section>
 
       <section style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <WandSparkles size={16} color="var(--primary)" />
-          <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.step3Title}</h3>
-        </div>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{tx.step3Hint}</p>
-
-        {step3Error && (
-          <div style={{ border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 10, padding: 10, fontSize: 13 }}>
-            <strong>{tx.stepError}: </strong>{step3Error}
+        <div 
+          onClick={() => setStep3Open(!step3Open)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <WandSparkles size={16} color="var(--primary)" />
+            <h3 style={{ margin: 0, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{tx.step3Title}</h3>
           </div>
-        )}
+          <ArrowIcon open={step3Open} />
+        </div>
+
+        {step3Open && (
+          <>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{tx.step3Hint}</p>
+
+            {step3Error && (
+              <div style={{ border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 10, padding: 10, fontSize: 13 }}>
+                <strong>{tx.stepError}: </strong>{step3Error}
+              </div>
+            )}
 
         {!selectedStoreMapping && selectedStore && (
           <div style={{ border: '1px solid var(--warning-border)', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: 10, padding: 10, fontSize: 13 }}>
@@ -3039,6 +3100,8 @@ export default function ExternalAffluencePage() {
               </div>
             )}
           </div>
+        )}
+          </>
         )}
       </section>
 

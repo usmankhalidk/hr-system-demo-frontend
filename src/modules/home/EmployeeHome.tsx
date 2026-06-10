@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Cake, PartyPopper, CalendarDays, Palmtree, Thermometer } from 'lucide-react';
 import { Card } from '../../components/ui';
+import { useAuth } from '../../context/AuthContext';
 
 interface EmployeeProfile {
   id: number;
@@ -140,6 +141,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
     );
   }
 
+  const { permissions } = useAuth();
   const { profile, nextShift, leaveBalance = [], isBirthday = false, showLeaveBalance, showShifts } = data;
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -207,7 +209,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
       )}
 
       {/* Next shift */}
-      {showShifts !== false && (
+      {showShifts !== false && permissions.turni === true && (
       <div style={{
         background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
