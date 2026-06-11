@@ -191,12 +191,12 @@ export default function ShiftsPage() {
   const canApproveWeek = Boolean(user && (user.isSuperAdmin || ['admin', 'hr', 'area_manager'].includes(user.role)));
   const canManageWindowDisplay = Boolean(user && (user.isSuperAdmin || ['admin', 'area_manager'].includes(user.role)));
 
-  // Load stores for admin/hr/area_manager store filter (not for store_manager or employee)
+  // Load stores for admin/hr/area_manager/store_manager store filter/views
   useEffect(() => {
-    if (canEdit && !isStoreManager) {
+    if (canEdit) {
       getStores().then(setStores).catch(() => { });
     }
-  }, [canEdit, isStoreManager]);
+  }, [canEdit]);
 
   const getVisibleWindowDisplayMonths = useCallback((): string[] => {
     if (viewMode === 'month' || viewMode === 'day') {

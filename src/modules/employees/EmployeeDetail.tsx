@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Smartphone, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactCountryFlag from 'react-country-flag';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -873,7 +874,7 @@ export function EmployeeDetail() {
   const isAdmin = user?.role === 'admin' || user?.isSuperAdmin === true;
   const isOwnProfile = user?.id === employee?.id;
   const canViewSensitive = isAdminOrHr || isOwnProfile;
-  const canResetDevice = isAdminOrHr && employee?.role === 'employee';
+  const canResetDevice = isAdminOrHr && (employee?.role === 'employee' || employee?.role === 'store_terminal');
   const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
   const shiftMonthToken = useMemo(() => formatMonthToken(shiftMonthCursor), [shiftMonthCursor]);
 
@@ -1018,11 +1019,15 @@ export function EmployeeDetail() {
   };
 
   const handleDeviceReset = async () => {
-    if (!employeeId) return;
+    if (!employeeId || deviceResetting) return;
+    const name = [employee?.surname, employee?.name].filter(Boolean).join(' ') || 'Utente';
+    if (!window.confirm(t('deviceReset.confirmMessage', { employee: name }))) {
+      return;
+    }
     setDeviceResetting(true);
     try {
       await resetEmployeeDevice(employeeId);
-      showToast(t('employees.deviceResetRequestedSuccess'), 'success');
+      showToast(t('deviceReset.successToast'), 'success');
       loadEmployee();
       loadAssociations();
     } catch (err: unknown) {
@@ -1509,107 +1514,220 @@ export function EmployeeDetail() {
       ) : (
         <>
           {activeTab === 'overview' && (
-            <div style={{ display: 'grid', gridTemplateColumns: (canViewSensitive && !isMobile) ? '1fr 1fr' : '1fr', gap: '20px' }}>
-
-
-
-              {/* General info */}
-              <SectionPanel title={t('employees.generalInfo')} icon={<IconUser />}>
-                <InfoRow label={t('employees.emailField')} value={employee.email} />
-                <InfoRow label={t('employees.colUniqueId')} value={
-                  employee.uniqueId
-                    ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12.5px', letterSpacing: '0.04em' }}>{employee.uniqueId}</span>
-                    : '—'
-                } />
-                <InfoRow label={t('common.role')} value={
-                  <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{tRole(employee.role, employee.isSuperAdmin)}</Badge>
-                } />
-                <InfoRow label={t('common.status')} value={
-                  <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
-                    {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
-                  </Badge>
-                } />
-                <InfoRow
-                  label={t('employees.deviceBindingField')}
-                  value={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 auto' }}>
-                        {employee.deviceResetPending
-                          ? t('employees.deviceStatusResetPending')
-                          : employee.deviceRegistered
-                            ? t('employees.deviceStatusRegistered')
-                            : t('employees.deviceStatusNotRegistered')}
-                      </span>
-                      <Toggle
-                        checked={employee.deviceResetPending === true}
-                        disabled={!canResetDevice || deviceResetting || employee.deviceResetPending === true}
-                        onChange={handleDeviceReset}
-                      />
-                    </div>
-                  }
-                />
-                <InfoRow label={t('common.department')} value={employee.department ?? '—'} />
-                <InfoRow label={t('employees.companyField')} value={employee.companyName ?? '—'} />
-                <InfoRow label={t('common.store')} value={employee.storeName ?? '—'} />
-                <InfoRow label={t('employees.supervisorField')} value={employee.supervisorName ?? '—'} last />
-              </SectionPanel>
-
-              {/* Sensitive / contractual info */}
-              {canViewSensitive && (
-                <SectionPanel title={t('employees.contractualDetails')} icon={<IconFile />}>
-                  <InfoRow label={t('employees.hireDateField')} value={formatDate(employee.hireDate, i18n.language)} />
-                  <InfoRow label={t('employees.contractEndField')} value={
-                    employee.contractEndDate
-                      ? <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{formatDate(employee.contractEndDate, i18n.language)}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: (canViewSensitive && !isMobile) ? '1fr 1fr' : '1fr', gap: '20px' }}>
+                {/* General info */}
+                <SectionPanel title={t('employees.generalInfo')} icon={<IconUser />}>
+                  <InfoRow label={t('employees.emailField')} value={employee.email} />
+                  <InfoRow label={t('employees.colUniqueId')} value={
+                    employee.uniqueId
+                      ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12.5px', letterSpacing: '0.04em' }}>{employee.uniqueId}</span>
                       : '—'
                   } />
-                  <InfoRow label={t('employees.workingTypeField')} value={workingTypeLabel} />
-                  <InfoRow label={t('employees.weeklyHoursField')} value={employee.weeklyHours != null ? `${employee.weeklyHours}h` : '—'} />
-                  <InfoRow label={t('employees.personalEmailField')} value={employee.personalEmail ?? '—'} />
-                  <InfoRow label={t('employees.dateOfBirthField')} value={formatDate(employee.dateOfBirth, i18n.language)} />
-                  <InfoRow label={t('employees.ibanField')} value={
-                    employee.iban
-                      ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12px', letterSpacing: '0.06em' }}>{maskIban(employee.iban)}</span>
-                      : '—'
+                  <InfoRow label={t('common.role')} value={
+                    <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>{tRole(employee.role, employee.isSuperAdmin)}</Badge>
                   } />
-                  <InfoRow
-                    label={t('employees.nationalityField')}
-                    value={employee.nationality ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                        {employee.country ? <ReactCountryFlag countryCode={employee.country} svg style={{ width: '1em', height: '1em' }} /> : null}
-                        <span>{employee.nationality}</span>
-                      </span>
-                    ) : '—'}
-                  />
-                  <InfoRow label={t('employees.genderField')} value={
-                    employee.gender === 'M' ? t('employees.genderMale')
-                      : employee.gender === 'F' ? t('employees.genderFemale')
-                        : employee.gender === 'other' ? t('employees.genderOther')
-                          : '—'
+                  <InfoRow label={t('common.status')} value={
+                    <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
+                      {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
+                    </Badge>
                   } />
-                  <InfoRow
-                    label={t('employees.addressField')}
-                    value={[
-                      employee.address,
-                      employee.city,
-                      employee.state,
-                      employee.country,
-                      employee.cap,
-                    ].filter(Boolean).join(', ') || '—'}
-                  />
-                  <InfoRow label={t('companies.companyPhoneNumbers', 'Phone')} value={employee.phone ?? '—'} />
-                  <InfoRow label={t('employees.firstAidField')} value={
-                    <span style={{ color: employee.firstAidFlag ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
-                      {employee.firstAidFlag ? t('common.yes') : t('common.no')}
-                    </span>
-                  } />
-                  <InfoRow label={t('employees.maritalStatusField')} value={employee.maritalStatus ? t(MARITAL_STATUS_KEYS[employee.maritalStatus] ?? 'employees.maritalStatusField', { defaultValue: employee.maritalStatus }) : '—'} />
-                  <InfoRow label={t('employees.contractTypeField')} value={employee.contractType ? t(CONTRACT_TYPE_KEYS[employee.contractType] ?? 'employees.contractTypeField', { defaultValue: employee.contractType }) : '—'} />
-                  <InfoRow label={t('employees.probationField')} value={employee.probationMonths != null ? `${employee.probationMonths} ${t('employees.months')}` : '—'} />
-                  <InfoRow label={t('employees.terminationDateField')} value={formatDate(employee.terminationDate, i18n.language)} />
-                  <InfoRow label={t('employees.terminationTypeField')} value={employee.terminationType ? t(TERMINATION_TYPE_KEYS[employee.terminationType] ?? 'employees.terminationTypeField', { defaultValue: employee.terminationType }) : '—'} last />
+                  <InfoRow label={t('common.department')} value={employee.department ?? '—'} />
+                  <InfoRow label={t('employees.companyField')} value={employee.companyName ?? '—'} />
+                  <InfoRow label={t('common.store')} value={employee.storeName ?? '—'} />
+                  <InfoRow label={t('employees.supervisorField')} value={employee.supervisorName ?? '—'} last />
                 </SectionPanel>
-              )}
+
+                {/* Sensitive / contractual info */}
+                {canViewSensitive && (
+                  <SectionPanel title={t('employees.contractualDetails')} icon={<IconFile />}>
+                    <InfoRow label={t('employees.hireDateField')} value={formatDate(employee.hireDate, i18n.language)} />
+                    <InfoRow label={t('employees.contractEndField')} value={
+                      employee.contractEndDate
+                        ? <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{formatDate(employee.contractEndDate, i18n.language)}</span>
+                        : '—'
+                    } />
+                    <InfoRow label={t('employees.workingTypeField')} value={workingTypeLabel} />
+                    <InfoRow label={t('employees.weeklyHoursField')} value={employee.weeklyHours != null ? `${employee.weeklyHours}h` : '—'} />
+                    <InfoRow label={t('employees.personalEmailField')} value={employee.personalEmail ?? '—'} />
+                    <InfoRow label={t('employees.dateOfBirthField')} value={formatDate(employee.dateOfBirth, i18n.language)} />
+                    <InfoRow label={t('employees.ibanField')} value={
+                      employee.iban
+                        ? <span style={{ fontFamily: 'var(--font-display)', fontSize: '12px', letterSpacing: '0.06em' }}>{maskIban(employee.iban)}</span>
+                        : '—'
+                    } />
+                    <InfoRow
+                      label={t('employees.nationalityField')}
+                      value={employee.nationality ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          {employee.country ? <ReactCountryFlag countryCode={employee.country} svg style={{ width: '1em', height: '1em' }} /> : null}
+                          <span>{employee.nationality}</span>
+                        </span>
+                      ) : '—'}
+                    />
+                    <InfoRow label={t('employees.genderField')} value={
+                      employee.gender === 'M' ? t('employees.genderMale')
+                        : employee.gender === 'F' ? t('employees.genderFemale')
+                          : employee.gender === 'other' ? t('employees.genderOther')
+                            : '—'
+                    } />
+                    <InfoRow
+                      label={t('employees.addressField')}
+                      value={[
+                        employee.address,
+                        employee.city,
+                        employee.state,
+                        employee.country,
+                        employee.cap,
+                      ].filter(Boolean).join(', ') || '—'}
+                    />
+                    <InfoRow label={t('companies.companyPhoneNumbers', 'Phone')} value={employee.phone ?? '—'} />
+                    <InfoRow label={t('employees.firstAidField')} value={
+                      <span style={{ color: employee.firstAidFlag ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                        {employee.firstAidFlag ? t('common.yes') : t('common.no')}
+                      </span>
+                    } />
+                    <InfoRow label={t('employees.maritalStatusField')} value={employee.maritalStatus ? t(MARITAL_STATUS_KEYS[employee.maritalStatus] ?? 'employees.maritalStatusField', { defaultValue: employee.maritalStatus }) : '—'} />
+                    <InfoRow label={t('employees.contractTypeField')} value={employee.contractType ? t(CONTRACT_TYPE_KEYS[employee.contractType] ?? 'employees.contractTypeField', { defaultValue: employee.contractType }) : '—'} />
+                    <InfoRow label={t('employees.probationField')} value={employee.probationMonths != null ? `${employee.probationMonths} ${t('employees.months')}` : '—'} />
+                    <InfoRow label={t('employees.terminationDateField')} value={formatDate(employee.terminationDate, i18n.language)} />
+                    <InfoRow label={t('employees.terminationTypeField')} value={employee.terminationType ? t(TERMINATION_TYPE_KEYS[employee.terminationType] ?? 'employees.terminationTypeField', { defaultValue: employee.terminationType }) : '—'} last />
+                  </SectionPanel>
+                )}
+              </div>
+
+              {/* Device Binding Section */}
+              <SectionPanel
+                title={t('deviceReset.title')}
+                icon={<Smartphone size={15} style={{ color: 'var(--accent)' }} />}
+              >
+                {employee.deviceRegistered ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                          {t('deviceReset.colDeviceStatus')}:
+                        </span>
+                        {employee.deviceResetPending ? (
+                          <Badge variant="warning">{t('employees.deviceStatusResetPending')}</Badge>
+                        ) : (
+                          <Badge variant="success">{t('employees.deviceStatusRegistered')}</Badge>
+                        )}
+                      </div>
+                      
+                      {canResetDevice && (
+                        <button
+                          type="button"
+                          onClick={handleDeviceReset}
+                          disabled={deviceResetting}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--danger)',
+                            padding: '6px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'background 0.2s',
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                          title={t('deviceReset.resetButton')}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '4px' }}>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                          {t('deviceReset.model')}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {employee.deviceMetadata?.device?.model || employee.deviceMetadata?.model || 'Generic Device'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                          {t('deviceReset.os')}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {employee.deviceMetadata?.os?.name || '—'} {employee.deviceMetadata?.os?.version || ''}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                          {t('deviceReset.browser')}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {employee.deviceMetadata?.browser?.name || '—'} {employee.deviceMetadata?.browser?.version || ''}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                          {t('deviceReset.registeredIp')}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {employee.deviceMetadata?.ipAddress || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                          {t('deviceReset.lastSeen')}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {employee.lastSeenAt ? formatDate(employee.lastSeenAt, i18n.language) : t('deviceReset.neverSeen')}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                          {t('deviceReset.currentIp')}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{employee.lastSeenIp || '—'}</span>
+                          {employee.deviceMetadata?.ipAddress && employee.lastSeenIp && employee.deviceMetadata.ipAddress !== employee.lastSeenIp && (
+                            <span style={{
+                              background: 'rgba(217,119,6,0.12)',
+                              color: '#b45309',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(217,119,6,0.2)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px'
+                            }}>
+                              <AlertTriangle size={10} />
+                              {t('deviceReset.ipChangedWarning')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: '4px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        {t('deviceReset.colDeviceStatus')}:
+                      </span>
+                      <Badge variant="neutral">{t('employees.deviceStatusNotRegistered')}</Badge>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                      {t('deviceReset.subtitle')}
+                    </p>
+                  </div>
+                )}
+              </SectionPanel>
             </div>
           )}
 

@@ -18,6 +18,9 @@ export interface User {
   deviceResetPending?: boolean;
   requiresDeviceRegistration?: boolean;
   uniqueId?: string | null;
+  deviceMetadata?: any;
+  lastSeenIp?: string | null;
+  lastSeenAt?: string | null;
 }
 
 export interface Company {
@@ -140,6 +143,9 @@ export interface Employee {
   deviceResetPending?: boolean;
   deviceRegistered?: boolean;
   deviceRegisteredAt?: string | null;
+  deviceMetadata?: any;
+  lastSeenIp?: string | null;
+  lastSeenAt?: string | null;
 }
 
 export interface EmployeeAssociationEntry {

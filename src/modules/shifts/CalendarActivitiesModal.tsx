@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays } from 'lucide-react';
 import { Store } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 import { StoreActivityType, WindowDisplayActivity } from '../../api/windowDisplay';
 import { getEmployees } from '../../api/employees';
 import { getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
@@ -142,6 +143,8 @@ export default function CalendarActivitiesModal({
 }: CalendarActivitiesModalProps) {
   const { t, i18n } = useTranslation();
   const { isMobile } = useBreakpoint();
+  const { user } = useAuth();
+  const isStoreManager = user?.role === 'store_manager';
   const [selectedMonth, setSelectedMonth] = useState(formatIsoMonth(currentDate));
   const monthPickerRef = useRef<HTMLDivElement | null>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -306,6 +309,10 @@ export default function CalendarActivitiesModal({
 
   useEffect(() => {
     if (!open) return;
+    if (isStoreManager && user?.storeId) {
+      setSelectedStoreId(user.storeId);
+      return;
+    }
     if (!availableStores.length) {
       setSelectedStoreId(null);
       return;
@@ -322,7 +329,7 @@ export default function CalendarActivitiesModal({
     }
 
     setSelectedStoreId(availableStores[0].id);
-  }, [open, availableStores, selectedStoreId, isMobile]);
+  }, [open, availableStores, selectedStoreId, isMobile, isStoreManager, user?.storeId]);
 
   const selectedStore = useMemo(
     () => availableStores.find((store) => store.id === selectedStoreId) ?? null,
@@ -610,28 +617,30 @@ export default function CalendarActivitiesModal({
               </div>
 
               {/* Company filter */}
-              <select
-                value={selectedCompanyId ?? ''}
-                onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
-                style={{
-                  borderRadius: 8,
-                  border: '1px solid rgba(255,255,255,0.28)',
-                  background: 'rgba(255,255,255,0.12)',
-                  color: '#fff',
-                  fontSize: 12,
-                  padding: '0 10px',
-                  fontWeight: 700,
-                  width: '100%',
-                  height: 34,
-                }}
-              >
-                <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
-                {companyOptions.map((company) => (
-                  <option key={company.id} value={company.id} style={{ color: '#111827' }}>
-                    {company.name}
-                  </option>
-                ))}
-              </select>
+              {!isStoreManager && (
+                <select
+                  value={selectedCompanyId ?? ''}
+                  onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
+                  style={{
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,255,255,0.28)',
+                    background: 'rgba(255,255,255,0.12)',
+                    color: '#fff',
+                    fontSize: 12,
+                    padding: '0 10px',
+                    fontWeight: 700,
+                    width: '100%',
+                    height: 34,
+                  }}
+                >
+                  <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
+                  {companyOptions.map((company) => (
+                    <option key={company.id} value={company.id} style={{ color: '#111827' }}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               {/* Month picker */}
               <div
@@ -852,28 +861,30 @@ export default function CalendarActivitiesModal({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <select
-                  value={selectedCompanyId ?? ''}
-                  onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
-                  style={{
-                    borderRadius: 8,
-                    border: '1px solid rgba(255,255,255,0.28)',
-                    background: 'rgba(255,255,255,0.12)',
-                    color: '#fff',
-                    fontSize: 12,
-                    padding: '0 10px',
-                    fontWeight: 700,
-                    minWidth: 190,
-                    height: 34,
-                  }}
-                >
-                  <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
-                  {companyOptions.map((company) => (
-                    <option key={company.id} value={company.id} style={{ color: '#111827' }}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
+                {!isStoreManager && (
+                  <select
+                    value={selectedCompanyId ?? ''}
+                    onChange={(e) => setSelectedCompanyId(e.target.value ? Number(e.target.value) : null)}
+                    style={{
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.28)',
+                      background: 'rgba(255,255,255,0.12)',
+                      color: '#fff',
+                      fontSize: 12,
+                      padding: '0 10px',
+                      fontWeight: 700,
+                      minWidth: 190,
+                      height: 34,
+                    }}
+                  >
+                    <option value="" style={{ color: '#111827' }}>{t('shifts.allCompanies', 'All companies')}</option>
+                    {companyOptions.map((company) => (
+                      <option key={company.id} value={company.id} style={{ color: '#111827' }}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
 
                 <div
                   ref={monthPickerRef}
@@ -1099,7 +1110,7 @@ export default function CalendarActivitiesModal({
         <div style={{
           display: isMobile ? 'flex' : 'grid',
           flexDirection: isMobile ? 'column' : undefined,
-          gridTemplateColumns: isMobile ? undefined : '360px minmax(0, 1fr)',
+          gridTemplateColumns: isMobile ? undefined : (isStoreManager ? 'minmax(0, 1fr)' : '360px minmax(0, 1fr)'),
           gap: 0,
           minHeight: 470,
           height: 'calc(92vh - 74px)',
@@ -1107,8 +1118,8 @@ export default function CalendarActivitiesModal({
           overflowX: 'hidden',
           overflowY: isMobile ? 'auto' : 'hidden',
         }}>
-          {/* Store list - hide on mobile when store is selected */}
-          {(!isMobile || !selectedStoreId) && (
+          {/* Store list - hide on mobile when store is selected, and hide completely for store manager */}
+          {!isStoreManager && (!isMobile || !selectedStoreId) && (
             <div style={{
               borderRight: isMobile ? 'none' : '1px solid var(--border)',
               borderBottom: isMobile && selectedStoreId ? '1px solid var(--border)' : 'none',
@@ -1327,7 +1338,7 @@ export default function CalendarActivitiesModal({
               background: 'var(--surface)',
             }}>
             {/* Mobile: Back button to return to store list */}
-            {isMobile && selectedStoreId && (
+            {isMobile && selectedStoreId && !isStoreManager && (
               <button
                 type="button"
                 onClick={() => setSelectedStoreId(null)}
