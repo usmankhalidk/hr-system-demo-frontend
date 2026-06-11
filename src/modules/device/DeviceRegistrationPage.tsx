@@ -32,12 +32,12 @@ export default function DeviceRegistrationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const requiresRegistration = user?.role === 'employee' && user?.requiresDeviceRegistration === true;
+  const requiresRegistration = (user?.role === 'employee' || user?.role === 'store_terminal') && user?.requiresDeviceRegistration === true;
 
   useEffect(() => {
-    // If the employee is already registered, avoid showing the registration screen.
+    // If the device is already registered, avoid showing the registration screen.
     if (!user) return;
-    if (user.role !== 'employee') {
+    if (user.role !== 'employee' && user.role !== 'store_terminal') {
       navigate('/', { replace: true });
       return;
     }
@@ -48,7 +48,7 @@ export default function DeviceRegistrationPage() {
   }, [user, requiresRegistration, navigate, searchParams]);
 
   const handleRegister = async () => {
-    if (!user || user.role !== 'employee') return;
+    if (!user || (user.role !== 'employee' && user.role !== 'store_terminal')) return;
     setSubmitting(true);
     setError(null);
     try {

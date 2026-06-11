@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../../components/ui';
+import { Button, Spinner } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
+import { getDeviceStatus } from '../../api/device';
+import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 
 interface TerminalStore {
   id: number;
@@ -21,9 +23,46 @@ interface TerminalHomeProps {
 export const TerminalHome: React.FC<TerminalHomeProps> = ({ data }) => {
   const { store } = data;
   const { t, i18n } = useTranslation();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  
+  const [deviceStatus, setDeviceStatus] = useState<{
+    loading: boolean;
+    isBlocked: boolean;
+    error: string | null;
+  }>({ loading: true, isBlocked: false, error: null });
+
+  useEffect(() => {
+    let active = true;
+    const checkDevice = async () => {
+      if (user?.isSuperAdmin) {
+        setDeviceStatus({ loading: false, isBlocked: false, error: null });
+        return;
+      }
+      try {
+        const fpResult = await getDeviceFingerprint();
+        const status = await getDeviceStatus(fpResult.fingerprint);
+        if (active) {
+          if (status.requiresDeviceRegistration) {
+            const next = encodeURIComponent(window.location.pathname + window.location.search);
+            navigate(`/device/register?next=${next}`, { replace: true });
+          } else if (status.isDeviceRegistered && !status.isDeviceMatched) {
+            setDeviceStatus({ loading: false, isBlocked: true, error: null });
+          } else {
+            setDeviceStatus({ loading: false, isBlocked: false, error: null });
+          }
+        }
+      } catch (err) {
+        console.error('Error during terminal device check:', err);
+        if (active) {
+          setDeviceStatus({ loading: false, isBlocked: false, error: 'Device check failed' });
+        }
+      }
+    };
+    void checkDevice();
+    return () => { active = false; };
+  }, [user, navigate]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -100,6 +139,51 @@ export const TerminalHome: React.FC<TerminalHomeProps> = ({ data }) => {
     borderRadius: '2px',
     opacity: 0.4,
   };
+
+  if (deviceStatus.loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--background)' }}>
+        <Spinner size="lg" color="var(--accent)" />
+      </div>
+    );
+  }
+
+  if (deviceStatus.isBlocked) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 32, textAlign: 'center', gap: 20,
+        background: 'linear-gradient(135deg, #0D2137 0%, #1A3B5C 100%)',
+        color: '#fff',
+        fontFamily: 'var(--font-body)'
+      }}>
+        <div style={{ fontSize: 64 }}>🔒</div>
+        <div style={{
+          fontSize: 24, fontWeight: 800,
+          color: '#ffffff', fontFamily: 'var(--font-display)',
+        }}>
+          {t('deviceReset.terminalBlockedTitle', 'Terminal Non Autorizzato')}
+        </div>
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', maxWidth: 450, lineHeight: 1.5 }}>
+          {t('deviceReset.terminalBlockedDesc', 'Questo dispositivo non è autorizzato per questo punto vendita. L\'accesso al terminale è consentito solo dal dispositivo originariamente registrato.')}
+        </div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
+          {t('deviceReset.terminalBlockedHint', 'Se hai sostituito il dispositivo, contatta un amministratore HR per effettuare il reset del terminale.')}
+        </div>
+        <button
+          onClick={logout}
+          style={{
+            padding: '11px 28px', borderRadius: 10, marginTop: 16,
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+            color: '#fff', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 600
+          }}
+        >
+          {t('nav.logout')}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={containerStyle}>

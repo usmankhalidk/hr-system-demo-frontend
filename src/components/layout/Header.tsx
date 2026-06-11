@@ -341,11 +341,12 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
 
             {dropOpen && (
               <div style={{
-                position: 'absolute',
-                top: 'calc(100% + 6px)',
-                right: 0,
-                width: 340,
-                maxWidth: 'calc(100vw - 24px)',
+                position: isMobile ? 'fixed' : 'absolute',
+                top: isMobile ? 'calc(var(--header-height) + 6px)' : 'calc(100% + 6px)',
+                right: isMobile ? 12 : 0,
+                left: isMobile ? 12 : 'auto',
+                width: isMobile ? 'auto' : 340,
+                maxWidth: isMobile ? 'none' : 'calc(100vw - 24px)',
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
                 borderRadius: 12,

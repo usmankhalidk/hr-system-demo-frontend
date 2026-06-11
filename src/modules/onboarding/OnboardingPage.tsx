@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { Building2, CheckCircle2, ChevronDown, ChevronUp, Pencil, Power, Store as StoreIcon, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -2817,6 +2818,8 @@ const EmployeeTaskView: React.FC<{
   onUncomplete?: (taskId: number) => Promise<void>;
 }> = ({ progress, employeeName, onComplete, onUncomplete }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { isMobile } = useBreakpoint();
   const [activePhase, setActivePhase] = useState<Phase>('day1');
   const [completingId, setCompletingId] = useState<number | null>(null);
   const [noteTaskId, setNoteTaskId] = useState<number | null>(null);
@@ -2929,63 +2932,125 @@ const EmployeeTaskView: React.FC<{
                   background: task.isOverdue ? 'rgba(220,38,38,0.03)' : 'var(--surface)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>
-                    {getCategoryMeta(task.templateCategory).icon}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{task.templateName}</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[task.templatePriority] ?? '#6B7280', textTransform: 'uppercase' }}>
-                        {t(`onboarding.priority${task.templatePriority.charAt(0).toUpperCase() + task.templatePriority.slice(1)}` as any, task.templatePriority)}
-                      </span>
-                    </div>
-                    {task.templateDescription && (
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>{task.templateDescription}</p>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 11, color: due.color, fontWeight: 500 }}>📅 {due.label}</span>
-                      {task.templateLinkUrl && (
-                        <a
-                          href={task.templateLinkUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}
-                        >
-                          {t('onboarding.openLink', 'Open →')}
-                        </a>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>
+                      {getCategoryMeta(task.templateCategory).icon}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{task.templateName}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLORS[task.templatePriority] ?? '#6B7280', textTransform: 'uppercase' }}>
+                          {t(`onboarding.priority${task.templatePriority.charAt(0).toUpperCase() + task.templatePriority.slice(1)}` as any, task.templatePriority)}
+                        </span>
+                      </div>
+                      {task.templateDescription && (
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>{task.templateDescription}</p>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, color: due.color, fontWeight: 500 }}>📅 {due.label}</span>
+                        {task.templateLinkUrl && (
+                          task.templateLinkUrl.startsWith('http') || task.templateLinkUrl.startsWith('//') || task.templateLinkUrl.startsWith('www') ? (
+                            <a
+                              href={task.templateLinkUrl.startsWith('www') ? `https://${task.templateLinkUrl}` : task.templateLinkUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}
+                            >
+                              {t('onboarding.openLink', 'Open →')}
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => navigate(task.templateLinkUrl!)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                fontSize: 11,
+                                color: 'var(--accent)',
+                                fontWeight: 600,
+                                textDecoration: 'none',
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              {t('onboarding.openLink', 'Open →')}
+                            </button>
+                          )
+                        )}
+                      </div>
+                      {!isMobile && noteTaskId === task.id && (
+                        <textarea
+                          autoFocus
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          placeholder={t('onboarding.completionNotePlaceholder', 'Add a note (optional)...')}
+                          rows={2}
+                          style={{
+                            width: '100%', marginTop: 10, padding: '8px 10px',
+                            borderRadius: 8, border: '1.5px solid var(--border)',
+                            background: 'var(--background)', fontSize: 12,
+                            resize: 'vertical', boxSizing: 'border-box',
+                          }}
+                        />
                       )}
                     </div>
-                    {noteTaskId === task.id && (
-                      <textarea
-                        autoFocus
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        placeholder={t('onboarding.completionNotePlaceholder', 'Add a note (optional)...')}
-                        rows={2}
-                        style={{
-                          width: '100%', marginTop: 10, padding: '8px 10px',
-                          borderRadius: 8, border: '1.5px solid var(--border)',
-                          background: 'var(--background)', fontSize: 12,
-                          resize: 'vertical', boxSizing: 'border-box',
-                        }}
-                      />
+                    {!isMobile && (
+                      <div style={{ flexShrink: 0 }}>
+                        {noteTaskId === task.id ? (
+                          <Button
+                            onClick={() => handleComplete(task.id)}
+                            disabled={completingId === task.id}
+                          >
+                            {completingId === task.id ? '...' : t('onboarding.markDoneWithNote', 'Mark as done')}
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" onClick={() => { setNoteTaskId(task.id); setNote(''); }}>
+                            {t('onboarding.markDone', 'Done')}
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <div style={{ flexShrink: 0 }}>
-                    {noteTaskId === task.id ? (
-                      <Button
-                        onClick={() => handleComplete(task.id)}
-                        disabled={completingId === task.id}
-                      >
-                        {completingId === task.id ? '...' : t('onboarding.markDoneWithNote', 'Mark as done')}
-                      </Button>
-                    ) : (
-                      <Button variant="ghost" onClick={() => { setNoteTaskId(task.id); setNote(''); }}>
-                        {t('onboarding.markDone', 'Done')}
-                      </Button>
-                    )}
-                  </div>
+
+                  {isMobile && (
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {noteTaskId === task.id && (
+                        <textarea
+                          autoFocus
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          placeholder={t('onboarding.completionNotePlaceholder', 'Add a note (optional)...')}
+                          rows={2}
+                          style={{
+                            width: '100%', padding: '8px 10px',
+                            borderRadius: 8, border: '1.5px solid var(--border)',
+                            background: 'var(--background)', fontSize: 12,
+                            resize: 'none', boxSizing: 'border-box',
+                          }}
+                        />
+                      )}
+                      {noteTaskId === task.id ? (
+                        <Button
+                          variant="accent"
+                          fullWidth
+                          onClick={() => handleComplete(task.id)}
+                          disabled={completingId === task.id}
+                        >
+                          {completingId === task.id ? '...' : t('onboarding.markDoneWithNote', 'Mark as done')}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="accent"
+                          fullWidth
+                          onClick={() => { setNoteTaskId(task.id); setNote(''); }}
+                        >
+                          {t('onboarding.markDone', 'Done')}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

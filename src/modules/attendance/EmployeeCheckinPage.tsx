@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import client from '../../api/client';
 import { persistDailyAttendanceState } from '../../utils/indexedDB';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { AlertCircle, CalendarX } from 'lucide-react';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -32,7 +33,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 }
 
-type Filter = '7' | '30';
+type Filter = '7' | '15' | '30';
 
 interface DailyState {
   checkedIn: boolean;
@@ -354,7 +355,7 @@ export default function EmployeeCheckinPage() {
   const allowedActions = resolveAllowedActions(fullDailyState);
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: isMobile ? '16px 0' : '24px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Header banner with employee identity */}
       <div
@@ -623,7 +624,7 @@ export default function EmployeeCheckinPage() {
             {t('checkin.myHistory')}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            {(['7', '30'] as Filter[]).map((f) => (
+            {(['7', '15', '30'] as Filter[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -639,7 +640,7 @@ export default function EmployeeCheckinPage() {
                   transition: 'all 0.15s',
                 }}
               >
-                {t(f === '7' ? 'checkin.filterLast7' : 'checkin.filterLast30')}
+                {t(f === '7' ? 'checkin.filterLast7' : f === '15' ? 'checkin.filterLast15' : 'checkin.filterLast30')}
               </button>
             ))}
           </div>
@@ -652,14 +653,69 @@ export default function EmployeeCheckinPage() {
         )}
 
         {error && !loading && (
-          <div style={{ color: 'var(--danger)', fontSize: 13, textAlign: 'center', padding: '12px 0' }}>
-            {error}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '28px 16px',
+            textAlign: 'center',
+            background: 'var(--surface-warm)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1.5px dashed rgba(220,38,38,0.25)',
+            margin: '12px 0',
+          }}>
+            <div style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'rgba(220,38,38,0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#dc2626',
+              marginBottom: 10,
+            }}>
+              <AlertCircle size={20} />
+            </div>
+            <div style={{ fontSize: 13, color: '#dc2626', fontWeight: 600, maxWidth: 280, lineHeight: 1.4 }}>
+              {error}
+            </div>
           </div>
         )}
 
         {!loading && !error && grouped.length === 0 && (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
-            {t('checkin.noHistory')}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '36px 16px',
+            textAlign: 'center',
+            background: 'var(--surface-warm)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1.5px dashed var(--border)',
+            margin: '12px 0',
+          }}>
+            <div style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'var(--background)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-muted)',
+              marginBottom: 10,
+            }}>
+              <CalendarX size={20} />
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 2 }}>
+              {t('checkin.noHistoryTitle', 'Nessuna registrazione')}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', maxWidth: 280, lineHeight: 1.4 }}>
+              {t('checkin.noHistory')}
+            </div>
           </div>
         )}
 

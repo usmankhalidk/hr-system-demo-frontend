@@ -220,7 +220,7 @@ function AppRoutes() {
       } />
 
       <Route path="/terminale" element={
-        <ProtectedRoute roles={['store_terminal']} permissionKey="presenze">
+        <ProtectedRoute roles={['store_terminal', 'admin']} permissionKey="presenze">
           <TerminalPage />
         </ProtectedRoute>
       } />
@@ -239,7 +239,7 @@ function AppRoutes() {
       } />
 
       <Route path="/device/register" element={
-        <ProtectedRoute roles={['employee']}>
+        <ProtectedRoute roles={['employee', 'store_terminal']}>
           <DeviceRegistrationPage />
         </ProtectedRoute>
       } />

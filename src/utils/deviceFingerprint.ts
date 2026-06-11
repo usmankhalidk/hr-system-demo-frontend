@@ -1,8 +1,10 @@
+import { UAParser } from 'ua-parser-js';
+
 export type DeviceFingerprintResult = {
   // Hex-encoded fingerprint (stable for the same device profile).
   fingerprint: string;
   // Raw metadata used to build the fingerprint (stored in DB as JSONB).
-  metadata: Record<string, unknown>;
+  metadata: Record<string, any>;
 };
 
 function fnv1aHex(input: string, seed: number): string {
@@ -23,20 +25,69 @@ async function sha256Hex(input: string): Promise<string> {
     return arr.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // Fallback: stable non-crypto hash (enough for device binding demo).
-  // Produces 4x32-bit = 32 hex chars (>= backend min length).
+  // Fallback: stable non-crypto hash.
   return fnv1aHex(input, 1) + fnv1aHex(input, 7) + fnv1aHex(input, 13) + fnv1aHex(input, 29);
 }
 
-export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
-  const nav = typeof navigator !== 'undefined' ? navigator : ({} as Navigator);
-  const scr = typeof window !== 'undefined' ? window.screen : undefined;
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
-  const metadata: Record<string, unknown> = {
-    userAgent: nav.userAgent ?? null,
-    platform: (nav as any).platform ?? null,
-    language: nav.language ?? null,
-    languages: (nav as any).languages ?? null,
+export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
+  const nav = typeof navigator !== 'undefined' ? navigator : ({} as any);
+
+  let token = typeof localStorage !== 'undefined' ? localStorage.getItem('veylohr_device_token') : null;
+  if (!token) {
+    token = generateUUID();
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('veylohr_device_token', token);
+    }
+  }
+
+  const fingerprint = await sha256Hex(token);
+
+  let model: string | null = null;
+  let platform: string | null = null;
+  let platformVersion: string | null = null;
+
+  if (nav.userAgentData && typeof nav.userAgentData.getHighEntropyValues === 'function') {
+    try {
+      const hints = await nav.userAgentData.getHighEntropyValues(['model', 'platform', 'platformVersion']);
+      model = hints.model || null;
+      platform = hints.platform || null;
+      platformVersion = hints.platformVersion || null;
+    } catch (e) {
+      console.warn('Failed to retrieve high entropy values:', e);
+    }
+  }
+
+  const ua = nav.userAgent || '';
+  const parser = new UAParser(ua);
+  const uaResult = parser.getResult();
+
+  const metadata = {
+    userAgent: ua,
+    browser: {
+      name: uaResult.browser.name || null,
+      version: uaResult.browser.version || null,
+    },
+    os: {
+      name: platform || uaResult.os.name || null,
+      version: platformVersion || uaResult.os.version || null,
+    },
+    device: {
+      model: model || uaResult.device.model || null,
+      vendor: uaResult.device.vendor || null,
+      type: uaResult.device.type || null,
+    },
+    language: nav.language || null,
     timezone: (() => {
       try {
         return new Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -44,23 +95,11 @@ export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
         return null;
       }
     })(),
-    screen: scr
-      ? {
-          width: scr.width ?? null,
-          height: scr.height ?? null,
-          colorDepth: scr.colorDepth ?? null,
-          availWidth: scr.availWidth ?? null,
-          availHeight: scr.availHeight ?? null,
-        }
-      : null,
-    devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio ?? null : null,
-    hardwareConcurrency: (nav as any).hardwareConcurrency ?? null,
+    screen: typeof window !== 'undefined' && window.screen ? {
+      width: window.screen.width || null,
+      height: window.screen.height || null,
+    } : null,
   };
-
-  // Build a deterministic string with fixed key order.
-  const canonical = JSON.stringify(metadata);
-  const fingerprint = await sha256Hex(canonical);
 
   return { fingerprint, metadata };
 }
-

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../../context/AuthContext';
 import { generateQrToken, QrTokenResponse } from '../../api/attendance';
@@ -7,6 +8,9 @@ import { useOfflineSync } from '../../context/OfflineSyncContext';
 import { type OfflineAttendanceEvent } from '../../utils/indexedDB';
 import { getStore } from '../../api/stores';
 import { Store } from '../../types';
+import { getDeviceStatus } from '../../api/device';
+import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
+import { Spinner } from '../../components/ui';
 
 const REFRESH_AT_SECONDS = 15;
 
@@ -28,8 +32,46 @@ function getProgressColor(secondsLeft: number, expiresIn: number): string {
 
 export default function TerminalPage() {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  const [deviceStatus, setDeviceStatus] = useState<{
+    loading: boolean;
+    isBlocked: boolean;
+    error: string | null;
+  }>({ loading: true, isBlocked: false, error: null });
+
+  useEffect(() => {
+    let active = true;
+    const checkDevice = async () => {
+      if (user?.isSuperAdmin) {
+        setDeviceStatus({ loading: false, isBlocked: false, error: null });
+        return;
+      }
+      try {
+        const fpResult = await getDeviceFingerprint();
+        const status = await getDeviceStatus(fpResult.fingerprint);
+        if (active) {
+          if (status.requiresDeviceRegistration) {
+            const next = encodeURIComponent(window.location.pathname + window.location.search);
+            navigate(`/device/register?next=${next}`, { replace: true });
+          } else if (status.isDeviceRegistered && !status.isDeviceMatched) {
+            setDeviceStatus({ loading: false, isBlocked: true, error: null });
+          } else {
+            setDeviceStatus({ loading: false, isBlocked: false, error: null });
+          }
+        }
+      } catch (err) {
+        console.error('Error during terminal device check:', err);
+        if (active) {
+          setDeviceStatus({ loading: false, isBlocked: false, error: 'Device check failed' });
+        }
+      }
+    };
+    void checkDevice();
+    return () => { active = false; };
+  }, [user, navigate]);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -138,6 +180,51 @@ export default function TerminalPage() {
   }
 
   // ── Derived display values ─────────────────────────────────────────────────
+  if (deviceStatus.loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--background)' }}>
+        <Spinner size="lg" color="var(--accent)" />
+      </div>
+    );
+  }
+
+  if (deviceStatus.isBlocked) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 32, textAlign: 'center', gap: 20,
+        background: 'linear-gradient(135deg, #0D2137 0%, #1A3B5C 100%)',
+        color: '#fff',
+        fontFamily: 'var(--font-body)'
+      }}>
+        <div style={{ fontSize: 64 }}>🔒</div>
+        <div style={{
+          fontSize: 24, fontWeight: 800,
+          color: '#ffffff', fontFamily: 'var(--font-display)',
+        }}>
+          {t('deviceReset.terminalBlockedTitle', 'Terminal Non Autorizzato')}
+        </div>
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', maxWidth: 450, lineHeight: 1.5 }}>
+          {t('deviceReset.terminalBlockedDesc', 'Questo dispositivo non è autorizzato per questo punto vendita. L\'accesso al terminale è consentito solo dal dispositivo originariamente registrato.')}
+        </div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
+          {t('deviceReset.terminalBlockedHint', 'Se hai sostituito il dispositivo, contatta un amministratore HR per effettuare il reset del terminale.')}
+        </div>
+        <button
+          onClick={logout}
+          style={{
+            padding: '11px 28px', borderRadius: 10, marginTop: 16,
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+            color: '#fff', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 600
+          }}
+        >
+          {t('nav.logout')}
+        </button>
+      </div>
+    );
+  }
+
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
   const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = time.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

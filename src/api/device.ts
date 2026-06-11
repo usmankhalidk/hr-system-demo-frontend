@@ -4,6 +4,7 @@ export interface DeviceStatusResponse {
   isDeviceRegistered: boolean;
   deviceResetPending: boolean;
   requiresDeviceRegistration: boolean;
+  isDeviceMatched?: boolean;
 }
 
 export interface RegisterDevicePayload {
@@ -11,8 +12,20 @@ export interface RegisterDevicePayload {
   metadata?: Record<string, unknown>;
 }
 
-export async function getDeviceStatus(): Promise<DeviceStatusResponse> {
-  const { data } = await apiClient.get('/device/status');
+export interface DeviceEvent {
+  id: number;
+  userId: number;
+  eventType: 'registered' | 'mismatch_blocked' | 'admin_bypass' | 'reset' | 'suspicious_ip';
+  ipAddress: string | null;
+  userAgent: string | null;
+  metadata: any;
+  createdAt: string;
+}
+
+export async function getDeviceStatus(fingerprint?: string): Promise<DeviceStatusResponse> {
+  const { data } = await apiClient.get('/device/status', {
+    params: fingerprint ? { fingerprint } : undefined,
+  });
   return data.data as DeviceStatusResponse;
 }
 
@@ -21,3 +34,7 @@ export async function registerDevice(payload: RegisterDevicePayload): Promise<De
   return data.data as DeviceStatusResponse;
 }
 
+export async function getDeviceHistory(userId: number): Promise<DeviceEvent[]> {
+  const { data } = await apiClient.get(`/device/history/${userId}`);
+  return data.data as DeviceEvent[];
+}
