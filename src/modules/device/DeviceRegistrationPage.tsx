@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Monitor } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { registerDevice } from '../../api/device';
@@ -78,6 +79,8 @@ export default function DeviceRegistrationPage() {
     );
   }
 
+  const isTerminal = user.role === 'store_terminal';
+
   return (
     <div
       style={{
@@ -107,19 +110,35 @@ export default function DeviceRegistrationPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 44, lineHeight: 1 }}>🔐</div>
+          <div style={{ fontSize: 44, lineHeight: 1 }}>{isTerminal ? '🖥️' : '🔐'}</div>
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800 }}>
-              {t('deviceRegistration.title')}
+              {isTerminal ? t('deviceRegistration.terminalTitle') : t('deviceRegistration.title')}
             </div>
-            <div style={{ opacity: 0.75, fontSize: 14, marginTop: 4 }}>{t('deviceRegistration.subtitle')}</div>
+            <div style={{ opacity: 0.75, fontSize: 14, marginTop: 4 }}>
+              {isTerminal ? t('deviceRegistration.terminalSubtitle') : t('deviceRegistration.subtitle')}
+            </div>
           </div>
         </div>
 
         <div style={{ marginTop: 16, background: 'rgba(0,0,0,0.15)', borderRadius: 16, padding: 16 }}>
           <div style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.92 }}>
-            {t('deviceRegistration.body')}
+            {isTerminal ? t('deviceRegistration.terminalBody') : t('deviceRegistration.body')}
           </div>
+
+          {isTerminal && (
+            <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', color: '#C9973A', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {t('deviceRegistration.terminalHowTo')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '13px', opacity: 0.85 }}>
+                <div>{t('deviceRegistration.terminalHowToStep1')}</div>
+                <div>{t('deviceRegistration.terminalHowToStep2')}</div>
+                <div>{t('deviceRegistration.terminalHowToStep3')}</div>
+                <div>{t('deviceRegistration.terminalHowToStep4')}</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -151,7 +170,14 @@ export default function DeviceRegistrationPage() {
               gap: 10,
             }}
           >
-            {submitting ? <Spinner size="sm" color="#0A1929" /> : t('deviceRegistration.button')}
+            {submitting ? (
+              <Spinner size="sm" color="#0A1929" />
+            ) : (
+              <>
+                {isTerminal && <Monitor size={18} />}
+                {isTerminal ? t('deviceRegistration.terminalButton') : t('deviceRegistration.button')}
+              </>
+            )}
           </button>
 
           <button

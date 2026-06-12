@@ -220,7 +220,7 @@ function AppRoutes() {
       } />
 
       <Route path="/terminale" element={
-        <ProtectedRoute roles={['store_terminal', 'admin']} permissionKey="presenze">
+        <ProtectedRoute roles={['store_terminal', 'admin', 'hr', 'area_manager', 'store_manager']} permissionKey="presenze">
           <TerminalPage />
         </ProtectedRoute>
       } />

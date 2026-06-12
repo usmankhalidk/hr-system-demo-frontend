@@ -254,6 +254,7 @@ export default function TerminalList() {
           showToast(selectedTerminal ? t('common.success') : t('terminals.terminalSaveSuccess'), 'success');
         }}
         onCancel={() => setShowForm(false)}
+        onRefreshList={() => setListReloadTick(prev => prev + 1)}
       />
     </div>
   );

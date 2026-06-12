@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Eye, EyeOff, RefreshCw, Copy, CheckCircle2, KeyRound, ChevronDown, Store as StoreIcon, Trash2, QrCode } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, Copy, CheckCircle2, KeyRound, ChevronDown, Store as StoreIcon, Trash2, QrCode, Monitor, Smartphone, AlertTriangle } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { createTerminal, updateTerminal, deleteTerminal, getStoresWithTerminalStatus, StoreTerminalStatus, Terminal } from '../../api/terminals';
 import { generateQrToken, QrTokenResponse } from '../../api/attendance';
+import { resetEmployeeDevice } from '../../api/employees';
 import { translateApiError } from '../../utils/apiErrors';
+import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
@@ -16,6 +18,7 @@ interface TerminalFormProps {
   terminal?: Terminal | null;
   onSuccess: () => void;
   onCancel: () => void;
+  onRefreshList?: () => void;
 }
 
 function generateTempPassword(): string {
@@ -45,13 +48,15 @@ function SectionDivider({ label }: { label: string }) {
   );
 }
 
-export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: TerminalFormProps) {
+export function TerminalForm({ open = true, terminal, onSuccess, onCancel, onRefreshList }: TerminalFormProps) {
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
+  const { showToast } = useToast();
   
   const [stores, setStores] = useState<StoreTerminalStatus[]>([]);
   const [loadingStores, setLoadingStores] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,8 +66,16 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
   const [copied, setCopied] = useState(false);
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [localTerminal, setLocalTerminal] = useState<Terminal | null>(null);
+
+  // QR state
   const [qrData, setQrData] = useState<QrTokenResponse | null>(null);
   const [loadingQr, setLoadingQr] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownStartRef = useRef<number>(0);
+  const countdownTotalRef = useRef<number>(0);
+
   const storePickerRef = useRef<HTMLDivElement | null>(null);
 
   const isEditMode = !!terminal;
@@ -73,19 +86,14 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
     setPasswordError(undefined);
   }, []);
 
-  const getTerminalEmail = (store?: StoreTerminalStatus) => {
-    if (isEditMode && terminal) return terminal.email;
-    if (!store) return '';
-    const sName = (store.name || '').toLowerCase().replace(/\s+/g, '');
-    const cName = (store.companyName || '').toLowerCase().replace(/\s+/g, '');
-    return `${sName}@${cName}.com`;
-  };
-
-  const loadQrCode = useCallback(async (storeId: number) => {
-    setLoadingQr(true);
+  const loadQrCode = useCallback(async (storeId: number, isAutoRefresh = false) => {
+    if (!isAutoRefresh) setLoadingQr(true);
     try {
       const data = await generateQrToken(storeId);
       setQrData(data);
+      setSecondsLeft(data.expiresIn);
+      countdownStartRef.current = Date.now();
+      countdownTotalRef.current = data.expiresIn;
     } catch (err) {
       console.error('Failed to generate preview QR:', err);
       setQrData(null);
@@ -93,6 +101,10 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
       setLoadingQr(false);
     }
   }, []);
+
+  useEffect(() => {
+    setLocalTerminal(terminal || null);
+  }, [terminal]);
 
   useEffect(() => {
     if (open) {
@@ -103,6 +115,7 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
           setStores(list);
           if (terminal) {
             setSelectedStoreId(String(terminal.storeId));
+            setEmail(terminal.email);
             loadQrCode(terminal.storeId);
           }
         })
@@ -111,12 +124,14 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
       
       if (!terminal) {
         setPassword(generateTempPassword());
+        setEmail('');
         setQrData(null);
       } else {
         setPassword(terminal.plainPassword || '');
       }
     } else {
       setSelectedStoreId('');
+      setEmail('');
       setPassword('');
       setError(null);
       setCreatedCredentials(null);
@@ -124,16 +139,42 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
       setPasswordError(undefined);
       setConfirmDelete(false);
       setQrData(null);
+      setLocalTerminal(null);
     }
   }, [open, terminal, t, loadQrCode]);
 
   useEffect(() => {
     if (selectedStoreId && !isEditMode) {
+      const selectedStore = stores.find(s => String(s.id) === selectedStoreId);
+      if (selectedStore) {
+        const sName = (selectedStore.name || '').toLowerCase().replace(/\s+/g, '');
+        const cName = (selectedStore.companyName || '').toLowerCase().replace(/\s+/g, '');
+        setEmail(`${sName}@${cName}.com`);
+      }
       loadQrCode(Number(selectedStoreId));
     } else if (!selectedStoreId) {
       setQrData(null);
     }
-  }, [selectedStoreId, isEditMode, loadQrCode]);
+  }, [selectedStoreId, isEditMode, stores, loadQrCode]);
+
+  useEffect(() => {
+    if (!qrData) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - countdownStartRef.current) / 1000);
+      const next = Math.max(0, countdownTotalRef.current - elapsed);
+      setSecondsLeft(next);
+      if (next <= 15) {
+        clearInterval(timerRef.current!);
+        timerRef.current = null;
+        const sid = Number(selectedStoreId) || (localTerminal?.storeId);
+        if (sid) {
+          loadQrCode(sid, true);
+        }
+      }
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [qrData, selectedStoreId, localTerminal, loadQrCode]);
 
   useEffect(() => {
     if (!storePickerOpen) return;
@@ -146,12 +187,43 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [storePickerOpen]);
 
+  const handleResetDevice = async () => {
+    if (!localTerminal) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await resetEmployeeDevice(localTerminal.id);
+      showToast(t('deviceReset.successToast'), 'success');
+      
+      setLocalTerminal(prev => prev ? {
+        ...prev,
+        deviceRegistered: false,
+        deviceResetPending: false,
+        deviceRegisteredAt: null,
+        deviceMetadata: null,
+        lastSeenIp: null,
+        lastSeenAt: null
+      } : null);
+
+      if (onRefreshList) onRefreshList();
+    } catch (err) {
+      setError(translateApiError(err, t, t('employees.deviceResetRequestedError')));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedStoreId) {
       setError(t('terminals.fieldRequired'));
       return;
     }
     
+    if (!email) {
+      setError(t('terminals.fieldRequired'));
+      return;
+    }
+
     if (!password) {
       setError(t('terminals.fieldRequired')); 
       return;
@@ -161,23 +233,21 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
       setPasswordError(t('employees.passwordTooShort'));
       return;
     }
-    if (!selectedStore) return;
 
     setLoading(true);
     setError(null);
     try {
-      if (isEditMode && terminal) {
-        await updateTerminal(terminal.id, { password });
+      if (isEditMode && localTerminal) {
+        await updateTerminal(localTerminal.id, { email, password: password || undefined });
         onSuccess();
       } else {
-        const email = getTerminalEmail(selectedStore);
         await createTerminal({
-          storeId: selectedStore.id,
+          storeId: Number(selectedStoreId),
           email,
           password,
         });
         setCreatedCredentials({
-          name: selectedStore.name,
+          name: selectedStore ? selectedStore.name : '',
           email,
           password,
         });
@@ -190,7 +260,7 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
   };
 
   const handleDelete = async () => {
-    if (!terminal) return;
+    if (!localTerminal) return;
     if (!confirmDelete) {
       setConfirmDelete(true);
       return;
@@ -199,7 +269,7 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
     setLoading(true);
     setError(null);
     try {
-      await deleteTerminal(terminal.id);
+      await deleteTerminal(localTerminal.id);
       onSuccess();
     } catch (err) {
       setError(translateApiError(err, t, t('common.error')));
@@ -238,102 +308,14 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
               )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-                {/* Store Selection */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t('terminals.selectStore')}
-                  </label>
-                  <div style={{ position: 'relative' }} ref={storePickerRef}>
-                    <button
-                      onClick={() => !isEditMode && setStorePickerOpen(!storePickerOpen)}
-                      type="button"
-                      disabled={loadingStores || isEditMode}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '10px 14px', background: isEditMode ? 'var(--surface-warm)' : 'var(--surface)',
-                        border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                        cursor: isEditMode ? 'not-allowed' : 'pointer', textAlign: 'left',
-                      }}
-                    >
-                      <span style={{ fontSize: '14px', color: (selectedStore || (isEditMode && terminal)) ? 'var(--text-primary)' : 'var(--text-disabled)' }}>
-                        {selectedStore 
-                          ? `${selectedStore.name} (${selectedStore.companyName})` 
-                          : (isEditMode && terminal 
-                              ? `${terminal.storeName} (${terminal.companyName})` 
-                              : t('terminals.selectStore'))}
-                      </span>
-                      {!isEditMode && <ChevronDown size={16} color="var(--text-muted)" />}
-                    </button>
-
-                    {!isEditMode && storePickerOpen && (
-                      <div style={{
-                        position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 10,
-                        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                        boxShadow: 'var(--shadow-lg)', maxHeight: '250px', overflowY: 'auto', padding: '4px'
-                      }}>
-                        {stores.map(s => (
-                          <button
-                            key={s.id}
-                            onClick={() => {
-                              if (!s.hasTerminal) {
-                                setSelectedStoreId(String(s.id));
-                                setStorePickerOpen(false);
-                                setError(null);
-                              }
-                            }}
-                            disabled={s.hasTerminal}
-                            style={{
-                              width: '100%', padding: '8px 12px', border: 'none', borderRadius: 'var(--radius-sm)',
-                              background: selectedStoreId === String(s.id) ? 'var(--primary-light)' : 'transparent',
-                              cursor: s.hasTerminal ? 'not-allowed' : 'pointer', textAlign: 'left',
-                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                              gap: '12px'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                              {/* Store Avatar */}
-                              <div style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '8px',
-                                background: s.hasTerminal ? 'rgba(100,116,139,0.1)' : 'var(--accent)',
-                                color: s.hasTerminal ? 'var(--text-disabled)' : '#fff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '13px',
-                                fontWeight: 700,
-                                flexShrink: 0
-                              }}>
-                                {s.name.charAt(0).toUpperCase()}
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: s.hasTerminal ? 'var(--text-disabled)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.companyName}</span>
-                              </div>
-                            </div>
-                            <span style={{
-                              fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
-                              background: s.hasTerminal ? 'rgba(21,128,61,0.1)' : 'rgba(100,116,139,0.1)',
-                              color: s.hasTerminal ? 'var(--success)' : 'var(--text-muted)', textTransform: 'uppercase',
-                              flexShrink: 0
-                            }}>
-                              {s.hasTerminal ? t('terminals.terminalCreated') : t('terminals.terminalNotCreated')}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Premium Compact Store Detail Card */}
+                
+                {/* Store Details Card (Always at top in Edit Mode) */}
                 {(() => {
-                  const name = selectedStore ? selectedStore.name : (terminal ? terminal.storeName : '');
-                  const code = selectedStore ? selectedStore.code : (stores.find(s => s.id === terminal?.storeId)?.code);
-                  const company = selectedStore ? selectedStore.companyName : (terminal ? terminal.companyName : '');
-                  const address = selectedStore ? selectedStore.address : (stores.find(s => s.id === terminal?.storeId)?.address);
-                  const cap = selectedStore ? selectedStore.cap : (stores.find(s => s.id === terminal?.storeId)?.cap);
+                  const name = selectedStore ? selectedStore.name : (localTerminal ? localTerminal.storeName : '');
+                  const code = selectedStore ? selectedStore.code : (stores.find(s => s.id === localTerminal?.storeId)?.code);
+                  const company = selectedStore ? selectedStore.companyName : (localTerminal ? localTerminal.companyName : '');
+                  const address = selectedStore ? selectedStore.address : (stores.find(s => s.id === localTerminal?.storeId)?.address);
+                  const cap = selectedStore ? selectedStore.cap : (stores.find(s => s.id === localTerminal?.storeId)?.cap);
 
                   if (!name && !company) return null;
 
@@ -370,16 +352,222 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                   );
                 })()}
 
+                {/* Store Selection (Only in Create Mode) */}
+                {!isEditMode && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {t('terminals.selectStore')}
+                    </label>
+                    <div style={{ position: 'relative' }} ref={storePickerRef}>
+                      <button
+                        onClick={() => setStorePickerOpen(!storePickerOpen)}
+                        type="button"
+                        disabled={loadingStores}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '10px 14px', background: 'var(--surface)',
+                          border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                          cursor: 'pointer', textAlign: 'left',
+                        }}
+                      >
+                        <span style={{ fontSize: '14px', color: selectedStore ? 'var(--text-primary)' : 'var(--text-disabled)' }}>
+                          {selectedStore 
+                            ? `${selectedStore.name} (${selectedStore.companyName})` 
+                            : t('terminals.selectStore')}
+                        </span>
+                        <ChevronDown size={16} color="var(--text-muted)" />
+                      </button>
+
+                      {storePickerOpen && (
+                        <div style={{
+                          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 10,
+                          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                          boxShadow: 'var(--shadow-lg)', maxHeight: '250px', overflowY: 'auto', padding: '4px'
+                        }}>
+                          {stores.map(s => (
+                            <button
+                              key={s.id}
+                              onClick={() => {
+                                if (!s.hasTerminal) {
+                                  setSelectedStoreId(String(s.id));
+                                  setStorePickerOpen(false);
+                                  setError(null);
+                                }
+                              }}
+                              disabled={s.hasTerminal}
+                              style={{
+                                width: '100%', padding: '8px 12px', border: 'none', borderRadius: 'var(--radius-sm)',
+                                background: selectedStoreId === String(s.id) ? 'var(--primary-light)' : 'transparent',
+                                cursor: s.hasTerminal ? 'not-allowed' : 'pointer', textAlign: 'left',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                gap: '12px'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '8px',
+                                  background: s.hasTerminal ? 'rgba(100,116,139,0.1)' : 'var(--accent)',
+                                  color: s.hasTerminal ? 'var(--text-disabled)' : '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  flexShrink: 0
+                                }}>
+                                  {s.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 600, color: s.hasTerminal ? 'var(--text-disabled)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.companyName}</span>
+                                </div>
+                              </div>
+                              <span style={{
+                                fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
+                                background: s.hasTerminal ? 'rgba(21,128,61,0.1)' : 'rgba(100,116,139,0.1)',
+                                color: s.hasTerminal ? 'var(--success)' : 'var(--text-muted)', textTransform: 'uppercase',
+                                flexShrink: 0
+                              }}>
+                                {s.hasTerminal ? t('terminals.terminalCreated') : t('terminals.terminalNotCreated')}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Device Binding / Registration Details (Only in Edit Mode) */}
+                {isEditMode && localTerminal && (
+                  <div>
+                    <SectionDivider label={t('deviceReset.colDeviceStatus')} />
+                    {localTerminal.deviceRegistered ? (
+                      <div style={{
+                        background: 'var(--surface-warm)',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid var(--border)',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        fontSize: '13px',
+                        marginBottom: '8px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '8px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{t('deviceReset.model', 'Device')}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {localTerminal.deviceMetadata?.device?.model || localTerminal.deviceMetadata?.model || 'Generic Terminal'}
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400, marginLeft: '6px' }}>
+                              ({localTerminal.deviceMetadata?.os?.name || 'Unknown'} {localTerminal.deviceMetadata?.os?.version || ''})
+                            </span>
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '8px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{t('deviceReset.browser', 'Browser')}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {localTerminal.deviceMetadata?.browser?.name || 'Unknown'} {localTerminal.deviceMetadata?.browser?.version || ''}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '8px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{t('deviceReset.registeredIp', 'Registered IP')}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                            {localTerminal.deviceMetadata?.ipAddress || '—'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '8px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{t('deviceReset.registeredAt', 'Registered At')}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {localTerminal.deviceRegisteredAt ? new Date(localTerminal.deviceRegisteredAt).toLocaleString() : '—'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{t('deviceReset.lastSeen', 'Last Active')}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {localTerminal.lastSeenAt ? new Date(localTerminal.lastSeenAt).toLocaleString() : t('deviceReset.neverSeen')}
+                            </span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                              IP: {localTerminal.lastSeenIp || '—'}
+                            </span>
+                            {localTerminal.deviceMetadata?.ipAddress && localTerminal.lastSeenIp && localTerminal.deviceMetadata.ipAddress !== localTerminal.lastSeenIp && (
+                              <span style={{
+                                background: 'rgba(217,119,6,0.1)',
+                                color: '#b45309',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                border: '1px solid rgba(217,119,6,0.2)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                                marginTop: '2px'
+                              }}>
+                                <AlertTriangle size={9} />
+                                {t('deviceReset.ipChangedWarning')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: '6px', borderTop: '1px solid var(--border-light)', paddingTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={handleResetDevice}
+                            loading={loading}
+                            style={{ gap: '6px' }}
+                          >
+                            <Smartphone size={14} />
+                            {t('deviceReset.resetButton')}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        background: 'var(--surface-warm)',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px dashed var(--border)',
+                        padding: '20px',
+                        textAlign: 'center',
+                        color: 'var(--text-muted)',
+                        fontSize: '13px',
+                        marginBottom: '8px'
+                      }}>
+                        <Monitor size={24} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                        <div style={{ fontWeight: 600 }}>{t('deviceRegistration.notRegisteredTitle', 'Terminal Not Registered')}</div>
+                        <div style={{ fontSize: '11.5px', marginTop: '4px', opacity: 0.75 }}>
+                          {t('deviceRegistration.notRegisteredDesc', 'This terminal is not bound to a device.')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <SectionDivider label={t('terminals.terminalStep2')} />
 
+                {/* Editable Credentials Section */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('terminals.emailLabel')}</label>
-                    <Input value={getTerminalEmail(selectedStore)} readOnly disabled style={{ background: 'var(--surface-warm)', cursor: 'not-allowed' }} />
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      {t('terminals.emailLabel')}
+                    </label>
+                    <Input 
+                      type="email"
+                      value={email} 
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="terminal@company.com"
+                      required
+                    />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('terminals.passwordLabel')}</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      {t('terminals.passwordLabel')}
+                    </label>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <div style={{ flex: 1, position: 'relative' }}>
                         <Input
@@ -408,14 +596,21 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                     </div>
                   </div>
 
-                  {/* QR Code Section */}
-                  {selectedStoreId && (
+                  {/* QR Code Preview Section with Countdown */}
+                  {(selectedStoreId || (isEditMode && localTerminal)) && (
                     <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '20px', background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
-                      <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
-                        <QrCode size={14} />
-                        <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {t('qr.title')} Preview
-                        </span>
+                      <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', width: '100%', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <QrCode size={14} />
+                          <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('qr.title')} Preview
+                          </span>
+                        </div>
+                        {qrData && secondsLeft > 0 && (
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: secondsLeft <= 15 ? 'var(--danger)' : 'var(--success)' }}>
+                            {secondsLeft}s
+                          </span>
+                        )}
                       </div>
                       
                       <div style={{ padding: '12px', background: '#fff', borderRadius: 'var(--radius)', border: '1.5px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', opacity: loadingQr ? 0.5 : 1, transition: 'opacity 0.2s' }}>
@@ -431,6 +626,17 @@ export function TerminalForm({ open = true, terminal, onSuccess, onCancel }: Ter
                           </div>
                         )}
                       </div>
+
+                      {qrData && (
+                        <div style={{ width: '100%', height: '4px', background: 'var(--border-light)', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${Math.max(0, (secondsLeft / (qrData.expiresIn || 60)) * 100)}%`,
+                            height: '100%',
+                            background: secondsLeft <= 15 ? 'var(--danger)' : 'var(--success)',
+                            transition: 'width 1s linear'
+                          }} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
