@@ -119,6 +119,14 @@ export default function TerminalPage() {
   const [time, setTime] = useState(new Date());
   const [store, setStore] = useState<Store | null>(null);
 
+  // ── Hour format state ──────────────────────────────────────────────────────
+  const [hour12, setHour12] = useState(() => {
+    return localStorage.getItem('terminal_hour12') === 'true';
+  });
+  useEffect(() => {
+    localStorage.setItem('terminal_hour12', String(hour12));
+  }, [hour12]);
+
   const { enqueue, queueLength, isOnline, isSyncing } = useOfflineSync();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const storeIdRef = useRef<number | null>(user?.storeId ?? null);
@@ -269,7 +277,7 @@ export default function TerminalPage() {
   }
 
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
-  const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: hour12 });
   const dateStr = time.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const expiresIn = qrData?.expiresIn ?? 60;
   const progress = qrData ? Math.max(0, (secondsLeft / expiresIn) * 100) : 0;
@@ -307,6 +315,22 @@ export default function TerminalPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Time Format Toggle */}
+          <button
+            onClick={() => setHour12(prev => !prev)}
+            style={{
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+              color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+              fontWeight: 800, fontSize: 11.5,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontFamily: 'var(--font-display)',
+              letterSpacing: 0.5,
+              transition: 'all 0.15s'
+            }}
+          >
+            🕒 {hour12 ? '12H' : '24H'}
+          </button>
+
           {user?.role !== 'store_terminal' ? (
             <button
               onClick={() => navigate('/')}

@@ -10,11 +10,12 @@ export default function PrivacyPolicyPage() {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
   const params = new URLSearchParams(window.location.search);
-  const companyName = params.get('companyName') || 'Fusaro Uomo S.r.l.';
-  const companyEmail = params.get('companyEmail') || 'diletta@fusarouomo.it';
 
   const [doc, setDoc] = useState<LegalDocument | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const companyName = companySlug ? (params.get('companyName') || '') : (doc?.platformCompanyName || '');
+  const companyEmail = companySlug ? (params.get('companyEmail') || '') : (doc?.platformCompanyEmail || '');
 
   useEffect(() => {
     let isMounted = true;

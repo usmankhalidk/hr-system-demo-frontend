@@ -241,6 +241,8 @@ export interface LegalDocument {
   language: string;
   title: string;
   content: string;
+  platformCompanyName?: string | null;
+  platformCompanyEmail?: string | null;
   updatedAt: string;
   updatedByName: string | null;
 }
@@ -250,7 +252,13 @@ export async function getPublicLegalDocument(key: string, lang = 'it'): Promise<
   return data.data.document as LegalDocument;
 }
 
-export async function updateLegalDocument(key: string, params: { language: string; title: string; content: string }): Promise<LegalDocument> {
+export async function updateLegalDocument(key: string, params: { 
+  language: string; 
+  title: string; 
+  content: string;
+  platformCompanyName?: string;
+  platformCompanyEmail?: string;
+}): Promise<LegalDocument> {
   const { data } = await apiClient.put(`/public/legal-documents/${key}`, params);
   return data.data.document as LegalDocument;
 }

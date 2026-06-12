@@ -10,10 +10,12 @@ export default function TermsOfServicePage() {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
   const params = new URLSearchParams(window.location.search);
-  const companyName = params.get('companyName') || 'Fusaro Uomo S.r.l.';
 
   const [doc, setDoc] = useState<LegalDocument | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const companyName = companySlug ? (params.get('companyName') || '') : (doc?.platformCompanyName || '');
+  const companyEmail = companySlug ? (params.get('companyEmail') || '') : (doc?.platformCompanyEmail || '');
 
   useEffect(() => {
     let isMounted = true;
@@ -38,7 +40,8 @@ export default function TermsOfServicePage() {
     if (!md) return '';
 
     let html = md
-      .replace(/\{\{companyName\}\}/g, companyName);
+      .replace(/\{\{companyName\}\}/g, companyName)
+      .replace(/\{\{companyEmail\}\}/g, companyEmail);
 
     // If it is already HTML, skip markdown conversion
     const isHtml = /<[a-z][\s\S]*>/i.test(md);

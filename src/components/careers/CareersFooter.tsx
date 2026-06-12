@@ -11,7 +11,7 @@ interface CareersFooterProps {
 export default function CareersFooter({ companyName, companyEmail, companySlug }: CareersFooterProps) {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
-  const displayCompany = companyName || 'Fusaro Uomo';
+  const displayCompany = companySlug ? (companyName || 'Fusaro Uomo') : null;
 
   const queryParams = new URLSearchParams();
   if (companyName) queryParams.set('companyName', companyName);
@@ -38,7 +38,7 @@ export default function CareersFooter({ companyName, companyEmail, companySlug }
         gap: '16px'
       }} className="flex-col-mobile">
         <div>
-          <span>&copy; 2026 {displayCompany}. Powered by </span>
+          <span>&copy; 2026{displayCompany ? ` ${displayCompany}` : ''}. Powered by </span>
           <a href="https://veylohr.com" style={{ color: 'var(--primary)', fontWeight: 600 }}>Veylo HR</a>
         </div>
         <div style={{ display: 'flex', gap: '24px' }}>
