@@ -38,3 +38,15 @@ export async function getDeviceHistory(userId: number): Promise<DeviceEvent[]> {
   const { data } = await apiClient.get(`/device/history/${userId}`);
   return data.data as DeviceEvent[];
 }
+
+export interface ReRegisterDevicePayload {
+  email: string;
+  password: string;
+  fingerprint: string;
+  metadata?: Record<string, unknown>;
+}
+
+export async function reRegisterDevice(payload: ReRegisterDevicePayload): Promise<{ success: boolean }> {
+  const { data } = await apiClient.post('/device/re-register', payload);
+  return data.data;
+}

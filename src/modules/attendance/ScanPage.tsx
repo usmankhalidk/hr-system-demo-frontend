@@ -8,6 +8,31 @@ import { useOfflineSync } from '../../context/OfflineSyncContext';
 import { useToast } from '../../context/ToastContext';
 import client from '../../api/client';
 import { persistDailyAttendanceState } from '../../utils/indexedDB';
+import { getStore } from '../../api/stores';
+
+// ── JWT decoder helper ──────────────────────────────────────────────────────
+function parseQrToken(token: string): { companyId: number; storeId: number; nonce: string; exp: number } | null {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const parsed = JSON.parse(jsonPayload);
+    return {
+      companyId: parsed.companyId,
+      storeId: parsed.storeId,
+      nonce: parsed.nonce,
+      exp: parsed.exp
+    };
+  } catch (e) {
+    return null;
+  }
+}
 
 // ── Event definitions ────────────────────────────────────────────────────────
 const EVENTS: { type: EventType; labelKey: string; bg: string; shadow: string }[] = [
@@ -22,12 +47,28 @@ type Stage = 'ready' | 'loading' | 'success' | 'error';
 interface DailyState {
   hasShift: boolean;
   hasLeave: boolean;
+  shiftStoreId?: number;
+  shiftStoreName?: string;
   state: {
     checkedIn: boolean;
+    checkedInTime?: string | null;
     breakStarted: boolean;
+    breakStartedTime?: string | null;
     breakEnded: boolean;
+    breakEndedTime?: string | null;
     checkedOut: boolean;
+    checkedOutTime?: string | null;
   };
+}
+
+function formatTime(iso: string) {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
 }
 
 // ── Helper ──────────────────────────────────────────────────────────────────
@@ -96,6 +137,78 @@ export default function ScanPage() {
 
   const token = params.get('token') ?? '';
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
+
+  // ── QR Token countdown and store resolution ──────────────────────────────
+  const [tokenTimeLeft, setTokenTimeLeft] = useState<number>(0);
+  const [scannedStoreName, setScannedStoreName] = useState<string | null>(null);
+  const [scannedStoreError, setScannedStoreError] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!token) return;
+
+    // Save token to localStorage for attendance module bypass use
+    localStorage.setItem('scanned_qr_token', token);
+    localStorage.setItem('scanned_qr_token_time', Date.now().toString());
+
+    const parsed = parseQrToken(token);
+    if (!parsed) {
+      setStage('error');
+      setErrorMsg(t('scan.invalidQrCode'));
+      return;
+    }
+
+    // Load store name
+    getStore(parsed.storeId)
+      .then((s) => {
+        setScannedStoreName(s.name);
+      })
+      .catch(() => {
+        setScannedStoreName(`${t('common.store')} #${parsed.storeId}`);
+      });
+
+    // Countdown interval
+    const intervalId = setInterval(() => {
+      const expTime = parsed.exp * 1000;
+      const timeLeft = Math.max(0, Math.floor((expTime - Date.now()) / 1000));
+      setTokenTimeLeft(timeLeft);
+
+      if (timeLeft <= 0) {
+        clearInterval(intervalId);
+        setStage('error');
+        setErrorMsg(t('errors.INVALID_QR_TOKEN', 'QR code invalid or expired. Please scan again.'));
+      }
+    }, 1000);
+
+    // Initial check
+    const expTime = parsed.exp * 1000;
+    const initialTimeLeft = Math.max(0, Math.floor((expTime - Date.now()) / 1000));
+    setTokenTimeLeft(initialTimeLeft);
+    if (initialTimeLeft <= 0) {
+      setStage('error');
+      setErrorMsg(t('errors.INVALID_QR_TOKEN', 'QR code invalid or expired. Please scan again.'));
+    }
+
+    return () => clearInterval(intervalId);
+  }, [token, t]);
+
+  // Compute store mismatch dynamically when dailyState is loaded
+  useEffect(() => {
+    if (!token) return;
+    const parsed = parseQrToken(token);
+    if (!parsed) return;
+
+    if (dailyState) {
+      if (dailyState.hasShift && dailyState.shiftStoreId) {
+        if (dailyState.shiftStoreId !== parsed.storeId) {
+          setScannedStoreError(true);
+        } else {
+          setScannedStoreError(false);
+        }
+      } else {
+        setScannedStoreError(false);
+      }
+    }
+  }, [token, dailyState]);
 
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 1000);
@@ -336,10 +449,22 @@ export default function ScanPage() {
           setDailyState((prev) => {
             if (!prev) return prev;
             const next = { ...prev, state: { ...prev.state } };
-            if (eventType === 'checkin')     next.state.checkedIn    = true;
-            if (eventType === 'break_start') next.state.breakStarted = true;
-            if (eventType === 'break_end')   next.state.breakEnded   = true;
-            if (eventType === 'checkout')    next.state.checkedOut   = true;
+            if (eventType === 'checkin') {
+              next.state.checkedIn = true;
+              next.state.checkedInTime = eventTime;
+            }
+            if (eventType === 'break_start') {
+              next.state.breakStarted = true;
+              next.state.breakStartedTime = eventTime;
+            }
+            if (eventType === 'break_end') {
+              next.state.breakEnded = true;
+              next.state.breakEndedTime = eventTime;
+            }
+            if (eventType === 'checkout') {
+              next.state.checkedOut = true;
+              next.state.checkedOutTime = eventTime;
+            }
             // Persist updated state so it survives page reloads and offline transitions
             if (user?.id) {
               persistDailyAttendanceState(user.id, {
@@ -460,6 +585,40 @@ export default function ScanPage() {
         </div>
       </div>
 
+      {/* Scanned store and token expiration */}
+      {scannedStoreName && stage !== 'error' && (
+        <div style={{
+          padding: '12px 20px',
+          borderRadius: 10,
+          background: scannedStoreError ? 'rgba(239,68,68,0.12)' : 'rgba(22,163,74,0.12)',
+          border: `1px solid ${scannedStoreError ? 'rgba(239,68,68,0.45)' : 'rgba(22,163,74,0.45)'}`,
+          color: scannedStoreError ? '#fca5a5' : '#86efac',
+          fontSize: 13,
+          fontWeight: 600,
+          fontFamily: 'var(--font-body)',
+          textAlign: 'center',
+          maxWidth: 400,
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span>{scannedStoreError ? '⚠️' : '🛡️'}</span>
+            <span>
+              {scannedStoreError 
+                ? t('errors.SHIFT_STORE_MISMATCH', { store: dailyState?.shiftStoreName || scannedStoreName, defaultValue: `You have a shift scheduled today at another store, not at this store.` })
+                : t('attendance.qrTokenActiveWithStore', { store: scannedStoreName, seconds: tokenTimeLeft })}
+            </span>
+          </div>
+          {scannedStoreError && user && (
+            <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 500, lineHeight: 1.4 }}>
+              This terminal belongs to <strong>{scannedStoreName}</strong>. Your scheduled shift is at store <strong>{dailyState?.shiftStoreName || `#${dailyState?.shiftStoreId}`}</strong>.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* No-shift banner */}
       {!stateLoading && dailyState && !dailyState.hasShift && (
         <div style={{
@@ -514,7 +673,23 @@ export default function ScanPage() {
           const isActive  = tappedType === type && stage === 'loading';
           const isDimmed  = stage === 'loading' && tappedType !== type;
           const isAllowed = allowedActions.has(type);
-          const isDisabled = stage === 'loading' || stateLoading || !isAllowed;
+          const isDisabled = stage === 'loading' || stateLoading || !isAllowed || scannedStoreError;
+
+          const isCheckedIn = type === 'checkin' && dailyState?.state.checkedIn;
+          const isBreakStart = type === 'break_start' && dailyState?.state.breakStarted;
+          const isBreakEnd = type === 'break_end' && dailyState?.state.breakEnded;
+          const isCheckedOut = type === 'checkout' && dailyState?.state.checkedOut;
+
+          let recordedTime: string | null = null;
+          if (isCheckedIn && dailyState?.state.checkedInTime) {
+            recordedTime = formatTime(dailyState.state.checkedInTime);
+          } else if (isBreakStart && dailyState?.state.breakStartedTime) {
+            recordedTime = formatTime(dailyState.state.breakStartedTime);
+          } else if (isBreakEnd && dailyState?.state.breakEndedTime) {
+            recordedTime = formatTime(dailyState.state.breakEndedTime);
+          } else if (isCheckedOut && dailyState?.state.checkedOutTime) {
+            recordedTime = formatTime(dailyState.state.checkedOutTime);
+          }
 
           return (
             <button
@@ -523,7 +698,7 @@ export default function ScanPage() {
               disabled={isDisabled}
               data-testid={`scan-action-${type}`}
               style={{
-                padding: '38px 12px',
+                padding: '28px 12px',
                 borderRadius: 20,
                 border: 'none',
                 background: isActive ? '#475569' : bg,
@@ -539,9 +714,19 @@ export default function ScanPage() {
                 fontFamily: 'var(--font-display)',
                 lineHeight: 1.3,
                 textTransform: 'uppercase' as const,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4
               }}
             >
-              {isActive ? '...' : t(labelKey)}
+              <span>{isActive ? '...' : t(labelKey)}</span>
+              {recordedTime && (
+                <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.85, textTransform: 'none' }}>
+                  {t('attendance.recordedAt', { time: recordedTime })}
+                </span>
+              )}
             </button>
           );
         })}

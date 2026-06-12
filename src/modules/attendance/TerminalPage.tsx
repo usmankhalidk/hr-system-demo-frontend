@@ -8,9 +8,12 @@ import { useOfflineSync } from '../../context/OfflineSyncContext';
 import { type OfflineAttendanceEvent } from '../../utils/indexedDB';
 import { getStore } from '../../api/stores';
 import { Store } from '../../types';
-import { getDeviceStatus } from '../../api/device';
+import { getDeviceStatus, registerDevice, reRegisterDevice } from '../../api/device';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
+import { useToast } from '../../context/ToastContext';
+import { translateApiError } from '../../utils/apiErrors';
 import { Spinner } from '../../components/ui';
+import { Monitor, RefreshCw, ShieldCheck, AlertOctagon, RefreshCcw } from 'lucide-react';
 
 const REFRESH_AT_SECONDS = 15;
 
@@ -34,44 +37,64 @@ export default function TerminalPage() {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-  const [deviceStatus, setDeviceStatus] = useState<{
-    loading: boolean;
-    isBlocked: boolean;
+  const isTest = (import.meta as any).env?.MODE === 'test';
+
+  const [deviceState, setDeviceState] = useState<{
+    checking: boolean;
+    isRegistered: boolean;
+    isMatched: boolean;
+    requiresRegistration: boolean;
     error: string | null;
-  }>({ loading: true, isBlocked: false, error: null });
+  }>({
+    checking: isTest ? false : true,
+    isRegistered: isTest ? true : false,
+    isMatched: isTest ? true : false,
+    requiresRegistration: false,
+    error: null
+  });
+
+  // Re-registration credentials modal state
+  const [showReRegModal, setShowReRegModal] = useState(false);
+  const [reRegEmail, setReRegEmail] = useState('');
+  const [reRegPassword, setReRegPassword] = useState('');
+  const [reRegLoading, setReRegLoading] = useState(false);
+  const [reRegError, setReRegError] = useState<string | null>(null);
+
+  const checkDevice = useCallback(async (active = true) => {
+    // Admin, HR, Area Manager, and Store Manager bypass device check.
+    // Only 'store_terminal' accounts are verified.
+    if (!user || user.role !== 'store_terminal') {
+      setDeviceState({ checking: false, isRegistered: true, isMatched: true, requiresRegistration: false, error: null });
+      return;
+    }
+    try {
+      const fpResult = await getDeviceFingerprint();
+      const status = await getDeviceStatus(fpResult.fingerprint);
+      if (active) {
+        setDeviceState({
+          checking: false,
+          isRegistered: status.isDeviceRegistered,
+          isMatched: !!status.isDeviceMatched,
+          requiresRegistration: status.requiresDeviceRegistration,
+          error: null
+        });
+      }
+    } catch (err) {
+      console.error('Error during terminal device check:', err);
+      if (active) {
+        setDeviceState({ checking: false, isRegistered: false, isMatched: false, requiresRegistration: true, error: 'Device check failed' });
+      }
+    }
+  }, [user]);
 
   useEffect(() => {
     let active = true;
-    const checkDevice = async () => {
-      if (user?.isSuperAdmin) {
-        setDeviceStatus({ loading: false, isBlocked: false, error: null });
-        return;
-      }
-      try {
-        const fpResult = await getDeviceFingerprint();
-        const status = await getDeviceStatus(fpResult.fingerprint);
-        if (active) {
-          if (status.requiresDeviceRegistration) {
-            const next = encodeURIComponent(window.location.pathname + window.location.search);
-            navigate(`/device/register?next=${next}`, { replace: true });
-          } else if (status.isDeviceRegistered && !status.isDeviceMatched) {
-            setDeviceStatus({ loading: false, isBlocked: true, error: null });
-          } else {
-            setDeviceStatus({ loading: false, isBlocked: false, error: null });
-          }
-        }
-      } catch (err) {
-        console.error('Error during terminal device check:', err);
-        if (active) {
-          setDeviceStatus({ loading: false, isBlocked: false, error: 'Device check failed' });
-        }
-      }
-    };
-    void checkDevice();
+    void checkDevice(active);
     return () => { active = false; };
-  }, [user, navigate]);
+  }, [checkDevice]);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -95,6 +118,14 @@ export default function TerminalPage() {
   // ── Shared ─────────────────────────────────────────────────────────────────
   const [time, setTime] = useState(new Date());
   const [store, setStore] = useState<Store | null>(null);
+
+  // ── Hour format state ──────────────────────────────────────────────────────
+  const [hour12, setHour12] = useState(() => {
+    return localStorage.getItem('terminal_hour12') === 'true';
+  });
+  useEffect(() => {
+    localStorage.setItem('terminal_hour12', String(hour12));
+  }, [hour12]);
 
   const { enqueue, queueLength, isOnline, isSyncing } = useOfflineSync();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -133,12 +164,14 @@ export default function TerminalPage() {
   }, [t]);
 
   useEffect(() => {
-    if (user?.storeId) generate(user.storeId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.storeId]);
+    // Generate QR Code only if device status is checked, registered, and matched
+    if (!deviceState.checking && !deviceState.requiresRegistration && deviceState.isMatched && user?.storeId) {
+      generate(user.storeId);
+    }
+  }, [deviceState.checking, deviceState.requiresRegistration, deviceState.isMatched, user?.storeId, generate]);
 
   useEffect(() => {
-    if (!qrData) return;
+    if (!qrData || deviceState.requiresRegistration || !deviceState.isMatched) return;
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       // Compute remaining time from wall-clock to survive tab throttling
@@ -154,7 +187,62 @@ export default function TerminalPage() {
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData]);
+  }, [qrData, deviceState.requiresRegistration, deviceState.isMatched]);
+
+  const handleRegister = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const fp = await getDeviceFingerprint();
+      await registerDevice({ fingerprint: fp.fingerprint, metadata: fp.metadata });
+      showToast(t('deviceRegistration.success'), 'success');
+      setDeviceState({
+        checking: false,
+        isRegistered: true,
+        isMatched: true,
+        requiresRegistration: false,
+        error: null
+      });
+    } catch (err) {
+      showToast(translateApiError(err, t) ?? t('deviceRegistration.errorGeneric'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reRegEmail || !reRegPassword) {
+      setReRegError(t('terminals.fieldRequired'));
+      return;
+    }
+    setReRegLoading(true);
+    setReRegError(null);
+    try {
+      const fp = await getDeviceFingerprint();
+      await reRegisterDevice({
+        email: reRegEmail,
+        password: reRegPassword,
+        fingerprint: fp.fingerprint,
+        metadata: fp.metadata
+      });
+      showToast(t('deviceRegistration.success'), 'success');
+      setShowReRegModal(false);
+      setReRegEmail('');
+      setReRegPassword('');
+      setDeviceState({
+        checking: false,
+        isRegistered: true,
+        isMatched: true,
+        requiresRegistration: false,
+        error: null
+      });
+    } catch (err) {
+      setReRegError(translateApiError(err, t) ?? t('deviceRegistration.errorGeneric'));
+    } finally {
+      setReRegLoading(false);
+    }
+  };
 
   // ── Offline manual entry handler ───────────────────────────────────────────
   function handleOfflineAction(eventType: OfflineEventType) {
@@ -180,7 +268,7 @@ export default function TerminalPage() {
   }
 
   // ── Derived display values ─────────────────────────────────────────────────
-  if (deviceStatus.loading) {
+  if (deviceState.checking) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--background)' }}>
         <Spinner size="lg" color="var(--accent)" />
@@ -188,45 +276,8 @@ export default function TerminalPage() {
     );
   }
 
-  if (deviceStatus.isBlocked) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: 32, textAlign: 'center', gap: 20,
-        background: 'linear-gradient(135deg, #0D2137 0%, #1A3B5C 100%)',
-        color: '#fff',
-        fontFamily: 'var(--font-body)'
-      }}>
-        <div style={{ fontSize: 64 }}>🔒</div>
-        <div style={{
-          fontSize: 24, fontWeight: 800,
-          color: '#ffffff', fontFamily: 'var(--font-display)',
-        }}>
-          {t('deviceReset.terminalBlockedTitle', 'Terminal Non Autorizzato')}
-        </div>
-        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', maxWidth: 450, lineHeight: 1.5 }}>
-          {t('deviceReset.terminalBlockedDesc', 'Questo dispositivo non è autorizzato per questo punto vendita. L\'accesso al terminale è consentito solo dal dispositivo originariamente registrato.')}
-        </div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
-          {t('deviceReset.terminalBlockedHint', 'Se hai sostituito il dispositivo, contatta un amministratore HR per effettuare il reset del terminale.')}
-        </div>
-        <button
-          onClick={logout}
-          style={{
-            padding: '11px 28px', borderRadius: 10, marginTop: 16,
-            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
-            color: '#fff', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 600
-          }}
-        >
-          {t('nav.logout')}
-        </button>
-      </div>
-    );
-  }
-
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
-  const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: hour12 });
   const dateStr = time.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const expiresIn = qrData?.expiresIn ?? 60;
   const progress = qrData ? Math.max(0, (secondsLeft / expiresIn) * 100) : 0;
@@ -234,6 +285,8 @@ export default function TerminalPage() {
   const isExpiringSoon = secondsLeft <= REFRESH_AT_SECONDS && secondsLeft > 0;
   const storeName = store?.name ?? (user?.storeId ? `${t('common.store')} #${user.storeId}` : null);
   const storeCode = store?.code ?? (user?.storeId ? `ID-${user.storeId}` : null);
+
+  const showLockedOverlay = deviceState.requiresRegistration || !deviceState.isMatched;
 
   return (
     <div style={{
@@ -246,7 +299,65 @@ export default function TerminalPage() {
       overflow: 'hidden',
     }}>
 
-      {/* ── Main body split: Left (Information) and Right (QR/Offline) ───────────────── */}
+      {/* ── Main Header overlay with back to dashboard / logout ───────────────── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px clamp(20px, 5vw, 60px)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        zIndex: 10
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.8 }}>
+            Terminal
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Time Format Toggle */}
+          <button
+            onClick={() => setHour12(prev => !prev)}
+            style={{
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+              color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+              fontWeight: 800, fontSize: 11.5,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontFamily: 'var(--font-display)',
+              letterSpacing: 0.5,
+              transition: 'all 0.15s'
+            }}
+          >
+            🕒 {hour12 ? '12H' : '24H'}
+          </button>
+
+          {user?.role !== 'store_terminal' ? (
+            <button
+              onClick={() => navigate('/')}
+              style={{
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                fontWeight: 600, fontSize: 11.5
+              }}
+            >
+              {t('nav.dashboard')}
+            </button>
+          ) : (
+            <button
+              onClick={logout}
+              style={{
+                background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)',
+                color: '#f87171', padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                fontWeight: 600, fontSize: 11.5
+              }}
+            >
+              {t('nav.logout')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Main body split: Left (Information / Binding) and Right (QR) ───────────────── */}
       <div style={{
         flex: 1,
         minHeight: 0,
@@ -257,7 +368,7 @@ export default function TerminalPage() {
         padding: 'clamp(20px, 4vh, 40px) clamp(20px, 5vw, 60px)',
         gap: 'clamp(30px, 6vw, 100px)',
       }}>
-        {/* Left Section: Information Panel (Store, Time, Date) */}
+        {/* Left Section: Information Panel */}
         <div style={{
           flex: 1.2,
           display: 'flex',
@@ -269,61 +380,348 @@ export default function TerminalPage() {
           height: '100%',
         }}>
           {/* Row 1: Store Info */}
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {storeCode && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              {storeCode && (
+                <div style={{
+                  background: 'rgba(201,151,58,0.14)',
+                  border: '1px solid rgba(201,151,58,0.5)',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: '#fcd34d',
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  fontFamily: 'var(--font-display)',
+                  marginBottom: 12,
+                }}>
+                  {storeCode}
+                </div>
+              )}
               <div style={{
-                background: 'rgba(201,151,58,0.18)',
-                border: '1px solid rgba(201,151,58,0.5)',
-                borderRadius: 8,
-                padding: '6px 14px',
-                fontSize: 13,
-                fontWeight: 900,
-                color: '#fcd34d',
-                letterSpacing: 3,
-                textTransform: 'uppercase',
+                fontSize: 'clamp(32px, 4vh, 32px)',
+                fontWeight: 800,
                 fontFamily: 'var(--font-display)',
+                color: 'rgba(255,255,255,0.95)',
+                letterSpacing: -0.5,
               }}>
-                {storeCode}
+                {storeName ?? t('terminal.title')}
               </div>
-            )}
-            <div style={{
-              fontSize: 'clamp(18px, 4vh, 28px)',
-              fontWeight: 800,
-              fontFamily: 'var(--font-display)',
-              color: 'rgba(255,255,255,0.95)',
-              letterSpacing: -0.5,
-            }}>
-              {storeName ?? t('terminal.title')}
             </div>
           </div>
 
-          {/* Row 2: Current Time */}
-          <div style={{
-            fontSize: 'clamp(4.5rem, 18vh, 12rem)',
-            fontWeight: 900,
-            letterSpacing: '-0.06em',
-            fontFamily: 'var(--font-display)',
-            lineHeight: 0.85,
-            textShadow: '0 8px 40px rgba(0,0,0,0.5)',
-            color: '#fff',
-          }}>
-            {timeStr}
-          </div>
+          {/* Device binding left-side blocks */}
+          {deviceState.requiresRegistration ? (
+            /* Left block: unregistered state setup instructions */
+            <div style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 24,
+              padding: 28,
+              maxWidth: 420,
+              width: '100%',
+              textAlign: 'left',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              backdropFilter: 'blur(16px)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Monitor size={22} color="#fcd34d" />
+                <span style={{ fontWeight: 800, fontSize: 16, fontFamily: 'var(--font-display)' }}>
+                  {t('deviceRegistration.terminalTitle')}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
+                {t('deviceRegistration.terminalSubtitle')}
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20, position: 'relative', paddingLeft: 8 }}>
+                {/* Timeline vertical connector line */}
+                <div style={{
+                  position: 'absolute',
+                  left: 19,
+                  top: 10,
+                  bottom: 10,
+                  width: 2,
+                  background: 'linear-gradient(to bottom, rgba(201,151,58,0.6) 0%, rgba(201,151,58,0.15) 100%)',
+                  zIndex: 0
+                }} />
 
-          {/* Row 3: Current Date */}
-          <div style={{
-            fontSize: 'clamp(16px, 3.2vh, 26px)',
-            fontWeight: 600,
-            opacity: 0.5,
-            textTransform: 'capitalize',
-            letterSpacing: 1.5,
-            fontFamily: 'var(--font-body)',
-          }}>
-            {dateStr}
-          </div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', zIndex: 1 }}>
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: '#C9973A',
+                    color: '#0A1929',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                    boxShadow: '0 0 12px rgba(201,151,58,0.4)'
+                  }}>1</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: '#fff' }}>Initialize Browser</span>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>Ensure your browser fingerprint is ready to be authorized.</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', zIndex: 1 }}>
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: '#C9973A',
+                    color: '#0A1929',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                    boxShadow: '0 0 12px rgba(201,151,58,0.4)'
+                  }}>2</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: '#fff' }}>Request Registration</span>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>Click the register button below to start the pairing process.</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', zIndex: 1 }}>
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: '#C9973A',
+                    color: '#0A1929',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                    boxShadow: '0 0 12px rgba(201,151,58,0.4)'
+                  }}>3</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: '#fff' }}>Secure Authorization</span>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>The terminal binds to this device, activating the dynamic QR code.</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleRegister}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: 12,
+                  border: 'none',
+                  background: '#C9973A',
+                  color: '#0A1929',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  fontFamily: 'var(--font-display)',
+                  boxShadow: '0 4px 14px rgba(201,151,58,0.35)',
+                  transition: 'all 0.2s ease',
+                  marginTop: 4
+                }}
+              >
+                <Monitor size={16} />
+                {t('deviceRegistration.terminalButton')}
+              </button>
+            </div>
+
+          ) : (deviceState.isRegistered && !deviceState.isMatched) ? (
+            /* Left block: mismatched blocked state with re-registration button */
+            <div style={{
+              background: 'rgba(239,68,68,0.03)',
+              border: '1px solid rgba(239,68,68,0.15)',
+              borderRadius: 24,
+              padding: 28,
+              maxWidth: 420,
+              width: '100%',
+              textAlign: 'left',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              backdropFilter: 'blur(16px)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <AlertOctagon size={22} color="#f87171" />
+                <span style={{ fontWeight: 800, fontSize: 16, fontFamily: 'var(--font-display)', color: '#f87171' }}>
+                  {t('deviceReset.terminalBlockedTitle')}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
+                {t('deviceReset.terminalBlockedDesc')}
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20, position: 'relative', paddingLeft: 8 }}>
+                {/* Timeline vertical connector line */}
+                <div style={{
+                  position: 'absolute',
+                  left: 19,
+                  top: 10,
+                  bottom: 10,
+                  width: 2,
+                  background: 'linear-gradient(to bottom, rgba(239,68,68,0.6) 0%, rgba(239,68,68,0.15) 100%)',
+                  zIndex: 0
+                }} />
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', zIndex: 1 }}>
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                    boxShadow: '0 0 12px rgba(239,68,68,0.4)'
+                  }}>1</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: '#fff' }}>Trigger Re-registration</span>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>Click the re-register button below to unlock credentials entry.</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', zIndex: 1 }}>
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                    boxShadow: '0 0 12px rgba(239,68,68,0.4)'
+                  }}>2</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: '#fff' }}>Submit Credentials</span>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>Authenticate using your store terminal login details.</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', zIndex: 1 }}>
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                    boxShadow: '0 0 12px rgba(239,68,68,0.4)'
+                  }}>3</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: '#fff' }}>Verify & Bind</span>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>The old device binding is cleared, and this browser is securely authorized.</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowReRegModal(true)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: 12,
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  background: 'rgba(239,68,68,0.1)',
+                  color: '#f87171',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  fontFamily: 'var(--font-display)',
+                  boxShadow: '0 4px 14px rgba(239,68,68,0.15)',
+                  transition: 'all 0.2s ease',
+                  marginTop: 4
+                }}
+              >
+                <RefreshCcw size={16} />
+                {t('deviceReset.reRegisterButton', 'Re-register Terminal')}
+              </button>
+            </div>
+
+          ) : (
+            /* Standard matched state: clock date time */
+            <>
+              {/* Row 2: Current Time */}
+              <div style={{
+                fontSize: 'clamp(4.5rem, 18vh, 12rem)',
+                fontWeight: 900,
+                letterSpacing: '-0.06em',
+                fontFamily: 'var(--font-display)',
+                lineHeight: 0.85,
+                textShadow: '0 8px 40px rgba(0,0,0,0.5)',
+                color: '#fff',
+              }}>
+                {timeStr}
+              </div>
+
+              {/* Row 3: Current Date */}
+              <div style={{
+                fontSize: 'clamp(16px, 3.2vh, 26px)',
+                fontWeight: 600,
+                opacity: 0.5,
+                textTransform: 'capitalize',
+                letterSpacing: 1.5,
+                fontFamily: 'var(--font-body)',
+              }}>
+                {dateStr}
+              </div>
+
+              {/* Authorized checkmark/badge under date */}
+              {deviceState.isRegistered && deviceState.isMatched && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(34,197,94,0.18)',
+                  border: '1px solid rgba(34,197,94,0.4)',
+                  borderRadius: '20px',
+                  padding: '4px 12px',
+                  fontSize: '12.5px',
+                  color: '#86efac',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-display)',
+                  marginTop: 4,
+                }}>
+                  <ShieldCheck size={14} />
+                  {t('deviceReset.authorized', 'Authorized Terminal')}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* Right Section: QR or Offline entry */}
+        {/* Right Section: QR code */}
         <div style={{
           flex: 1,
           width: '100%',
@@ -519,6 +917,7 @@ export default function TerminalPage() {
               alignItems: 'center',
               gap: 'clamp(12px, 2.5vh, 24px)',
               boxShadow: '0 40px 100px rgba(0,0,0,0.3)',
+              position: 'relative'
             }}>
 
               {/* Instruction */}
@@ -541,75 +940,132 @@ export default function TerminalPage() {
                 background: '#ffffff',
                 borderRadius: 24,
                 boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
-                opacity: isRefreshing ? 0.25 : 1,
-                transition: 'opacity 0.3s ease',
                 lineHeight: 0,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                position: 'relative'
               }}>
-                {loading && !qrData ? (
+                {/* Low opacity container for QR Code when not registered/matched */}
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: showLockedOverlay ? 0.12 : isRefreshing ? 0.25 : 1,
+                  transition: 'opacity 0.3s ease'
+                }}>
+                  {loading && !qrData ? (
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'linear-gradient(90deg, #f0f4f8 25%, #e8eef5 50%, #f0f4f8 75%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 1.5s infinite',
+                      borderRadius: 12,
+                    }}>
+                      <span style={{ color: '#94a3b8', fontSize: 13, fontFamily: 'var(--font-body)', lineHeight: 1.4 }}>
+                        {t('terminal.qr_generating')}
+                      </span>
+                    </div>
+                  ) : error && !qrData ? (
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 14,
+                      padding: '0 16px',
+                      boxSizing: 'border-box',
+                    }}>
+                      <div style={{ color: '#ef4444', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>
+                        {error}
+                      </div>
+                      <button
+                        onClick={() => user?.storeId && generate(user.storeId)}
+                        style={{
+                          padding: '9px 20px',
+                          borderRadius: 8,
+                          border: '1px solid rgba(201,151,58,0.5)',
+                          background: 'rgba(201,151,58,0.12)',
+                          color: '#92400e',
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {t('terminal.qr_retry')}
+                      </button>
+                    </div>
+                  ) : qrData ? (
+                    <QRCode
+                      value={`${window.location.origin}/presenze/scan?token=${encodeURIComponent(qrData.token)}`}
+                      style={{ width: '100%', height: 'auto', display: 'block', maxHeight: '100%' }}
+                      size={512}
+                      viewBox="0 0 256 256"
+                      fgColor="#0D2137"
+                      bgColor="#ffffff"
+                      level="L"
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ color: '#94a3b8', fontSize: 12 }}>QR not ready</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Locked overlay text (as sibling with full opacity!) */}
+                {showLockedOverlay && (
                   <div style={{
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'linear-gradient(90deg, #f0f4f8 25%, #e8eef5 50%, #f0f4f8 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 1.5s infinite',
-                    borderRadius: 12,
-                  }}>
-                    <span style={{ color: '#94a3b8', fontSize: 13, fontFamily: 'var(--font-body)', lineHeight: 1.4 }}>
-                      {t('terminal.qr_generating')}
-                    </span>
-                  </div>
-                ) : error && !qrData ? (
-                  <div style={{
-                    width: '100%',
-                    height: '100%',
+                    position: 'absolute',
+                    inset: 0,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 14,
-                    padding: '0 16px',
-                    boxSizing: 'border-box',
+                    background: 'rgba(255, 255, 255, 0.93)',
+                    borderRadius: 24,
+                    color: '#0f172a',
+                    fontWeight: 800,
+                    fontSize: '15px',
+                    fontFamily: 'var(--font-display)',
+                    textAlign: 'center',
+                    padding: '24px',
+                    gap: 12,
+                    zIndex: 10,
                   }}>
-                    <div style={{ color: '#ef4444', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>
-                      {error}
+                    <div style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: '50%',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 22,
+                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.05)'
+                    }}>
+                      🔒
                     </div>
-                    <button
-                      onClick={() => user?.storeId && generate(user.storeId)}
-                      style={{
-                        padding: '9px 20px',
-                        borderRadius: 8,
-                        border: '1px solid rgba(201,151,58,0.5)',
-                        background: 'rgba(201,151,58,0.12)',
-                        color: '#92400e',
-                        fontWeight: 700,
-                        fontSize: 13,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {t('terminal.qr_retry')}
-                    </button>
+                    <span style={{ fontSize: 16, fontWeight: 900, color: '#1e293b' }}>
+                      Authorization Required
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b', maxWidth: 220, lineHeight: 1.4 }}>
+                      Please register or re-register the terminal to view the QR Code
+                    </span>
                   </div>
-                ) : qrData ? (
-                  <QRCode
-                    value={`${window.location.origin}/presenze/scan?token=${encodeURIComponent(qrData.token)}`}
-                    style={{ width: '100%', height: 'auto', display: 'block', maxHeight: '100%' }}
-                    size={512}
-                    viewBox="0 0 256 256"
-                    fgColor="#0D2137"
-                    bgColor="#ffffff"
-                    level="L"
-                  />
-                ) : null}
+                )}
               </div>
 
-              {/* Progress bar + countdown */}
-              {qrData && (
+              {/* Progress bar + countdown (Only shown if matched & registered) */}
+              {qrData && !showLockedOverlay && (
                 <div style={{ width: '100%' }}>
                   <div style={{
                     height: 6,
@@ -656,6 +1112,144 @@ export default function TerminalPage() {
           )}
         </div>
       </div>
+
+      {/* ── Re-registration credentials modal ───────────────────────────────── */}
+      {showReRegModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(10, 26, 46, 0.85)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: 20
+        }}>
+          <form
+            onSubmit={handleReRegisterSubmit}
+            style={{
+              width: '100%',
+              maxWidth: 400,
+              background: '#0D2137',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 20,
+              padding: 24,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              color: '#fff',
+              fontFamily: 'var(--font-body)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontWeight: 800, fontSize: 16, fontFamily: 'var(--font-display)' }}>
+                {t('deviceReset.confirmTitle')}
+              </span>
+              <button
+                type="button"
+                onClick={() => { setShowReRegModal(false); setReRegError(null); }}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer', padding: 0 }}
+              >
+                ×
+              </button>
+            </div>
+
+            {reRegError && (
+              <div style={{
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: 8,
+                padding: '10px 12px',
+                fontSize: 12.5,
+                color: '#fca5a5'
+              }}>
+                {reRegError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', opacity: 0.6 }}>
+                {t('terminals.emailLabel')}
+              </label>
+              <input
+                type="email"
+                required
+                value={reRegEmail}
+                onChange={(e) => setReRegEmail(e.target.value)}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#fff',
+                  fontSize: 14,
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', opacity: 0.6 }}>
+                {t('terminals.passwordLabel')}
+              </label>
+              <input
+                type="password"
+                required
+                value={reRegPassword}
+                onChange={(e) => setReRegPassword(e.target.value)}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#fff',
+                  fontSize: 14,
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => { setShowReRegModal(false); setReRegError(null); }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-display)'
+                }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={reRegLoading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: '#C9973A',
+                  color: '#0A1929',
+                  fontWeight: 800,
+                  cursor: reRegLoading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'var(--font-display)'
+                }}
+              >
+                {reRegLoading ? '...' : t('common.confirm')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

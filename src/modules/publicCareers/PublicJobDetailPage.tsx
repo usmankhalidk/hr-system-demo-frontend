@@ -594,6 +594,16 @@ export default function PublicJobDetailPage() {
   } | null>(null);
   const [hiringTeam, setHiringTeam] = useState<PublicHiringContact[]>([]);
 
+  const privacyUrl = useMemo(() => {
+    const queryParams = new URLSearchParams();
+    if (companyName) queryParams.set('companyName', companyName);
+    if (companyMeta?.companyEmail) queryParams.set('companyEmail', companyMeta.companyEmail);
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return effectiveCompanySlug 
+      ? `/careers/${effectiveCompanySlug}/privacy${queryString}` 
+      : `/privacy${queryString}`;
+  }, [effectiveCompanySlug, companyName, companyMeta?.companyEmail]);
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -1411,14 +1421,14 @@ export default function PublicJobDetailPage() {
                   {uiLanguage === 'it' ? (
                     <>
                       Acconsento al trattamento dei miei dati personali in conformità con l'
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline', marginLeft: '4px' }}>
+                      <a href={privacyUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline', marginLeft: '4px' }}>
                         Informativa sulla Privacy
                       </a>
                     </>
                   ) : (
                     <>
                       I consent to processing of my personal data in accordance with the{' '}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                      <a href={privacyUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                         Privacy Policy
                       </a>
                     </>
@@ -1771,14 +1781,14 @@ export default function PublicJobDetailPage() {
                     {uiLanguage === 'it' ? (
                       <>
                         Acconsento al trattamento dei miei dati personali in conformità con l'
-                        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline', marginLeft: '4px' }}>
+                        <a href={privacyUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline', marginLeft: '4px' }}>
                           Informativa sulla Privacy
                         </a>
                       </>
                     ) : (
                       <>
                         I consent to processing of my personal data in accordance with the{' '}
-                        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                        <a href={privacyUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                           Privacy Policy
                         </a>
                       </>
@@ -1810,7 +1820,7 @@ export default function PublicJobDetailPage() {
           />
         )}
       </div>
-      <CareersFooter companyName={companyName} companyEmail={companyMeta?.companyEmail || undefined} />
+      <CareersFooter companyName={companyName} companyEmail={companyMeta?.companyEmail || undefined} companySlug={effectiveCompanySlug} />
       <CookieConsentBanner />
     </div>
   );

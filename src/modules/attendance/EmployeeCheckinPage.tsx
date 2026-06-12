@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { listMyAttendanceEvents, type AttendanceEvent, type EventType } from '../../api/attendance';
+import { listMyAttendanceEvents, recordCheckin, type AttendanceEvent, type EventType } from '../../api/attendance';
 import { Spinner } from '../../components/ui/Spinner';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { formatLocalDate } from '../../utils/date';
@@ -29,22 +29,35 @@ const EVENT_COLORS: Record<string, string> = {
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+function formatTime(iso: string | null | undefined) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
 }
 
 type Filter = '7' | '15' | '30';
 
 interface DailyState {
   checkedIn: boolean;
+  checkedInTime?: string | null;
   breakStarted: boolean;
+  breakStartedTime?: string | null;
   breakEnded: boolean;
+  breakEndedTime?: string | null;
   checkedOut: boolean;
+  checkedOutTime?: string | null;
 }
 
 interface FullDailyState {
   hasShift: boolean;
   hasLeave: boolean;
+  shiftStoreId?: number;
+  shiftStoreName?: string;
   state: DailyState;
 }
 
@@ -78,6 +91,8 @@ function resolveAllowedActions(full: FullDailyState | null): Set<EventType> {
   return allowed;
 }
 
+
+
 export default function EmployeeCheckinPage() {
   const { t } = useTranslation();
   const { user, permissions } = useAuth();
@@ -94,9 +109,123 @@ export default function EmployeeCheckinPage() {
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fingerprintRef = useRef<string | null>(null);
 
+  // ── QR Security Token state ──────────────────────────────────────────────
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [activeQrToken, setActiveQrToken] = useState<string | null>(null);
+  const [tokenTimeLeft, setTokenTimeLeft] = useState<number>(0);
+  const [scannedStoreName, setScannedStoreName] = useState<string | null>(null);
+  const [scannedStoreError, setScannedStoreError] = useState<boolean>(false);
+
+  // ── JWT decoder helper ──────────────────────────────────────────────────────
+  function parseQrToken(token: string): { companyId: number; storeId: number; nonce: string; exp: number } | null {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        window
+          .atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const parsed = JSON.parse(jsonPayload);
+      return {
+        companyId: parsed.companyId,
+        storeId: parsed.storeId,
+        nonce: parsed.nonce,
+        exp: parsed.exp
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ── Countdown and status checker for QR token ────────────────────────────
+  useEffect(() => {
+    let cachedStoreId: number | null = null;
+
+    const checkToken = () => {
+      const savedToken = localStorage.getItem('scanned_qr_token');
+      const savedTimeStr = localStorage.getItem('scanned_qr_token_time');
+
+      if (!savedToken || !savedTimeStr) {
+        setActiveQrToken(null);
+        setTokenTimeLeft(0);
+        setScannedStoreName(null);
+        setScannedStoreError(false);
+        return;
+      }
+
+      const parsed = parseQrToken(savedToken);
+      if (!parsed) {
+        localStorage.removeItem('scanned_qr_token');
+        localStorage.removeItem('scanned_qr_token_time');
+        setActiveQrToken(null);
+        setTokenTimeLeft(0);
+        setScannedStoreName(null);
+        setScannedStoreError(false);
+        return;
+      }
+
+      const expTime = parsed.exp * 1000;
+      const timeLeft = Math.max(0, Math.floor((expTime - Date.now()) / 1000));
+
+      if (timeLeft <= 0) {
+        setActiveQrToken(null);
+        setTokenTimeLeft(0);
+        return;
+      }
+
+      setActiveQrToken(savedToken);
+      setTokenTimeLeft(timeLeft);
+
+      if (parsed.storeId !== cachedStoreId) {
+        cachedStoreId = parsed.storeId;
+        import('../../api/stores').then(({ getStore }) => {
+          getStore(parsed.storeId)
+            .then((s) => {
+              setScannedStoreName(s.name);
+            })
+            .catch(() => {
+              setScannedStoreName(`${t('common.store')} #${parsed.storeId}`);
+            });
+        });
+      }
+    };
+
+    checkToken();
+    const intervalId = setInterval(checkToken, 1000);
+    return () => clearInterval(intervalId);
+  }, [user, t]);
+
   // ── Daily state machine ──────────────────────────────────────────────────
   const [fullDailyState, setFullDailyState] = useState<FullDailyState | null>(null);
   const [stateLoading, setStateLoading] = useState(true);
+
+  // Compute scannedStoreError dynamically based on fullDailyState
+  useEffect(() => {
+    if (!activeQrToken) {
+      setScannedStoreError(false);
+      return;
+    }
+    const parsed = parseQrToken(activeQrToken);
+    if (!parsed) {
+      setScannedStoreError(false);
+      return;
+    }
+
+    if (fullDailyState) {
+      if (fullDailyState.hasShift && fullDailyState.shiftStoreId) {
+        if (fullDailyState.shiftStoreId !== parsed.storeId) {
+          setScannedStoreError(true);
+        } else {
+          setScannedStoreError(false);
+        }
+      } else {
+        setScannedStoreError(false);
+      }
+    }
+  }, [activeQrToken, fullDailyState]);
 
   const initials = user
     ? `${user.name?.[0] ?? ''}${user.surname ? user.surname[0] : ''}`.toUpperCase()
@@ -221,16 +350,29 @@ export default function EmployeeCheckinPage() {
           event_time: eventTime,
           unique_id: user?.uniqueId || undefined,
           user_id: user?.id,
+          qr_token: activeQrToken || undefined,
           device_fingerprint: fingerprintRef.current || undefined,
         });
         // Optimistically update local daily state
         setFullDailyState((prev) => {
           if (!prev) return prev;
           const next = { ...prev, state: { ...prev.state } };
-          if (eventType === 'checkin')     next.state.checkedIn    = true;
-          if (eventType === 'break_start') next.state.breakStarted = true;
-          if (eventType === 'break_end')   next.state.breakEnded   = true;
-          if (eventType === 'checkout')    next.state.checkedOut   = true;
+          if (eventType === 'checkin') {
+            next.state.checkedIn = true;
+            next.state.checkedInTime = eventTime;
+          }
+          if (eventType === 'break_start') {
+            next.state.breakStarted = true;
+            next.state.breakStartedTime = eventTime;
+          }
+          if (eventType === 'break_end') {
+            next.state.breakEnded = true;
+            next.state.breakEndedTime = eventTime;
+          }
+          if (eventType === 'checkout') {
+            next.state.checkedOut = true;
+            next.state.checkedOutTime = eventTime;
+          }
           // Persist updated state so it survives page reloads
           if (user?.id) {
             persistDailyAttendanceState(user.id, {
@@ -243,34 +385,35 @@ export default function EmployeeCheckinPage() {
         });
         setActionMsg({ text: t('terminal.saved_offline'), ok: true });
       } else {
-        // Use /sync endpoint — /checkin requires a QR token and is for terminal use only.
-        // /sync accepts authenticated direct clock-ins without a QR token.
-        const clientUuid: string =
-          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const res = await client.post('/attendance/sync', {
-          events: [{
-            event_type: eventType,
-            event_time: eventTime,
-            unique_id: user?.uniqueId || undefined,
-            user_id: user?.id,
-            device_fingerprint: fingerprintRef.current || undefined,
-            client_uuid: clientUuid,
-          }],
-        });
-        const result = (res.data as any)?.data ?? res.data;
-        if ((result?.failed ?? 0) > 0) {
-          throw new Error(result?.errors?.[0] ?? t('common.error'));
+        // Online: call recordCheckin using the active QR token!
+        if (!activeQrToken) {
+          throw new Error(t('attendance.qrTokenMissing'));
         }
+        await recordCheckin({
+          qrToken: activeQrToken,
+          eventType,
+          deviceFingerprint: fingerprintRef.current || undefined,
+        });
         // Update local state to reflect the recorded action
         setFullDailyState((prev) => {
           if (!prev) return prev;
           const next = { ...prev, state: { ...prev.state } };
-          if (eventType === 'checkin')     next.state.checkedIn    = true;
-          if (eventType === 'break_start') next.state.breakStarted = true;
-          if (eventType === 'break_end')   next.state.breakEnded   = true;
-          if (eventType === 'checkout')    next.state.checkedOut   = true;
+          if (eventType === 'checkin') {
+            next.state.checkedIn = true;
+            next.state.checkedInTime = eventTime;
+          }
+          if (eventType === 'break_start') {
+            next.state.breakStarted = true;
+            next.state.breakStartedTime = eventTime;
+          }
+          if (eventType === 'break_end') {
+            next.state.breakEnded = true;
+            next.state.breakEndedTime = eventTime;
+          }
+          if (eventType === 'checkout') {
+            next.state.checkedOut = true;
+            next.state.checkedOutTime = eventTime;
+          }
           // Persist updated state so offline mode can read it later
           if (user?.id) {
             persistDailyAttendanceState(user.id, {
@@ -448,7 +591,6 @@ export default function EmployeeCheckinPage() {
         </div>
       )}
 
-      {/* Clock-in action buttons - Only visible on mobile */}
       {isMobile && <div style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
@@ -466,17 +608,126 @@ export default function EmployeeCheckinPage() {
           {t('checkin.actionTypes')}
         </div>
 
+        {/* QR Security Token status banner */}
+        <div style={{ marginBottom: 4 }}>
+          {!activeQrToken ? (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              padding: '16px 14px',
+              borderRadius: 12,
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1.5px dashed var(--border)',
+              alignItems: 'center',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>📱</div>
+              <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 600 }}>
+                {t('attendance.scanQrTitle', 'Scan Store Terminal QR')}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: 260 }}>
+                Please scan the QR code displayed on the store terminal screen with your device camera to connect.
+              </div>
+            </div>
+          ) : scannedStoreError ? (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              padding: '16px 14px',
+              borderRadius: 12,
+              background: 'rgba(220, 38, 38, 0.03)',
+              border: '1.5px solid rgba(220, 38, 38, 0.25)',
+              alignItems: 'center'
+            }}>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                width: '100%',
+                color: '#dc2626',
+                fontSize: 13,
+                fontWeight: 600
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>⚠️</span>
+                  <span>{t('errors.SHIFT_STORE_MISMATCH', { store: fullDailyState?.shiftStoreName || scannedStoreName, defaultValue: `Store Mismatch` })}</span>
+                </div>
+                <div style={{ fontSize: 11.5, fontWeight: 500, opacity: 0.85, lineHeight: 1.4 }}>
+                  This terminal belongs to <strong>{scannedStoreName}</strong>. Your shift is at store <strong>{fullDailyState?.shiftStoreName || `#${fullDailyState?.shiftStoreId}`}</strong>.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              padding: '12px 14px',
+              borderRadius: 8,
+              background: 'rgba(22, 163, 74, 0.08)',
+              border: '1.5px solid rgba(22, 163, 74, 0.35)',
+              color: '#16a34a',
+              fontSize: 13,
+              fontWeight: 600
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>🛡️</span>
+                <span>{t('attendance.qrTokenActive')}</span>
+              </div>
+              <div style={{ fontSize: 11.5, fontWeight: 500, opacity: 0.85 }}>
+                {t('attendance.connectedToStore', { store: scannedStoreName })} (expires in {tokenTimeLeft}s)
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Display shift flexibility info */}
+        {fullDailyState?.hasShift && !fullDailyState.hasLeave && (
+          <div style={{
+            fontSize: 11.5,
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-body)',
+            background: 'var(--surface-warm)',
+            padding: '8px 12px',
+            borderRadius: 6,
+            border: '1px solid var(--border-light)',
+            marginBottom: 4,
+            lineHeight: 1.4
+          }}>
+            ℹ️ <strong>Flexibility Policy:</strong> Check-in is allowed up to 15 minutes before your scheduled shift starting time.
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {CLOCK_ACTIONS.map(({ type, label, color }) => {
             const isAllowed = allowedActions.has(type);
-            const isDisabled = actionLoading || stateLoading || !isAllowed;
+            const isDisabled = actionLoading || stateLoading || !isAllowed || !activeQrToken || scannedStoreError;
+
+            const isCheckedIn = type === 'checkin' && fullDailyState?.state.checkedIn;
+            const isBreakStart = type === 'break_start' && fullDailyState?.state.breakStarted;
+            const isBreakEnd = type === 'break_end' && fullDailyState?.state.breakEnded;
+            const isCheckedOut = type === 'checkout' && fullDailyState?.state.checkedOut;
+
+            let recordedTime: string | null = null;
+            if (isCheckedIn && fullDailyState?.state.checkedInTime) {
+              recordedTime = formatTime(fullDailyState.state.checkedInTime);
+            } else if (isBreakStart && fullDailyState?.state.breakStartedTime) {
+              recordedTime = formatTime(fullDailyState.state.breakStartedTime);
+            } else if (isBreakEnd && fullDailyState?.state.breakEndedTime) {
+              recordedTime = formatTime(fullDailyState.state.breakEndedTime);
+            } else if (isCheckedOut && fullDailyState?.state.checkedOutTime) {
+              recordedTime = formatTime(fullDailyState.state.checkedOutTime);
+            }
+
             return (
               <button
                 key={type}
                 onClick={() => void handleAction(type)}
                 disabled={isDisabled}
                 style={{
-                  padding: '14px 10px',
+                  padding: '10px 8px',
                   borderRadius: 10,
                   border: `1.5px solid ${color}55`,
                   background: `${color}15`,
@@ -487,9 +738,18 @@ export default function EmployeeCheckinPage() {
                   letterSpacing: 0.5,
                   opacity: isDisabled ? 0.35 : 1,
                   transition: 'all 0.15s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 4
                 }}
               >
-                {label}
+                <span>{label}</span>
+                {recordedTime && (
+                  <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.8 }}>
+                    {t('attendance.recordedAt', { time: recordedTime })}
+                  </span>
+                )}
               </button>
             );
           })}

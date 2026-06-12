@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 
 export default function CookieConsentBanner() {
   const [show, setShow] = useState(false);
+  const { companySlug } = useParams<{ companySlug?: string }>();
 
   useEffect(() => {
     const consent = localStorage.getItem('cookie_consent_given');
@@ -49,7 +51,7 @@ export default function CookieConsentBanner() {
           <p style={{ color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
             Questo sito utilizza cookie per migliorare l'esperienza utente. Continuando a navigare, accetti l'uso dei cookie.{' '}
             <a 
-              href="/cookie-policy" 
+              href={companySlug ? `/careers/${companySlug}/cookie-policy` : "/cookie-policy"} 
               style={{ color: 'var(--accent)', textDecoration: 'underline', fontWeight: 600 }}
               target="_blank"
               rel="noopener noreferrer"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   Shield, 
@@ -21,11 +21,15 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  Info
+  Info,
+  Building,
+  Mail
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { getPublicLegalDocument, updateLegalDocument } from '../../api/publicCareers';
 import { STATIC_ORIGINAL_DOCS } from './staticOriginalDocs';
+import { getCompanies } from '../../api/companies';
+import { Company } from '../../types';
 
 type DocKey = 'privacy' | 'terms' | 'cookie';
 type Language = 'it' | 'en';
@@ -65,19 +69,93 @@ export default function LegalDocumentsAdminPage() {
   // Document content states
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [platformCompanyName, setPlatformCompanyName] = useState('');
+  const [platformCompanyEmail, setPlatformCompanyEmail] = useState('');
   
   // Keep original state to track changes for enabling/disabling the Save button
   const [originalTitle, setOriginalTitle] = useState('');
   const [originalContent, setOriginalContent] = useState('');
+  const [originalPlatformCompanyName, setOriginalPlatformCompanyName] = useState('');
+  const [originalPlatformCompanyEmail, setOriginalPlatformCompanyEmail] = useState('');
   
   const [metadata, setMetadata] = useState<{ updatedAt: string; updatedByName: string | null } | null>(null);
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
 
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedPreviewCompanyId, setSelectedPreviewCompanyId] = useState<string>('general');
+
+  // Platform settings editing states
+  const [isPlatformEditing, setIsPlatformEditing] = useState(false);
+  const [savingPlatform, setSavingPlatform] = useState(false);
+
+  // Custom preview dropdown state
+  const [isPreviewDropdownOpen, setIsPreviewDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Preview values for substitution
-  const previewCompanyName = 'Fusaro Uomo S.r.l.';
-  const previewCompanyEmail = 'diletta@fusarouomo.it';
+  // Load companies list for preview contexts
+  useEffect(() => {
+    getCompanies()
+      .then((data) => {
+        setCompanies(data || []);
+      })
+      .catch((err) => {
+        console.error('Failed to load companies for preview dropdown:', err);
+      });
+  }, []);
+
+  // Close custom preview dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsPreviewDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleCancelPlatform = () => {
+    setPlatformCompanyName(originalPlatformCompanyName);
+    setPlatformCompanyEmail(originalPlatformCompanyEmail);
+    setIsPlatformEditing(false);
+  };
+
+  const handleSavePlatform = async () => {
+    setSavingPlatform(true);
+    try {
+      // Upsert using the current active document to trigger the global DB update
+      const doc = await updateLegalDocument(activeDoc, {
+        language: activeLang,
+        title: title.trim(),
+        content: content,
+        platformCompanyName: platformCompanyName.trim(),
+        platformCompanyEmail: platformCompanyEmail.trim()
+      });
+      setOriginalPlatformCompanyName(doc.platformCompanyName || '');
+      setOriginalPlatformCompanyEmail(doc.platformCompanyEmail || '');
+      setIsPlatformEditing(false);
+      showToast(
+        activeLang === 'it' 
+          ? 'Dati titolare piattaforma salvati con successo' 
+          : 'Platform owner details saved successfully', 
+        'success'
+      );
+    } catch (err: any) {
+      console.error('Failed to save platform details:', err);
+      showToast(
+        activeLang === 'it' 
+          ? 'Errore durante il salvataggio dei dati piattaforma' 
+          : 'Failed to save platform details', 
+          'error'
+      );
+    } finally {
+      setSavingPlatform(false);
+    }
+  };
 
   // Load document content when active doc or active language changes
   useEffect(() => {
@@ -88,8 +166,12 @@ export default function LegalDocumentsAdminPage() {
         const doc = await getPublicLegalDocument(activeDoc, activeLang);
         setTitle(doc.title);
         setContent(doc.content);
+        setPlatformCompanyName(doc.platformCompanyName || '');
+        setPlatformCompanyEmail(doc.platformCompanyEmail || '');
         setOriginalTitle(doc.title);
         setOriginalContent(doc.content);
+        setOriginalPlatformCompanyName(doc.platformCompanyName || '');
+        setOriginalPlatformCompanyEmail(doc.platformCompanyEmail || '');
         setMetadata({
           updatedAt: doc.updatedAt,
           updatedByName: doc.updatedByName
@@ -106,8 +188,12 @@ export default function LegalDocumentsAdminPage() {
         
         setTitle(defaultTitle);
         setContent('');
+        setPlatformCompanyName('');
+        setPlatformCompanyEmail('');
         setOriginalTitle(defaultTitle);
         setOriginalContent('');
+        setOriginalPlatformCompanyName('');
+        setOriginalPlatformCompanyEmail('');
         setMetadata(null);
       } finally {
         setLoading(false);
@@ -133,10 +219,14 @@ export default function LegalDocumentsAdminPage() {
       const doc = await updateLegalDocument(activeDoc, {
         language: activeLang,
         title: title.trim(),
-        content: content
+        content: content,
+        platformCompanyName: platformCompanyName.trim(),
+        platformCompanyEmail: platformCompanyEmail.trim()
       });
       setOriginalTitle(doc.title);
       setOriginalContent(doc.content);
+      setOriginalPlatformCompanyName(doc.platformCompanyName || '');
+      setOriginalPlatformCompanyEmail(doc.platformCompanyEmail || '');
       setMetadata({
         updatedAt: doc.updatedAt,
         updatedByName: doc.updatedByName
@@ -341,6 +431,20 @@ export default function LegalDocumentsAdminPage() {
   const hasChanges = title !== originalTitle || content !== originalContent;
   const isSaveDisabled = !isEditing || !hasChanges || saving;
 
+  const activePreviewCompany = useMemo(() => {
+    if (selectedPreviewCompanyId === 'general') {
+      return {
+        name: platformCompanyName || (activeLang === 'it' ? '[Nome Azienda Generale non configurato]' : '[General Company Name not configured]'),
+        email: platformCompanyEmail || (activeLang === 'it' ? '[Email Generale non configurata]' : '[General Email not configured]')
+      };
+    }
+    const comp = companies.find(c => String(c.id) === selectedPreviewCompanyId);
+    return {
+      name: comp?.name || '',
+      email: comp?.companyEmail || ''
+    };
+  }, [selectedPreviewCompanyId, platformCompanyName, platformCompanyEmail, companies, activeLang]);
+
   // Retrieve static original backup template
   const staticBackupDoc = STATIC_ORIGINAL_DOCS[activeDoc]?.[activeLang] || { title: '', content: '' };
 
@@ -501,45 +605,6 @@ export default function LegalDocumentsAdminPage() {
                 )}
               </div>
             )}
-
-            {/* Lock / Unlock Edit mode toggle button */}
-            {activeTab === 'editor' && (
-              <button
-                onClick={() => {
-                  if (isEditing) {
-                    handleCancel();
-                  } else {
-                    setIsEditing(true);
-                  }
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '6px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  border: '1px solid var(--border)',
-                  background: isEditing ? 'rgba(239, 68, 68, 0.08)' : 'var(--background)',
-                  color: isEditing ? '#EF4444' : 'var(--text-secondary)',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {isEditing ? (
-                  <>
-                    <Lock size={13} />
-                    <span>{activeLang === 'it' ? 'Annulla' : 'Cancel'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Unlock size={13} />
-                    <span>{activeLang === 'it' ? 'Abilita Modifica' : 'Enable Edit'}</span>
-                  </>
-                )}
-              </button>
-            )}
           </div>
         </div>
 
@@ -600,13 +665,227 @@ export default function LegalDocumentsAdminPage() {
               <div 
                 className="static-reference-content legal-content-section"
                 style={{ fontSize: '15px', color: 'var(--text-secondary)' }}
-                dangerouslySetInnerHTML={{ __html: staticBackupDoc.content.replace(/\{\{companyName\}\}/g, previewCompanyName).replace(/\{\{companyEmail\}\}/g, previewCompanyEmail) }}
+                dangerouslySetInnerHTML={{ __html: staticBackupDoc.content.replace(/\{\{companyName\}\}/g, activePreviewCompany.name).replace(/\{\{companyEmail\}\}/g, activePreviewCompany.email) }}
               />
             </div>
           </div>
         ) : (
           /* Editable Database Version tab content */
           <div style={{ padding: '24px' }}>
+            {/* Platform Details Card */}
+            <div style={{
+              background: 'var(--surface)',
+              border: '1.5px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px',
+              marginBottom: '24px',
+              boxShadow: 'var(--shadow-sm)',
+              position: 'relative'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isPlatformEditing ? '16px' : '0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Shield size={18} style={{ color: 'var(--accent)' }} />
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                    {activeLang === 'it' ? 'Dati Titolare Piattaforma (Careers Generale)' : 'Platform Owner Details (General Careers)'}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {!isPlatformEditing ? (
+                    <button
+                      onClick={() => setIsPlatformEditing(true)}
+                      title={activeLang === 'it' ? 'Modifica dati piattaforma' : 'Edit platform details'}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 16px',
+                        borderRadius: '20px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--background)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                    >
+                      <Edit3 size={14} />
+                      <span>{activeLang === 'it' ? 'Modifica' : 'Edit'}</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleCancelPlatform}
+                        disabled={savingPlatform}
+                        style={{
+                          padding: '6px 16px',
+                          borderRadius: '20px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--background)',
+                          color: 'var(--text-secondary)',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--background)'}
+                      >
+                        {activeLang === 'it' ? 'Annulla' : 'Cancel'}
+                      </button>
+                      <button
+                        onClick={handleSavePlatform}
+                        disabled={savingPlatform || (!platformCompanyName.trim() && !platformCompanyEmail.trim())}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 18px',
+                          borderRadius: '20px',
+                          border: 'none',
+                          background: 'var(--accent)',
+                          color: '#fff',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--accent)'}
+                      >
+                        <Save size={14} />
+                        <span>{savingPlatform ? (activeLang === 'it' ? 'Salvataggio...' : 'Saving...') : (activeLang === 'it' ? 'Salva' : 'Save')}</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {!isPlatformEditing ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '14px' }}>
+                  {/* Company Name Badge/Card */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    background: 'rgba(201, 151, 58, 0.02)',
+                    border: '1px solid rgba(201, 151, 58, 0.1)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '14px 18px',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: 'rgba(201, 151, 58, 0.08)',
+                      color: 'var(--accent)',
+                      flexShrink: 0
+                    }}>
+                      <Building size={18} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {activeLang === 'it' ? 'Nome Azienda Piattaforma' : 'Platform Company Name'}
+                      </span>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
+                        {platformCompanyName || (activeLang === 'it' ? '[Non impostato]' : '[Not Set]')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Company Email Badge/Card */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    background: 'rgba(201, 151, 58, 0.02)',
+                    border: '1px solid rgba(201, 151, 58, 0.1)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '14px 18px',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: 'rgba(201, 151, 58, 0.08)',
+                      color: 'var(--accent)',
+                      flexShrink: 0
+                    }}>
+                      <Mail size={16} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {activeLang === 'it' ? 'Email Azienda Piattaforma' : 'Platform Company Email'}
+                      </span>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
+                        {platformCompanyEmail || (activeLang === 'it' ? '[Non impostato]' : '[Not Set]')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      {activeLang === 'it' ? 'Nome Azienda Piattaforma' : 'Platform Company Name'}
+                    </label>
+                    <input
+                      type="text"
+                      value={platformCompanyName}
+                      onChange={(e) => setPlatformCompanyName(e.target.value)}
+                      placeholder={activeLang === 'it' ? 'Es. Veylo HR...' : 'E.g. Veylo HR...'}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: 'var(--background)',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      {activeLang === 'it' ? 'Email Azienda Piattaforma' : 'Platform Company Email'}
+                    </label>
+                    <input
+                      type="email"
+                      value={platformCompanyEmail}
+                      onChange={(e) => setPlatformCompanyEmail(e.target.value)}
+                      placeholder={activeLang === 'it' ? 'Es. info@veylohr.com...' : 'E.g. info@veylohr.com...'}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: 'var(--background)',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Variable reference bar with Guide Text */}
             <div style={{
               background: 'rgba(201, 151, 58, 0.03)',
@@ -626,8 +905,8 @@ export default function LegalDocumentsAdminPage() {
                       {activeLang === 'it' ? 'Variabili Disponibili:' : 'Available Variables:'}
                     </span>
                     {[
-                      { code: '{{companyName}}', val: previewCompanyName, desc: activeLang === 'it' ? 'Nome Azienda' : 'Company Name' },
-                      { code: '{{companyEmail}}', val: previewCompanyEmail, desc: activeLang === 'it' ? 'Email di Contatto' : 'Contact Email' }
+                      { code: '{{companyName}}', val: activePreviewCompany.name, desc: activeLang === 'it' ? 'Nome Azienda' : 'Company Name' },
+                      { code: '{{companyEmail}}', val: activePreviewCompany.email, desc: activeLang === 'it' ? 'Email di Contatto' : 'Contact Email' }
                     ].map((item) => (
                       <div 
                         key={item.code}
@@ -636,21 +915,30 @@ export default function LegalDocumentsAdminPage() {
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '6px',
-                          background: 'var(--surface)',
-                          border: '1px solid var(--border)',
-                          padding: '4px 10px',
-                          borderRadius: 'var(--radius-md)',
+                          gap: '8px',
+                          background: 'var(--background)',
+                          border: '1.5px solid var(--border)',
+                          padding: '6px 14px',
+                          borderRadius: '20px',
                           cursor: 'pointer',
                           fontSize: '11px',
-                          transition: 'border-color 0.15s ease'
+                          boxShadow: 'var(--shadow-xs)',
+                          transition: 'all 0.15s ease'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
-                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--accent)';
+                          e.currentTarget.style.transform = 'translateY(-1px)';
+                          e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--border)';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
+                        }}
                       >
-                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{item.code}</span>
-                        <span style={{ color: 'var(--text-muted)' }}>({item.desc})</span>
-                        {copiedVar === item.code ? <Check size={11} style={{ color: '#22C55E' }} /> : <Copy size={11} style={{ color: 'var(--text-muted)' }} />}
+                        <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 700, color: 'var(--accent)' }}>{item.code}</span>
+                        <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{item.desc}</span>
+                        {copiedVar === item.code ? <Check size={12} style={{ color: '#22C55E' }} /> : <Copy size={12} style={{ color: 'var(--text-muted)' }} />}
                       </div>
                     ))}
                   </div>
@@ -675,6 +963,39 @@ export default function LegalDocumentsAdminPage() {
                 height: '620px',
                 transition: 'all 0.2s ease'
               }}>
+                {/* Editor Title Row with Enable Edit Button */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                    <Edit3 size={14} />
+                    <span>{activeLang === 'it' ? 'MODIFICA DOCUMENTO' : 'DOCUMENT EDITOR'}</span>
+                  </div>
+                  
+                  <button
+                    onClick={() => setIsEditing(!isEditing)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '12px',
+                      border: '1px solid var(--border)',
+                      background: isEditing ? 'rgba(239, 68, 68, 0.05)' : 'var(--background)',
+                      color: isEditing ? '#EF4444' : 'var(--text-secondary)',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {isEditing ? <Lock size={14} /> : <Unlock size={14} />}
+                    <span>
+                      {isEditing 
+                        ? (activeLang === 'it' ? 'Blocca Modifica' : 'Lock Editor') 
+                        : (activeLang === 'it' ? 'Abilita Modifica' : 'Enable Edit')}
+                    </span>
+                  </button>
+                </div>
+
                 {/* Title Input & Label inside Editor */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -692,7 +1013,7 @@ export default function LegalDocumentsAdminPage() {
                       width: '100%',
                       padding: '10px 14px',
                       border: '1.5px solid var(--border)',
-                      borderRadius: 'var(--radius-md)',
+                      borderRadius: 'var(--radius-lg)',
                       background: isEditing ? 'var(--background)' : 'var(--surface-warm)',
                       color: isEditing ? 'var(--text-primary)' : 'var(--text-muted)',
                       fontFamily: 'var(--font-body)',
@@ -902,9 +1223,120 @@ export default function LegalDocumentsAdminPage() {
                   gap: '12px',
                   height: '620px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0, marginBottom: '12px' }}>
                     <Eye size={14} />
                     <span>{activeLang === 'it' ? 'ANTEPRIMA IN TEMPO REALE' : 'LIVE PREVIEW'}</span>
+                  </div>
+
+                  {/* Custom Preview Dropdown Container - OUTSIDE and ABOVE the preview box */}
+                  <div ref={dropdownRef} style={{ position: 'relative', width: '100%', flexShrink: 0 }}>
+                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                      {activeLang === 'it' ? 'Anteprima per:' : 'Preview for:'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewDropdownOpen(!isPreviewDropdownOpen)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: 'var(--background)',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        textAlign: 'left',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        transition: 'border-color 0.15s ease'
+                      }}
+                    >
+                      <span>
+                        {selectedPreviewCompanyId === 'general'
+                          ? (activeLang === 'it' ? 'Pagina Careers Generale (Semplice)' : 'General Careers Page (Simple)')
+                          : (companies.find(c => String(c.id) === selectedPreviewCompanyId)?.name || selectedPreviewCompanyId)}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'transform 0.2s', transform: isPreviewDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+
+                    {/* Custom Dropdown Options Menu */}
+                    {isPreviewDropdownOpen && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        marginTop: '4px',
+                        background: 'var(--surface)',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: 'var(--radius-lg)',
+                        boxShadow: 'var(--shadow-md)',
+                        zIndex: 100,
+                        maxHeight: '160px',
+                        overflowY: 'auto'
+                      }}>
+                        <div
+                          onClick={() => {
+                            setSelectedPreviewCompanyId('general');
+                            setIsPreviewDropdownOpen(false);
+                          }}
+                          style={{
+                            padding: '10px 14px',
+                            fontSize: '13px',
+                            fontWeight: selectedPreviewCompanyId === 'general' ? 700 : 500,
+                            color: selectedPreviewCompanyId === 'general' ? 'var(--accent)' : 'var(--text-primary)',
+                            background: selectedPreviewCompanyId === 'general' ? 'rgba(201, 151, 58, 0.05)' : 'transparent',
+                            cursor: 'pointer',
+                            transition: 'background 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (selectedPreviewCompanyId !== 'general') e.currentTarget.style.background = 'var(--surface-warm)';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (selectedPreviewCompanyId !== 'general') e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          {activeLang === 'it' ? 'Pagina Careers Generale (Semplice)' : 'General Careers Page (Simple)'}
+                        </div>
+
+                        {companies.map((comp) => {
+                          const isSelected = selectedPreviewCompanyId === String(comp.id);
+                          return (
+                            <div
+                              key={comp.id}
+                              onClick={() => {
+                                setSelectedPreviewCompanyId(String(comp.id));
+                                setIsPreviewDropdownOpen(false);
+                              }}
+                              style={{
+                                padding: '10px 14px',
+                                fontSize: '13px',
+                                fontWeight: isSelected ? 700 : 500,
+                                color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+                                background: isSelected ? 'rgba(201, 151, 58, 0.05)' : 'transparent',
+                                borderTop: '1px solid var(--border-light, #f3f4f6)',
+                                cursor: 'pointer',
+                                transition: 'background 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'var(--surface-warm)';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              {comp.name}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{
@@ -933,7 +1365,7 @@ export default function LegalDocumentsAdminPage() {
                     <div 
                       className="legal-content-section"
                       style={{ fontSize: '15px', lineHeight: 1.7, color: 'var(--text-secondary)' }}
-                      dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(content, previewCompanyName, previewCompanyEmail) }}
+                      dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(content, activePreviewCompany.name, activePreviewCompany.email) }}
                     />
                     <style>{`
                       .legal-content-section p {

@@ -12,6 +12,12 @@ export interface Terminal {
   companyName: string;
   storeName: string;
   plainPassword?: string;
+  deviceRegistered: boolean;
+  deviceRegisteredAt: string | null;
+  deviceMetadata: any;
+  lastSeenIp: string | null;
+  lastSeenAt: string | null;
+  deviceResetPending: boolean;
 }
 
 export interface ListTerminalsResponse {
@@ -77,7 +83,7 @@ export const createTerminal = async (payload: CreateTerminalPayload): Promise<{ 
   return response.data;
 };
 
-export const updateTerminal = async (id: number, payload: { password?: string }): Promise<{ success: boolean; data: any }> => {
+export const updateTerminal = async (id: number, payload: { email?: string; password?: string }): Promise<{ success: boolean; data: any }> => {
   const response = await apiClient.patch(`terminals/${id}`, payload);
   return response.data;
 };

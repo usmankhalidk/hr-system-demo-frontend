@@ -98,8 +98,11 @@ function AppRoutes() {
       <Route path="/careers/jobs/:jobId" element={<PublicJobDetailPage />} />
       <Route path="/careers/:companySlug/jobs/:jobId" element={<PublicJobDetailPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/careers/:companySlug/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/terms" element={<TermsOfServicePage />} />
+      <Route path="/careers/:companySlug/terms" element={<TermsOfServicePage />} />
       <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+      <Route path="/careers/:companySlug/cookie-policy" element={<CookiePolicyPage />} />
 
       <Route path="/" element={
         <ProtectedRoute>
@@ -220,7 +223,7 @@ function AppRoutes() {
       } />
 
       <Route path="/terminale" element={
-        <ProtectedRoute roles={['store_terminal', 'admin']} permissionKey="presenze">
+        <ProtectedRoute roles={['store_terminal', 'admin', 'hr', 'area_manager', 'store_manager']} permissionKey="presenze">
           <TerminalPage />
         </ProtectedRoute>
       } />

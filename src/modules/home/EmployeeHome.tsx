@@ -330,187 +330,196 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
       )}
 
       {/* Attendance & Tracking Card */}
-      <Card 
-        title={t('nav.presenze', 'Rilevazione Presenze')}
-        actions={
-          <button
-            onClick={() => navigate('/presenze/checkin')}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '11px',
-              color: 'var(--accent)',
-              fontWeight: 600,
-              padding: '4px 8px',
-              borderRadius: 6,
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            {t('common.viewAll', 'Vedi tutti →')}
-          </button>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Status Display */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '16px 20px',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--surface-warm)',
-            border: '1px solid var(--border-light)',
-            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
-            width: '100%'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-              <div style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: stateLoading 
-                  ? 'rgba(100, 116, 139, 0.1)' 
-                  : dailyState?.state?.checkedOut 
-                  ? 'rgba(22, 163, 74, 0.1)' 
-                  : dailyState?.state?.breakStarted && !dailyState?.state?.breakEnded
-                  ? 'rgba(217, 119, 6, 0.1)'
-                  : dailyState?.state?.checkedIn
-                  ? 'rgba(37, 99, 235, 0.1)'
-                  : 'rgba(100, 116, 139, 0.1)',
-                color: stateLoading
-                  ? 'var(--text-muted)'
-                  : dailyState?.state?.checkedOut
-                  ? '#16a34a'
-                  : dailyState?.state?.breakStarted && !dailyState?.state?.breakEnded
-                  ? '#d97706'
-                  : dailyState?.state?.checkedIn
-                  ? '#2563eb'
-                  : 'var(--text-muted)',
-                flexShrink: 0
-              }}>
-                {stateLoading ? <RefreshCw className="animate-spin" size={20} />
-                  : dailyState?.state?.checkedOut ? <CheckCircle2 size={20} />
-                  : dailyState?.state?.breakStarted && !dailyState?.state?.breakEnded ? <Coffee size={20} />
-                  : dailyState?.state?.checkedIn ? <CheckCircle2 size={20} />
-                  : <AlertCircle size={20} />}
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  {t('attendance.status')}
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {stateLoading 
-                    ? t('attendance.stateLoading') 
+      {permissions.presenze === true && (
+        <Card 
+          title={t('nav.presenze', 'Rilevazione Presenze')}
+          actions={
+            <button
+              onClick={() => navigate('/presenze/checkin')}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '11px',
+                color: 'var(--accent)',
+                fontWeight: 600,
+                padding: '4px 8px',
+                borderRadius: 6,
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              {t('common.viewAll', 'Vedi tutti →')}
+            </button>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Status Display */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '16px 20px',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--surface-warm)',
+              border: '1px solid var(--border-light)',
+              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
+              width: '100%'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: stateLoading 
+                    ? 'rgba(100, 116, 139, 0.1)' 
                     : dailyState?.state?.checkedOut 
-                    ? t('attendance.finishedService') 
+                    ? 'rgba(22, 163, 74, 0.1)' 
                     : dailyState?.state?.breakStarted && !dailyState?.state?.breakEnded
-                    ? t('attendance.onBreak')
+                    ? 'rgba(217, 119, 6, 0.1)'
                     : dailyState?.state?.checkedIn
-                    ? t('attendance.inService')
-                    : t('attendance.notCheckedIn')}
+                    ? 'rgba(37, 99, 235, 0.1)'
+                    : !dailyState?.hasShift
+                    ? 'rgba(37, 99, 235, 0.1)'
+                    : 'rgba(100, 116, 139, 0.1)',
+                  color: stateLoading
+                    ? 'var(--text-muted)'
+                    : dailyState?.state?.checkedOut
+                    ? '#16a34a'
+                    : dailyState?.state?.breakStarted && !dailyState?.state?.breakEnded
+                    ? '#d97706'
+                    : dailyState?.state?.checkedIn
+                    ? '#2563eb'
+                    : !dailyState?.hasShift
+                    ? '#2563eb'
+                    : 'var(--text-muted)',
+                  flexShrink: 0
+                }}>
+                  {stateLoading ? <RefreshCw className="animate-spin" size={20} />
+                    : dailyState?.state?.checkedOut ? <CheckCircle2 size={20} />
+                    : dailyState?.state?.breakStarted && !dailyState?.state?.breakEnded ? <Coffee size={20} />
+                    : dailyState?.state?.checkedIn ? <CheckCircle2 size={20} />
+                    : !dailyState?.hasShift ? <CalendarDays size={20} />
+                    : <AlertCircle size={20} />}
                 </div>
                 
-                {/* Shift/Permit Summary (Under Heading) */}
-                {!stateLoading && dailyState && (
-                  <div style={{ fontSize: '12.5px', marginTop: '2px', fontWeight: 600 }}>
-                    {!dailyState.hasShift ? (
-                      <span style={{ color: '#dc2626' }}>{t('attendance.noShiftToday')}</span>
-                    ) : dailyState.hasLeave ? (
-                      <span style={{ color: '#d97706' }}>{t('attendance.leaveToday')}</span>
-                    ) : (
-                      <span style={{ color: '#16a34a' }}>{t('attendance.hasShiftToday')}</span>
-                    )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    {t('attendance.status')}
                   </div>
-                )}
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {stateLoading 
+                      ? t('attendance.stateLoading') 
+                      : dailyState?.state?.checkedOut 
+                      ? t('attendance.finishedService') 
+                      : dailyState?.state?.breakStarted && !dailyState?.state?.breakEnded
+                      ? t('attendance.onBreak')
+                      : dailyState?.state?.checkedIn
+                      ? t('attendance.inService')
+                      : !dailyState?.hasShift
+                      ? t('attendance.notAssigned')
+                      : t('attendance.notCheckedIn')}
+                  </div>
+                  
+                  {/* Shift/Permit Summary (Under Heading) */}
+                  {!stateLoading && dailyState && (
+                    <div style={{ fontSize: '12.5px', marginTop: '2px', fontWeight: 600 }}>
+                      {!dailyState.hasShift ? (
+                        <span style={{ color: '#2563eb' }}>{t('attendance.noShiftToday')}</span>
+                      ) : dailyState.hasLeave ? (
+                        <span style={{ color: '#d97706' }}>{t('attendance.leaveToday')}</span>
+                      ) : (
+                        <span style={{ color: '#16a34a' }}>{t('attendance.hasShiftToday')}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Device Registration Warning Banner */}
-          {user?.requiresDeviceRegistration && showRegWarning && (
-            <div style={{
-              position: 'relative',
-              padding: '16px',
-              borderRadius: 'var(--radius-lg)',
-              background: 'rgba(239, 68, 68, 0.08)',
-              border: '1.5px solid rgba(239, 68, 68, 0.25)',
-              display: 'flex',
-              gap: '14px',
-              alignItems: 'flex-start',
-              marginTop: '4px',
-              animation: 'fadeIn 0.2s ease'
-            }}>
-              {/* Dismiss button (top-right) */}
-              <button
-                onClick={() => setShowRegWarning(false)}
-                style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                  fontSize: '18px',
-                  lineHeight: 1,
-                  padding: '4px'
-                }}
-              >
-                ×
-              </button>
-
-              {/* Icon */}
+            {/* Device Registration Warning Banner */}
+            {user?.requiresDeviceRegistration && showRegWarning && (
               <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                background: 'rgba(239, 68, 68, 0.1)',
-                color: '#dc2626',
+                position: 'relative',
+                padding: '16px',
+                borderRadius: 'var(--radius-lg)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1.5px solid rgba(239, 68, 68, 0.25)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
+                gap: '14px',
+                alignItems: 'flex-start',
+                marginTop: '4px',
+                animation: 'fadeIn 0.2s ease'
               }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-                  <line x1="12" y1="18" x2="12.01" y2="18"/>
-                </svg>
-              </div>
-
-              {/* Text & Button */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, paddingRight: '20px' }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {t('deviceRegistration.notRegisteredTitle', 'Dispositivo Non Registrato')}
-                  </h4>
-                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                    {t('deviceRegistration.notRegisteredDesc', 'Questo dispositivo non è registrato. Non potrai timbrare le tue presenze finché non lo registri.')}
-                  </p>
-                </div>
+                {/* Dismiss button (top-right) */}
                 <button
-                  onClick={() => navigate('/device/register')}
-                  className="btn btn-primary"
+                  onClick={() => setShowRegWarning(false)}
                   style={{
-                    alignSelf: 'flex-start',
-                    height: '32px',
-                    padding: '0 14px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    borderRadius: '6px',
-                    cursor: 'pointer'
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                    fontSize: '18px',
+                    lineHeight: 1,
+                    padding: '4px'
                   }}
                 >
-                  {t('deviceRegistration.button', 'Registra Dispositivo')}
+                  ×
                 </button>
+
+                {/* Icon */}
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: '#dc2626',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                    <line x1="12" y1="18" x2="12.01" y2="18"/>
+                  </svg>
+                </div>
+
+                {/* Text & Button */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, paddingRight: '20px' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('deviceRegistration.notRegisteredTitle', 'Dispositivo Non Registrato')}
+                    </h4>
+                    <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      {t('deviceRegistration.notRegisteredDesc', 'Questo dispositivo non è registrato. Non potrai timbrare le tue presenze finché non lo registri.')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate('/device/register')}
+                    className="btn btn-primary"
+                    style={{
+                      alignSelf: 'flex-start',
+                      height: '32px',
+                      padding: '0 14px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {t('deviceRegistration.button', 'Registra Dispositivo')}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      </Card>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Leave balance */}
       {showLeaveBalance !== false && (

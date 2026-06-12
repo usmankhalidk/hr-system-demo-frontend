@@ -909,7 +909,7 @@ export default function PublicCareersPage() {
         </div>
       )}
       </div>
-      <CareersFooter companyName={currentCompany?.name} companyEmail={currentCompany?.companyEmail || undefined} />
+      <CareersFooter companyName={currentCompany?.name} companyEmail={currentCompany?.companyEmail || undefined} companySlug={companySlug} />
       <CookieConsentBanner />
     </div>
   );
