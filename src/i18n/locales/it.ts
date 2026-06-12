@@ -1583,6 +1583,7 @@ const it = {
     syncSuccessCount: '{{count}} timbrature offline sincronizzate con successo',
     status: 'Stato Odierno',
     notCheckedIn: 'Non in Servizio',
+    notAssigned: 'Non assegnato',
     inService: 'In Servizio',
     onBreak: 'In Pausa',
     finishedService: 'Servizio Terminato',

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useParams, Link } from 'react-router-dom';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import { getPublicLegalDocument, LegalDocument } from '../../api/publicCareers';
 
 export default function CookiePolicyPage() {
+  const { companySlug } = useParams<{ companySlug?: string }>();
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
   const params = new URLSearchParams(window.location.search);
@@ -87,8 +89,8 @@ export default function CookiePolicyPage() {
     <div style={{ background: 'var(--background)', minHeight: '100vh', padding: '40px 20px', fontFamily: 'var(--font-body)' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-          <a 
-            href="/careers" 
+          <Link 
+            to={companySlug ? `/careers/${companySlug}` : "/careers"} 
             style={{ 
               display: 'inline-flex', 
               alignItems: 'center', 
@@ -104,7 +106,7 @@ export default function CookiePolicyPage() {
           >
             <ArrowLeft size={16} />
             {lang === 'it' ? 'Torna alle Careers' : 'Back to Careers'}
-          </a>
+          </Link>
           <LanguageSwitcher variant="pill" />
         </div>
 

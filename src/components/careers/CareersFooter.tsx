@@ -1,12 +1,14 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 interface CareersFooterProps {
   companyName?: string;
   companyEmail?: string;
+  companySlug?: string;
 }
 
-export default function CareersFooter({ companyName, companyEmail }: CareersFooterProps) {
+export default function CareersFooter({ companyName, companyEmail, companySlug }: CareersFooterProps) {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith('en') ? 'en' : 'it';
   const displayCompany = companyName || 'Fusaro Uomo';
@@ -40,30 +42,30 @@ export default function CareersFooter({ companyName, companyEmail }: CareersFoot
           <a href="https://veylohr.com" style={{ color: 'var(--primary)', fontWeight: 600 }}>Veylo HR</a>
         </div>
         <div style={{ display: 'flex', gap: '24px' }}>
-          <a 
-            href={`/privacy${queryString}`} 
+          <Link 
+            to={companySlug ? `/careers/${companySlug}/privacy${queryString}` : `/privacy${queryString}`} 
             style={{ color: 'var(--text-secondary)', transition: 'color 0.2s', textDecoration: 'none' }} 
             onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'} 
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >
             {lang === 'it' ? 'Informativa Privacy' : 'Privacy Policy'}
-          </a>
-          <a 
-            href={`/terms${queryString}`} 
+          </Link>
+          <Link 
+            to={companySlug ? `/careers/${companySlug}/terms${queryString}` : `/terms${queryString}`} 
             style={{ color: 'var(--text-secondary)', transition: 'color 0.2s', textDecoration: 'none' }} 
             onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'} 
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >
             {lang === 'it' ? 'Termini di Servizio' : 'Terms of Service'}
-          </a>
-          <a 
-            href={`/cookie-policy${queryString}`} 
+          </Link>
+          <Link 
+            to={companySlug ? `/careers/${companySlug}/cookie-policy${queryString}` : `/cookie-policy${queryString}`} 
             style={{ color: 'var(--text-secondary)', transition: 'color 0.2s', textDecoration: 'none' }} 
             onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'} 
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >
             Cookie Policy
-          </a>
+          </Link>
         </div>
       </div>
     </footer>

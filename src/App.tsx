@@ -98,8 +98,11 @@ function AppRoutes() {
       <Route path="/careers/jobs/:jobId" element={<PublicJobDetailPage />} />
       <Route path="/careers/:companySlug/jobs/:jobId" element={<PublicJobDetailPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/careers/:companySlug/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/terms" element={<TermsOfServicePage />} />
+      <Route path="/careers/:companySlug/terms" element={<TermsOfServicePage />} />
       <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+      <Route path="/careers/:companySlug/cookie-policy" element={<CookiePolicyPage />} />
 
       <Route path="/" element={
         <ProtectedRoute>

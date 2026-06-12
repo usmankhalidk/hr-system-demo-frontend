@@ -1589,6 +1589,7 @@ const en = {
     syncSuccessCount: '{{count}} offline attendance records synced successfully',
     status: 'Today\'s Status',
     notCheckedIn: 'Not Checked In',
+    notAssigned: 'Not Assigned',
     inService: 'In Service',
     onBreak: 'On Break',
     finishedService: 'Finished Service',
