@@ -153,6 +153,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const normalizeUser = (u: any): User => {
+    if (u && (u.role === 'system_admin' || u.isSuperAdmin === true)) {
+      return {
+        ...u,
+        role: 'admin',
+        isSuperAdmin: true,
+      };
+    }
+    return u as User;
+  };
+
   // Restore session on mount
   useEffect(() => {
     const token = getStoredToken();
@@ -169,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       apiClient.get('/permissions/effective').then((r) => r.data.data as EffectivePermissionsResponse),
     ])
       .then(([userData, effective]) => {
-        setUser(userData);
+        setUser(normalizeUser(userData));
         setPermissions(mapEffectiveToPermissionMap(effective));
         setAllowedCompanyIds(effective.allowedCompanyIds ?? []);
         setTargetCompanyId(effective.targetCompanyId ?? null);
@@ -206,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set header immediately before fetching permissions
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     const effective = await apiClient.get('/permissions/effective').then((r) => r.data.data as EffectivePermissionsResponse);
-    setUser(userData as User);
+    setUser(normalizeUser(userData));
     setPermissions(mapEffectiveToPermissionMap(effective));
     setAllowedCompanyIds(effective.allowedCompanyIds ?? []);
     setTargetCompanyId(effective.targetCompanyId ?? null);
@@ -249,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = async () => {
     const userData = await apiClient.get('/auth/me').then((r) => r.data.data as User);
-    setUser(userData);
+    setUser(normalizeUser(userData));
   };
 
   return (
