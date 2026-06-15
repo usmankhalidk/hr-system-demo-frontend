@@ -5,6 +5,9 @@ export interface CompanySearchResult {
   name: string;
   slug: string;
   logoFilename?: string;
+  storeCount?: number;
+  employeeCount?: number;
+  groupName?: string;
 }
 
 export interface EmployeeSearchResult {
@@ -57,13 +60,18 @@ export interface OnboardingSearchResult {
   companyId: number;
   companyName: string;
   onboardingType: 'template' | 'task';
+  // individual task properties
+  taskName?: string;
+  taskDescription?: string;
+  taskCategory?: string;
+  taskPriority?: string;
+  completed?: boolean;
+  completedAt?: string;
   employeeId?: number; // tasks
   employeeName?: string; // tasks
   employeeSurname?: string; // tasks
   employeeEmail?: string; // tasks
   employeeRole?: string; // tasks
-  totalTasks?: number; // tasks
-  completedTasks?: number; // tasks
 }
 
 export interface MessageSearchResult {

@@ -97,7 +97,7 @@ export const GlobalSearch: React.FC = () => {
         type: 'company',
         id: c.id,
         label: c.name,
-        sub: c.slug,
+        sub: `${c.slug || ''} • ${c.storeCount || 0} ${t('search.stores_owned', 'Stores')} • ${c.employeeCount || 0} ${t('search.employees_count', 'Employees')}`,
         data: c,
       });
     });
@@ -108,7 +108,7 @@ export const GlobalSearch: React.FC = () => {
         type: 'employee',
         id: e.id,
         label: `${e.name} ${e.surname}`,
-        sub: `${e.uniqueId || ''} • ${e.email} (${t(`roles.${e.role}`, e.role)})`,
+        sub: `${e.uniqueId || ''} • ${e.email} (${t(`roles.${e.role}`, e.role)}) • ${e.companyName}`,
         data: e,
       });
     });
@@ -148,20 +148,20 @@ export const GlobalSearch: React.FC = () => {
   }
   if (results.onboarding && results.onboarding.length > 0) {
     results.onboarding.forEach((o) => {
-      if (o.onboarding_type === 'template') {
+      if (o.onboardingType === 'template') {
         flatResults.push({
           type: 'onboarding_template',
           id: o.id,
           label: o.name || '',
-          sub: `${t('onboarding.template', 'Template')} • ${o.category || ''} • ${t('onboarding.priority', 'Priority')}: ${o.priority || ''} (${o.companyName})`,
+          sub: `${t('onboarding.category', 'Category')}: ${o.category || ''} • ${t('onboarding.priority', 'Priority')}: ${o.priority || ''} (${o.companyName})`,
           data: o,
         });
       } else {
         flatResults.push({
           type: 'onboarding_task',
           id: o.id,
-          label: `${o.employee_name} ${o.employee_surname}`,
-          sub: `${t('onboarding.progress', 'Progress')}: ${o.completed_tasks}/${o.total_tasks} ${t('onboarding.tasks', 'tasks')} • ${t(`roles.${o.employee_role}` as string, o.employee_role || '')} (${o.companyName})`,
+          label: o.taskName || '',
+          sub: `${t('onboarding.employee', 'Employee')}: ${o.employeeName} ${o.employeeSurname} • ${o.completed ? t('onboarding.completed', 'Completed') : t('onboarding.pending', 'Pending')} (${o.companyName})`,
           data: o,
         });
       }
@@ -169,8 +169,8 @@ export const GlobalSearch: React.FC = () => {
   }
   if (results.messages && results.messages.length > 0) {
     results.messages.forEach((m) => {
-      const isOutgoing = m.sender_id === user?.id;
-      const peerName = isOutgoing ? `${m.recipient_name} ${m.recipient_surname}` : `${m.sender_name} ${m.sender_surname}`;
+      const isOutgoing = m.senderId === user?.id;
+      const peerName = isOutgoing ? `${m.recipientName} ${m.recipientSurname}` : `${m.senderName} ${m.senderSurname}`;
       flatResults.push({
         type: 'message',
         id: m.id,
@@ -185,14 +185,13 @@ export const GlobalSearch: React.FC = () => {
       flatResults.push({
         type: 'document',
         id: d.id,
-        label: d.file_name,
-        sub: `${t('documents.employee', 'Employee')}: ${d.employee_name} ${d.employee_surname} • ${d.category_name || t('documents.noCategory', 'No category')} • ${new Date(d.uploaded_at).toLocaleDateString()}`,
+        label: d.fileName || '',
+        sub: `${t('documents.employee', 'Employee')}: ${d.employeeName} ${d.employeeSurname} • ${d.categoryName || t('documents.noCategory', 'No category')} • ${d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString() : ''}`,
         data: d,
       });
     });
   }
 
-  // Handle keydown inside input/modal for list navigation
   const handleModalKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       setIsOpen(false);
@@ -241,11 +240,11 @@ export const GlobalSearch: React.FC = () => {
         navigate('/onboarding');
         break;
       case 'message': {
-        const isOutgoing = item.data.sender_id === user?.id;
-        const peerId = isOutgoing ? item.data.recipient_id : item.data.sender_id;
+        const isOutgoing = item.data.senderId === user?.id;
+        const peerId = isOutgoing ? item.data.recipientId : item.data.senderId;
         const peerName = isOutgoing 
-          ? `${item.data.recipient_name} ${item.data.recipient_surname}` 
-          : `${item.data.sender_name} ${item.data.sender_surname}`;
+          ? `${item.data.recipientName} ${item.data.recipientSurname}` 
+          : `${item.data.senderName} ${item.data.senderSurname}`;
         navigate(`/hr-chat?recipientId=${peerId}&recipientName=${encodeURIComponent(peerName)}&subject=${encodeURIComponent(item.data.subject)}`);
         break;
       }
@@ -287,43 +286,141 @@ export const GlobalSearch: React.FC = () => {
     }
   };
 
-  if (!user || (user.role !== 'admin' && user.role !== 'hr' && user.role !== 'area_manager' && !user.isSuperAdmin && (user.role as string) !== 'system_admin')) {
-    return null; // Restricted to super admins, company admins, HR, and Area Managers
+  if (!user || (user.role !== 'admin' && user.role !== 'hr' && user.role !== 'area_manager' && !user.isSuperAdmin)) {
+    return null;
   }
 
-  const getBadgeStyles = (type: string) => {
-    switch (type) {
-      case 'company': return { bg: 'rgba(13, 33, 55, 0.08)', color: 'var(--primary)' };
-      case 'employee': return { bg: 'rgba(2, 132, 199, 0.1)', color: '#0284C7' };
-      case 'candidate': return { bg: 'rgba(124, 58, 237, 0.1)', color: '#7C3AED' };
-      case 'job': return { bg: 'rgba(21, 128, 61, 0.1)', color: '#15803D' };
-      case 'store': return { bg: 'rgba(234, 88, 12, 0.1)', color: '#EA580C' };
+  const getBadgeStyle = (item: FlatResultItem) => {
+    switch (item.type) {
+      case 'company': {
+        const hasGroup = !!item.data.groupName;
+        return {
+          bg: hasGroup ? 'rgba(201, 151, 58, 0.12)' : 'rgba(13, 33, 55, 0.08)',
+          color: hasGroup ? '#C9973A' : 'var(--primary)',
+          text: hasGroup ? item.data.groupName : t('search.company', 'Company'),
+          icon: <Building size={10} />
+        };
+      }
+      case 'employee': {
+        const role = item.data.role;
+        let bg = 'rgba(107, 114, 128, 0.10)';
+        let color = '#6B7280';
+        switch (role) {
+          case 'admin':
+            bg = 'rgba(201,151,58,0.12)';
+            color = '#C9973A';
+            break;
+          case 'hr':
+            bg = 'rgba(2,132,199,0.12)';
+            color = '#0284C7';
+            break;
+          case 'area_manager':
+            bg = 'rgba(21,128,61,0.12)';
+            color = '#15803D';
+            break;
+          case 'store_manager':
+            bg = 'rgba(124,58,237,0.12)';
+            color = '#7C3AED';
+            break;
+          case 'employee':
+            bg = 'rgba(107,114,128,0.12)';
+            color = '#6B7280';
+            break;
+        }
+        return {
+          bg,
+          color,
+          text: t(`roles.${role}`, role),
+          icon: <Users size={10} />
+        };
+      }
+      case 'candidate': {
+        const status = item.data.status;
+        let bg = 'rgba(124, 58, 237, 0.1)';
+        let color = '#7C3AED';
+        switch (status?.toLowerCase()) {
+          case 'new':
+            bg = 'rgba(59, 130, 246, 0.12)';
+            color = '#3B82F6';
+            break;
+          case 'interviewing':
+            bg = 'rgba(245, 158, 11, 0.12)';
+            color = '#F59E0B';
+            break;
+          case 'hired':
+            bg = 'rgba(16, 185, 129, 0.12)';
+            color = '#10B981';
+            break;
+          case 'rejected':
+            bg = 'rgba(239, 68, 68, 0.12)';
+            color = '#EF6868';
+            break;
+        }
+        return {
+          bg,
+          color,
+          text: status,
+          icon: <UserCheck size={10} />
+        };
+      }
+      case 'job':
+        return {
+          bg: 'rgba(21, 128, 61, 0.12)',
+          color: '#15803D',
+          text: t(`roles.${item.data.targetRole}`, item.data.targetRole || 'Job'),
+          icon: <Briefcase size={10} />
+        };
+      case 'store': {
+        const active = item.data.isActive;
+        return {
+          bg: active ? 'rgba(22, 163, 74, 0.12)' : 'rgba(220, 38, 38, 0.12)',
+          color: active ? '#16A34A' : '#DC2626',
+          text: active ? t('common.active', 'Active') : t('common.inactive', 'Inactive'),
+          icon: <Store size={10} />
+        };
+      }
       case 'onboarding_template':
-      case 'onboarding_task': return { bg: 'rgba(13, 148, 136, 0.1)', color: '#0D9488' };
-      case 'message': return { bg: 'rgba(219, 39, 119, 0.1)', color: '#DB2777' };
-      case 'document': return { bg: 'rgba(15, 118, 110, 0.1)', color: '#0F766E' };
-      default: return { bg: 'var(--background)', color: 'var(--text-secondary)' };
-    }
-  };
-
-  const getTypeIconSmall = (type: string) => {
-    switch (type) {
-      case 'company': return <Building size={10} />;
-      case 'employee': return <Users size={10} />;
-      case 'candidate': return <UserCheck size={10} />;
-      case 'job': return <Briefcase size={10} />;
-      case 'store': return <Store size={10} />;
-      case 'onboarding_template':
-      case 'onboarding_task': return <GraduationCap size={10} />;
-      case 'message': return <MessageSquare size={10} />;
-      case 'document': return <FileText size={10} />;
-      default: return null;
+        return {
+          bg: 'rgba(13, 148, 136, 0.12)',
+          color: '#0D9488',
+          text: t('onboarding.template', 'Template'),
+          icon: <GraduationCap size={10} />
+        };
+      case 'onboarding_task':
+        return {
+          bg: item.data.completed ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+          color: item.data.completed ? '#10B981' : '#F59E0B',
+          text: item.data.completed ? t('onboarding.completed', 'Completed') : t('onboarding.in_progress', 'In Progress'),
+          icon: <GraduationCap size={10} />
+        };
+      case 'message': {
+        const unread = !item.data.isRead;
+        return {
+          bg: unread ? 'rgba(219, 39, 119, 0.12)' : 'rgba(107, 114, 128, 0.10)',
+          color: unread ? '#DB2777' : '#6B7280',
+          text: unread ? t('messages.unread', 'New') : t('messages.read', 'Read'),
+          icon: <MessageSquare size={10} />
+        };
+      }
+      case 'document':
+        return {
+          bg: 'rgba(15, 118, 110, 0.12)',
+          color: '#0F766E',
+          text: item.data.categoryName || t('documents.noCategory', 'No category'),
+          icon: <FileText size={10} />
+        };
+      default:
+        return {
+          bg: 'var(--background)',
+          color: 'var(--text-secondary)',
+          text: '',
+          icon: null
+        };
     }
   };
 
   return (
     <>
-      {/* Search CSS Styles - always active */}
       <style>{`
         @keyframes slideDown {
           from { transform: translateY(-20px); opacity: 0; }
@@ -409,7 +506,6 @@ export const GlobalSearch: React.FC = () => {
         }
       `}</style>
 
-      {/* ── Search Input Trigger Box in Header ── */}
       <div
         className="global-search-trigger"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -428,14 +524,6 @@ export const GlobalSearch: React.FC = () => {
           cursor: 'pointer',
           transition: 'all 0.2s ease',
           margin: '0 16px',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'var(--border-focus)';
-          e.currentTarget.style.background = 'var(--surface)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'var(--border)';
-          e.currentTarget.style.background = 'var(--background)';
         }}
       >
         <Search size={15} style={{ color: 'var(--text-muted)' }} />
@@ -460,7 +548,6 @@ export const GlobalSearch: React.FC = () => {
         </kbd>
       </div>
 
-      {/* ── Search Backdrop Modal Overlay ── */}
       {isOpen && (
         <div
           className="global-search-backdrop"
@@ -480,7 +567,6 @@ export const GlobalSearch: React.FC = () => {
             zIndex: 9999,
           }}
         >
-          {/* Modal Container */}
           <div
             ref={modalRef}
             className="global-search-modal-container"
@@ -501,7 +587,6 @@ export const GlobalSearch: React.FC = () => {
               animation: 'slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
-            {/* Input Header Area */}
             <div
               className="gemini-border-active"
               style={{
@@ -551,7 +636,6 @@ export const GlobalSearch: React.FC = () => {
               ) : null}
             </div>
 
-            {/* Category Filter Chips */}
             <div
               style={{
                 display: 'flex',
@@ -577,7 +661,12 @@ export const GlobalSearch: React.FC = () => {
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    if (tab.id !== 'employees') {
+                      setRoleFilter('all');
+                    }
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -593,16 +682,6 @@ export const GlobalSearch: React.FC = () => {
                     whiteSpace: 'nowrap',
                     cursor: 'pointer',
                   }}
-                  onMouseEnter={(e) => {
-                    if (activeTab !== tab.id) {
-                      e.currentTarget.style.borderColor = 'var(--text-muted)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (activeTab !== tab.id) {
-                      e.currentTarget.style.borderColor = 'var(--border)';
-                    }
-                  }}
                 >
                   {tab.icon}
                   <span>{tab.label}</span>
@@ -610,54 +689,54 @@ export const GlobalSearch: React.FC = () => {
               ))}
             </div>
 
-            {/* Role Filter Chips */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 20px',
-                background: 'var(--surface)',
-                borderBottom: '1px solid var(--border)',
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                flexShrink: 0,
-              }}
-            >
-              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginRight: '4px', whiteSpace: 'nowrap' }}>
-                {t('search.filter_by_role', 'Filter by Role')}:
-              </span>
-              {[
-                { id: 'all', label: t('roles.allRoles', 'All Roles') },
-                { id: 'admin', label: t('roles.admin', 'Admin') },
-                { id: 'hr', label: t('roles.hr', 'HR') },
-                { id: 'area_manager', label: t('roles.area_manager', 'Area Manager') },
-                { id: 'store_manager', label: t('roles.store_manager', 'Store Manager') },
-                { id: 'employee', label: t('roles.employee', 'Employee') },
-              ].map((roleChip) => (
-                <button
-                  key={roleChip.id}
-                  onClick={() => setRoleFilter(roleChip.id as any)}
-                  style={{
-                    background: roleFilter === roleChip.id ? 'var(--accent-light)' : 'transparent',
-                    color: roleFilter === roleChip.id ? 'var(--accent)' : 'var(--text-muted)',
-                    border: '1.5px solid',
-                    borderColor: roleFilter === roleChip.id ? 'var(--accent)' : 'var(--border)',
-                    borderRadius: '14px',
-                    padding: '2px 10px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    transition: 'all 0.15s ease',
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {roleChip.label}
-                </button>
-              ))}
-            </div>
+            {activeTab === 'employees' && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '6px 20px',
+                  background: 'var(--surface)',
+                  borderBottom: '1px solid var(--border)',
+                  overflowX: 'auto',
+                  scrollbarWidth: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginRight: '4px', whiteSpace: 'nowrap' }}>
+                  {t('search.filter_by_role', 'Filter by Role')}:
+                </span>
+                {[
+                  { id: 'all', label: t('roles.allRoles', 'All Roles') },
+                  { id: 'admin', label: t('roles.admin', 'Admin') },
+                  { id: 'hr', label: t('roles.hr', 'HR') },
+                  { id: 'area_manager', label: t('roles.area_manager', 'Area Manager') },
+                  { id: 'store_manager', label: t('roles.store_manager', 'Store Manager') },
+                  { id: 'employee', label: t('roles.employee', 'Employee') },
+                ].map((roleChip) => (
+                  <button
+                    key={roleChip.id}
+                    onClick={() => setRoleFilter(roleChip.id as any)}
+                    style={{
+                      background: roleFilter === roleChip.id ? 'var(--accent-light)' : 'transparent',
+                      color: roleFilter === roleChip.id ? 'var(--accent)' : 'var(--text-muted)',
+                      border: '1.5px solid',
+                      borderColor: roleFilter === roleChip.id ? 'var(--accent)' : 'var(--border)',
+                      borderRadius: '14px',
+                      padding: '2px 10px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {roleChip.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {/* Results List */}
             <div className="global-search-results-list" style={{ flex: 1, overflowY: 'auto', padding: '12px 0' }}>
               {queryText.trim().length < 2 ? (
                 <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -674,10 +753,13 @@ export const GlobalSearch: React.FC = () => {
                 flatResults.map((item, index) => {
                   const isHighlighted = index === activeIndex;
                   const showHeader = index === 0 || flatResults[index].type !== flatResults[index - 1].type;
+                  const badge = getBadgeStyle(item);
+                  const resultKey = item.type === 'onboarding_task' 
+                    ? `onboarding_task-${item.data.id || item.data.employeeId || index}`
+                    : `${item.type}-${item.id}`;
 
                   return (
-                    <div key={`${item.type}-${item.id}`}>
-                      {/* Section Header */}
+                    <div key={resultKey}>
                       {showHeader && (
                         <div
                           style={{
@@ -696,7 +778,6 @@ export const GlobalSearch: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Result Row */}
                       <div
                         onClick={() => handleNavigate(item)}
                         onMouseEnter={() => setActiveIndex(index)}
@@ -743,15 +824,15 @@ export const GlobalSearch: React.FC = () => {
                               gap: '4px',
                               fontSize: '9px',
                               fontWeight: 700,
-                              background: getBadgeStyles(item.type).bg,
-                              color: getBadgeStyles(item.type).color,
+                              background: badge.bg,
+                              color: badge.color,
                               borderRadius: '4px',
                               padding: '1px 6px',
                               textTransform: 'uppercase',
                               letterSpacing: '0.03em',
                             }}>
-                              {getTypeIconSmall(item.type)}
-                              <span>{getTypeName(item.type)}</span>
+                              {badge.icon}
+                              <span>{badge.text}</span>
                             </span>
                           </div>
                           <div
@@ -788,7 +869,6 @@ export const GlobalSearch: React.FC = () => {
               )}
             </div>
 
-            {/* Footer Details */}
             <div
               style={{
                 padding: '10px 20px',
@@ -824,4 +904,3 @@ export const GlobalSearch: React.FC = () => {
     </>
   );
 };
-
