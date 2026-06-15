@@ -416,9 +416,6 @@ export default function ScanPage() {
       });
       
       setStage('success');
-      window.setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 2000);
     } catch (err: any) {
       console.error('Attendance attempt error:', err);
       
@@ -477,10 +474,6 @@ export default function ScanPage() {
           });
 
           setStage('success');
-          // Match the online experience exactly
-          window.setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 2000);
         } catch (enqueueErr) {
           console.error('Offline enqueue failed:', enqueueErr);
           setStage('error');
