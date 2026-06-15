@@ -982,7 +982,7 @@ export default function SystemCompanyManagement() {
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button
-                      onClick={() => navigate(`/aziende/${toCompanySlug(c)}`)}
+                      onClick={() => navigate(`/aziende/${c.id}`)}
                       title={t('common.open')}
                       style={{
                         height: 32,

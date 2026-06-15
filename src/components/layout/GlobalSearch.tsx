@@ -152,7 +152,7 @@ export const GlobalSearch: React.FC = () => {
     setIsOpen(false);
     switch (item.type) {
       case 'company':
-        navigate(`/aziende/${item.data.slug}`);
+        navigate(`/aziende/${item.id}`);
         break;
       case 'employee':
         navigate(`/dipendenti/${item.id}`);
