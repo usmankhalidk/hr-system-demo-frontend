@@ -56,14 +56,14 @@ export interface OnboardingSearchResult {
   priority?: string; // templates
   companyId: number;
   companyName: string;
-  onboarding_type: 'template' | 'task';
-  employee_id?: number; // tasks
-  employee_name?: string; // tasks
-  employee_surname?: string; // tasks
-  employee_email?: string; // tasks
-  employee_role?: string; // tasks
-  total_tasks?: number; // tasks
-  completed_tasks?: number; // tasks
+  onboardingType: 'template' | 'task';
+  employeeId?: number; // tasks
+  employeeName?: string; // tasks
+  employeeSurname?: string; // tasks
+  employeeEmail?: string; // tasks
+  employeeRole?: string; // tasks
+  totalTasks?: number; // tasks
+  completedTasks?: number; // tasks
 }
 
 export interface MessageSearchResult {
@@ -74,27 +74,27 @@ export interface MessageSearchResult {
   isRead: boolean;
   companyId: number;
   companyName: string;
-  sender_id: number;
-  sender_name: string;
-  sender_surname: string;
-  sender_role: string;
-  recipient_id: number;
-  recipient_name: string;
-  recipient_surname: string;
-  recipient_role: string;
+  senderId: number;
+  senderName: string;
+  senderSurname: string;
+  senderRole: string;
+  recipientId: number;
+  recipientName: string;
+  recipientSurname: string;
+  recipientRole: string;
 }
 
 export interface DocumentSearchResult {
   id: number;
-  file_name: string;
-  mime_type?: string;
-  uploaded_at: string;
-  requires_signature: boolean;
-  signed_at?: string;
-  category_name?: string;
-  employee_name: string;
-  employee_surname: string;
-  employee_role: string;
+  fileName: string;
+  mimeType?: string;
+  uploadedAt: string;
+  requiresSignature: boolean;
+  signedAt?: string;
+  categoryName?: string;
+  employeeName: string;
+  employeeSurname: string;
+  employeeRole: string;
   companyId: number;
   companyName: string;
 }
