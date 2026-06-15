@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, Building, Users, UserCheck, Briefcase, Loader2, CornerDownLeft } from 'lucide-react';
+import { Search, X, Building, Users, UserCheck, Briefcase, Loader2, CornerDownLeft, Store, GraduationCap, MessageSquare, FileText } from 'lucide-react';
 import { searchGlobal, GlobalSearchResults } from '../../api/search';
 import { useAuth } from '../../context/AuthContext';
 
 interface FlatResultItem {
-  type: 'company' | 'employee' | 'candidate' | 'job';
+  type: 'company' | 'employee' | 'candidate' | 'job' | 'store' | 'onboarding_template' | 'onboarding_task' | 'message' | 'document';
   id: number;
   label: string;
   sub: string;
@@ -19,13 +19,18 @@ export const GlobalSearch: React.FC = () => {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [queryText, setQueryText] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'companies' | 'employees' | 'candidates' | 'jobs'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'companies' | 'employees' | 'candidates' | 'jobs' | 'stores' | 'onboarding' | 'messages' | 'documents'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'hr' | 'area_manager' | 'store_manager' | 'employee'>('all');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<GlobalSearchResults>({
     companies: [],
     employees: [],
     candidates: [],
-    jobs: []
+    jobs: [],
+    stores: [],
+    onboarding: [],
+    messages: [],
+    documents: []
   });
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -54,14 +59,15 @@ export const GlobalSearch: React.FC = () => {
     } else {
       document.body.style.overflow = '';
       setQueryText('');
-      setResults({ companies: [], employees: [], candidates: [], jobs: [] });
+      setRoleFilter('all');
+      setResults({ companies: [], employees: [], candidates: [], jobs: [], stores: [], onboarding: [], messages: [], documents: [] });
     }
   }, [isOpen]);
 
   // Debounced search query
   useEffect(() => {
     if (queryText.trim().length < 2) {
-      setResults({ companies: [], employees: [], candidates: [], jobs: [] });
+      setResults({ companies: [], employees: [], candidates: [], jobs: [], stores: [], onboarding: [], messages: [], documents: [] });
       setLoading(false);
       return;
     }
@@ -69,7 +75,7 @@ export const GlobalSearch: React.FC = () => {
     setLoading(true);
     const delayDebounce = setTimeout(async () => {
       try {
-        const searchResults = await searchGlobal(queryText, activeTab);
+        const searchResults = await searchGlobal(queryText, activeTab, roleFilter);
         setResults(searchResults);
         setActiveIndex(0);
       } catch (err) {
@@ -80,7 +86,7 @@ export const GlobalSearch: React.FC = () => {
     }, 250);
 
     return () => clearTimeout(delayDebounce);
-  }, [queryText, activeTab]);
+  }, [queryText, activeTab, roleFilter]);
 
   // Flatten results for easy keyboard navigation
   const flatResults: FlatResultItem[] = [];
@@ -129,6 +135,62 @@ export const GlobalSearch: React.FC = () => {
       });
     });
   }
+  if (results.stores && results.stores.length > 0) {
+    results.stores.forEach((s) => {
+      flatResults.push({
+        type: 'store',
+        id: s.id,
+        label: s.name,
+        sub: `${s.code} • ${s.address || ''} • ${s.companyName}`,
+        data: s,
+      });
+    });
+  }
+  if (results.onboarding && results.onboarding.length > 0) {
+    results.onboarding.forEach((o) => {
+      if (o.onboarding_type === 'template') {
+        flatResults.push({
+          type: 'onboarding_template',
+          id: o.id,
+          label: o.name || '',
+          sub: `${t('onboarding.template', 'Template')} • ${o.category || ''} • ${t('onboarding.priority', 'Priority')}: ${o.priority || ''} (${o.companyName})`,
+          data: o,
+        });
+      } else {
+        flatResults.push({
+          type: 'onboarding_task',
+          id: o.id,
+          label: `${o.employee_name} ${o.employee_surname}`,
+          sub: `${t('onboarding.progress', 'Progress')}: ${o.completed_tasks}/${o.total_tasks} ${t('onboarding.tasks', 'tasks')} • ${t(`roles.${o.employee_role}` as string, o.employee_role || '')} (${o.companyName})`,
+          data: o,
+        });
+      }
+    });
+  }
+  if (results.messages && results.messages.length > 0) {
+    results.messages.forEach((m) => {
+      const isOutgoing = m.sender_id === user?.id;
+      const peerName = isOutgoing ? `${m.recipient_name} ${m.recipient_surname}` : `${m.sender_name} ${m.sender_surname}`;
+      flatResults.push({
+        type: 'message',
+        id: m.id,
+        label: m.subject,
+        sub: `${isOutgoing ? t('messages.to', 'To') : t('messages.from', 'From')}: ${peerName} • ${m.body.substring(0, 60)}${m.body.length > 60 ? '...' : ''} • ${new Date(m.createdAt).toLocaleDateString()}`,
+        data: m,
+      });
+    });
+  }
+  if (results.documents && results.documents.length > 0) {
+    results.documents.forEach((d) => {
+      flatResults.push({
+        type: 'document',
+        id: d.id,
+        label: d.file_name,
+        sub: `${t('documents.employee', 'Employee')}: ${d.employee_name} ${d.employee_surname} • ${d.category_name || t('documents.noCategory', 'No category')} • ${new Date(d.uploaded_at).toLocaleDateString()}`,
+        data: d,
+      });
+    });
+  }
 
   // Handle keydown inside input/modal for list navigation
   const handleModalKeyDown = (e: React.KeyboardEvent) => {
@@ -163,6 +225,33 @@ export const GlobalSearch: React.FC = () => {
       case 'job':
         navigate(`/ats?view=jobs&jobId=${item.id}`);
         break;
+      case 'store': {
+        const storeNameSlug = item.label
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        navigate(`/negozi/${item.id}-${storeNameSlug || 'store'}`);
+        break;
+      }
+      case 'onboarding_template':
+      case 'onboarding_task':
+        navigate('/onboarding');
+        break;
+      case 'message': {
+        const isOutgoing = item.data.sender_id === user?.id;
+        const peerId = isOutgoing ? item.data.recipient_id : item.data.sender_id;
+        const peerName = isOutgoing 
+          ? `${item.data.recipient_name} ${item.data.recipient_surname}` 
+          : `${item.data.sender_name} ${item.data.sender_surname}`;
+        navigate(`/hr-chat?recipientId=${peerId}&recipientName=${encodeURIComponent(peerName)}&subject=${encodeURIComponent(item.data.subject)}`);
+        break;
+      }
+      case 'document':
+        navigate(`/documenti?search=${encodeURIComponent(item.label)}`);
+        break;
       default:
         break;
     }
@@ -174,6 +263,11 @@ export const GlobalSearch: React.FC = () => {
       case 'employee': return t('search.employees', 'Employees');
       case 'candidate': return t('search.candidates', 'Candidates');
       case 'job': return t('search.jobs', 'Job Openings');
+      case 'store': return t('search.stores', 'Stores');
+      case 'onboarding_template': return t('search.onboarding_templates', 'Onboarding Templates');
+      case 'onboarding_task': return t('search.onboarding_tasks', 'Employee Onboarding');
+      case 'message': return t('search.messages', 'Messages');
+      case 'document': return t('search.documents', 'Documents');
       default: return '';
     }
   };
@@ -184,12 +278,17 @@ export const GlobalSearch: React.FC = () => {
       case 'employee': return <Users size={16} />;
       case 'candidate': return <UserCheck size={16} />;
       case 'job': return <Briefcase size={16} />;
+      case 'store': return <Store size={16} />;
+      case 'onboarding_template':
+      case 'onboarding_task': return <GraduationCap size={16} />;
+      case 'message': return <MessageSquare size={16} />;
+      case 'document': return <FileText size={16} />;
       default: return null;
     }
   };
 
-  if (!user || (user.role !== 'admin' && user.role !== 'hr' && !user.isSuperAdmin)) {
-    return null; // Restricted to super admins, company admins, and HR
+  if (!user || (user.role !== 'admin' && user.role !== 'hr' && user.role !== 'area_manager' && !user.isSuperAdmin && (user.role as string) !== 'system_admin')) {
+    return null; // Restricted to super admins, company admins, HR, and Area Managers
   }
 
   const getBadgeStyles = (type: string) => {
@@ -198,6 +297,11 @@ export const GlobalSearch: React.FC = () => {
       case 'employee': return { bg: 'rgba(2, 132, 199, 0.1)', color: '#0284C7' };
       case 'candidate': return { bg: 'rgba(124, 58, 237, 0.1)', color: '#7C3AED' };
       case 'job': return { bg: 'rgba(21, 128, 61, 0.1)', color: '#15803D' };
+      case 'store': return { bg: 'rgba(234, 88, 12, 0.1)', color: '#EA580C' };
+      case 'onboarding_template':
+      case 'onboarding_task': return { bg: 'rgba(13, 148, 136, 0.1)', color: '#0D9488' };
+      case 'message': return { bg: 'rgba(219, 39, 119, 0.1)', color: '#DB2777' };
+      case 'document': return { bg: 'rgba(15, 118, 110, 0.1)', color: '#0F766E' };
       default: return { bg: 'var(--background)', color: 'var(--text-secondary)' };
     }
   };
@@ -208,6 +312,11 @@ export const GlobalSearch: React.FC = () => {
       case 'employee': return <Users size={10} />;
       case 'candidate': return <UserCheck size={10} />;
       case 'job': return <Briefcase size={10} />;
+      case 'store': return <Store size={10} />;
+      case 'onboarding_template':
+      case 'onboarding_task': return <GraduationCap size={10} />;
+      case 'message': return <MessageSquare size={10} />;
+      case 'document': return <FileText size={10} />;
       default: return null;
     }
   };
@@ -392,8 +501,6 @@ export const GlobalSearch: React.FC = () => {
               animation: 'slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
-            {/* CSS styles are handled globally at root */}
-
             {/* Input Header Area */}
             <div
               className="gemini-border-active"
@@ -412,7 +519,7 @@ export const GlobalSearch: React.FC = () => {
                 type="text"
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                placeholder={t('search.placeholder_detailed', 'Find employees, candidates, and job positions...')}
+                placeholder={t('search.placeholder_detailed', 'Find employees, candidates, stores, documents...')}
                 style={{
                   flex: 1,
                   border: 'none',
@@ -463,6 +570,10 @@ export const GlobalSearch: React.FC = () => {
                 { id: 'employees', label: t('search.filter_employees', 'Employees'), icon: <Users size={13} /> },
                 { id: 'candidates', label: t('search.filter_candidates', 'Candidates'), icon: <UserCheck size={13} /> },
                 { id: 'jobs', label: t('search.filter_jobs', 'Jobs'), icon: <Briefcase size={13} /> },
+                { id: 'stores', label: t('search.filter_stores', 'Stores'), icon: <Store size={13} /> },
+                { id: 'onboarding', label: t('search.filter_onboarding', 'Onboarding'), icon: <GraduationCap size={13} /> },
+                { id: 'messages', label: t('search.filter_messages', 'Messages'), icon: <MessageSquare size={13} /> },
+                { id: 'documents', label: t('search.filter_documents', 'Documents'), icon: <FileText size={13} /> },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -480,6 +591,7 @@ export const GlobalSearch: React.FC = () => {
                     fontWeight: 500,
                     transition: 'all 0.15s ease',
                     whiteSpace: 'nowrap',
+                    cursor: 'pointer',
                   }}
                   onMouseEnter={(e) => {
                     if (activeTab !== tab.id) {
@@ -494,6 +606,53 @@ export const GlobalSearch: React.FC = () => {
                 >
                   {tab.icon}
                   <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Role Filter Chips */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 20px',
+                background: 'var(--surface)',
+                borderBottom: '1px solid var(--border)',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginRight: '4px', whiteSpace: 'nowrap' }}>
+                {t('search.filter_by_role', 'Filter by Role')}:
+              </span>
+              {[
+                { id: 'all', label: t('roles.allRoles', 'All Roles') },
+                { id: 'admin', label: t('roles.admin', 'Admin') },
+                { id: 'hr', label: t('roles.hr', 'HR') },
+                { id: 'area_manager', label: t('roles.area_manager', 'Area Manager') },
+                { id: 'store_manager', label: t('roles.store_manager', 'Store Manager') },
+                { id: 'employee', label: t('roles.employee', 'Employee') },
+              ].map((roleChip) => (
+                <button
+                  key={roleChip.id}
+                  onClick={() => setRoleFilter(roleChip.id as any)}
+                  style={{
+                    background: roleFilter === roleChip.id ? 'var(--accent-light)' : 'transparent',
+                    color: roleFilter === roleChip.id ? 'var(--accent)' : 'var(--text-muted)',
+                    border: '1.5px solid',
+                    borderColor: roleFilter === roleChip.id ? 'var(--accent)' : 'var(--border)',
+                    borderRadius: '14px',
+                    padding: '2px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {roleChip.label}
                 </button>
               ))}
             </div>
@@ -665,3 +824,4 @@ export const GlobalSearch: React.FC = () => {
     </>
   );
 };
+

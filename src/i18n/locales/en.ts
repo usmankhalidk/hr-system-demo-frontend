@@ -74,6 +74,26 @@ const en = {
     selected: 'selected',
   },
 
+  search: {
+    placeholder_detailed: 'Find employees, candidates, stores, documents...',
+    filter_employees: 'Employees',
+    filter_candidates: 'Candidates',
+    filter_jobs: 'Jobs',
+    filter_stores: 'Stores',
+    filter_onboarding: 'Onboarding',
+    filter_messages: 'Messages',
+    filter_documents: 'Documents',
+    filter_by_role: 'Filter by Role',
+    employees: 'Employees',
+    candidates: 'Candidates',
+    jobs: 'Job Openings',
+    stores: 'Stores',
+    onboarding_templates: 'Onboarding Templates',
+    onboarding_tasks: 'Employee Onboarding',
+    messages: 'Messages',
+    documents: 'Documents',
+  },
+
   // ─── Roles ────────────────────────────────────────────────────────────────
   roles: {
     admin: 'Administrator',
@@ -84,6 +104,7 @@ const en = {
     store_manager_full: 'Store Manager',
     employee: 'Employee',
     store_terminal: 'Terminal',
+    allRoles: 'All Roles',
   },
 
   // ─── Navigation ───────────────────────────────────────────────────────────

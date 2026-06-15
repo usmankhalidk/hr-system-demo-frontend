@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Briefcase, CalendarClock, ExternalLink, FileText, GraduationCap, LogOut, Settings, ShieldAlert, UserCircle2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 import { UserRole } from '../../types';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -106,6 +107,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { isMobile } = useBreakpoint();
+  const { socket } = useSocket();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [companyName, setCompanyName] = useState<string>('');
@@ -160,7 +162,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
   const [markingAll, setMarkingAll] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
-  // Fetch on open and poll every 60s
+  // Fetch on mount and listen to real-time notification events via Socket.io
   useEffect(() => {
     if (!user || user.role === 'store_terminal') return;
     const load = () => {
@@ -171,10 +173,21 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         })
         .catch(() => {});
     };
+
     load();
-    const iv = setInterval(load, 15_000);
-    return () => clearInterval(iv);
-  }, [user?.id]);
+
+    if (socket) {
+      const handleNotification = (data: { userId: number }) => {
+        if (data.userId === user.id) {
+          load();
+        }
+      };
+      socket.on('NOTIFICATION_CREATED', handleNotification);
+      return () => {
+        socket.off('NOTIFICATION_CREATED', handleNotification);
+      };
+    }
+  }, [user?.id, socket]);
 
   // Close dropdown on outside click
   useEffect(() => {
