@@ -9,6 +9,7 @@ import { WeekPicker } from '../../components/ui/WeekPicker';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import CustomSelect from '../../components/ui/CustomSelect';
 import AnomalyList from './AnomalyList';
+import { HelpCircle, Clock, AlertTriangle, Coffee, LogOut, CheckCircle2, UserX, X } from 'lucide-react';
 
 function isoWeekToDateRange(isoWeek: string): { from: string; to: string } | null {
   const m = isoWeek.match(/^(\d{4})-W(\d{1,2})$/);
@@ -48,6 +49,7 @@ export default function AnomaliesPage() {
   const [filterStores, setFilterStores]   = useState<Array<{ id: number; name: string; companyName?: string }>>([]);
 
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [compact, setCompact] = useState(false);
 
   // Temporary filter states
@@ -298,6 +300,36 @@ export default function AnomaliesPage() {
           <span style={{ display: isMobile ? 'none' : 'inline' }}>
             {compact ? t('attendance.compact', 'Compatto') : t('attendance.normal', 'Normale')}
           </span>
+        </button>
+
+        {/* Info / Guide Button */}
+        <button
+          onClick={() => setShowInfoModal(true)}
+          title={t('attendance.infoTitle', 'Come funzionano le anomalie')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 12px',
+            height: 42,
+            borderRadius: 12,
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--text-muted)';
+            e.currentTarget.style.background = 'var(--surface-warm)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--border)';
+            e.currentTarget.style.background = 'var(--surface)';
+          }}
+        >
+          <HelpCircle size={16} />
         </button>
       </div>
 
@@ -558,6 +590,226 @@ export default function AnomaliesPage() {
                   {t('employees.applyFilters', 'Applica filtri')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showInfoModal && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(13,33,55,0.48)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setShowInfoModal(false)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: '16px',
+              width: 'min(580px, 94vw)',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.22)',
+              overflow: 'hidden',
+              border: '1px solid var(--border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Accent stripe */}
+            <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%)' }} />
+
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <HelpCircle size={20} style={{ color: 'var(--accent)' }} />
+                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  {t('attendance.info_modal_title', 'Come funzionano le anomalie')}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowInfoModal(false)}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: 4,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              
+              {/* Timing Section */}
+              <div style={{ background: 'var(--accent-light)', border: '1px solid rgba(201,151,58,0.2)', borderRadius: 12, padding: '16px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Clock size={16} style={{ color: 'var(--accent)' }} />
+                  <span style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--accent)' }}>
+                    {t('attendance.info_timing_title', 'Rilevamento in Tempo Reale & Notifiche')}
+                  </span>
+                </div>
+                <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                  {t('attendance.info_timing_desc', 'Il sistema esegue controlli in background ogni 15 minuti sui turni attivi della giornata. Le anomalie e le notifiche non richiedono che la giornata sia conclusa: vengono segnalate in tempo reale per consentire interventi immediati.')}
+                </p>
+              </div>
+
+              {/* Grid of anomaly types */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                
+                {/* No Show */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <UserX size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                        {t('attendance.info_noshow_title', 'Assente (No Show)')}
+                      </span>
+                      <span style={{ fontSize: '10px', background: 'rgba(239, 68, 68, 0.12)', color: '#EF4444', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                        {t('attendance.real_time_badge', 'IN TEMPO REALE')}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_noshow_desc', 'Scatta 10 minuti dopo l\'inizio programmato del turno se il dipendente non ha ancora registrato un Check-in. Se il dipendente timbra in seguito, lo stato si converte automaticamente in "Ritardo".')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Late Arrival */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Clock size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {t('attendance.info_late_title', 'Ingresso in Ritardo')}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_late_desc', 'Rilevato immediatamente se l\'orario del Check-in supera l\'inizio previsto del turno di oltre 10 minuti.')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Missing Checkout */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <AlertTriangle size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                        {t('attendance.info_missing_checkout_title', 'Mancata Uscita')}
+                      </span>
+                      <span style={{ fontSize: '10px', background: 'rgba(239, 68, 68, 0.12)', color: '#EF4444', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                        {t('attendance.real_time_badge', 'IN TEMPO REALE')}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_missing_checkout_desc', 'Rilevato 30 minuti dopo il termine previsto del turno se il dipendente ha effettuato il Check-in ma non ha registrato alcuna uscita.')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Early Exit */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <LogOut size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {t('attendance.info_early_title', 'Uscita Anticipata')}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_early_desc', 'Segnalato se la timbratura di Check-out avviene prima dell\'orario di fine turno previsto.')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Long Break */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Coffee size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {t('attendance.info_break_title', 'Pausa Prolungata')}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_break_desc', 'Generato se il dipendente supera il tempo di pausa previsto di oltre 5 minuti.')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Overtime */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <CheckCircle2 size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {t('attendance.info_overtime_title', 'Straordinario')}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_overtime_desc', 'Rilevato se il Check-out avviene oltre 1 ora dopo il termine concordato del turno.')}
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '14px 24px',
+                borderTop: '1px solid var(--border)',
+                background: 'var(--surface-warm)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                flexShrink: 0,
+              }}
+            >
+              <button
+                onClick={() => setShowInfoModal(false)}
+                style={{
+                  padding: '9px 24px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: 'var(--primary)',
+                  color: '#fff',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {t('common.close', 'Chiudi')}
+              </button>
             </div>
           </div>
         </div>,

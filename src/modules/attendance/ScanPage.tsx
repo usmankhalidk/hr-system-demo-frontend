@@ -216,7 +216,7 @@ export default function ScanPage() {
   }, []);
 
   useEffect(() => {
-    if (!user || (user.role !== 'employee' && user.role !== 'store_manager')) return;
+    if (!user || !['employee', 'store_manager', 'hr', 'area_manager'].includes(user.role)) return;
     if (!token) return;
     if (user.requiresDeviceRegistration === true) {
       const next = encodeURIComponent('/presenze/scan' + (token ? `?token=${token}` : ''));
@@ -226,7 +226,7 @@ export default function ScanPage() {
 
   // ── Load today's attendance state ────────────────────────────────────────
   const loadDailyState = useCallback(async () => {
-    if (!user || (user.role !== 'employee' && user.role !== 'store_manager')) {
+    if (!user || !['employee', 'store_manager', 'hr', 'area_manager'].includes(user.role)) {
       setStateLoading(false);
       return;
     }
@@ -272,7 +272,7 @@ export default function ScanPage() {
   }, [loadDailyState]);
 
   // ── Non-employee role guard ────────────────────────────────────────────────
-  if (user && user.role !== 'employee' && user.role !== 'store_manager') {
+  if (user && !['employee', 'store_manager', 'hr', 'area_manager'].includes(user.role)) {
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',

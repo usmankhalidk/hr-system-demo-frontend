@@ -172,7 +172,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         .catch(() => {});
     };
     load();
-    const iv = setInterval(load, 60_000);
+    const iv = setInterval(load, 15_000);
     return () => clearInterval(iv);
   }, [user?.id]);
 

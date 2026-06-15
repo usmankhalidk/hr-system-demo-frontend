@@ -229,20 +229,20 @@ function AppRoutes() {
       } />
 
       <Route path="/presenze/checkin" element={
-        <ProtectedRoute roles={['employee', 'store_manager']}>
+        <ProtectedRoute roles={['employee', 'store_manager', 'hr', 'area_manager']}>
           <Layout title={t('checkin.title')}><EmployeeCheckinPage /></Layout>
         </ProtectedRoute>
       } />
 
       {/* QR scan landing page — opened by scanning the store terminal QR code */}
       <Route path="/presenze/scan" element={
-        <ProtectedRoute roles={['employee', 'store_manager']}>
+        <ProtectedRoute roles={['employee', 'store_manager', 'hr', 'area_manager']}>
           <ScanPage />
         </ProtectedRoute>
       } />
 
       <Route path="/device/register" element={
-        <ProtectedRoute roles={['employee', 'store_terminal', 'store_manager']}>
+        <ProtectedRoute roles={['employee', 'store_terminal', 'store_manager', 'hr', 'area_manager']}>
           <DeviceRegistrationPage />
         </ProtectedRoute>
       } />

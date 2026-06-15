@@ -233,7 +233,7 @@ export default function EmployeeCheckinPage() {
 
   // ── Load today's state ───────────────────────────────────────────────────
   const loadDailyState = useCallback(async () => {
-    if (!user || (user.role !== 'employee' && user.role !== 'store_manager')) {
+    if (!user || !['employee', 'store_manager', 'hr', 'area_manager'].includes(user.role)) {
       setStateLoading(false);
       return;
     }
