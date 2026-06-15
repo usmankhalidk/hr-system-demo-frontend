@@ -1201,6 +1201,10 @@ export default function LegalDocumentsAdminPage() {
                       font-family: var(--font-body);
                       color: var(--text-primary);
                     }
+
+                    .responsive-card-body {
+                      padding: 24px;
+                    }
                     
                     @media (max-width: 1024px) {
                       .responsive-page-container {

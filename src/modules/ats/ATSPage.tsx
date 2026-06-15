@@ -6743,6 +6743,8 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
   const [copiedCompany, setCopiedCompany] = useState(false);
   const [complianceRefId, setComplianceRefId] = useState<string | null>(null);
   const [expandedJobIds, setExpandedJobIds] = useState<Set<number>>(new Set());
+  const [searchParams] = useSearchParams();
+  const deepLinkJobId = searchParams.get('jobId') ? Number(searchParams.get('jobId')) : null;
 
   const toggleDescription = useCallback((jobId: number) => {
     setExpandedJobIds((prev) => {
@@ -6820,6 +6822,23 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
   }, [filterStatus, user?.isSuperAdmin, companyId, defaultCompanyId, showToast, t]);
 
   useEffect(() => { fetch(); }, [fetch]);
+
+  useEffect(() => {
+    if (deepLinkJobId && jobs.some(j => j.id === deepLinkJobId)) {
+      setExpandedJobIds(prev => new Set([...prev, deepLinkJobId]));
+      setTimeout(() => {
+        const el = document.getElementById(`job-row-${deepLinkJobId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.style.transition = 'all 0.4s ease';
+          el.style.background = 'var(--accent-light)';
+          setTimeout(() => {
+            el.style.background = 'var(--surface)';
+          }, 2000);
+        }
+      }, 300);
+    }
+  }, [deepLinkJobId, jobs]);
 
   // Socket listeners for real-time job updates
   const { socket } = useSocket();
@@ -7243,6 +7262,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                   const salarySummary = formatEuroRange(job.salaryMin, job.salaryMax, locale, t('common.noData'));
                   return (
                     <div
+                      id={`job-row-${job.id}`}
                       key={job.id}
                       onMouseEnter={() => setHoveredId(job.id)}
                       onMouseLeave={() => setHoveredId(null)}

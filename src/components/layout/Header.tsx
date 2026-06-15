@@ -9,6 +9,7 @@ import { UserRole } from '../../types';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getAvatarUrl } from '../../api/client';
 import { getCompanyById } from '../../api/companies';
+import { GlobalSearch } from './GlobalSearch';
 import {
   getNotifications,
   markNotificationRead,
@@ -263,9 +264,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         <MenuIcon />
       </button>
 
-      {/* Title */}
-      <div role="heading" aria-level={2} style={{
-        flex: 1,
+      <div role="heading" aria-level={2} className="header-title" style={{
         fontSize: '16px',
         fontWeight: 600,
         fontFamily: 'var(--font-display)',
@@ -275,12 +274,14 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
+        marginRight: '12px',
       }}>{title}</div>
+
+
+      <GlobalSearch />
+      <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <span className="hide-mobile">
-          <LanguageSwitcher variant="pill" />
-        </span>
-        <span className="show-mobile-only-header">
           <LanguageSwitcher variant="pill" />
         </span>
         {user && user.role !== 'store_terminal' && (
@@ -318,8 +319,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
               {unreadCount > 0 && (
                 <span style={{
                   position: 'absolute',
-                  top: 3,
-                  right: 3,
+                  top: -2,
+                  right: -2,
                   background: '#DC2626',
                   color: '#fff',
                   borderRadius: 99,
