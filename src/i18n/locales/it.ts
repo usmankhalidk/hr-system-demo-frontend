@@ -73,6 +73,26 @@ const it = {
     selected: 'selezionato/i',
   },
 
+  search: {
+    placeholder_detailed: 'Cerca dipendenti, candidati, negozi, documenti...',
+    filter_employees: 'Dipendenti',
+    filter_candidates: 'Candidati',
+    filter_jobs: 'Lavori',
+    filter_stores: 'Negozi',
+    filter_onboarding: 'Onboarding',
+    filter_messages: 'Messaggi',
+    filter_documents: 'Documenti',
+    filter_by_role: 'Filtra per Ruolo',
+    employees: 'Dipendenti',
+    candidates: 'Candidati',
+    jobs: 'Posizioni Aperte',
+    stores: 'Negozi',
+    onboarding_templates: 'Template Onboarding',
+    onboarding_tasks: 'Onboarding Dipendente',
+    messages: 'Messaggi',
+    documents: 'Documenti',
+  },
+
   // ─── Roles ────────────────────────────────────────────────────────────────
   roles: {
     admin: 'Amministratore',
@@ -83,6 +103,7 @@ const it = {
     store_manager_full: 'Responsabile Negozio',
     employee: 'Dipendente',
     store_terminal: 'Terminale',
+    allRoles: 'Tutti i Ruoli',
   },
 
   // ─── Navigation ───────────────────────────────────────────────────────────

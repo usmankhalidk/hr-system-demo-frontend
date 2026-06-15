@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import {
   getLeaveRequests,
   getPendingLeaveApprovals,
@@ -41,6 +42,7 @@ export default function LeavePage() {
 function PersonalLeavePage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { isMobile } = useBreakpoint();
 
   const [activeTab, setActiveTab] = useState<Tab>('mine');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -142,7 +144,7 @@ function PersonalLeavePage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 860, margin: '0 auto' }}>
+    <div style={{ padding: isMobile ? '16px 0' : '24px 20px', maxWidth: 860, margin: '0 auto' }}>
       {/* Page header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

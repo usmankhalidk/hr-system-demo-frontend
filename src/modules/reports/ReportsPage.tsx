@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { TimePicker } from '../../components/ui/TimePicker';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { Company } from '../../types';
 import { getCompanies } from '../../api/companies';
 import {
@@ -203,6 +204,7 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
   onDownloadLast: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const { isMobile } = useBreakpoint();
 
   const isRecentlyGenerated = (() => {
     if (!report.lastGenerated) return false;
@@ -297,7 +299,7 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
         </div>
 
         {/* Meta */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, marginBottom: 14 }}>
           {[
             { label: t('reports.card.frequency'), value: displayFrequency },
             { label: t('reports.card.nextRun'), value: report.nextRun },
@@ -340,7 +342,7 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
           <button onClick={onRun} style={{
             padding: '7px 14px',
             background: report.status === 'attivo' ? '#DC2626' : report.color,
@@ -348,6 +350,8 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
             borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
             fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 5,
             transition: 'all 0.2s ease',
+            flex: isMobile ? '1 1 auto' : 'none',
+            justifyContent: 'center',
           }}>
             {report.status === 'attivo' ? (
               <>
@@ -369,11 +373,15 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
             padding: '7px 14px', background: 'transparent', color: 'var(--text-secondary)',
             border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 12, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'var(--font-body)',
+            flex: isMobile ? '1 1 auto' : 'none',
+            textAlign: 'center',
           }}>{t('reports.card.configure')}</button>
           <button onClick={onDownloadLast} style={{
             padding: '7px 14px', background: 'transparent', color: 'var(--text-secondary)',
             border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 12, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 5,
+            flex: isMobile ? '1 1 auto' : 'none',
+            justifyContent: 'center',
           }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
             {t('reports.card.downloadLast')}
@@ -386,6 +394,7 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
 
 function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose: () => void; onSave: (data: Partial<ReportData>) => void }) {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
   const [recipients, setRecipients] = useState([...report.recipients]);
   const [newEmail, setNewEmail] = useState('');
   const [sections, setSections] = useState(() => {
@@ -466,7 +475,7 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
           {/* Recipients */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>{t('reports.modal.recipientsLabel')}</label>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexDirection: isMobile ? 'column' : 'row' }}>
               <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
                 placeholder={t('reports.modal.emailPlaceholder')}
                 style={{ flex: 1, padding: '8px 12px', border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none' }}
@@ -509,9 +518,9 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '9px 20px', background: 'transparent', color: 'var(--text-secondary)', border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>{t('reports.modal.cancel')}</button>
-          <button onClick={handleSave} style={{ padding: '9px 20px', background: 'var(--primary)', color: '#FFF', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>{t('reports.modal.save')}</button>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: isMobile ? 'space-between' : 'flex-end' }}>
+          <button onClick={onClose} style={{ flex: isMobile ? 1 : 'none', padding: '9px 20px', background: 'transparent', color: 'var(--text-secondary)', border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>{t('reports.modal.cancel')}</button>
+          <button onClick={handleSave} style={{ flex: isMobile ? 1 : 'none', padding: '9px 20px', background: 'var(--primary)', color: '#FFF', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>{t('reports.modal.save')}</button>
         </div>
       </div>
     </div>
@@ -546,6 +555,7 @@ export function ReportsPage() {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { isMobile } = useBreakpoint();
   const [loading, setLoading] = useState(true);
 
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -885,7 +895,7 @@ export function ReportsPage() {
       </div>
 
       {/* Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
           { label: t('reports.stats.active'), value: totalActive, color: '#15803D', icon: '✓' },
           { label: t('reports.stats.totalRuns'), value: totalRuns, color: '#0284C7', icon: '▶' },
@@ -916,7 +926,7 @@ export function ReportsPage() {
       </Card>
 
       {/* Reports grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 20 }}>
         {visibleReports.map(report => (
           <ReportCard
             key={report.id}
@@ -954,19 +964,22 @@ export function ReportsPage() {
 
                 return (
                   <div key={item.id} style={{
-                    padding: '14px 22px', borderBottom: i < arr.length - 1 ? '1px solid var(--surface-warm)' : 'none',
-                    display: 'flex', alignItems: 'center', gap: 14,
+                    padding: isMobile ? '14px 16px' : '14px 22px', borderBottom: i < arr.length - 1 ? '1px solid var(--surface-warm)' : 'none',
+                    display: 'flex', flexDirection: isMobile ? 'column' : 'row',
+                    alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 12 : 14,
                   }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: `${itemColor}12`, border: `1px solid ${itemColor}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={itemColor} strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t(`reports.data.${item.reportId}.name`)}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-disabled)' }}>{t('reports.archive.generatedOn')} {formattedDate} · {formattedSize}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: `${itemColor}12`, border: `1px solid ${itemColor}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={itemColor} strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{t(`reports.data.${item.reportId}.name`)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-disabled)' }}>{t('reports.archive.generatedOn')} {formattedDate} · {formattedSize}</div>
+                      </div>
                     </div>
                     <button
                       onClick={() => handleDownloadArchived(item)}
-                      style={{ padding: '5px 12px', background: 'transparent', color: 'var(--text-secondary)', border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 4 }}
+                      style={{ padding: '8px 12px', background: 'transparent', color: 'var(--text-secondary)', border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, width: isMobile ? '100%' : 'auto' }}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
                       {t('reports.archive.downloadPdf')}

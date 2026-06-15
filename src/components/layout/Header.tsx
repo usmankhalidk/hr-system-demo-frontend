@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Briefcase, CalendarClock, ExternalLink, FileText, GraduationCap, LogOut, Settings, ShieldAlert, UserCircle2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 import { UserRole } from '../../types';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getAvatarUrl } from '../../api/client';
 import { getCompanyById } from '../../api/companies';
+import { GlobalSearch } from './GlobalSearch';
 import {
   getNotifications,
   markNotificationRead,
@@ -105,6 +107,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { isMobile } = useBreakpoint();
+  const { socket } = useSocket();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [companyName, setCompanyName] = useState<string>('');
@@ -159,7 +162,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
   const [markingAll, setMarkingAll] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
-  // Fetch on open and poll every 60s
+  // Fetch on mount and listen to real-time notification events via Socket.io
   useEffect(() => {
     if (!user || user.role === 'store_terminal') return;
     const load = () => {
@@ -170,10 +173,21 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         })
         .catch(() => {});
     };
+
     load();
-    const iv = setInterval(load, 60_000);
-    return () => clearInterval(iv);
-  }, [user?.id]);
+
+    if (socket) {
+      const handleNotification = (data: { userId: number }) => {
+        if (data.userId === user.id) {
+          load();
+        }
+      };
+      socket.on('NOTIFICATION_CREATED', handleNotification);
+      return () => {
+        socket.off('NOTIFICATION_CREATED', handleNotification);
+      };
+    }
+  }, [user?.id, socket]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -263,9 +277,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         <MenuIcon />
       </button>
 
-      {/* Title */}
-      <div role="heading" aria-level={2} style={{
-        flex: 1,
+      <div role="heading" aria-level={2} className="header-title" style={{
         fontSize: '16px',
         fontWeight: 600,
         fontFamily: 'var(--font-display)',
@@ -275,12 +287,14 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
+        marginRight: '12px',
       }}>{title}</div>
+
+
+      <GlobalSearch />
+      <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <span className="hide-mobile">
-          <LanguageSwitcher variant="pill" />
-        </span>
-        <span className="show-mobile-only-header">
           <LanguageSwitcher variant="pill" />
         </span>
         {user && user.role !== 'store_terminal' && (
@@ -318,8 +332,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
               {unreadCount > 0 && (
                 <span style={{
                   position: 'absolute',
-                  top: 3,
-                  right: 3,
+                  top: -2,
+                  right: -2,
                   background: '#DC2626',
                   color: '#fff',
                   borderRadius: 99,

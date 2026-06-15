@@ -216,7 +216,7 @@ export default function ScanPage() {
   }, []);
 
   useEffect(() => {
-    if (!user || (user.role !== 'employee' && user.role !== 'store_manager')) return;
+    if (!user || !['employee', 'store_manager', 'hr', 'area_manager'].includes(user.role)) return;
     if (!token) return;
     if (user.requiresDeviceRegistration === true) {
       const next = encodeURIComponent('/presenze/scan' + (token ? `?token=${token}` : ''));
@@ -226,7 +226,7 @@ export default function ScanPage() {
 
   // ── Load today's attendance state ────────────────────────────────────────
   const loadDailyState = useCallback(async () => {
-    if (!user || (user.role !== 'employee' && user.role !== 'store_manager')) {
+    if (!user || !['employee', 'store_manager', 'hr', 'area_manager'].includes(user.role)) {
       setStateLoading(false);
       return;
     }
@@ -272,7 +272,7 @@ export default function ScanPage() {
   }, [loadDailyState]);
 
   // ── Non-employee role guard ────────────────────────────────────────────────
-  if (user && user.role !== 'employee' && user.role !== 'store_manager') {
+  if (user && !['employee', 'store_manager', 'hr', 'area_manager'].includes(user.role)) {
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',
@@ -416,9 +416,6 @@ export default function ScanPage() {
       });
       
       setStage('success');
-      window.setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 2000);
     } catch (err: any) {
       console.error('Attendance attempt error:', err);
       
@@ -477,10 +474,6 @@ export default function ScanPage() {
           });
 
           setStage('success');
-          // Match the online experience exactly
-          window.setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 2000);
         } catch (enqueueErr) {
           console.error('Offline enqueue failed:', enqueueErr);
           setStage('error');

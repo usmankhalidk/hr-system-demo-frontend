@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
@@ -41,7 +42,16 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'active' | 'trash'>('active');
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const searchParamVal = searchParams.get('search') || '';
+  const [search, setSearch] = useState(searchParamVal);
+
+  useEffect(() => {
+    if (searchParamVal) {
+      setSearch(searchParamVal);
+    }
+  }, [searchParamVal]);
+
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showCategories, setShowCategories] = useState(false);

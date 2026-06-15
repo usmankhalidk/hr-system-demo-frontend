@@ -179,7 +179,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
 
   if (rangeExceeds14Days) {
     return (
-      <div style={{ margin: `20px ${pad}` }}>
+      <div style={{ margin: isMobile ? '20px 0' : `20px ${pad}` }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '12px 16px', borderRadius: 'var(--radius)',
@@ -210,7 +210,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
 
   if (error) {
     return (
-      <div style={{ margin: `20px ${pad}` }}>
+      <div style={{ margin: isMobile ? '20px 0' : `20px ${pad}` }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '12px 16px', borderRadius: 'var(--radius)',
@@ -254,7 +254,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
           : 'repeat(6, minmax(0, 1fr))',
         gap: isMobile ? 8 : 12,
         marginBottom: isMobile ? 16 : 24,
-        padding: isMobile ? '0 16px' : `0 ${pad}`,
+        padding: isMobile ? '0' : `0 ${pad}`,
       }}>
         {Object.entries(ANOMALY_META).map(([type, meta]) => {
           const count = countByType[type] ?? 0;
