@@ -21,6 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { snakeKeys } from '../../api/client';
 import { Company } from '../../types';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 interface AutomationItem {
   id: string;
@@ -90,6 +91,7 @@ const INITIAL_DATA: AutomationCategory[] = [
 export default function AutomationsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { isMobile } = useBreakpoint();
   const [categories, setCategories] = useState(INITIAL_DATA);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -182,9 +184,16 @@ export default function AutomationsPage() {
   const totalItems = categories.flatMap(c => c.items).length;
 
   return (
-    <div className="page-enter" style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 20px' }}>
+    <div className="page-enter" style={{ maxWidth: 1000, margin: '0 auto', padding: isMobile ? '16px 0' : '24px 20px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: isMobile ? 'stretch' : 'flex-start',
+        justifyContent: 'space-between',
+        marginBottom: 24,
+        gap: 16
+      }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0, fontFamily: 'var(--font-display)' }}>
             {t('automations.page_title')}
@@ -193,9 +202,15 @@ export default function AutomationsPage() {
             {totalEnabled}/{totalItems} {t('common.active', 'active')} · {t('automations.control_panel')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{
+          display: 'flex',
+          gap: 10,
+          alignItems: isMobile ? 'stretch' : 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          width: isMobile ? '100%' : 'auto',
+        }}>
           {isSuperAdmin && (
-            <div style={{ width: 240 }}>
+            <div style={{ width: isMobile ? '100%' : 240 }}>
               <Select
                 value={selectedCompanyId || ''}
                 onChange={e => setSelectedCompanyId(Number((e.target as HTMLSelectElement).value))}
@@ -208,18 +223,18 @@ export default function AutomationsPage() {
               </Select>
             </div>
           )}
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', width: isMobile ? '100%' : 'auto' }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-disabled)' }} />
             <Input 
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={t('automations.search_placeholder')}
-              style={{ paddingLeft: 32, height: 38, width: 220, fontSize: 13, borderRadius: 10 }}
+              style={{ paddingLeft: 32, height: 38, width: isMobile ? '100%' : 220, fontSize: 13, borderRadius: 10 }}
             />
           </div>
           <Button 
             variant="primary" 
-            style={{ height: 38, padding: '0 20px', minWidth: 100, borderRadius: 10, fontWeight: 700 }}
+            style={{ height: 38, padding: '0 20px', minWidth: 100, borderRadius: 10, fontWeight: 700, width: isMobile ? '100%' : 'auto' }}
             onClick={handleSave}
             disabled={saving || Object.keys(pendingChanges).length === 0}
           >

@@ -129,7 +129,7 @@ export default function AnomaliesPage() {
         background: 'var(--primary)',
         padding: heroPad,
         paddingBottom: 24,
-        margin: isMobile ? '16px 16px 0' : isTablet ? '20px 20px 0' : '24px 32px 0',
+        margin: isMobile ? '16px 0 0' : isTablet ? '20px 20px 0' : '24px 32px 0',
         borderRadius: 'var(--radius-lg)',
         boxShadow: 'var(--shadow-md)',
       }}>
@@ -187,7 +187,7 @@ export default function AnomaliesPage() {
 
       {/* ── Filter bar ────────────────────────────────────────────────────── */}
       <div style={{
-        margin: isMobile ? '12px 16px 0' : isTablet ? '16px 20px 0' : '20px 32px 0',
+        margin: isMobile ? '12px 0 0' : isTablet ? '16px 20px 0' : '20px 32px 0',
         padding: filterPad,
         background: 'var(--surface)',
         border: '1px solid var(--border)',

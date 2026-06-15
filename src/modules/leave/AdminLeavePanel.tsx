@@ -32,6 +32,7 @@ import ApprovalConfigPanel from './ApprovalConfigPanel';
 import LeaveCalendar from './LeaveCalendar';
 import { translateApiError } from '../../utils/apiErrors';
 import { Store as StoreModel } from '../../types';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 // ── Status badge ───────────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ interface BalancesTabProps {
 
 export function BalancesTab({ showFlash }: BalancesTabProps) {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
 
   const currentYear = new Date().getFullYear();
   const yearOptions: number[] = [];
@@ -412,7 +414,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   }
 
   return (
-    <div style={{ padding: '20px 32px' }}>
+    <div style={{ padding: isMobile ? '16px 0 20px' : '20px 32px' }}>
       {/* Year & Search & Export/Import Row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -942,6 +944,7 @@ type CreateEmployeeOption = {
 export default function AdminLeavePanel() {
   const { t, i18n } = useTranslation();
   const { user, permissions } = useAuth();
+  const { isMobile } = useBreakpoint();
 
   const isAdmin = user?.role === 'admin';
   const effectiveApproverRole = user?.role === 'admin' ? 'admin' : user?.role;
@@ -1413,7 +1416,7 @@ export default function AdminLeavePanel() {
     <div style={{ padding: 0, minHeight: '100%' }}>
 
       {/* ── Header Summary ────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 24px 0' }}>
+      <div style={{ padding: isMobile ? '16px 0 0' : '20px 24px 0' }}>
         <div style={{
           background: 'var(--primary)',
           border: '1px solid rgba(13,33,55,0.9)',
@@ -1636,7 +1639,7 @@ export default function AdminLeavePanel() {
       </div>
 
       {/* ── Tabs + Filters bar ───────────────────────────────────────────── */}
-      <div style={{ padding: '14px 24px 0' }}>
+      <div style={{ padding: isMobile ? '14px 0 0' : '14px 24px 0' }}>
         <div style={{
           background: '#f8f3ec',
           border: '1px solid #e3d7c8',
@@ -1755,7 +1758,7 @@ export default function AdminLeavePanel() {
       {panelTab === 'requests' && (
         <>
           {/* ── Table ─────────────────────────────────────────────────────── */}
-          <div style={{ padding: '20px 24px 24px' }}>
+          <div style={{ padding: isMobile ? '16px 0 20px' : '20px 24px 24px' }}>
             {flash && (
               <div style={{
                 background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
@@ -2049,7 +2052,7 @@ export default function AdminLeavePanel() {
         <>
           {flash && (
             <div style={{
-              margin: '16px 32px 0',
+              margin: isMobile ? '16px 0 0' : '16px 32px 0',
               background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
               borderLeft: '4px solid #16a34a', borderRadius: 8,
               padding: '10px 16px', color: '#16a34a', fontSize: 13, fontWeight: 600,
@@ -2063,14 +2066,14 @@ export default function AdminLeavePanel() {
 
       {/* ── Calendar tab ────────────────────────────────────────────────── */}
       {panelTab === 'calendar' && (
-        <div style={{ padding: '20px 24px 24px' }}>
+        <div style={{ padding: isMobile ? '16px 0 20px' : '20px 24px 24px' }}>
           <LeaveCalendar onDayClick={(date) => { setCStart(date); setCEnd(date); setCreateOpen(true); }} onRefresh={fetchRequests} />
         </div>
       )}
 
       {/* ── Approval Config tab ─────────────────────────────────────────── */}
       {panelTab === 'approval_config' && !user?.isSuperAdmin && (
-        <div style={{ padding: '20px 24px 24px' }}>
+        <div style={{ padding: isMobile ? '16px 0 20px' : '20px 24px 24px' }}>
           <ApprovalConfigPanel />
         </div>
       )}

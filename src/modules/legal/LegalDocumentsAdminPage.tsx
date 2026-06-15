@@ -449,9 +449,9 @@ export default function LegalDocumentsAdminPage() {
   const staticBackupDoc = STATIC_ORIGINAL_DOCS[activeDoc]?.[activeLang] || { title: '', content: '' };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto', fontFamily: 'var(--font-body)', color: 'var(--text-primary)' }}>
+    <div className="responsive-page-container">
       {/* Page Title & Subtitle */}
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="responsive-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--primary)', fontFamily: 'var(--font-display)', margin: 0 }}>
             {activeLang === 'it' ? 'Pagine Legali' : 'Legal Pages'}
@@ -465,7 +465,7 @@ export default function LegalDocumentsAdminPage() {
       </div>
 
       {/* Top Document Selection Tabs Bar (Full Width) */}
-      <div style={{
+      <div className="scrollable-tabs" style={{
         display: 'flex',
         borderBottom: '1px solid var(--border)',
         marginBottom: '24px',
@@ -624,7 +624,7 @@ export default function LegalDocumentsAdminPage() {
           </div>
         ) : activeTab === 'reference' ? (
           /* Static Original Backups (Read-Only Reference View) */
-          <div style={{ padding: '24px' }}>
+          <div className="responsive-card-body">
             <div style={{
               background: 'rgba(201, 151, 58, 0.03)',
               border: '1.5px solid rgba(201, 151, 58, 0.15)',
@@ -643,11 +643,10 @@ export default function LegalDocumentsAdminPage() {
               </p>
             </div>
 
-            <div style={{
+            <div className="responsive-reference-box" style={{
               border: '1.5px solid var(--border)',
               borderRadius: 'var(--radius-lg)',
               background: 'var(--background)',
-              padding: '32px',
               maxHeight: '600px',
               overflowY: 'auto'
             }}>
@@ -669,15 +668,14 @@ export default function LegalDocumentsAdminPage() {
               />
             </div>
           </div>
-        ) : (
-          /* Editable Database Version tab content */
-          <div style={{ padding: '24px' }}>
+        ) : (          /* Editable Database Version tab content */
+          <div className="responsive-card-body">
             {/* Platform Details Card */}
             <div style={{
               background: 'var(--surface)',
               border: '1.5px solid var(--border)',
               borderRadius: 'var(--radius-lg)',
-              padding: '20px',
+              padding: '24px',
               marginBottom: '24px',
               boxShadow: 'var(--shadow-sm)',
               position: 'relative'
@@ -765,7 +763,7 @@ export default function LegalDocumentsAdminPage() {
               </div>
 
               {!isPlatformEditing ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '14px' }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '14px' }}>
                   {/* Company Name Badge/Card */}
                   <div style={{
                     display: 'flex',
@@ -835,7 +833,7 @@ export default function LegalDocumentsAdminPage() {
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                       {activeLang === 'it' ? 'Nome Azienda Piattaforma' : 'Platform Company Name'}
@@ -952,9 +950,9 @@ export default function LegalDocumentsAdminPage() {
             </div>
 
             {/* Split layout: Editor & Preview */}
-            <div style={{ display: 'flex', gap: '24px', position: 'relative' }}>
+            <div className="responsive-split-layout" style={{ display: 'flex', gap: '24px', position: 'relative' }}>
               {/* Left Column: WYSIWYG Editor */}
-              <div style={{ 
+              <div className="responsive-column" style={{ 
                 flex: isFullWidth ? 1 : 0.5, 
                 width: isFullWidth ? '100%' : '50%',
                 display: 'flex', 
@@ -1194,6 +1192,83 @@ export default function LegalDocumentsAdminPage() {
                       border: 0;
                       border-top: 1px solid var(--border);
                     }
+
+                    /* Responsive Layout Adjustments */
+                    .responsive-page-container {
+                      padding: 24px;
+                      max-width: 1440px;
+                      margin: 0 auto;
+                      font-family: var(--font-body);
+                      color: var(--text-primary);
+                    }
+                    
+                    @media (max-width: 1024px) {
+                      .responsive-page-container {
+                        padding: 12px !important;
+                      }
+                      
+                      .responsive-split-layout {
+                        flex-direction: column !important;
+                        gap: 24px !important;
+                      }
+                      
+                      .responsive-column {
+                        width: 100% !important;
+                        flex: none !important;
+                        height: 550px !important;
+                      }
+                    }
+
+                     @media (max-width: 768px) {
+                      .responsive-page-container {
+                        padding: 16px 0 !important;
+                      }
+
+                      .responsive-card-body {
+                        padding: 16px !important;
+                      }
+                      
+                      .responsive-header {
+                        flex-direction: column !important;
+                        align-items: flex-start !important;
+                        gap: 12px !important;
+                      }
+
+                      .responsive-grid-2 {
+                        grid-template-columns: 1fr !important;
+                        gap: 12px !important;
+                      }
+
+                      .responsive-reference-box {
+                        padding: 16px !important;
+                      }
+
+                      .hide-mobile {
+                        display: none !important;
+                      }
+                      
+                      .scrollable-tabs::-webkit-scrollbar {
+                        display: none;
+                      }
+                      
+                      .scrollable-tabs {
+                        -ms-overflow-style: none;
+                        scrollbar-width: none;
+                      }
+                    }
+
+                    @media (max-width: 480px) {
+                      .responsive-footer-actions {
+                        flex-direction: column-reverse !important;
+                        align-items: stretch !important;
+                        gap: 10px !important;
+                      }
+                      
+                      .responsive-footer-actions button {
+                        width: 100% !important;
+                        justify-content: center !important;
+                      }
+                    }
                   `}</style>
 
                   {/* Bottom Counter bar inside Editor */}
@@ -1215,7 +1290,7 @@ export default function LegalDocumentsAdminPage() {
 
               {/* Right Column: Live Preview (hidden in full width editor mode) */}
               {!isFullWidth && (
-                <div style={{ 
+                <div className="responsive-column" style={{ 
                   flex: 0.5, 
                   width: '50%',
                   display: 'flex', 
@@ -1405,7 +1480,7 @@ export default function LegalDocumentsAdminPage() {
             </div>
 
             {/* Bottom Actions Save/Cancel Bar */}
-            <div style={{
+            <div className="responsive-footer-actions" style={{
               marginTop: '24px',
               paddingTop: '16px',
               borderTop: '1px solid var(--border)',
