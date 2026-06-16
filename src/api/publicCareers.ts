@@ -199,6 +199,7 @@ export async function applyToPublicJob(params: {
   applicationDate?: string;
   startDate?: string;
   postalCode?: string;
+  screenerAnswers?: Array<{ questionId: number; answer: string }>;
 }): Promise<void> {
   const formData = new FormData();
   formData.append('full_name', params.fullName);
@@ -222,6 +223,9 @@ export async function applyToPublicJob(params: {
   if (params.applicationDate) formData.append('application_date', params.applicationDate);
   if (params.startDate) formData.append('start_date', params.startDate);
   if (params.postalCode) formData.append('postal_code', params.postalCode);
+  if (params.screenerAnswers) {
+    formData.append('screener_answers', JSON.stringify(params.screenerAnswers));
+  }
   formData.append('gdpr_consent', params.gdprConsent ? 'true' : 'false');
   formData.append('resume', params.resume);
 
@@ -262,3 +266,29 @@ export async function updateLegalDocument(key: string, params: {
   const { data } = await apiClient.put(`/public/legal-documents/${key}`, params);
   return data.data.document as LegalDocument;
 }
+
+export interface PublicScreenerQuestionOption {
+  label: string;
+  value: string;
+  isKnockout?: boolean;
+}
+
+export interface PublicScreenerQuestion {
+  id: string;
+  type: string; // 'radio' | 'checkbox' | 'text' | 'number'
+  label: string;
+  required: boolean;
+  isKnockout?: boolean;
+  options?: PublicScreenerQuestionOption[];
+}
+
+export async function getPublicJobScreenerQuestions(
+  companySlug: string,
+  jobId: number
+): Promise<PublicScreenerQuestion[]> {
+  const { data } = await apiClient.get<{ questions: PublicScreenerQuestion[] }>(
+    `/public/indeed-apply-questions/${companySlug}/${jobId}`
+  );
+  return data.questions || [];
+}
+

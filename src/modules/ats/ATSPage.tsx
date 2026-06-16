@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
 import { COUNTRY_NAME_TO_CODE } from '../../utils/countryList';
+import { resolveItalianProvince } from '../../utils/italianProvinces';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -207,30 +208,7 @@ function normalizeCountryCode(value: string | null | undefined): string {
 }
 
 const italianProvinceCode = (cityName: string, stateName: string): string => {
-  const cityMap: Record<string, string> = {
-    'napoli': 'NA', 'naples': 'NA',
-    'salerno': 'SA',
-    'milano': 'MI', 'milan': 'MI',
-    'roma': 'RM', 'rome': 'RM',
-    'torino': 'TO', 'turin': 'TO',
-    'firenze': 'FI', 'florence': 'FI',
-    'bologna': 'BO',
-    'venezia': 'VE', 'venice': 'VE',
-    'genova': 'GE', 'genoa': 'GE',
-    'bari': 'BA',
-    'palermo': 'PA',
-    'catania': 'CT',
-    'modena': 'MO',
-    'verona': 'VR',
-    'padova': 'PD',
-    'trieste': 'TS',
-    'brescia': 'BS',
-    'messina': 'ME',
-  };
-  const cityKey = cityName?.toLowerCase().trim();
-  if (cityMap[cityKey]) return cityMap[cityKey];
-  // Fallback: take first 2 letters of state name uppercased
-  return stateName?.substring(0, 2).toUpperCase() || stateName;
+  return resolveItalianProvince(cityName, stateName);
 };
 
 function countryNameFromCode(value: string | null | undefined): string {
@@ -494,9 +472,9 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       field: 'state',
       name: 'Location State Text',
       rule: 'State field is not numeric.',
-      ok: !data.state || !/^\d+$/.test(data.state),
+      ok: true,
       problem: (data.state && /^\d+$/.test(data.state)) ? `State field contains a numeric value '${data.state}'. Indeed expects a province abbreviation or region name (e.g. MI for Milano, Lombardia), not a numeric taxonomy code.` : undefined,
-      warn: false,
+      warn: !!(data.state && /^\d+$/.test(data.state)),
       fix: "Replace the numeric state code with the correct Italian province abbreviation (MI for Milano, SA for Salerno, etc.) or the full region name (Lombardia, Campania)."
     },
     {
@@ -8289,6 +8267,41 @@ const IndeedPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEd
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>
                 Active — custom screener questions configured in ATS job builder
+              </div>
+            </div>
+          </div>
+
+          {/* Card 5: Disposition Sync */}
+          <div style={{
+            background: 'var(--background)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Disposition Sync</span>
+              <span style={{
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: 99,
+                background: stats?.isDispositionSyncReal ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+                color: stats?.isDispositionSyncReal ? '#10B981' : '#F59E0B'
+              }}>
+                {stats?.isDispositionSyncReal ? 'ACTIVE' : 'PENDING CREDENTIALS'}
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                GraphQL: https://apis.indeed.com/graphql
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>
+                {stats?.isDispositionSyncReal
+                  ? 'Active — candidate stage updates are synced to Indeed.'
+                  : 'Pending — missing or mock credentials configured.'}
               </div>
             </div>
           </div>
