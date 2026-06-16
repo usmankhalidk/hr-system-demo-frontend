@@ -44,12 +44,12 @@ export default function DeviceRegistrationPage() {
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupResult, setLookupResult] = useState<CheckDeviceRegistrationResponse | null>(null);
 
-  const requiresRegistration = (user?.role === 'employee' || user?.role === 'store_terminal' || user?.role === 'store_manager') && user?.requiresDeviceRegistration === true;
+  const requiresRegistration = (user?.role === 'employee' || user?.role === 'store_terminal' || user?.role === 'store_manager' || user?.role === 'hr' || user?.role === 'area_manager') && user?.requiresDeviceRegistration === true;
 
   useEffect(() => {
     // If the device is already registered, avoid showing the registration screen.
     if (!user) return;
-    if (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager') {
+    if (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager' && user.role !== 'hr' && user.role !== 'area_manager') {
       navigate('/', { replace: true });
       return;
     }
@@ -60,7 +60,7 @@ export default function DeviceRegistrationPage() {
   }, [user, requiresRegistration, navigate, searchParams]);
 
   const handleRegister = async () => {
-    if (!user || (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager')) return;
+    if (!user || (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager' && user.role !== 'hr' && user.role !== 'area_manager')) return;
     setSubmitting(true);
     setError(null);
     try {
