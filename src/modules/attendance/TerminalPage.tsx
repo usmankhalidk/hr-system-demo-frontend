@@ -13,7 +13,8 @@ import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { useToast } from '../../context/ToastContext';
 import { translateApiError } from '../../utils/apiErrors';
 import { Spinner } from '../../components/ui';
-import { Monitor, RefreshCw, ShieldCheck, AlertOctagon, RefreshCcw } from 'lucide-react';
+import { Monitor, RefreshCw, ShieldCheck, AlertOctagon, RefreshCcw, LogIn, LogOut, Coffee, Play, Clock } from 'lucide-react';
+import { useSocket } from '../../context/SocketContext';
 
 const REFRESH_AT_SECONDS = 15;
 
@@ -26,11 +27,42 @@ const OFFLINE_ACTIONS: { type: OfflineEventType; labelKey: string; bg: string; s
   { type: 'checkout', labelKey: 'terminal.offline_checkout', bg: '#dc2626', shadow: 'rgba(220,38,38,0.35)' },
 ];
 
+const EVENT_COLORS: Record<string, string> = {
+  checkin:     '#16a34a',
+  break_start: '#d97706',
+  break_end:   '#2563eb',
+  checkout:    '#dc2626',
+};
+
+const EVENT_ICONS: Record<string, React.ComponentType<any>> = {
+  checkin:     LogIn,
+  break_start: Coffee,
+  break_end:   Play,
+  checkout:    LogOut,
+};
+
 function getProgressColor(secondsLeft: number, expiresIn: number): string {
   const pct = expiresIn > 0 ? (secondsLeft / expiresIn) * 100 : 0;
   if (pct > 50) return '#22c55e';
   if (pct > 25) return '#f59e0b';
   return '#ef4444';
+}
+
+function formatTerminalTime(date: Date, hour12: boolean): string {
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  if (hour12) {
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const hoursStr = String(hours).padStart(2, '0');
+    return `${hoursStr}:${minutes}:${seconds} ${ampm}`;
+  } else {
+    const hoursStr = String(hours).padStart(2, '0');
+    return `${hoursStr}:${minutes}:${seconds}`;
+  }
 }
 
 export default function TerminalPage() {
@@ -39,6 +71,38 @@ export default function TerminalPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  const { socket } = useSocket();
+  const [recentAction, setRecentAction] = useState<{
+    userId: number;
+    name: string;
+    surname: string;
+    eventType: 'checkin' | 'checkout' | 'break_start' | 'break_end';
+    timestamp: string;
+  } | null>(null);
+
+  // Subscribe to real-time checkin notifications
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleAttendanceAction = (data: any) => {
+      setRecentAction(data);
+    };
+
+    socket.on('TERMINAL_ATTENDANCE_ACTION', handleAttendanceAction);
+    return () => {
+      socket.off('TERMINAL_ATTENDANCE_ACTION', handleAttendanceAction);
+    };
+  }, [socket]);
+
+  // Clear success toast after 3 seconds
+  useEffect(() => {
+    if (!recentAction) return;
+    const timer = setTimeout(() => {
+      setRecentAction(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [recentAction]);
 
   const isTest = (import.meta as any).env?.MODE === 'test';
 
@@ -277,7 +341,7 @@ export default function TerminalPage() {
   }
 
   const locale = i18n.language === 'en' ? 'en-GB' : 'it-IT';
-  const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: hour12 });
+  const timeStr = formatTerminalTime(time, hour12);
   const dateStr = time.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const expiresIn = qrData?.expiresIn ?? 60;
   const progress = qrData ? Math.max(0, (secondsLeft / expiresIn) * 100) : 0;
@@ -715,6 +779,80 @@ export default function TerminalPage() {
                 }}>
                   <ShieldCheck size={14} />
                   {t('deviceReset.authorized', 'Authorized Terminal')}
+                </div>
+              )}
+
+              {recentAction && (
+                <div
+                  className="pop-in"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: 16,
+                    padding: '10px 16px',
+                    marginTop: 16,
+                    maxWidth: 360,
+                    width: '100%',
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
+                    backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  {/* User Avatar */}
+                  <div style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: '50%',
+                    background: 'rgba(201, 151, 58, 0.2)',
+                    border: '1.5px solid rgba(201, 151, 58, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: 14,
+                    color: '#C9973A',
+                    flexShrink: 0,
+                  }}>
+                    {`${recentAction.name?.[0] ?? ''}${recentAction.surname?.[0] ?? ''}`.toUpperCase()}
+                  </div>
+                  
+                  {/* User Details & Action */}
+                  <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {recentAction.name} {recentAction.surname}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                        {t('terminal.recorded', 'Recorded:')}
+                      </span>
+                      <span style={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: EVENT_COLORS[recentAction.eventType] || '#fff',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}>
+                        {(() => {
+                          const Icon = EVENT_ICONS[recentAction.eventType] || Clock;
+                          const label = t(
+                            recentAction.eventType === 'checkin' ? 'scan.checkin'
+                            : recentAction.eventType === 'break_start' ? 'scan.breakStart'
+                            : recentAction.eventType === 'break_end' ? 'scan.breakEnd'
+                            : 'scan.checkout'
+                          );
+                          return (
+                            <>
+                              <Icon size={12} />
+                              <span>{label}</span>
+                            </>
+                          );
+                        })()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
