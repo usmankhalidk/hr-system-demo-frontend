@@ -115,6 +115,35 @@ function resolveAllowedActions(daily: DailyState): Set<EventType> {
   return allowed;
 }
 
+function getErrorTheme(code: string | null) {
+  if (!code) return { bg: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.45)', color: '#fca5a5', icon: '⚠️' };
+  
+  const c = code.toUpperCase();
+  if (c === 'NO_ACTIVE_SHIFT' || c === 'SHIFT_STORE_MISMATCH' || c === 'ON_HOLIDAY' || c === 'SHIFT_NOT_FOUND') {
+    return {
+      bg: 'rgba(59, 130, 246, 0.12)',
+      border: '1px solid rgba(59, 130, 246, 0.45)',
+      color: '#93c5fd',
+      icon: '📅'
+    };
+  }
+  if (c === 'SHIFT_TOO_EARLY' || c === 'SHIFT_TOO_EARLY_PARAMS') {
+    return {
+      bg: 'rgba(245, 158, 11, 0.12)',
+      border: '1px solid rgba(245, 158, 11, 0.45)',
+      color: '#fcd34d',
+      icon: '⏰'
+    };
+  }
+  // Default to Red for module disabled and other errors
+  return {
+    bg: 'rgba(239, 68, 68, 0.12)',
+    border: '1px solid rgba(239, 68, 68, 0.45)',
+    color: '#fca5a5',
+    icon: c.startsWith('MODULE_') || c === 'ROLE_NOT_ELIGIBLE' ? '🔒' : '⚠️'
+  };
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ScanPage() {
   const { t, i18n } = useTranslation();
@@ -126,6 +155,7 @@ export default function ScanPage() {
   const [stage, setStage]           = useState<Stage>('ready');
   const [tappedType, setTappedType] = useState<EventType | null>(null);
   const [errorMsg, setErrorMsg]     = useState('');
+  const [lastErrorCode, setLastErrorCode] = useState<string | null>(null);
   const [clock, setClock]           = useState(() => new Date());
   const fingerprintRef = useRef<string | null>(null);
 
@@ -153,6 +183,7 @@ export default function ScanPage() {
     const parsed = parseQrToken(token);
     if (!parsed) {
       setStage('error');
+      setLastErrorCode('INVALID_QR_TOKEN');
       setErrorMsg(t('scan.invalidQrCode'));
       return;
     }
@@ -175,6 +206,7 @@ export default function ScanPage() {
       if (timeLeft <= 0) {
         clearInterval(intervalId);
         setStage('error');
+        setLastErrorCode('INVALID_QR_TOKEN');
         setErrorMsg(t('errors.INVALID_QR_TOKEN', 'QR code invalid or expired. Please scan again.'));
       }
     }, 1000);
@@ -185,6 +217,7 @@ export default function ScanPage() {
     setTokenTimeLeft(initialTimeLeft);
     if (initialTimeLeft <= 0) {
       setStage('error');
+      setLastErrorCode('INVALID_QR_TOKEN');
       setErrorMsg(t('errors.INVALID_QR_TOKEN', 'QR code invalid or expired. Please scan again.'));
     }
 
@@ -482,11 +515,39 @@ export default function ScanPage() {
         return;
       }
 
-      const axiosErr = err as { response?: { data?: { error?: string; code?: string } } };
+      const axiosErr = err as {
+        response?: {
+          data?: {
+            error?: string;
+            code?: string;
+            moduleName?: string;
+            shiftStart?: string;
+            allowedFrom?: string;
+          };
+        };
+      };
       setStage('error');
       const errCode = axiosErr?.response?.data?.code;
+      setLastErrorCode(errCode || 'UNKNOWN');
       const errText = axiosErr?.response?.data?.error ?? t('common.error');
-      setErrorMsg(errCode ? t(`errors.${errCode}`, errText) : errText);
+      
+      if (errCode === 'MODULE_DISABLED' && axiosErr?.response?.data?.moduleName) {
+        const mKey = axiosErr.response.data.moduleName;
+        const translatedModuleName = t(`nav.${mKey}`, mKey);
+        setErrorMsg(t('errors.MODULE_DISABLED_WITH_NAME', {
+          defaultValue: `The module "${translatedModuleName}" is disabled for your role in the selected company. Please contact the HR manager to enable it.`,
+          module: translatedModuleName
+        }));
+      } else if (errCode === 'SHIFT_TOO_EARLY' && axiosErr?.response?.data?.shiftStart) {
+        const { shiftStart, allowedFrom } = axiosErr.response.data;
+        setErrorMsg(t('errors.SHIFT_TOO_EARLY_PARAMS', {
+          defaultValue: `Your shift for today starts at ${shiftStart} and you can check in from ${allowedFrom}. Please try again later.`,
+          shiftStart,
+          allowedFrom
+        }));
+      } else {
+        setErrorMsg(errCode ? t(`errors.${errCode}`, errText) : errText);
+      }
     }
   }
 
@@ -578,82 +639,101 @@ export default function ScanPage() {
         </div>
       </div>
 
-      {/* Scanned store and token expiration */}
-      {scannedStoreName && stage !== 'error' && (
+      {/* Messages Group Container (small gap between banners) */}
+      {(scannedStoreName || stage === 'error' || (!stateLoading && dailyState && !dailyState.hasShift) || (!stateLoading && dailyState?.state.checkedOut)) && (
         <div style={{
-          padding: '12px 20px',
-          borderRadius: 10,
-          background: scannedStoreError ? 'rgba(239,68,68,0.12)' : 'rgba(22,163,74,0.12)',
-          border: `1px solid ${scannedStoreError ? 'rgba(239,68,68,0.45)' : 'rgba(22,163,74,0.45)'}`,
-          color: scannedStoreError ? '#fca5a5' : '#86efac',
-          fontSize: 13,
-          fontWeight: 600,
-          fontFamily: 'var(--font-body)',
-          textAlign: 'center',
-          maxWidth: 400,
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6
+          gap: 10,
+          width: '100%',
+          alignItems: 'center',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <span>{scannedStoreError ? '⚠️' : '🛡️'}</span>
-            <span>
-              {scannedStoreError 
-                ? t('errors.SHIFT_STORE_MISMATCH', { store: dailyState?.shiftStoreName || scannedStoreName, defaultValue: `You have a shift scheduled today at another store, not at this store.` })
-                : t('attendance.qrTokenActiveWithStore', { store: scannedStoreName, seconds: tokenTimeLeft })}
-            </span>
-          </div>
-          {scannedStoreError && user && (
-            <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 500, lineHeight: 1.4 }}>
-              This terminal belongs to <strong>{scannedStoreName}</strong>. Your scheduled shift is at store <strong>{dailyState?.shiftStoreName || `#${dailyState?.shiftStoreId}`}</strong>.
+          {/* Scanned store and token expiration */}
+          {scannedStoreName && tokenTimeLeft > 0 && lastErrorCode !== 'INVALID_QR_TOKEN' && (
+            <div style={{
+              padding: '12px 20px',
+              borderRadius: 10,
+              background: scannedStoreError ? 'rgba(239,68,68,0.12)' : 'rgba(22,163,74,0.12)',
+              border: `1px solid ${scannedStoreError ? 'rgba(239,68,68,0.45)' : 'rgba(22,163,74,0.45)'}`,
+              color: scannedStoreError ? '#fca5a5' : '#86efac',
+              fontSize: 13,
+              fontWeight: 600,
+              fontFamily: 'var(--font-body)',
+              textAlign: 'center',
+              maxWidth: 400,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <span>{scannedStoreError ? '⚠️' : '🛡️'}</span>
+                <span>
+                  {scannedStoreError 
+                    ? t('errors.SHIFT_STORE_MISMATCH', { store: dailyState?.shiftStoreName || scannedStoreName, defaultValue: `You have a shift scheduled today at another store, not at this store.` })
+                    : t('attendance.qrTokenActiveWithStore', { store: scannedStoreName, seconds: tokenTimeLeft })}
+                </span>
+              </div>
+              {scannedStoreError && user && (
+                <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 500, lineHeight: 1.4 }}>
+                  This terminal belongs to <strong>{scannedStoreName}</strong>. Your scheduled shift is at store <strong>{dailyState?.shiftStoreName || `#${dailyState?.shiftStoreId}`}</strong>.
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* No-shift banner */}
-      {!stateLoading && dailyState && !dailyState.hasShift && (
-        <div style={{
-          padding: '12px 20px',
-          borderRadius: 10,
-          background: 'rgba(239,68,68,0.15)',
-          border: '1px solid rgba(239,68,68,0.45)',
-          color: '#fca5a5',
-          fontSize: 14, fontWeight: 600,
-          maxWidth: 400, width: '100%', textAlign: 'center',
-        }}>
-          {t('attendance.noShiftToday')}
-        </div>
-      )}
+          {/* No-shift banner */}
+          {!stateLoading && dailyState && !dailyState.hasShift && (
+            <div style={{
+              padding: '12px 20px',
+              borderRadius: 10,
+              background: 'rgba(239,68,68,0.15)',
+              border: '1px solid rgba(239,68,68,0.45)',
+              color: '#fca5a5',
+              fontSize: 14, fontWeight: 600,
+              maxWidth: 400, width: '100%', textAlign: 'center',
+            }}>
+              {t('attendance.noShiftToday')}
+            </div>
+          )}
 
-      {/* Checkout done banner */}
-      {!stateLoading && dailyState?.state.checkedOut && (
-        <div style={{
-          padding: '12px 20px',
-          borderRadius: 10,
-          background: 'rgba(22,163,74,0.15)',
-          border: '1px solid rgba(22,163,74,0.45)',
-          color: '#86efac',
-          fontSize: 14, fontWeight: 600,
-          maxWidth: 400, width: '100%', textAlign: 'center',
-        }}>
-          {t('attendance.alreadyCheckedOut')}
-        </div>
-      )}
+          {/* Checkout done banner */}
+          {!stateLoading && dailyState?.state.checkedOut && (
+            <div style={{
+              padding: '12px 20px',
+              borderRadius: 10,
+              background: 'rgba(22,163,74,0.15)',
+              border: '1px solid rgba(22,163,74,0.45)',
+              color: '#86efac',
+              fontSize: 14, fontWeight: 600,
+              maxWidth: 400, width: '100%', textAlign: 'center',
+            }}>
+              {t('attendance.alreadyCheckedOut')}
+            </div>
+          )}
 
-      {/* Error banner */}
-      {stage === 'error' && (
-        <div style={{
-          padding: '12px 20px',
-          borderRadius: 10,
-          background: 'rgba(239,68,68,0.15)',
-          border: '1px solid rgba(239,68,68,0.45)',
-          color: '#fca5a5',
-          fontSize: 14, fontWeight: 600,
-          maxWidth: 400, width: '100%', textAlign: 'center',
-        }}>
-          {errorMsg}
+          {/* Error banner */}
+          {stage === 'error' && (() => {
+            const theme = getErrorTheme(lastErrorCode);
+            return (
+              <div style={{
+                padding: '12px 20px',
+                borderRadius: 10,
+                background: theme.bg,
+                border: theme.border,
+                color: theme.color,
+                fontSize: 14, fontWeight: 600,
+                maxWidth: 400, width: '100%',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'center',
+                gap: 8,
+              }}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>{theme.icon}</span>
+                <span style={{ textAlign: 'left', lineHeight: 1.4 }}>{errorMsg}</span>
+              </div>
+            );
+          })()}
         </div>
       )}
 

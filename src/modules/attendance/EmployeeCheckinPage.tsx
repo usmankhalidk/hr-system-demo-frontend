@@ -106,7 +106,7 @@ export default function EmployeeCheckinPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean; code?: string } | null>(null);
   const fingerprintRef = useRef<string | null>(null);
 
   // ── QR Security Token state ──────────────────────────────────────────────
@@ -429,8 +429,40 @@ export default function EmployeeCheckinPage() {
         window.setTimeout(() => setHistoryVersion((v) => v + 1), 1500);
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? err?.message ?? t('common.error');
-      setActionMsg({ text: msg, ok: false });
+      const axiosErr = err as {
+        response?: {
+          data?: {
+            error?: string;
+            code?: string;
+            moduleName?: string;
+            shiftStart?: string;
+            allowedFrom?: string;
+          };
+        };
+      };
+      const errCode = axiosErr?.response?.data?.code;
+      const errText = axiosErr?.response?.data?.error ?? err?.message ?? t('common.error');
+      
+      let msg = errText;
+      if (errCode === 'MODULE_DISABLED' && axiosErr?.response?.data?.moduleName) {
+        const mKey = axiosErr.response.data.moduleName;
+        const translatedModuleName = t(`nav.${mKey}`, mKey);
+        msg = t('errors.MODULE_DISABLED_WITH_NAME', {
+          defaultValue: `The module "${translatedModuleName}" is disabled for your role. Please contact the HR manager to enable it.`,
+          module: translatedModuleName
+        });
+      } else if (errCode === 'SHIFT_TOO_EARLY' && axiosErr?.response?.data?.shiftStart) {
+        const { shiftStart, allowedFrom } = axiosErr.response.data;
+        msg = t('errors.SHIFT_TOO_EARLY_PARAMS', {
+          defaultValue: `Your shift for today starts at ${shiftStart} and you can check in from ${allowedFrom}. Please try again later.`,
+          shiftStart,
+          allowedFrom
+        });
+      } else if (errCode) {
+        msg = t(`errors.${errCode}`, errText);
+      }
+      
+      setActionMsg({ text: msg, ok: false, code: errCode || 'UNKNOWN' });
     } finally {
       setActionLoading(false);
       window.setTimeout(() => setActionMsg(null), 4000);
@@ -761,19 +793,52 @@ export default function EmployeeCheckinPage() {
           </div>
         )}
 
-        {actionMsg && (
-          <div style={{
-            padding: '10px 14px',
-            borderRadius: 8,
-            fontSize: 13, fontWeight: 600,
-            fontFamily: 'var(--font-body)',
-            background: actionMsg.ok ? 'rgba(22,163,74,0.10)' : 'rgba(220,38,38,0.10)',
-            border: `1px solid ${actionMsg.ok ? 'rgba(22,163,74,0.30)' : 'rgba(220,38,38,0.30)'}`,
-            color: actionMsg.ok ? '#16a34a' : '#dc2626',
-          }}>
-            {actionMsg.text}
-          </div>
-        )}
+        {actionMsg && (() => {
+          let bg = 'rgba(220,38,38,0.10)';
+          let border = '1px solid rgba(220,38,38,0.30)';
+          let color = '#dc2626';
+          let icon = '⚠️';
+
+          if (actionMsg.ok) {
+            bg = 'rgba(22,163,74,0.10)';
+            border = '1px solid rgba(22,163,74,0.30)';
+            color = '#16a34a';
+            icon = '✓';
+          } else if (actionMsg.code) {
+            const c = actionMsg.code.toUpperCase();
+            if (c === 'NO_ACTIVE_SHIFT' || c === 'SHIFT_STORE_MISMATCH' || c === 'ON_HOLIDAY' || c === 'SHIFT_NOT_FOUND') {
+              bg = 'rgba(59, 130, 246, 0.10)';
+              border = '1px solid rgba(59, 130, 246, 0.30)';
+              color = '#2563eb';
+              icon = '📅';
+            } else if (c === 'SHIFT_TOO_EARLY' || c === 'SHIFT_TOO_EARLY_PARAMS') {
+              bg = 'rgba(245, 158, 11, 0.10)';
+              border = '1px solid rgba(245, 158, 11, 0.35)';
+              color = '#d97706';
+              icon = '⏰';
+            } else if (c.startsWith('MODULE_') || c === 'ROLE_NOT_ELIGIBLE') {
+              icon = '🔒';
+            }
+          }
+
+          return (
+            <div style={{
+              padding: '10px 14px',
+              borderRadius: 8,
+              fontSize: 13, fontWeight: 600,
+              fontFamily: 'var(--font-body)',
+              background: bg,
+              border: border,
+              color: color,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
+              <span style={{ lineHeight: 1.4 }}>{actionMsg.text}</span>
+            </div>
+          );
+        })()}
       </div>}
 
       {/* Steps card */}

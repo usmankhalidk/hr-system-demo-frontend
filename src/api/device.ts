@@ -50,3 +50,29 @@ export async function reRegisterDevice(payload: ReRegisterDevicePayload): Promis
   const { data } = await apiClient.post('/device/re-register', payload);
   return data.data;
 }
+
+export interface CheckDeviceRegistrationPayload {
+  email: string;
+  password: string;
+  fingerprint: string;
+}
+
+export interface CheckDeviceRegistrationResponse {
+  found: boolean;
+  message?: string;
+  details?: {
+    name: string;
+    surname: string;
+    role: string;
+    registeredAt: string;
+    ipAddress: string;
+    browser: string;
+    os: string;
+  };
+}
+
+export async function checkDeviceRegistrationApi(payload: CheckDeviceRegistrationPayload): Promise<CheckDeviceRegistrationResponse> {
+  const { data } = await apiClient.post('/device/check-fingerprint', payload);
+  return data.data as CheckDeviceRegistrationResponse;
+}
+
