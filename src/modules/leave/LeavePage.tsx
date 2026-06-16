@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -39,6 +40,16 @@ export default function LeavePage() {
   return <PersonalLeavePage />;
 }
 
+function IconMenu() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </svg>
+  );
+}
+
 function PersonalLeavePage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -46,6 +57,7 @@ function PersonalLeavePage() {
 
   const [activeTab, setActiveTab] = useState<Tab>('mine');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
   const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
@@ -148,10 +160,10 @@ function PersonalLeavePage() {
       {/* Page header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 20, flexWrap: 'wrap', gap: 12,
+        marginBottom: 20, gap: 12,
       }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--primary)', margin: 0 }}>
+          <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: 'var(--primary)', margin: 0 }}>
             {t('leave.page_title')}
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
@@ -159,19 +171,40 @@ function PersonalLeavePage() {
           </p>
         </div>
         {user?.role !== 'store_terminal' && (
-          <button
-            onClick={() => {
-              setPrefilledDate(undefined);
-              setDrawerOpen(true);
-            }}
-            style={{
-              padding: '10px 20px', borderRadius: 8, border: 'none',
-              background: 'var(--primary)', color: '#fff',
-              fontWeight: 700, fontSize: 14, cursor: 'pointer',
-            }}
-          >
-            + {t('leave.new_request')}
-          </button>
+          isMobile ? (
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '8px 12px',
+                height: 36,
+                minWidth: 36,
+                border: '1.5px solid var(--border)',
+                background: 'var(--surface)',
+                borderRadius: 8,
+                cursor: 'pointer',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <IconMenu />
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setPrefilledDate(undefined);
+                setDrawerOpen(true);
+              }}
+              style={{
+                padding: '10px 20px', borderRadius: 8, border: 'none',
+                background: 'var(--primary)', color: '#fff',
+                fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              }}
+            >
+              + {t('leave.new_request')}
+            </button>
+          )
         )}
       </div>
 
@@ -243,6 +276,130 @@ function PersonalLeavePage() {
           fetchBalance();
         }}
       />
+
+      {createPortal(
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1400,
+              background: 'rgba(13,33,55,0.55)',
+              backdropFilter: 'blur(3px)',
+              opacity: mobileMenuOpen ? 1 : 0,
+              pointerEvents: mobileMenuOpen ? 'auto' : 'none',
+              transition: 'opacity 0.3s ease',
+            }}
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: 'min(320px, 85vw)',
+              background: 'var(--surface)',
+              boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(100%)',
+              transition: 'transform 0.3s ease',
+              zIndex: 1401,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'var(--primary)',
+              color: '#fff',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              <div>
+                <div style={{
+                  fontSize: 10,
+                  letterSpacing: 1.2,
+                  opacity: 0.7,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}>
+                  {t('leave.page_title')}
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 800,
+                  fontSize: '1.1rem',
+                }}>
+                  {t('common.options', 'Options')}
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: 'none',
+                  color: '#fff',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: 20,
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Menu Items */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '16px 0',
+            }}>
+              <button
+                onClick={() => {
+                  setPrefilledDate(undefined);
+                  setDrawerOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '14px 20px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s',
+                  borderBottom: '1px solid var(--border)',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)' }}>
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>
+                  {t('leave.new_request')}
+                </span>
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 }

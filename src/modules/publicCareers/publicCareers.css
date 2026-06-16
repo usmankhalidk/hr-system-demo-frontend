@@ -1616,3 +1616,176 @@
     padding: 16px;
   }
 }
+
+/* --- Careers Redesign Part B, C & D Styles --- */
+
+/* Hero inline search positioning & styling */
+.careers-hero-inner .inline-hero-search {
+  margin-top: 24px;
+  background: #ffffff;
+  border: 1px solid rgba(201, 151, 58, 0.25);
+  border-radius: 14px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 24px rgba(13, 33, 55, 0.05);
+}
+
+.careers-hero-inner .inline-hero-search .careers-search-inline {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.careers-hero-inner .inline-hero-search .careers-search-inline input {
+  font-size: 14px;
+}
+
+/* Horizontal scrollable Tag Pills container */
+.careers-tag-pills-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 4px 16px;
+  margin-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 151, 58, 0.3) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.careers-tag-pills-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.careers-tag-pills-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.careers-tag-pills-row::-webkit-scrollbar-thumb {
+  background-color: rgba(201, 151, 58, 0.3);
+  border-radius: 3px;
+}
+
+.careers-tag-pill {
+  flex-shrink: 0;
+  border: 1px solid rgba(13, 33, 55, 0.12);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4b5563;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.careers-tag-pill:hover {
+  border-color: rgba(201, 151, 58, 0.5);
+  background: rgba(201, 151, 58, 0.03);
+  color: #8a5a07;
+}
+
+.careers-tag-pill.active {
+  background: linear-gradient(135deg, #c9973a, #b5852e);
+  border-color: #b5852e;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(201, 151, 58, 0.25);
+}
+
+/* Show More pagination button */
+.careers-show-more-btn {
+  border: 1px solid rgba(201, 151, 58, 0.4);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #8a5a07;
+  font-size: 13.5px;
+  font-weight: 700;
+  padding: 10px 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(201, 151, 58, 0.08);
+}
+
+.careers-show-more-btn:hover {
+  background: rgba(201, 151, 58, 0.05);
+  border-color: #8a5a07;
+  transform: translateY(-1px);
+}
+
+.careers-show-more-btn:active {
+  transform: translateY(0);
+}
+
+/* Collapsible Job Description */
+.careers-description-container {
+  position: relative;
+  line-height: 1.6;
+  color: #334155;
+  font-size: 14px;
+}
+
+.careers-description-fade {
+  pointer-events: none;
+}
+
+.careers-description-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c9973a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 0;
+  transition: color 0.15s ease;
+}
+
+.careers-description-toggle:hover {
+  color: #8a5a07;
+  text-decoration: underline;
+}
+
+/* Custom CV Drag & Drop zone */
+.careers-cv-dropzone {
+  border-radius: 12px;
+  transition: all 0.2s ease-in-out;
+  outline: none;
+}
+
+.careers-cv-dropzone:hover {
+  border-color: #c9973a !important;
+  background: rgba(201, 151, 58, 0.06) !important;
+}
+
+.careers-cv-dropzone.drag-active {
+  border-color: #c9973a !important;
+  background: rgba(201, 151, 58, 0.12) !important;
+  box-shadow: 0 0 0 4px rgba(201, 151, 58, 0.15);
+}
+
+/* Footer layout anchoring */
+.careers-detail-shell, .careers-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.careers-detail-shell > .careers-detail-wrapper,
+.careers-shell > .careers-hero,
+.careers-shell > .careers-content {
+  flex: 1;
+}
+
+/* Screener questions styling inside modal */
+.careers-apply-modal select.careers-form-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 40px;
+}

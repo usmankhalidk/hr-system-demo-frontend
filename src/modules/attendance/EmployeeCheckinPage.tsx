@@ -10,7 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import client from '../../api/client';
 import { persistDailyAttendanceState } from '../../utils/indexedDB';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { AlertCircle, CalendarX } from 'lucide-react';
+import { AlertCircle, CalendarX, LogIn, LogOut, Coffee, Play, Calendar, Store, Clock } from 'lucide-react';
 
 const STEPS = [
   { icon: '🖥️', key: 'step1' },
@@ -24,6 +24,13 @@ const EVENT_COLORS: Record<string, string> = {
   break_start: '#d97706',
   break_end:   '#2563eb',
   checkout:    '#dc2626',
+};
+
+const EVENT_ICONS: Record<string, React.ComponentType<any>> = {
+  checkin:     LogIn,
+  break_start: Coffee,
+  break_end:   Play,
+  checkout:    LogOut,
 };
 
 function formatDate(iso: string) {
@@ -106,7 +113,7 @@ export default function EmployeeCheckinPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean; code?: string } | null>(null);
   const fingerprintRef = useRef<string | null>(null);
 
   // ── QR Security Token state ──────────────────────────────────────────────
@@ -429,8 +436,40 @@ export default function EmployeeCheckinPage() {
         window.setTimeout(() => setHistoryVersion((v) => v + 1), 1500);
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? err?.message ?? t('common.error');
-      setActionMsg({ text: msg, ok: false });
+      const axiosErr = err as {
+        response?: {
+          data?: {
+            error?: string;
+            code?: string;
+            moduleName?: string;
+            shiftStart?: string;
+            allowedFrom?: string;
+          };
+        };
+      };
+      const errCode = axiosErr?.response?.data?.code;
+      const errText = axiosErr?.response?.data?.error ?? err?.message ?? t('common.error');
+      
+      let msg = errText;
+      if (errCode === 'MODULE_DISABLED' && axiosErr?.response?.data?.moduleName) {
+        const mKey = axiosErr.response.data.moduleName;
+        const translatedModuleName = t(`nav.${mKey}`, mKey);
+        msg = t('errors.MODULE_DISABLED_WITH_NAME', {
+          defaultValue: `The module "${translatedModuleName}" is disabled for your role. Please contact the HR manager to enable it.`,
+          module: translatedModuleName
+        });
+      } else if (errCode === 'SHIFT_TOO_EARLY' && axiosErr?.response?.data?.shiftStart) {
+        const { shiftStart, allowedFrom } = axiosErr.response.data;
+        msg = t('errors.SHIFT_TOO_EARLY_PARAMS', {
+          defaultValue: `Your shift for today starts at ${shiftStart} and you can check in from ${allowedFrom}. Please try again later.`,
+          shiftStart,
+          allowedFrom
+        });
+      } else if (errCode) {
+        msg = t(`errors.${errCode}`, errText);
+      }
+      
+      setActionMsg({ text: msg, ok: false, code: errCode || 'UNKNOWN' });
     } finally {
       setActionLoading(false);
       window.setTimeout(() => setActionMsg(null), 4000);
@@ -591,7 +630,7 @@ export default function EmployeeCheckinPage() {
         </div>
       )}
 
-      {isMobile && <div style={{
+      <div style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderTop: '3px solid var(--accent)',
@@ -700,7 +739,7 @@ export default function EmployeeCheckinPage() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 10px' }}>
           {CLOCK_ACTIONS.map(({ type, label, color }) => {
             const isAllowed = allowedActions.has(type);
             const isDisabled = actionLoading || stateLoading || !isAllowed || !activeQrToken || scannedStoreError;
@@ -721,36 +760,45 @@ export default function EmployeeCheckinPage() {
               recordedTime = formatTime(fullDailyState.state.checkedOutTime);
             }
 
+            const IconComponent = EVENT_ICONS[type] || Clock;
+
             return (
-              <button
-                key={type}
-                onClick={() => void handleAction(type)}
-                disabled={isDisabled}
-                style={{
-                  padding: '10px 8px',
-                  borderRadius: 10,
-                  border: `1.5px solid ${color}55`,
-                  background: `${color}15`,
-                  color,
-                  fontSize: 13, fontWeight: 800,
-                  cursor: isDisabled ? 'not-allowed' : 'pointer',
-                  fontFamily: 'var(--font-display)',
-                  letterSpacing: 0.5,
-                  opacity: isDisabled ? 0.35 : 1,
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 4
-                }}
-              >
-                <span>{label}</span>
-                {recordedTime && (
-                  <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.8 }}>
+              <div key={type} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <button
+                  onClick={() => void handleAction(type)}
+                  disabled={isDisabled}
+                  style={{
+                    width: '100%',
+                    padding: '12px 10px',
+                    borderRadius: 10,
+                    border: `1.5px solid ${color}55`,
+                    background: `${color}15`,
+                    color,
+                    fontSize: 13, fontWeight: 800,
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    fontFamily: 'var(--font-display)',
+                    letterSpacing: 0.5,
+                    opacity: isDisabled ? 0.35 : 1,
+                    transition: 'all 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <IconComponent size={14} style={{ color }} />
+                  <span>{label}</span>
+                </button>
+                {recordedTime ? (
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', textAlign: 'center' }}>
                     {t('attendance.recordedAt', { time: recordedTime })}
                   </span>
+                ) : (
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'transparent', userSelect: 'none' }}>
+                    &nbsp;
+                  </span>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -761,20 +809,53 @@ export default function EmployeeCheckinPage() {
           </div>
         )}
 
-        {actionMsg && (
-          <div style={{
-            padding: '10px 14px',
-            borderRadius: 8,
-            fontSize: 13, fontWeight: 600,
-            fontFamily: 'var(--font-body)',
-            background: actionMsg.ok ? 'rgba(22,163,74,0.10)' : 'rgba(220,38,38,0.10)',
-            border: `1px solid ${actionMsg.ok ? 'rgba(22,163,74,0.30)' : 'rgba(220,38,38,0.30)'}`,
-            color: actionMsg.ok ? '#16a34a' : '#dc2626',
-          }}>
-            {actionMsg.text}
-          </div>
-        )}
-      </div>}
+        {actionMsg && (() => {
+          let bg = 'rgba(220,38,38,0.10)';
+          let border = '1px solid rgba(220,38,38,0.30)';
+          let color = '#dc2626';
+          let icon = '⚠️';
+
+          if (actionMsg.ok) {
+            bg = 'rgba(22,163,74,0.10)';
+            border = '1px solid rgba(22,163,74,0.30)';
+            color = '#16a34a';
+            icon = '✓';
+          } else if (actionMsg.code) {
+            const c = actionMsg.code.toUpperCase();
+            if (c === 'NO_ACTIVE_SHIFT' || c === 'SHIFT_STORE_MISMATCH' || c === 'ON_HOLIDAY' || c === 'SHIFT_NOT_FOUND') {
+              bg = 'rgba(59, 130, 246, 0.10)';
+              border = '1px solid rgba(59, 130, 246, 0.30)';
+              color = '#2563eb';
+              icon = '📅';
+            } else if (c === 'SHIFT_TOO_EARLY' || c === 'SHIFT_TOO_EARLY_PARAMS') {
+              bg = 'rgba(245, 158, 11, 0.10)';
+              border = '1px solid rgba(245, 158, 11, 0.35)';
+              color = '#d97706';
+              icon = '⏰';
+            } else if (c.startsWith('MODULE_') || c === 'ROLE_NOT_ELIGIBLE') {
+              icon = '🔒';
+            }
+          }
+
+          return (
+            <div style={{
+              padding: '10px 14px',
+              borderRadius: 8,
+              fontSize: 13, fontWeight: 600,
+              fontFamily: 'var(--font-body)',
+              background: bg,
+              border: border,
+              color: color,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
+              <span style={{ lineHeight: 1.4 }}>{actionMsg.text}</span>
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Steps card */}
       <div style={{
@@ -820,51 +901,7 @@ export default function EmployeeCheckinPage() {
         ))}
       </div>
 
-      {/* Action type legend */}
-      <div style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-sm)',
-        padding: '20px 24px',
-      }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-          fontFamily: 'var(--font-display)', marginBottom: 14,
-        }}>
-          {t('checkin.actionTypes')}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {[
-            { color: '#16a34a', labelKey: 'scan.checkin' },
-            { color: '#d97706', labelKey: 'scan.breakStart' },
-            { color: '#2563eb', labelKey: 'scan.breakEnd' },
-            { color: '#dc2626', labelKey: 'scan.checkout' },
-          ].map(({ color, labelKey }) => (
-            <div key={labelKey} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 12px',
-              borderRadius: 10,
-              background: `${color}12`,
-              border: `1px solid ${color}30`,
-            }}>
-              <div style={{
-                width: 10, height: 10, borderRadius: '50%',
-                background: color, flexShrink: 0,
-              }} />
-              <span style={{
-                fontSize: 13, fontWeight: 700,
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-display)',
-                letterSpacing: 0.3,
-              }}>
-                {t(labelKey)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+
 
       {/* Attendance history — only shown when presenze module is enabled */}
       {permissions['presenze'] !== false && <div style={{
@@ -883,21 +920,22 @@ export default function EmployeeCheckinPage() {
           }}>
             {t('checkin.myHistory')}
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
             {(['7', '15', '30'] as Filter[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 style={{
-                  padding: '5px 12px',
+                  padding: '4px 10px',
                   borderRadius: 20,
                   border: filter === f ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
                   background: filter === f ? 'var(--primary)' : 'var(--surface)',
                   color: filter === f ? '#fff' : 'var(--text-secondary)',
-                  fontSize: 12, fontWeight: 600,
+                  fontSize: 11, fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: 'var(--font-display)',
                   transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {t(f === '7' ? 'checkin.filterLast7' : f === '15' ? 'checkin.filterLast15' : 'checkin.filterLast30')}
@@ -983,6 +1021,9 @@ export default function EmployeeCheckinPage() {
           <div key={date} style={{ marginBottom: 16 }}>
             {/* Date header */}
             <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
               textTransform: 'uppercase', letterSpacing: '0.06em',
               fontFamily: 'var(--font-display)',
@@ -990,7 +1031,20 @@ export default function EmployeeCheckinPage() {
               paddingBottom: 4,
               borderBottom: '1px solid var(--border-light)',
             }}>
-              {formatDate(date)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
+                <span>{formatDate(date)}</span>
+              </div>
+              {(() => {
+                const dayStoreName = items.map(ev => (ev as any).store_name ?? ev.storeName).find(Boolean);
+                if (!dayStoreName) return null;
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, textTransform: 'none', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    <Store size={12} style={{ color: 'var(--text-muted)' }} />
+                    <span>{dayStoreName}</span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Events for this day */}
@@ -998,12 +1052,12 @@ export default function EmployeeCheckinPage() {
               {items.map((ev) => {
                 const rawTime = (ev as any).event_time ?? ev.eventTime;
                 const rawType = (ev as any).event_type ?? ev.eventType;
-                const storeName = (ev as any).store_name ?? ev.storeName;
                 const color = EVENT_COLORS[rawType] ?? '#6b7280';
                 const labelKey = rawType === 'checkin' ? 'scan.checkin'
                   : rawType === 'break_start' ? 'scan.breakStart'
                   : rawType === 'break_end' ? 'scan.breakEnd'
                   : 'scan.checkout';
+                const IconComponent = EVENT_ICONS[rawType] || Clock;
                 return (
                   <div key={ev.id} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
@@ -1012,10 +1066,7 @@ export default function EmployeeCheckinPage() {
                     background: `${color}0d`,
                     border: `1px solid ${color}28`,
                   }}>
-                    <div style={{
-                      width: 8, height: 8, borderRadius: '50%',
-                      background: color, flexShrink: 0,
-                    }} />
+                    <IconComponent size={14} style={{ color, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         fontSize: 13, fontWeight: 700,
@@ -1024,11 +1075,6 @@ export default function EmployeeCheckinPage() {
                       }}>
                         {t(labelKey)}
                       </span>
-                      {storeName && (
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
-                          {storeName}
-                        </span>
-                      )}
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>
                       {formatTime(rawTime)}

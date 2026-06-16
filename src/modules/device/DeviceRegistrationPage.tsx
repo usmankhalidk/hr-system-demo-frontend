@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Monitor } from 'lucide-react';
+import { Monitor, Key, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { registerDevice } from '../../api/device';
+import { registerDevice, checkDeviceRegistrationApi, CheckDeviceRegistrationResponse } from '../../api/device';
 import { getDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { translateApiError } from '../../utils/apiErrors';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 /** Returns a safe in-app path from `?next=` or null (blocks open redirects). */
 function safeNextPath(raw: string | null): string | null {
@@ -29,16 +30,26 @@ export default function DeviceRegistrationPage() {
   const [searchParams] = useSearchParams();
   const { user, refreshUser } = useAuth();
   const { showToast } = useToast();
+  const { isMobile } = useBreakpoint();
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const requiresRegistration = (user?.role === 'employee' || user?.role === 'store_terminal' || user?.role === 'store_manager') && user?.requiresDeviceRegistration === true;
+  // States for check device registration
+  const [showLookupForm, setShowLookupForm] = useState(false);
+  const [managerEmail, setManagerEmail] = useState('');
+  const [managerPassword, setManagerPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [lookupSubmitting, setLookupSubmitting] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupResult, setLookupResult] = useState<CheckDeviceRegistrationResponse | null>(null);
+
+  const requiresRegistration = (user?.role === 'employee' || user?.role === 'store_terminal' || user?.role === 'store_manager' || user?.role === 'hr' || user?.role === 'area_manager') && user?.requiresDeviceRegistration === true;
 
   useEffect(() => {
     // If the device is already registered, avoid showing the registration screen.
     if (!user) return;
-    if (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager') {
+    if (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager' && user.role !== 'hr' && user.role !== 'area_manager') {
       navigate('/', { replace: true });
       return;
     }
@@ -49,7 +60,7 @@ export default function DeviceRegistrationPage() {
   }, [user, requiresRegistration, navigate, searchParams]);
 
   const handleRegister = async () => {
-    if (!user || (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager')) return;
+    if (!user || (user.role !== 'employee' && user.role !== 'store_terminal' && user.role !== 'store_manager' && user.role !== 'hr' && user.role !== 'area_manager')) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -68,6 +79,27 @@ export default function DeviceRegistrationPage() {
       setError(translateApiError(err, t) ?? t('deviceRegistration.errorGeneric'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!managerEmail.trim() || !managerPassword) return;
+    setLookupSubmitting(true);
+    setLookupError(null);
+    setLookupResult(null);
+    try {
+      const fp = await getDeviceFingerprint();
+      const res = await checkDeviceRegistrationApi({
+        email: managerEmail.trim(),
+        password: managerPassword,
+        fingerprint: fp.fingerprint,
+      });
+      setLookupResult(res);
+    } catch (err: unknown) {
+      setLookupError(translateApiError(err, t) ?? t('deviceRegistration.errorGeneric'));
+    } finally {
+      setLookupSubmitting(false);
     }
   };
 
@@ -90,7 +122,7 @@ export default function DeviceRegistrationPage() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
+        padding: isMobile ? 12 : 24,
         background: 'linear-gradient(160deg, #0D2137 0%, #1A3B5C 100%)',
         color: '#fff',
       }}
@@ -105,33 +137,33 @@ export default function DeviceRegistrationPage() {
           background: 'rgba(255,255,255,0.06)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 20,
-          padding: 24,
+          padding: isMobile ? 16 : 24,
           boxShadow: '0 16px 60px rgba(0,0,0,0.25)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 44, lineHeight: 1 }}>{isTerminal ? '🖥️' : '🔐'}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12, marginBottom: isMobile ? 8 : 12 }}>
+          <div style={{ fontSize: isMobile ? 32 : 44, lineHeight: 1 }}>{isTerminal ? '🖥️' : '🔐'}</div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? 18 : 22, fontWeight: 800 }}>
               {isTerminal ? t('deviceRegistration.terminalTitle') : t('deviceRegistration.title')}
             </div>
-            <div style={{ opacity: 0.75, fontSize: 14, marginTop: 4 }}>
+            <div style={{ opacity: 0.75, fontSize: isMobile ? 12 : 14, marginTop: 4 }}>
               {isTerminal ? t('deviceRegistration.terminalSubtitle') : t('deviceRegistration.subtitle')}
             </div>
           </div>
         </div>
 
-        <div style={{ marginTop: 16, background: 'rgba(0,0,0,0.15)', borderRadius: 16, padding: 16 }}>
-          <div style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.92 }}>
+        <div style={{ marginTop: isMobile ? 12 : 16, background: 'rgba(0,0,0,0.15)', borderRadius: 16, padding: isMobile ? 12 : 16 }}>
+          <div style={{ fontSize: isMobile ? 12.5 : 14, lineHeight: 1.6, opacity: 0.92 }}>
             {isTerminal ? t('deviceRegistration.terminalBody') : t('deviceRegistration.body')}
           </div>
 
           {isTerminal && (
             <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: '13px', color: '#C9973A', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ fontWeight: 700, fontSize: isMobile ? '11.5px' : '13px', color: '#C9973A', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t('deviceRegistration.terminalHowTo')}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '13px', opacity: 0.85 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: isMobile ? '11.5px' : '13px', opacity: 0.85 }}>
                 <div>{t('deviceRegistration.terminalHowToStep1')}</div>
                 <div>{t('deviceRegistration.terminalHowToStep2')}</div>
                 <div>{t('deviceRegistration.terminalHowToStep3')}</div>
@@ -146,16 +178,206 @@ export default function DeviceRegistrationPage() {
             <Alert variant="danger" title={t('common.error')}>
               {error}
             </Alert>
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLookupForm(!showLookupForm);
+                  setLookupResult(null);
+                  setLookupError(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#C9973A',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontSize: isMobile ? 12 : 13.5,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Key size={14} />
+                {t('deviceRegistration.checkButton')}
+              </button>
+            </div>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+        {/* Manager/HR credentials lookup form */}
+        {showLookupForm && (
+          <form
+            onSubmit={handleLookup}
+            style={{
+              marginTop: 16,
+              background: 'rgba(0, 0, 0, 0.25)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 16,
+              padding: 16,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Key size={16} style={{ color: '#C9973A' }} />
+              <div style={{ fontWeight: 700, fontSize: isMobile ? 13 : 14, color: '#C9973A' }}>
+                {t('deviceRegistration.checkTitle')}
+              </div>
+            </div>
+            <div style={{ fontSize: isMobile ? 11.5 : 12.5, opacity: 0.75, marginBottom: 12, lineHeight: 1.4 }}>
+              {t('deviceRegistration.checkDesc')}
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, opacity: 0.85, display: 'block', marginBottom: 4 }}>
+                {t('deviceRegistration.managerEmail')}
+              </label>
+              <input
+                type="email"
+                required
+                value={managerEmail}
+                onChange={(e) => setManagerEmail(e.target.value)}
+                placeholder="email@company.com"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#fff',
+                  fontSize: 13.5,
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, opacity: 0.85, display: 'block', marginBottom: 4 }}>
+                {t('deviceRegistration.managerPassword')}
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={managerPassword}
+                  onChange={(e) => setManagerPassword(e.target.value)}
+                  placeholder="••••••••"
+                  style={{
+                    width: '100%',
+                    padding: '10px 40px 10px 12px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#fff',
+                    fontSize: 13.5,
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: 10,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={lookupSubmitting}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#C9973A',
+                color: '#0A1929',
+                fontWeight: 700,
+                cursor: lookupSubmitting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                fontSize: 13.5,
+              }}
+            >
+              {lookupSubmitting ? <Spinner size="sm" color="#0A1929" /> : t('deviceRegistration.checkSubmit')}
+            </button>
+
+            {lookupError && (
+              <div style={{ marginTop: 12 }}>
+                <Alert variant="danger" title={t('common.error')}>
+                  {lookupError}
+                </Alert>
+              </div>
+            )}
+
+            {lookupResult && (
+              <div style={{ marginTop: 14 }}>
+                {!lookupResult.found ? (
+                  <Alert variant="warning" title={t('common.warning')}>
+                    {lookupResult.message || 'No registration details found.'}
+                  </Alert>
+                ) : (
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#C9973A', marginBottom: 8 }}>
+                      {t('deviceRegistration.deviceOwnerInfo')}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12.5 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
+                        <span style={{ opacity: 0.7 }}>{t('deviceRegistration.ownerName')}:</span>
+                        <span style={{ fontWeight: 600 }}>{lookupResult.details?.name} {lookupResult.details?.surname}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
+                        <span style={{ opacity: 0.7 }}>{t('deviceRegistration.ownerRole')}:</span>
+                        <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{lookupResult.details?.role}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
+                        <span style={{ opacity: 0.7 }}>{t('deviceRegistration.ownerDate')}:</span>
+                        <span style={{ fontWeight: 600 }}>{lookupResult.details?.registeredAt}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
+                        <span style={{ opacity: 0.7 }}>{t('deviceRegistration.ownerIp')}:</span>
+                        <span style={{ fontWeight: 600 }}>{lookupResult.details?.ipAddress}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
+                        <span style={{ opacity: 0.7 }}>{t('deviceRegistration.ownerBrowser')}:</span>
+                        <span style={{ fontWeight: 600 }}>{lookupResult.details?.browser}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 4 }}>
+                        <span style={{ opacity: 0.7 }}>{t('deviceRegistration.ownerOs')}:</span>
+                        <span style={{ fontWeight: 600 }}>{lookupResult.details?.os}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </form>
+        )}
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 18, flexDirection: isMobile ? 'column' : 'row', width: '100%' }}>
           <button
             type="button"
             disabled={submitting}
             onClick={handleRegister}
             style={{
-              flex: '1 1 220px',
+              flex: '1 1 auto',
+              width: '100%',
               padding: '13px 18px',
               borderRadius: 12,
               border: 'none',
@@ -168,6 +390,7 @@ export default function DeviceRegistrationPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
+              fontSize: isMobile ? 13.5 : 14,
             }}
           >
             {submitting ? (
@@ -185,7 +408,8 @@ export default function DeviceRegistrationPage() {
             disabled={submitting}
             onClick={() => navigate('/')}
             style={{
-              flex: '0 0 auto',
+              flex: isMobile ? '1 1 auto' : '0 0 auto',
+              width: isMobile ? '100%' : 'auto',
               padding: '13px 18px',
               borderRadius: 12,
               border: '1px solid rgba(255,255,255,0.18)',
@@ -194,17 +418,19 @@ export default function DeviceRegistrationPage() {
               fontWeight: 700,
               fontFamily: 'var(--font-body)',
               cursor: submitting ? 'not-allowed' : 'pointer',
+              fontSize: isMobile ? 13.5 : 14,
             }}
           >
             {t('deviceRegistration.backToDashboard')}
           </button>
         </div>
 
-        <div style={{ marginTop: 16, fontSize: 12.5, opacity: 0.7, lineHeight: 1.5 }}>
+        <div style={{ marginTop: 16, fontSize: isMobile ? 11.5 : 12.5, opacity: 0.7, lineHeight: 1.5 }}>
           {t('deviceRegistration.note')}
         </div>
       </div>
     </div>
   );
 }
+
 

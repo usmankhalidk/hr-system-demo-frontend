@@ -630,6 +630,7 @@ export interface IndeedStatsResponse {
     newPositionsPublished: number;
   }>;
   isIndeedApplyConfigured?: boolean;
+  isDispositionSyncReal?: boolean;
   companySlug?: string;
 }
 

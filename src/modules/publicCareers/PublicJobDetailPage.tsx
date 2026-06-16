@@ -32,6 +32,8 @@ import {
   getPublicJobDetail,
   PublicHiringContact,
   PublicJob,
+  getPublicJobScreenerQuestions,
+  PublicScreenerQuestion,
 } from '../../api/publicCareers';
 import {
   getCompanyBannerUrl,
@@ -639,6 +641,33 @@ export default function PublicJobDetailPage() {
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  const [screenerQuestions, setScreenerQuestions] = useState<PublicScreenerQuestion[]>([]);
+  const [screenerAnswers, setScreenerAnswers] = useState<Record<string, string>>({});
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+  useEffect(() => {
+    if (showApplyModal && job) {
+      setLoadingQuestions(true);
+      getPublicJobScreenerQuestions(companyMeta?.slug || job.companySlug, job.id)
+        .then((qs) => {
+          setScreenerQuestions(qs);
+          const initialAnswers: Record<string, string> = {};
+          qs.forEach((q) => {
+            initialAnswers[q.id] = '';
+          });
+          setScreenerAnswers(initialAnswers);
+        })
+        .catch((err) => {
+          console.error('Failed to load screener questions', err);
+        })
+        .finally(() => {
+          setLoadingQuestions(false);
+        });
+    }
+  }, [showApplyModal, job, companyMeta?.slug]);
 
   const [saved, setSaved] = useState(false);
   const [liked, setLiked] = useState(false);
@@ -849,8 +878,25 @@ export default function PublicJobDetailPage() {
       return;
     }
 
+    // Validate screener questions
+    for (const q of screenerQuestions) {
+      if (q.required && (!screenerAnswers[q.id] || screenerAnswers[q.id].trim() === '')) {
+        setSubmitMessage(
+          uiLanguage === 'it'
+            ? `Rispondi alla domanda obbligatoria: "${q.label}"`
+            : `Please answer the required question: "${q.label}"`
+        );
+        return;
+      }
+    }
+
     setSubmitting(true);
     setSubmitMessage(null);
+
+    const answersArray = Object.entries(screenerAnswers).map(([qId, ans]) => ({
+      questionId: parseInt(qId.replace('q_', ''), 10),
+      answer: ans
+    }));
 
     try {
       await applyToPublicJob({
@@ -879,6 +925,7 @@ export default function PublicJobDetailPage() {
         applicationDate: appProfile.applicationDate || undefined,
         startDate: appProfile.startDate || undefined,
         postalCode: appProfile.postalCode || undefined,
+        screenerAnswers: answersArray,
       });
 
       setSubmitMessage(browserLanguage === 'it'
@@ -916,6 +963,7 @@ export default function PublicJobDetailPage() {
       setResume(null);
       setResumePreviewUrl(null);
       setAgree(false);
+      setScreenerAnswers({});
     } catch (err: any) {
       const message = err?.response?.data?.error || copy.submitError;
       setSubmitMessage(message);
@@ -924,14 +972,51 @@ export default function PublicJobDetailPage() {
     }
   };
 
+  const validateAndSetResume = (file: File | null) => {
+    if (!file) {
+      setResume(null);
+      setResumePreviewUrl(null);
+      return;
+    }
+
+    if (!/\.(pdf|doc|docx|txt|rtf)$/i.test(file.name)) {
+      setSubmitMessage(copy.invalidCvFormatError);
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setSubmitMessage(copy.cvSizeError);
+      return;
+    }
+
+    setResume(file);
+    setSubmitMessage(null);
+    const url = URL.createObjectURL(file);
+    setResumePreviewUrl(url);
+  };
+
   const handleResumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
-    setResume(file);
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setResumePreviewUrl(url);
-    } else {
-      setResumePreviewUrl(null);
+    validateAndSetResume(file);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      validateAndSetResume(file);
     }
   };
 
@@ -1033,7 +1118,60 @@ export default function PublicJobDetailPage() {
               )}
               <div className="careers-detail-body">
                 {job.description ? (
-                  <div dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(job.description) }} />
+                  (() => {
+                    const isLong = job.description.length > 500;
+                    return (
+                      <div style={{ position: 'relative' }}>
+                        <div
+                          className="careers-description-container"
+                          style={{
+                            maxHeight: (!isLong || descExpanded) ? 'none' : '220px',
+                            overflow: 'hidden',
+                            transition: 'max-height 0.3s ease',
+                          }}
+                        >
+                          <div dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(job.description) }} />
+                        </div>
+                        {isLong && !descExpanded && (
+                          <div
+                            className="careers-description-fade"
+                            style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              height: '80px',
+                              background: 'linear-gradient(to bottom, transparent, #ffffff)',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        )}
+                        {isLong && (
+                          <button
+                            type="button"
+                            className="careers-description-toggle"
+                            onClick={() => setDescExpanded(prev => !prev)}
+                            style={{
+                              display: 'block',
+                              marginTop: '12px',
+                              background: 'none',
+                              border: 'none',
+                              color: '#C9973A',
+                              fontWeight: 600,
+                              fontSize: '13px',
+                              cursor: 'pointer',
+                              padding: 0,
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            {descExpanded
+                              ? (uiLanguage === 'it' ? 'Leggi meno' : 'See less')
+                              : (uiLanguage === 'it' ? 'Leggi tutto' : 'See more')}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()
                 ) : (
                   copy.noDescription
                 )}
@@ -1516,21 +1654,6 @@ export default function PublicJobDetailPage() {
               </div>
 
               <div style={{ display: 'grid', gap: 12, padding: '16px 16px 20px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-                  <div style={{ border: '1px solid rgba(201,151,58,0.22)', borderRadius: 12, padding: 12, background: 'rgba(201,151,58,0.06)' }}>
-                    <strong style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#8A5A07' }}>{copy.weeklyHours}</strong>
-                    <span style={{ display: 'block', marginTop: 4, fontSize: 13, color: '#1f2937', fontWeight: 700 }}>{job.weeklyHours ?? copy.notSpecified}</span>
-                  </div>
-                  <div style={{ border: '1px solid rgba(13,33,55,0.14)', borderRadius: 12, padding: 12, background: '#fff' }}>
-                    <strong style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#334155' }}>{copy.contract}</strong>
-                    <span style={{ display: 'block', marginTop: 4, fontSize: 13, color: '#1f2937', fontWeight: 700 }}>{job.contractType ?? copy.notSpecified}</span>
-                  </div>
-                  <div style={{ border: '1px solid rgba(13,33,55,0.14)', borderRadius: 12, padding: 12, background: '#fff' }}>
-                    <strong style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#334155' }}>{copy.location}</strong>
-                    <span style={{ display: 'block', marginTop: 4, fontSize: 13, color: '#1f2937', fontWeight: 700 }}>{formatLocation(job, remoteFallback)}</span>
-                  </div>
-                </div>
-
                 <form onSubmit={handleSubmit} className="careers-form-grid">
                   {/* Section 1 — Required fields (always visible, no heading needed) */}
                   <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(13,33,55,0.18)', background: 'rgba(248,250,252,0.8)' }}>
@@ -1586,17 +1709,70 @@ export default function PublicJobDetailPage() {
 
                   {/* Section 2 & 3 — CV/Resume and Cover Letter */}
                   <section style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 16, border: '1px solid rgba(13,33,55,0.14)', background: '#fff' }}>
-                    <div style={{ display: 'grid', gap: 8, padding: 14, borderRadius: 12, border: '1px dashed rgba(201,151,58,0.45)', background: 'rgba(201,151,58,0.06)' }}>
-                      <label style={{ fontSize: 12.5, color: '#374151', fontWeight: 700 }}>{copy.cvLabel}</label>
+                    <div
+                      className={`careers-cv-dropzone ${dragActive ? 'drag-active' : ''}`}
+                      onDragEnter={handleDrag}
+                      onDragOver={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDrop={handleDrop}
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        padding: '24px 16px',
+                        borderRadius: 12,
+                        border: dragActive ? '2px dashed #C9973A' : '1px dashed rgba(201,151,58,0.45)',
+                        background: dragActive ? 'rgba(201,151,58,0.1)' : 'rgba(201,151,58,0.04)',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <label style={{ fontSize: '13px', color: '#374151', fontWeight: 700, cursor: 'pointer', width: '100%', display: 'block' }}>
+                        {copy.cvLabel}
+                      </label>
                       {!resume ? (
-                        <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" onChange={handleResumeChange} required />
+                        <>
+                          <input
+                            type="file"
+                            id="cv-upload-input"
+                            accept=".pdf,.doc,.docx,.txt,.rtf"
+                            onChange={handleResumeChange}
+                            required
+                            style={{ display: 'none' }}
+                          />
+                          <label
+                            htmlFor="cv-upload-input"
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 6,
+                              cursor: 'pointer',
+                              width: '100%',
+                            }}
+                          >
+                            <div style={{ color: '#C9973A', marginBottom: 4 }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 16 4-4 4 4"/></svg>
+                            </div>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>
+                              {uiLanguage === 'it' ? 'Trascina il tuo CV qui o clicca per sfogliare' : 'Drag & drop your CV here or click to browse'}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                              {uiLanguage === 'it' ? 'Formati accettati: PDF, Word, TXT, RTF (max 5MB)' : 'Accepted formats: PDF, Word, TXT, RTF (max 5MB)'}
+                            </span>
+                          </label>
+                        </>
                       ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(201,151,58,0.3)', background: '#fff' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(201,151,58,0.3)', background: '#fff', width: '100%', boxSizing: 'border-box' }} onClick={(e) => e.stopPropagation()}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                             <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #C9973A, #B5852E)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                               {resume.name.split('.').pop()?.toUpperCase()}
                             </div>
-                            <div style={{ minWidth: 0 }}>
+                            <div style={{ minWidth: 0, textAlign: 'left' }}>
                               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resume.name}</div>
                               <div style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span>{(resume.size / 1024).toFixed(1)} KB</span>
@@ -1650,6 +1826,99 @@ export default function PublicJobDetailPage() {
                     />
                     <div className="careers-form-help">{coverLetter.length}/1000</div>
                   </section>
+
+                  {/* Part A: Screener Questions */}
+                  {screenerQuestions.length > 0 && (
+                    <section style={{ display: 'grid', gap: 16, padding: 16, borderRadius: 16, border: '1px solid rgba(201, 151, 58, 0.25)', background: 'rgba(201, 151, 58, 0.03)' }}>
+                      <h3 style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid rgba(201, 151, 58, 0.15)', paddingBottom: '8px' }}>
+                        {uiLanguage === 'it' ? 'Domande di preselezione' : 'Screening questions'}
+                      </h3>
+                      {screenerQuestions.map((q) => {
+                        const qVal = screenerAnswers[q.id] || '';
+                        return (
+                          <div key={q.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                              {q.label} {q.required && <span style={{ color: '#ef4444' }}>*</span>}
+                            </label>
+                            
+                            {q.type === 'radio' && (
+                              <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+                                {(q.options || [{ label: 'Sì', value: 'yes' }, { label: 'No', value: 'no' }]).map((opt) => {
+                                  const isChecked = qVal === opt.value;
+                                  return (
+                                    <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', color: '#1e293b', cursor: 'pointer' }}>
+                                      <input
+                                        type="radio"
+                                        name={q.id}
+                                        value={opt.value}
+                                        checked={isChecked}
+                                        onChange={(e) => setScreenerAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                        required={q.required}
+                                        style={{ accentColor: '#C9973A' }}
+                                      />
+                                      {opt.label}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {q.type === 'checkbox' && (
+                              <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
+                                {q.options?.map((opt) => {
+                                  const currentSelections = qVal ? qVal.split(',').map(s => s.trim()) : [];
+                                  const isChecked = currentSelections.includes(opt.value);
+                                  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+                                    let nextSelections;
+                                    if (e.target.checked) {
+                                      nextSelections = [...currentSelections, opt.value];
+                                    } else {
+                                      nextSelections = currentSelections.filter(v => v !== opt.value);
+                                    }
+                                    setScreenerAnswers(prev => ({ ...prev, [q.id]: nextSelections.join(', ') }));
+                                  };
+                                  return (
+                                    <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '13px', color: '#1e293b', cursor: 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        value={opt.value}
+                                        checked={isChecked}
+                                        onChange={handleCheckboxChange}
+                                        style={{ accentColor: '#C9973A' }}
+                                      />
+                                      {opt.label}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {q.type === 'text' && (
+                              <input
+                                type="text"
+                                className="careers-form-input"
+                                value={qVal}
+                                onChange={(e) => setScreenerAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                required={q.required}
+                                placeholder={uiLanguage === 'it' ? 'Scrivi la tua risposta...' : 'Type your answer...'}
+                              />
+                            )}
+
+                            {q.type === 'number' && (
+                              <input
+                                type="number"
+                                className="careers-form-input"
+                                value={qVal}
+                                onChange={(e) => setScreenerAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                required={q.required}
+                                placeholder="e.g. 5"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </section>
+                  )}
 
                   {/* GDPR Helper Notice */}
                   <div style={{ fontSize: '12.5px', color: '#64748b', padding: '0 4px', lineHeight: 1.4 }}>

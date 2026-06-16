@@ -85,6 +85,9 @@ export default function HrDeviceResetPage() {
   const roleOptions = [
     { value: 'employee', label: t('roles.employee', 'Dipendente') },
     { value: 'store_terminal', label: t('roles.store_terminal', 'Terminale Negozio') },
+    { value: 'store_manager', label: t('roles.store_manager', 'Store Manager') },
+    { value: 'area_manager', label: t('roles.area_manager', 'Area Manager') },
+    { value: 'hr', label: t('roles.hr', 'Human Resources') },
   ];
 
   const statusOptions = [
@@ -110,9 +113,14 @@ export default function HrDeviceResetPage() {
   const loadEmployees = async () => {
     // Include store terminals
     const res = await getEmployees({ limit: 500, status: 'active', includeStoreTerminals: true });
-    // Filter to only employee and store_terminal roles (device bindable)
+    // Filter to roles that can register devices and perform attendance actions
     const list = (res.employees ?? []).filter(
-      (emp) => emp.role === 'employee' || emp.role === 'store_terminal'
+      (emp) =>
+        emp.role === 'employee' ||
+        emp.role === 'store_terminal' ||
+        emp.role === 'store_manager' ||
+        emp.role === 'area_manager' ||
+        emp.role === 'hr'
     );
     setEmployees(list);
   };

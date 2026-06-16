@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { StatusBadge, ApprovalStepper } from './LeaveApprovalList';
 import { translateApiError } from '../../utils/apiErrors';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,6 +62,7 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { isMobile, isTablet } = useBreakpoint();
   
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -210,11 +212,15 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
   const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
   const daysInMonthTotal = daysInMonth(year, month);
 
-  const cells: (Date | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonthTotal }, (_, i) => new Date(year, month, i + 1)),
-  ];
-  while (cells.length % 7 !== 0) cells.push(null);
+  const cells: (Date | null)[] = (isMobile || isTablet)
+    ? Array.from({ length: daysInMonthTotal }, (_, i) => new Date(year, month, i + 1))
+    : [
+        ...Array(startOffset).fill(null),
+        ...Array.from({ length: daysInMonthTotal }, (_, i) => new Date(year, month, i + 1)),
+      ];
+  if (!isMobile && !isTablet) {
+    while (cells.length % 7 !== 0) cells.push(null);
+  }
 
   const summaryHoverCardStyle: React.CSSProperties = {
     position: 'absolute',
@@ -273,7 +279,7 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
 
   return (
     <div style={{
-      padding: '24px 32px',
+      padding: (isMobile || isTablet) ? '12px 16px' : '24px 32px',
       background: 'var(--surface)',
       borderRadius: 'var(--radius-lg)',
       border: '1px solid var(--border)',
@@ -350,27 +356,33 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
       )}
 
       {!loading && (
-        <div style={{ padding: 0, overflowX: 'auto' }}>
-          <div style={{ minWidth: 1200 }}>
+        <div style={{ padding: 0, overflowX: (isMobile || isTablet) ? 'visible' : 'auto' }}>
+          <div style={{ minWidth: (isMobile || isTablet) ? 'auto' : 1200 }}>
             {/* Day headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 8 }}>
-            {DAY_LABELS.map((label) => (
-              <div key={label} style={{
-                textAlign: 'center', fontWeight: 600,
-                fontFamily: 'var(--font-display)', color: 'var(--primary)',
-                padding: '4px 0', fontSize: '0.85rem',
-              }}>
-                {label}
+            {!isMobile && !isTablet && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 8 }}>
+                {DAY_LABELS.map((label) => (
+                  <div key={label} style={{
+                    textAlign: 'center', fontWeight: 600,
+                    fontFamily: 'var(--font-display)', color: 'var(--primary)',
+                    padding: '4px 0', fontSize: '0.85rem',
+                  }}>
+                    {label}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
 
-          {/* Day cells */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
-            {cells.map((date, idx) => {
-              if (!date) {
-                return <div key={`empty-${idx}`} style={{ minHeight: 104 }} />;
-              }
+            {/* Day cells */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0, 1fr))' : 'repeat(7, minmax(0, 1fr))',
+              gap: (isMobile || isTablet) ? 12 : 4
+            }}>
+              {cells.map((date, idx) => {
+                if (!date) {
+                  return <div key={`empty-${idx}`} style={{ minHeight: 104 }} />;
+                }
               const dateStr = formatDate(date);
               const dayReqs = dayMap.get(dateStr) ?? [];
               const isToday = dateStr === todayStr;
@@ -411,7 +423,6 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
                     justifyContent: 'space-between',
                     gap: 6,
                     marginBottom: 6,
-                    pointerEvents: 'none',
                   }}>
                     <div style={{
                       fontWeight: isToday ? 700 : 500,
@@ -431,6 +442,19 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
                         </span>
                       ) : date.getDate()}
                     </div>
+
+                    {(isMobile || isTablet) && (
+                      <div style={{
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                        fontFamily: 'var(--font-display)',
+                      }}>
+                        {DAY_LABELS[date.getDay() === 0 ? 6 : date.getDay() - 1]}
+                      </div>
+                    )}
                   </div>
 
                   {hasLeaves && (

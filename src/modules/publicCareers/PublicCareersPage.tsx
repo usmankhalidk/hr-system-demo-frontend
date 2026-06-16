@@ -140,8 +140,8 @@ const COPY: Record<UiLanguage, {
 }> = {
   en: {
     kicker: 'Public Careers',
-    title: 'Shape Teams That Build Better Workplaces',
-    subtitle: 'Browse open opportunities across all active companies. Public career pages stay open without login.',
+    title: 'Find your career opportunity in our team',
+    subtitle: 'Explore open positions and apply in a few clicks to become part of our team.',
     openRoles: 'Open roles',
     activeCompanies: 'Active companies',
     stores: 'Stores',
@@ -195,8 +195,8 @@ const COPY: Record<UiLanguage, {
   },
   it: {
     kicker: 'Careers Pubbliche',
-    title: 'Costruisci Team Che Migliorano il Lavoro',
-    subtitle: 'Esplora le opportunita aperte tra tutte le aziende attive. Le pagine careers pubbliche restano accessibili senza login.',
+    title: 'Trova la tua opportunità di carriera nel nostro team',
+    subtitle: 'Esplora le posizioni aperte e candidati in pochi clic per entrare a far parte della nostra realtà.',
     openRoles: 'Posizioni aperte',
     activeCompanies: 'Aziende attive',
     stores: 'Negozi',
@@ -356,11 +356,31 @@ export default function PublicCareersPage() {
   const [filters, setFilters] = useState<CareersFilters>(DEFAULT_FILTERS);
   const [draftFilters, setDraftFilters] = useState<CareersFilters>(DEFAULT_FILTERS);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(12);
 
   useEffect(() => {
     setFilters(DEFAULT_FILTERS);
     setDraftFilters(DEFAULT_FILTERS);
+    setSelectedTag(null);
+    setVisibleCount(12);
   }, [companySlug]);
+
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [filters, selectedTag]);
+
+  const uniqueTags = useMemo(() => {
+    return Array.from(new Set(jobs.flatMap((j) => j.tags || []))).filter(Boolean);
+  }, [jobs]);
+
+  const locationCount = useMemo(() => {
+    return new Set(jobs.map((job) => job.location.city || job.storeName).filter(Boolean)).size;
+  }, [jobs]);
+
+  const jobTypesCount = useMemo(() => {
+    return new Set(jobs.map((job) => job.jobType).filter(Boolean)).size;
+  }, [jobs]);
 
   useEffect(() => {
     setLoading(true);
@@ -405,6 +425,7 @@ export default function PublicCareersPage() {
       if (filters.remoteType !== 'all' && job.remoteType !== filters.remoteType) return false;
       if (filters.language !== 'all' && job.language !== filters.language) return false;
       if (filters.status !== 'all' && job.status !== filters.status) return false;
+      if (selectedTag && (!job.tags || !job.tags.includes(selectedTag))) return false;
 
       if (salaryMin !== null && Number.isFinite(salaryMin)) {
         const compare = job.salaryMin ?? job.salaryMax;
@@ -441,7 +462,11 @@ export default function PublicCareersPage() {
       if (filters.sort === 'oldest') return aTime - bTime;
       return bTime - aTime;
     });
-  }, [jobs, filters]);
+  }, [jobs, filters, selectedTag]);
+
+  const displayedJobs = useMemo(() => {
+    return filteredJobs.slice(0, visibleCount);
+  }, [filteredJobs, visibleCount]);
 
   const remoteRoles = useMemo(() => jobs.filter((job) => job.remoteType === 'remote').length, [jobs]);
 
@@ -621,28 +646,12 @@ export default function PublicCareersPage() {
               <article className="careers-stat-card"><Building2 size={18} /><div><strong>{companies.length}</strong><span>{copy.activeCompanies}</span></div></article>
               <article className="careers-stat-card"><StoreIcon size={18} /><div><strong>{stores.length}</strong><span>{copy.stores}</span></div></article>
               <article className="careers-stat-card"><Globe2 size={18} /><div><strong>{remoteRoles}</strong><span>{copy.fullyRemoteRoles}</span></div></article>
+              <article className="careers-stat-card"><MapPin size={18} /><div><strong>{locationCount}</strong><span>{uiLanguage === 'it' ? 'Sedi' : 'Locations'}</span></div></article>
+              <article className="careers-stat-card"><SlidersHorizontal size={18} /><div><strong>{jobTypesCount}</strong><span>{uiLanguage === 'it' ? 'Tipi contratto' : 'Job types'}</span></div></article>
             </div>
           )}
-        </div>
-      </section>
 
-      <section className="careers-content">
-        <div className="careers-filter-panel">
-          <div className="careers-filter-header">
-            <div>
-              <h2>{copy.findYourMatch}</h2>
-              <p>{copy.searchHint}</p>
-            </div>
-            <div className="careers-filter-actions">
-              {activeFiltersCount > 0 && (
-                <button className="careers-reset-btn" type="button" onClick={() => setFilters(DEFAULT_FILTERS)}>
-                  {copy.clearAllFilters}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="careers-search-toolbar">
+          <div className="careers-search-toolbar inline-hero-search">
             <label className="careers-search-inline">
               <Search size={15} />
               <input
@@ -656,12 +665,28 @@ export default function PublicCareersPage() {
               {activeFiltersCount > 0 && <span>{activeFiltersCount}</span>}
             </button>
           </div>
-
-          <div className="careers-filter-active-row">
-            <span><SlidersHorizontal size={12} /> {copy.findYourMatch}</span>
-            <strong>{activeFiltersCount > 0 ? `${activeFiltersCount} ${copy.activeFilters}` : copy.latestJobs}</strong>
-          </div>
         </div>
+      </section>
+
+      <section className="careers-content">
+        {uniqueTags.length > 0 && (
+          <div className="careers-tag-pills-row">
+            {uniqueTags.map((tag) => {
+              const isSelected = selectedTag === tag;
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`careers-tag-pill ${isSelected ? 'active' : ''}`}
+                  onClick={() => setSelectedTag(isSelected ? null : tag)}
+                >
+                  {tag}
+                  {isSelected && <X size={12} style={{ marginLeft: 6 }} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {loading && <div className="careers-empty">{copy.loadingOpenPositions}</div>}
         {!loading && hasError && <div className="careers-empty error">{copy.loadError}</div>}
@@ -672,7 +697,7 @@ export default function PublicCareersPage() {
 
         {!loading && !hasError && filteredJobs.length > 0 && (
           <div className="careers-jobs-grid">
-            {filteredJobs.map((job) => {
+            {displayedJobs.map((job) => {
               const company = companyById.get(job.companyId);
               const logoUrl = getCompanyLogoUrl(company?.logoFilename ?? job.companyLogoFilename);
               const companyCountryCode = normalizeCountryCode(company?.country ?? job.companyCountry ?? job.location.country);
@@ -768,6 +793,18 @@ export default function PublicCareersPage() {
                 </article>
               );
             })}
+          </div>
+        )}
+
+        {filteredJobs.length > visibleCount && (
+          <div className="careers-pagination-row" style={{ display: 'flex', justifyContent: 'center', marginTop: '32px' }}>
+            <button
+              type="button"
+              className="careers-show-more-btn"
+              onClick={() => setVisibleCount((prev) => prev + 8)}
+            >
+              {uiLanguage === 'it' ? 'Mostra altri' : 'Show more'}
+            </button>
           </div>
         )}
       </section>

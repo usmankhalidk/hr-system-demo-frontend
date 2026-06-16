@@ -874,7 +874,7 @@ export function EmployeeDetail() {
   const isAdmin = user?.role === 'admin' || user?.isSuperAdmin === true;
   const isOwnProfile = user?.id === employee?.id;
   const canViewSensitive = isAdminOrHr || isOwnProfile;
-  const canResetDevice = isAdminOrHr && (employee?.role === 'employee' || employee?.role === 'store_terminal');
+  const canResetDevice = isAdminOrHr && (employee?.role === 'employee' || employee?.role === 'store_terminal' || employee?.role === 'store_manager' || employee?.role === 'area_manager' || employee?.role === 'hr');
   const activeCompanyId = targetCompanyId ?? user?.companyId ?? null;
   const shiftMonthToken = useMemo(() => formatMonthToken(shiftMonthCursor), [shiftMonthCursor]);
 
