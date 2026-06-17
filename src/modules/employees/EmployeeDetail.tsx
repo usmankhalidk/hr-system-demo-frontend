@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Smartphone, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -821,6 +822,19 @@ const IconBack = () => (
     <polyline points="15 18 9 12 15 6" />
   </svg>
 );
+const IconMenu = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="12" cy="5" r="1" />
+    <circle cx="12" cy="19" r="1" />
+  </svg>
+);
+const IconClose = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export function EmployeeDetail() {
@@ -868,6 +882,7 @@ export function EmployeeDetail() {
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const employeeId = id && !isNaN(parseInt(id, 10)) ? parseInt(id, 10) : undefined;
   const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager' || user?.isSuperAdmin === true;
@@ -1158,67 +1173,260 @@ export function EmployeeDetail() {
               marginLeft: isMobile ? 'auto' : '0',
               justifyContent: isMobile ? 'flex-end' : 'flex-start',
             }}>
-              <button
-                onClick={() => setShowEditForm(true)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '6px 10px', borderRadius: 999,
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--text-primary)', fontSize: 11.5, fontWeight: 700,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
-              >
-                <IconEdit /> {t('common.edit')}
-              </button>
+              {isMobile ? (
+                <>
+                  <button
+                    onClick={() => setMobileMenuOpen(true)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '8px', borderRadius: '50%',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <IconMenu />
+                  </button>
 
-              {!isOwnProfile && (
-                <button
-                  onClick={() => setShowCompose(true)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '6px 10px', borderRadius: 999,
-                    border: '1px solid rgba(201,151,58,0.35)',
-                    background: 'rgba(201,151,58,0.10)',
-                    color: 'rgba(201,151,58,0.92)', fontSize: 11.5, fontWeight: 700,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                  </svg>
-                  {t('employees.sendMessage')}
-                </button>
-              )}
+                  {mobileMenuOpen && createPortal(
+                    <div style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      width: '100vw',
+                      height: '100vh',
+                      zIndex: 9999,
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                    }}>
+                      <style>{`
+                        @keyframes slideInRight {
+                          from { transform: translateX(100%); }
+                          to { transform: translateX(0); }
+                        }
+                      `}</style>
+                      {/* Backdrop */}
+                      <div 
+                        onClick={() => setMobileMenuOpen(false)}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          background: 'rgba(15, 23, 42, 0.4)',
+                          backdropFilter: 'blur(4px)',
+                        }}
+                      />
 
-              {employee.status === 'active' ? (
-                <button
-                  onClick={() => setShowDeactivateModal(true)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '6px 10px', borderRadius: 999,
-                    border: '1px solid rgba(220,38,38,0.42)',
-                    background: 'rgba(220,38,38,0.10)',
-                    color: '#DC2626', fontSize: 11.5, fontWeight: 700,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
-                >
-                  <IconOff /> {t('common.deactivate')}
-                </button>
+                      {/* Drawer container */}
+                      <div style={{
+                        position: 'relative',
+                        width: '280px',
+                        maxWidth: '80%',
+                        height: '100%',
+                        background: 'var(--surface)',
+                        boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        padding: '24px 20px',
+                        boxSizing: 'border-box',
+                        animation: 'slideInRight 0.3s ease-out',
+                        borderLeft: '1px solid var(--border)',
+                      }}>
+                        {/* Header */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '24px',
+                        }}>
+                          <h3 style={{
+                            fontFamily: 'var(--font-display)',
+                            fontSize: '18px',
+                            fontWeight: 700,
+                            color: 'var(--text-primary)',
+                            margin: 0,
+                          }}>
+                            {t('common.actions', 'Actions')}
+                          </h3>
+                          <button
+                            onClick={() => setMobileMenuOpen(false)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 4,
+                              cursor: 'pointer',
+                              color: 'var(--text-muted)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <IconClose />
+                          </button>
+                        </div>
+
+                        {/* Action Buttons list */}
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '12px',
+                        }}>
+                          <button
+                            onClick={() => {
+                              setMobileMenuOpen(false);
+                              setShowEditForm(true);
+                            }}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 10,
+                              padding: '12px 16px', borderRadius: 8,
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
+                              color: 'var(--text-primary)', fontSize: 13, fontWeight: 700,
+                              fontFamily: 'var(--font-body)', cursor: 'pointer',
+                              textAlign: 'left',
+                              width: '100%',
+                            }}
+                          >
+                            <IconEdit /> {t('common.edit')}
+                          </button>
+
+                          {!isOwnProfile && (
+                            <button
+                              onClick={() => {
+                                setMobileMenuOpen(false);
+                                setShowCompose(true);
+                              }}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 10,
+                                padding: '12px 16px', borderRadius: 8,
+                                border: '1px solid rgba(201,151,58,0.35)',
+                                background: 'rgba(201,151,58,0.10)',
+                                color: 'rgba(201,151,58,0.92)', fontSize: 13, fontWeight: 700,
+                                fontFamily: 'var(--font-body)', cursor: 'pointer',
+                                textAlign: 'left',
+                                width: '100%',
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                              </svg>
+                              {t('employees.sendMessage')}
+                            </button>
+                          )}
+
+                          {employee.status === 'active' ? (
+                            <button
+                              onClick={() => {
+                                setMobileMenuOpen(false);
+                                setShowDeactivateModal(true);
+                              }}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 10,
+                                padding: '12px 16px', borderRadius: 8,
+                                border: '1px solid rgba(220,38,38,0.42)',
+                                background: 'rgba(220,38,38,0.10)',
+                                color: '#DC2626', fontSize: 13, fontWeight: 700,
+                                fontFamily: 'var(--font-body)', cursor: 'pointer',
+                                textAlign: 'left',
+                                width: '100%',
+                              }}
+                            >
+                              <IconOff /> {t('common.deactivate')}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setMobileMenuOpen(false);
+                                setShowActivateModal(true);
+                              }}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 10,
+                                padding: '12px 16px', borderRadius: 8,
+                                border: '1px solid rgba(21,128,61,0.42)',
+                                background: 'rgba(21,128,61,0.10)',
+                                color: '#15803D', fontSize: 13, fontWeight: 700,
+                                fontFamily: 'var(--font-body)', cursor: 'pointer',
+                                textAlign: 'left',
+                                width: '100%',
+                              }}
+                            >
+                              <IconOn /> {t('common.activate')}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>,
+                    document.body
+                  )}
+                </>
               ) : (
-                <button
-                  onClick={() => setShowActivateModal(true)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '6px 10px', borderRadius: 999,
-                    border: '1px solid rgba(21,128,61,0.42)',
-                    background: 'rgba(21,128,61,0.10)',
-                    color: '#15803D', fontSize: 11.5, fontWeight: 700,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
-                >
-                  <IconOn /> {t('common.activate')}
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowEditForm(true)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '6px 10px', borderRadius: 999,
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-primary)', fontSize: 11.5, fontWeight: 700,
+                      fontFamily: 'var(--font-body)', cursor: 'pointer',
+                    }}
+                  >
+                    <IconEdit /> {t('common.edit')}
+                  </button>
+
+                  {!isOwnProfile && (
+                    <button
+                      onClick={() => setShowCompose(true)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '6px 10px', borderRadius: 999,
+                        border: '1px solid rgba(201,151,58,0.35)',
+                        background: 'rgba(201,151,58,0.10)',
+                        color: 'rgba(201,151,58,0.92)', fontSize: 11.5, fontWeight: 700,
+                        fontFamily: 'var(--font-body)', cursor: 'pointer',
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                      </svg>
+                      {t('employees.sendMessage')}
+                    </button>
+                  )}
+
+                  {employee.status === 'active' ? (
+                    <button
+                      onClick={() => setShowDeactivateModal(true)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '6px 10px', borderRadius: 999,
+                        border: '1px solid rgba(220,38,38,0.42)',
+                        background: 'rgba(220,38,38,0.10)',
+                        color: '#DC2626', fontSize: 11.5, fontWeight: 700,
+                        fontFamily: 'var(--font-body)', cursor: 'pointer',
+                      }}
+                    >
+                      <IconOff /> {t('common.deactivate')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowActivateModal(true)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '6px 10px', borderRadius: 999,
+                        border: '1px solid rgba(21,128,61,0.42)',
+                        background: 'rgba(21,128,61,0.10)',
+                        color: '#15803D', fontSize: 11.5, fontWeight: 700,
+                        fontFamily: 'var(--font-body)', cursor: 'pointer',
+                      }}
+                    >
+                      <IconOn /> {t('common.activate')}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1300,27 +1508,31 @@ export function EmployeeDetail() {
                 />
               )}
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>
-                {tRole(employee.role, employee.isSuperAdmin)}
-              </Badge>
-              <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
-                {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
-              </Badge>
-            </div>
-            <div style={{
-              marginTop: '10px', fontSize: '12.5px', color: 'rgba(255,255,255,0.55)',
-              display: 'flex', gap: '16px', flexWrap: 'wrap',
-            }}>
-              {employee.email && <span>{employee.email}</span>}
-              {employee.department && <span>· {employee.department}</span>}
-              {employee.storeName && <span>· {employee.storeName}</span>}
-              {employee.uniqueId && (
-                <span style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>
-                  · ID: {employee.uniqueId}
-                </span>
-              )}
-            </div>
+            {!isMobile && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <Badge variant={ROLE_BADGE_VARIANT[employee.role]}>
+                    {tRole(employee.role, employee.isSuperAdmin)}
+                  </Badge>
+                  <Badge variant={employee.status === 'active' ? 'success' : 'danger'}>
+                    {employee.status === 'active' ? t('employees.statusActive') : t('employees.statusInactive')}
+                  </Badge>
+                </div>
+                <div style={{
+                  marginTop: '10px', fontSize: '12.5px', color: 'rgba(255,255,255,0.55)',
+                  display: 'flex', gap: '16px', flexWrap: 'wrap',
+                }}>
+                  {employee.email && <span>{employee.email}</span>}
+                  {employee.department && <span>· {employee.department}</span>}
+                  {employee.storeName && <span>· {employee.storeName}</span>}
+                  {employee.uniqueId && (
+                    <span style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>
+                      · ID: {employee.uniqueId}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

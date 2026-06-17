@@ -621,7 +621,10 @@ export function EmployeeList() {
       label: t("employees.colStore"),
       render: (row) => {
         const transfer = activeTransfersByUser[row.id];
-        if (transfer) {
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const isExpired = transfer && transfer.endDate && transfer.endDate < todayStr;
+        if (transfer && !isExpired) {
           const showPopover = hoveredTransferUserId === row.id;
           return (
             <div
