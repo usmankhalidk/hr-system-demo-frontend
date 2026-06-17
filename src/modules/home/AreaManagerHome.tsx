@@ -10,12 +10,14 @@ import {
 } from 'recharts';
 import { Table, Card } from '../../components/ui';
 import type { Column } from '../../components/ui';
-import client from '../../api/client';
+import client, { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
 
 interface AssignedStore {
   id: number;
   name: string;
   code: string;
+  logoFilename?: string | null;
+  storeManager?: string | null;
   employeeCount: number;
 }
 
@@ -27,6 +29,8 @@ interface PendingShiftHomeRow {
   endTime: string;
   userName: string;
   userSurname: string;
+  userRole?: string;
+  userAvatarFilename?: string | null;
   storeName?: string | null;
 }
 
@@ -38,6 +42,9 @@ interface PendingLeaveHomeRow {
   endDate: string;
   userName: string;
   userSurname: string;
+  userRole?: string;
+  userAvatarFilename?: string | null;
+  storeName?: string | null;
 }
 
 export interface AreaManagerHomeData {
@@ -172,6 +179,81 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
   const { t, i18n } = useTranslation();
   const { isMobile, isTablet } = useBreakpoint();
   const { permissions, user } = useAuth();
+
+  const toStoreSlug = (store: { id: number; name: string }): string => {
+    const clean = store.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return `${store.id}-${clean}`;
+  };
+
+  const renderStoreLogo = (logoFilename: string | null | undefined, name: string, size = 36) => {
+    const logoUrl = getStoreLogoUrl(logoFilename);
+    if (logoUrl) {
+      return (
+        <img
+          src={logoUrl}
+          alt={name}
+          style={{ width: size, height: size, borderRadius: '10px', objectFit: 'cover', border: '1px solid rgba(148,163,184,0.3)', flexShrink: 0 }}
+        />
+      );
+    }
+    return (
+      <span
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '10px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #15803D, #166534)',
+          color: '#fff',
+          fontSize: '1rem',
+          fontWeight: 800,
+          border: '1px solid rgba(148,163,184,0.3)',
+          flexShrink: 0,
+        }}
+      >
+        <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      </span>
+    );
+  };
+
+  const renderUserAvatar = (avatarFilename: string | null | undefined, name: string, surname: string, size = 32) => {
+    const avatarUrl = getAvatarUrl(avatarFilename);
+    const initials = `${name?.[0] ?? ''}${surname?.[0] ?? ''}`.toUpperCase() || 'U';
+    if (avatarUrl) {
+      return (
+        <img
+          src={avatarUrl}
+          alt=""
+          style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(148,163,184,0.3)', flexShrink: 0 }}
+        />
+      );
+    }
+    return (
+      <span
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, var(--primary), #3b82f6)',
+          color: '#fff',
+          fontSize: size <= 32 ? '0.75rem' : '0.85rem',
+          fontWeight: 700,
+          border: '1px solid rgba(148,163,184,0.3)',
+          flexShrink: 0,
+        }}
+      >
+        {initials}
+      </span>
+    );
+  };
   
   const {
     assignedStores = [],
@@ -220,11 +302,17 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
 
   const storeColumns: Column<AssignedStore>[] = [
     {
+      key: 'logo',
+      label: '',
+      width: '48',
+      render: (row) => renderStoreLogo(row.logoFilename, row.name, 36),
+    },
+    {
       key: 'name', label: t('home.areaManager.colStore'),
       render: (row) => (
         <span
-          style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 500 }}
-          onClick={() => navigate(`/dipendenti?store_id=${row.id}`)}
+          style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
+          onClick={() => navigate(`/negozi/${toStoreSlug(row)}`)}
         >
           {row.name}
         </span>
@@ -232,10 +320,15 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
     },
     { key: 'code', label: t('home.areaManager.colCode'), render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '12.5px' }}>{row.code}</span> },
     {
+      key: 'storeManager',
+      label: t('home.areaManager.colManager', 'Store Manager'),
+      render: (row) => <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{row.storeManager || t('common.not_available', 'N/A')}</span>,
+    },
+    {
       key: 'employeeCount', label: t('home.areaManager.colEmployees'),
       align: 'right',
       render: (row) => (
-        <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', fontSize: '14px' }}>
+        <span style={{ fontWeight: 700, color: 'var(--primary)', fontFamily: 'var(--font-display)', fontSize: '14px' }}>
           {row.employeeCount}
         </span>
       ),
@@ -545,7 +638,69 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
           <h3 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
             {t('home.areaManager.storesList')}
           </h3>
-          <Table<AssignedStore> flush columns={storeColumns} data={assignedStores} emptyText={t('home.areaManager.noStores')} />
+          {(isMobile || isTablet) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {assignedStores.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    padding: '16px',
+                    background: 'var(--background)',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    boxShadow: 'var(--shadow-sm)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {/* Logo */}
+                    {renderStoreLogo(s.logoFilename, s.name, 44)}
+                    
+                    {/* Store Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h4
+                        style={{
+                          margin: 0,
+                          fontSize: '14.5px',
+                          fontWeight: 700,
+                          color: 'var(--accent)',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-display)',
+                        }}
+                        onClick={() => navigate(`/negozi/${toStoreSlug(s)}`)}
+                      >
+                        {s.name}
+                      </h4>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {t('home.areaManager.colCode')}: {s.code}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Additional info */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '10px', fontSize: '12.5px' }}>
+                    <div style={{ flex: '1 0 120px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('home.areaManager.colManager', 'Store Manager')}: </span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{s.storeManager || t('common.not_available', 'N/A')}</span>
+                    </div>
+                    <div style={{ flex: '1 0 120px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('home.areaManager.colEmployees', 'Employees')}: </span>
+                      <span style={{ fontWeight: 700, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>{s.employeeCount}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {assignedStores.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  {t('home.areaManager.noStores')}
+                </div>
+              )}
+            </div>
+          ) : (
+            <Table<AssignedStore> flush columns={storeColumns} data={assignedStores} emptyText={t('home.areaManager.noStores')} />
+          )}
         </div>
 
         {/* Analytics chart */}
@@ -556,9 +711,10 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
           <h3 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
             {t('home.areaManager.staffDistribution')}
           </h3>
-          <div style={{ height: 300 }}>
+          <div style={{ height: 300, overflowX: (isMobile || isTablet) ? 'auto' : 'hidden', width: '100%' }}>
             {assignedStores.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <div style={{ minWidth: (isMobile || isTablet) ? Math.max(400, barData.length * 50) : '100%', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                   <XAxis
@@ -581,6 +737,7 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             ) : (
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
                 {t('home.areaManager.noStores')}
@@ -619,23 +776,59 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {pendingShiftPreview.slice(0, 3).map((s) => (
                 <div key={s.id} style={{
-                  padding: '12px 14px', background: 'var(--background)', borderRadius: 'var(--radius-md)',
+                  padding: '12px 14px', background: 'var(--background)', borderRadius: 'var(--radius-lg)',
                   border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  gap: '16px', overflowX: 'auto', width: '100%',
                 }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>{s.userName} {s.userSurname}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.date} • {s.startTime}-{s.endTime}</div>
-                    {s.storeName && <div style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 500, marginTop: '2px' }}>{s.storeName}</div>}
+                  {/* User Sub-block */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '160px', flexShrink: 0 }}>
+                    {renderUserAvatar(s.userAvatarFilename, s.userName, s.userSurname, 36)}
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                        {s.userName} {s.userSurname}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                        {s.userRole ? t(`roles.${s.userRole}`, s.userRole) : ''}
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => navigate('/turni')}
-                    style={{
-                      background: 'none', border: '1px solid var(--accent)', color: 'var(--accent)',
-                      padding: '5px 12px', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    }}
-                  >
-                    {t('common.view')}
-                  </button>
+
+                  {/* Shift Sub-block */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '130px', flexShrink: 0 }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {s.date}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {s.startTime.slice(0, 5)} - {s.endTime.slice(0, 5)}
+                    </div>
+                  </div>
+
+                  {/* Store name Sub-block */}
+                  <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, minWidth: '120px', flexShrink: 0 }}>
+                    {s.storeName || '-'}
+                  </div>
+
+                  {/* Button Sub-block */}
+                  <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                    <button
+                      onClick={() => navigate('/turni')}
+                      style={{
+                        background: 'none', border: '1.5px solid var(--accent)', color: 'var(--accent)',
+                        padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                        whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--accent)';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.color = 'var(--accent)';
+                      }}
+                    >
+                      {t('common.view', 'View')}
+                    </button>
+                  </div>
                 </div>
               ))}
               {pendingShiftPreview.length === 0 && (
@@ -680,22 +873,59 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {pendingLeavePreview.slice(0, 3).map((l) => (
                 <div key={l.id} style={{
-                  padding: '12px 14px', background: 'var(--background)', borderRadius: 'var(--radius-md)',
+                  padding: '12px 14px', background: 'var(--background)', borderRadius: 'var(--radius-lg)',
                   border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  gap: '16px', overflowX: 'auto', width: '100%',
                 }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>{l.userName} {l.userSurname}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{l.leaveType} • {l.startDate} al {l.endDate}</div>
+                  {/* User Sub-block */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '160px', flexShrink: 0 }}>
+                    {renderUserAvatar(l.userAvatarFilename, l.userName, l.userSurname, 36)}
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                        {l.userName} {l.userSurname}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                        {l.userRole ? t(`roles.${l.userRole}`, l.userRole) : ''}
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => navigate('/permessi')}
-                    style={{
-                      background: 'none', border: '1px solid var(--accent)', color: 'var(--accent)',
-                      padding: '5px 12px', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    }}
-                  >
-                    {t('common.view')}
-                  </button>
+
+                  {/* Leave Sub-block */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '160px', flexShrink: 0 }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
+                      {t(`leave.type_${l.leaveType}`, l.leaveType)}
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                      {l.startDate} al {l.endDate}
+                    </div>
+                  </div>
+
+                  {/* Store name Sub-block */}
+                  <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, minWidth: '120px', flexShrink: 0 }}>
+                    {l.storeName || '-'}
+                  </div>
+
+                  {/* Button Sub-block */}
+                  <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                    <button
+                      onClick={() => navigate('/permessi')}
+                      style={{
+                        background: 'none', border: '1.5px solid var(--accent)', color: 'var(--accent)',
+                        padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                        whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--accent)';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.color = 'var(--accent)';
+                      }}
+                    >
+                      {t('common.view', 'View')}
+                    </button>
+                  </div>
                 </div>
               ))}
               {pendingLeavePreview.length === 0 && (

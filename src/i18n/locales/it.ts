@@ -297,6 +297,7 @@ const it = {
       colStore: 'Nome Negozio',
       colCode: 'Codice',
       colEmployees: 'Dipendenti',
+      colManager: 'Store Manager',
     },
     employee: {
       title: 'Il Mio Profilo',
