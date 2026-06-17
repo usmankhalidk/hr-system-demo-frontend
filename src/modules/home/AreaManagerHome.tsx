@@ -304,7 +304,7 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
     {
       key: 'logo',
       label: '',
-      width: 48,
+      width: '48',
       render: (row) => renderStoreLogo(row.logoFilename, row.name, 36),
     },
     {
