@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     target: ['es2020', 'safari14'],
+    emptyOutDir: false,
   },
   esbuild: {
     target: 'safari14',

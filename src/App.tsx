@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { lazy, Suspense, useEffect, useRef } from 'react';
+import type { ComponentType } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { SocketProvider } from './context/SocketContext';
@@ -10,50 +11,60 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import { Spinner } from './components/ui';
+import { recoverFromChunkLoadError } from './utils/chunkLoadRecovery';
 
 // Lazy-load route components to reduce the initial ES-module evaluation depth.
 // iOS Safari evaluates module imports recursively; eagerly importing 30+ heavy
 // page components (each with their own deep dependency trees) overflows Safari's
 // smaller call-stack limit, causing "RangeError: Maximum call stack size exceeded".
-const LoginPage = lazy(() => import('./modules/auth/LoginPage'));
-const HomePage = lazy(() => import('./modules/home/HomePage'));
-const EmployeeList = lazy(() => import('./modules/employees/EmployeeList'));
-const EmployeeDetail = lazy(() => import('./modules/employees/EmployeeDetail'));
-const StoreList = lazy(() => import('./modules/stores/StoreList'));
-const StoreDetail = lazy(() => import('./modules/stores/StoreDetail'));
-const SystemCompanyManagement = lazy(() => import('./modules/companies/SystemCompanyManagement'));
-const CompanyDetail = lazy(() => import('./modules/companies/CompanyDetail'));
-const SystemPermissionsPanel = lazy(() => import('./modules/permissions/SystemPermissionsPanel'));
-const PermissionsPanel = lazy(() => import('./modules/permissions/PermissionsPanel'));
-const ProfilePage = lazy(() => import('./modules/profile/ProfilePage'));
-const ShiftsPage = lazy(() => import('./modules/shifts/ShiftsPage'));
-const ExternalAffluencePage = lazy(() => import('./modules/externalAffluence/ExternalAffluencePage'));
-const AttendanceLogsPage = lazy(() => import('./modules/attendance/AttendanceLogsPage'));
-const AnomaliesPage = lazy(() => import('./modules/attendance/AnomaliesPage'));
-const QRPage = lazy(() => import('./modules/attendance/QRPage'));
-const TerminalPage = lazy(() => import('./modules/attendance/TerminalPage'));
-const TerminalList = lazy(() => import('./modules/terminals/TerminalList'));
-const LeavePage = lazy(() => import('./modules/leave/LeavePage'));
-const SettingsPage = lazy(() => import('./modules/settings/SettingsPage'));
-const EmployeeCheckinPage = lazy(() => import('./modules/attendance/EmployeeCheckinPage'));
-const ScanPage = lazy(() => import('./modules/attendance/ScanPage'));
-const HRChatPage = lazy(() => import('./modules/messages/HRChatPage'));
-const ATSPage = lazy(() => import('./modules/ats/ATSPage'));
-const OnboardingPage = lazy(() => import('./modules/onboarding/OnboardingPage'));
-const DocumentsPage = lazy(() => import('./modules/documents/DocumentsPage'));
-const TransfersPage = lazy(() => import('./modules/transfers/TransfersPage'));
-const NotificationsPage = lazy(() => import('./modules/notifications/NotificationsPage'));
-const AutomationsPage = lazy(() => import('./modules/automations/AutomationsPage'));
-const DeviceRegistrationPage = lazy(() => import('./modules/device/DeviceRegistrationPage'));
-const HrDeviceResetPage = lazy(() => import('./modules/device/HrDeviceResetPage'));
-const EmailSettingsPage = lazy(() => import('./modules/email/EmailSettingsPage'));
-const LegalDocumentsAdminPage = lazy(() => import('./modules/legal/LegalDocumentsAdminPage'));
-const ReportsPage = lazy(() => import('./modules/reports/ReportsPage'));
-const PublicCareersPage = lazy(() => import('./modules/publicCareers/PublicCareersPage'));
-const PublicJobDetailPage = lazy(() => import('./modules/publicCareers/PublicJobDetailPage'));
-const PrivacyPolicyPage = lazy(() => import('./pages/legal/PrivacyPolicyPage'));
-const TermsOfServicePage = lazy(() => import('./pages/legal/TermsOfServicePage'));
-const CookiePolicyPage = lazy(() => import('./pages/legal/CookiePolicyPage'));
+function lazyRoute<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
+  return lazy(() =>
+    factory().catch((error) => {
+      recoverFromChunkLoadError(error);
+      throw error;
+    })
+  );
+}
+
+const LoginPage = lazyRoute(() => import('./modules/auth/LoginPage'));
+const HomePage = lazyRoute(() => import('./modules/home/HomePage'));
+const EmployeeList = lazyRoute(() => import('./modules/employees/EmployeeList'));
+const EmployeeDetail = lazyRoute(() => import('./modules/employees/EmployeeDetail'));
+const StoreList = lazyRoute(() => import('./modules/stores/StoreList'));
+const StoreDetail = lazyRoute(() => import('./modules/stores/StoreDetail'));
+const SystemCompanyManagement = lazyRoute(() => import('./modules/companies/SystemCompanyManagement'));
+const CompanyDetail = lazyRoute(() => import('./modules/companies/CompanyDetail'));
+const SystemPermissionsPanel = lazyRoute(() => import('./modules/permissions/SystemPermissionsPanel'));
+const PermissionsPanel = lazyRoute(() => import('./modules/permissions/PermissionsPanel'));
+const ProfilePage = lazyRoute(() => import('./modules/profile/ProfilePage'));
+const ShiftsPage = lazyRoute(() => import('./modules/shifts/ShiftsPage'));
+const ExternalAffluencePage = lazyRoute(() => import('./modules/externalAffluence/ExternalAffluencePage'));
+const AttendanceLogsPage = lazyRoute(() => import('./modules/attendance/AttendanceLogsPage'));
+const AnomaliesPage = lazyRoute(() => import('./modules/attendance/AnomaliesPage'));
+const QRPage = lazyRoute(() => import('./modules/attendance/QRPage'));
+const TerminalPage = lazyRoute(() => import('./modules/attendance/TerminalPage'));
+const TerminalList = lazyRoute(() => import('./modules/terminals/TerminalList'));
+const LeavePage = lazyRoute(() => import('./modules/leave/LeavePage'));
+const SettingsPage = lazyRoute(() => import('./modules/settings/SettingsPage'));
+const EmployeeCheckinPage = lazyRoute(() => import('./modules/attendance/EmployeeCheckinPage'));
+const ScanPage = lazyRoute(() => import('./modules/attendance/ScanPage'));
+const HRChatPage = lazyRoute(() => import('./modules/messages/HRChatPage'));
+const ATSPage = lazyRoute(() => import('./modules/ats/ATSPage'));
+const OnboardingPage = lazyRoute(() => import('./modules/onboarding/OnboardingPage'));
+const DocumentsPage = lazyRoute(() => import('./modules/documents/DocumentsPage'));
+const TransfersPage = lazyRoute(() => import('./modules/transfers/TransfersPage'));
+const NotificationsPage = lazyRoute(() => import('./modules/notifications/NotificationsPage'));
+const AutomationsPage = lazyRoute(() => import('./modules/automations/AutomationsPage'));
+const DeviceRegistrationPage = lazyRoute(() => import('./modules/device/DeviceRegistrationPage'));
+const HrDeviceResetPage = lazyRoute(() => import('./modules/device/HrDeviceResetPage'));
+const EmailSettingsPage = lazyRoute(() => import('./modules/email/EmailSettingsPage'));
+const LegalDocumentsAdminPage = lazyRoute(() => import('./modules/legal/LegalDocumentsAdminPage'));
+const ReportsPage = lazyRoute(() => import('./modules/reports/ReportsPage'));
+const PublicCareersPage = lazyRoute(() => import('./modules/publicCareers/PublicCareersPage'));
+const PublicJobDetailPage = lazyRoute(() => import('./modules/publicCareers/PublicJobDetailPage'));
+const PrivacyPolicyPage = lazyRoute(() => import('./pages/legal/PrivacyPolicyPage'));
+const TermsOfServicePage = lazyRoute(() => import('./pages/legal/TermsOfServicePage'));
+const CookiePolicyPage = lazyRoute(() => import('./pages/legal/CookiePolicyPage'));
 
 // Refresh permissions whenever the user navigates to a new route.
 // This ensures that permission changes made by an admin are always picked up

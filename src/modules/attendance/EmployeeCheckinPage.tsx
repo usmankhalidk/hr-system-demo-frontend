@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import client from '../../api/client';
 import { persistDailyAttendanceState } from '../../utils/indexedDB';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { recoverFromChunkLoadError } from '../../utils/chunkLoadRecovery';
 import { AlertCircle, CalendarX, LogIn, LogOut, Coffee, Play, Calendar, Store, Clock } from 'lucide-react';
 
 const STEPS = [
@@ -188,15 +189,21 @@ export default function EmployeeCheckinPage() {
 
       if (parsed.storeId !== cachedStoreId) {
         cachedStoreId = parsed.storeId;
-        import('../../api/stores').then(({ getStore }) => {
-          getStore(parsed.storeId)
-            .then((s) => {
-              setScannedStoreName(s.name);
-            })
-            .catch(() => {
+        import('../../api/stores')
+          .then(({ getStore }) => {
+            getStore(parsed.storeId)
+              .then((s) => {
+                setScannedStoreName(s.name);
+              })
+              .catch(() => {
+                setScannedStoreName(`${t('common.store')} #${parsed.storeId}`);
+              });
+          })
+          .catch((error) => {
+            if (!recoverFromChunkLoadError(error)) {
               setScannedStoreName(`${t('common.store')} #${parsed.storeId}`);
-            });
-        });
+            }
+          });
       }
     };
 
