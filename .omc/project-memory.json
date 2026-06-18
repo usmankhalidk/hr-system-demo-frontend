@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1776317278295,
+  "lastScanned": 1781090634132,
   "projectRoot": "/Users/user/hr-software/hr-system-demo-frontend",
   "techStack": {
     "languages": [
@@ -84,7 +84,7 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 2,
-      "lastAccessed": 1776317278276,
+      "lastAccessed": 1781090634103,
       "keyFiles": [
         "favicon.png",
         "index.html"
@@ -93,17 +93,19 @@
     "public": {
       "path": "public",
       "purpose": "Public files",
-      "fileCount": 1,
-      "lastAccessed": 1776317278282,
+      "fileCount": 3,
+      "lastAccessed": 1781090634104,
       "keyFiles": [
-        "favicon.png"
+        "IMG_5144.png",
+        "favicon.png",
+        "robots.txt"
       ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 3,
-      "lastAccessed": 1776317278282,
+      "lastAccessed": 1781090634113,
       "keyFiles": [
         "App.tsx",
         "index.css",
@@ -113,19 +115,19 @@
     "dist/assets": {
       "path": "dist/assets",
       "purpose": "Static assets",
-      "fileCount": 3,
-      "lastAccessed": 1776317278283,
+      "fileCount": 109,
+      "lastAccessed": 1781090634115,
       "keyFiles": [
-        "fusaro-logo-BjyBPVsQ.png",
-        "index-CMVKs2Pn.css",
-        "index-CoFHjes-.js"
+        "ATSPage-Db4jDQJz.js",
+        "AdminLeavePanel-DDGsdiZi.js",
+        "Alert-DMX2300l.js"
       ]
     },
     "src/api": {
       "path": "src/api",
       "purpose": "API routes",
-      "fileCount": 22,
-      "lastAccessed": 1776317278284,
+      "fileCount": 28,
+      "lastAccessed": 1781090634117,
       "keyFiles": [
         "ats.ts",
         "attendance.ts",
@@ -135,9 +137,10 @@
     "src/assets": {
       "path": "src/assets",
       "purpose": "Static assets",
-      "fileCount": 1,
-      "lastAccessed": 1776317278284,
+      "fileCount": 2,
+      "lastAccessed": 1781090634117,
       "keyFiles": [
+        "fusaro-logo-2.png",
         "fusaro-logo.png"
       ]
     },
@@ -145,7 +148,7 @@
       "path": "src/components",
       "purpose": "UI components",
       "fileCount": 1,
-      "lastAccessed": 1776317278285,
+      "lastAccessed": 1781090634118,
       "keyFiles": [
         "ProtectedRoute.tsx"
       ]

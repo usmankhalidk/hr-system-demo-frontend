@@ -52,12 +52,15 @@ server {\n\
   }\n\
   # Hashed assets and static files: serve directly\n\
   location ~* \\.(?:js|css|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf)$ {\n\
+    try_files $uri =404;\n\
     expires 1y;\n\
-    add_header Cache-Control "public, immutable";\n\
+    add_header Cache-Control "public, max-age=31536000, immutable" always;\n\
   }\n\
   # index.html: never cache so new deploys take effect immediately\n\
   location = /index.html {\n\
-    add_header Cache-Control "no-store, no-cache, must-revalidate";\n\
+    try_files /index.html =404;\n\
+    expires -1;\n\
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;\n\
   }\n\
   location / {\n\
     if ($is_bot) {\n\
