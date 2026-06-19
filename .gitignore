@@ -8,3 +8,4 @@ temp_interactive_push.bat
 config.bat
 
 .env
+branch_structure.json

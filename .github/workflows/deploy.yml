@@ -21,6 +21,15 @@ jobs:
           script: |
             set -e
 
+            # Mock xclip and xsel to prevent clipboard errors in headless environment
+            mkdir -p /tmp/bin
+            echo '#!/bin/sh' > /tmp/bin/xclip
+            echo 'exit 0' >> /tmp/bin/xclip
+            echo '#!/bin/sh' > /tmp/bin/xsel
+            echo 'exit 0' >> /tmp/bin/xsel
+            chmod +x /tmp/bin/xclip /tmp/bin/xsel
+            export PATH=/tmp/bin:$PATH
+
             cd /var/www/hr-system-demo-frontend
 
             git fetch origin main
