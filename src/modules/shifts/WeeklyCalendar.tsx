@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftRight, Moon, Palmtree, Thermometer, Store } from 'lucide-react';
 import { Shift } from '../../api/shifts';
@@ -175,6 +175,23 @@ export default function WeeklyCalendar({
   const [hoveredLeaveKey, setHoveredLeaveKey] = useState<string | null>(null);
   const [legendOpen, setLegendOpen] = useState(false);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(() => {
+    const sidebarWidth = window.innerWidth < 1024 ? 64 : 252;
+    return window.innerWidth - sidebarWidth - 48;
+  });
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   // Close legend when clicking outside
   useEffect(() => {
     if (!legendOpen) return;
@@ -306,7 +323,7 @@ export default function WeeklyCalendar({
   }
 
   return (
-    <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
+    <div ref={containerRef} style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',
@@ -639,6 +656,10 @@ export default function WeeklyCalendar({
                         const isActivityHovered = hoveredActivityKey === activityHoverKey;
                         const activityStoreName = activity.storeName || t('common.store', 'Store');
 
+                        const isWide = containerWidth >= 1150;
+                        const maxChars = isWide ? 22 : 12;
+                        const displayLabel = activityLabel.length > maxChars ? activityLabel.slice(0, maxChars) + '..' : activityLabel;
+
                         return (
                           <div
                             key={`activity-${activity.id}`}
@@ -683,7 +704,7 @@ export default function WeeklyCalendar({
                                   {iconText}
                                 </span>
                                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>
-                                  {activityLabel}
+                                  {displayLabel}
                                 </span>
                               </span>
                               {hoursLabel && (

@@ -336,7 +336,7 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
   ];
 
   return (
-    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0, overflow: 'hidden' }}>
 
       {/* Header banner */}
       <div className="banner-inner" style={{
@@ -629,11 +629,14 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
         gap: '24px',
+        minWidth: 0,
+        overflow: 'hidden',
       }}>
         {/* Stores list */}
         <div style={{
           background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '24px',
           border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
+          minWidth: 0, overflow: 'hidden',
         }}>
           <h3 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
             {t('home.areaManager.storesList')}
@@ -707,6 +710,7 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
         <div style={{
           background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '24px',
           border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
+          minWidth: 0, overflow: 'hidden',
         }}>
           <h3 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
             {t('home.areaManager.staffDistribution')}
@@ -752,13 +756,16 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
         gap: '24px',
+        minWidth: 0,
+        overflow: 'hidden',
       }}>
         {/* Pending Shifts */}
         {(user?.isSuperAdmin || permissions.turni) && (
           <div style={{
-            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '24px',
+            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: isMobile ? '16px' : '24px',
             border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
             gridColumn: (user?.isSuperAdmin || permissions.permessi) ? 'span 1' : 'span 2',
+            minWidth: 0, overflow: 'hidden',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
@@ -777,14 +784,20 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
               {pendingShiftPreview.slice(0, 3).map((s) => (
                 <div key={s.id} style={{
                   padding: '12px 14px', background: 'var(--background)', borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  gap: '16px', overflowX: 'auto', width: '100%',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: isMobile ? 'column' : 'row',
+                  justifyContent: isMobile ? 'flex-start' : 'space-between',
+                  alignItems: isMobile ? 'stretch' : 'center',
+                  gap: isMobile ? '10px' : '16px',
+                  width: '100%',
+                  minWidth: 0,
                 }}>
                   {/* User Sub-block */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '160px', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexShrink: isMobile ? undefined : 0 }}>
                     {renderUserAvatar(s.userAvatarFilename, s.userName, s.userSurname, 36)}
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {s.userName} {s.userSurname}
                       </div>
                       <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
@@ -793,29 +806,49 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
                     </div>
                   </div>
 
-                  {/* Shift Sub-block */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '130px', flexShrink: 0 }}>
-                    <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {s.date}
+                  {/* Shift + Store row (on mobile these sit together) */}
+                  {isMobile ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {s.date}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          {s.startTime.slice(0, 5)} - {s.endTime.slice(0, 5)}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, textAlign: 'right' }}>
+                        {s.storeName || '-'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {s.startTime.slice(0, 5)} - {s.endTime.slice(0, 5)}
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      {/* Shift Sub-block */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '130px', flexShrink: 0 }}>
+                        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {s.date}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          {s.startTime.slice(0, 5)} - {s.endTime.slice(0, 5)}
+                        </div>
+                      </div>
 
-                  {/* Store name Sub-block */}
-                  <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, minWidth: '120px', flexShrink: 0 }}>
-                    {s.storeName || '-'}
-                  </div>
+                      {/* Store name Sub-block */}
+                      <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, minWidth: '120px', flexShrink: 0 }}>
+                        {s.storeName || '-'}
+                      </div>
+                    </>
+                  )}
 
                   {/* Button Sub-block */}
-                  <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                  <div style={{ flexShrink: 0, marginLeft: isMobile ? undefined : 'auto' }}>
                     <button
                       onClick={() => navigate('/turni')}
                       style={{
                         background: 'none', border: '1.5px solid var(--accent)', color: 'var(--accent)',
                         padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
                         whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                        width: isMobile ? '100%' : undefined,
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = 'var(--accent)';
@@ -853,9 +886,10 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
         {/* Pending Leaves */}
         {(user?.isSuperAdmin || permissions.permessi) && (
           <div style={{
-            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '24px',
+            background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: isMobile ? '16px' : '24px',
             border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
             gridColumn: (user?.isSuperAdmin || permissions.turni) ? 'span 1' : 'span 2',
+            minWidth: 0, overflow: 'hidden',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
@@ -874,14 +908,20 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
               {pendingLeavePreview.slice(0, 3).map((l) => (
                 <div key={l.id} style={{
                   padding: '12px 14px', background: 'var(--background)', borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  gap: '16px', overflowX: 'auto', width: '100%',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: isMobile ? 'column' : 'row',
+                  justifyContent: isMobile ? 'flex-start' : 'space-between',
+                  alignItems: isMobile ? 'stretch' : 'center',
+                  gap: isMobile ? '10px' : '16px',
+                  width: '100%',
+                  minWidth: 0,
                 }}>
                   {/* User Sub-block */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '160px', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexShrink: isMobile ? undefined : 0 }}>
                     {renderUserAvatar(l.userAvatarFilename, l.userName, l.userSurname, 36)}
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {l.userName} {l.userSurname}
                       </div>
                       <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
@@ -890,29 +930,49 @@ export const AreaManagerHome: React.FC<AreaManagerHomeProps> = ({ data }) => {
                     </div>
                   </div>
 
-                  {/* Leave Sub-block */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '160px', flexShrink: 0 }}>
-                    <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
-                      {t(`leave.type_${l.leaveType}`, l.leaveType)}
+                  {/* Leave + Store row */}
+                  {isMobile ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
+                          {t(`leave.type_${l.leaveType}`, l.leaveType)}
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                          {l.startDate} al {l.endDate}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, textAlign: 'right' }}>
+                        {l.storeName || '-'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                      {l.startDate} al {l.endDate}
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      {/* Leave Sub-block */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '160px', flexShrink: 0 }}>
+                        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
+                          {t(`leave.type_${l.leaveType}`, l.leaveType)}
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                          {l.startDate} al {l.endDate}
+                        </div>
+                      </div>
 
-                  {/* Store name Sub-block */}
-                  <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, minWidth: '120px', flexShrink: 0 }}>
-                    {l.storeName || '-'}
-                  </div>
+                      {/* Store name Sub-block */}
+                      <div style={{ fontSize: '12.5px', color: 'var(--accent)', fontWeight: 600, minWidth: '120px', flexShrink: 0 }}>
+                        {l.storeName || '-'}
+                      </div>
+                    </>
+                  )}
 
                   {/* Button Sub-block */}
-                  <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                  <div style={{ flexShrink: 0, marginLeft: isMobile ? undefined : 'auto' }}>
                     <button
                       onClick={() => navigate('/permessi')}
                       style={{
                         background: 'none', border: '1.5px solid var(--accent)', color: 'var(--accent)',
                         padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
                         whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                        width: isMobile ? '100%' : undefined,
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = 'var(--accent)';
