@@ -9,7 +9,7 @@ interface SocketContextValue {
 
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
