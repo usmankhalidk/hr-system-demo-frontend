@@ -252,7 +252,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, title }) => {
       boxShadow: '0 1px 0 var(--border)',
       position: 'sticky',
       top: 0,
-      zIndex: 10,
+      zIndex: 100,
     }}>
 
       {/* Menu toggle */}
