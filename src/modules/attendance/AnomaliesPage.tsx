@@ -118,7 +118,7 @@ export default function AnomaliesPage() {
   }, [loadFilterEmployees]);
 
   const heroPad    = isMobile ? '20px 16px 0' : isTablet ? '24px 20px 0' : '28px 32px 0';
-  const filterPad  = isMobile ? '10px 16px'   : isTablet ? '12px 20px' : '12px 32px';
+  const filterPad  = isMobile ? '10px 12px'   : isTablet ? '12px 16px' : '12px 16px';
 
   return (
     <div style={{ padding: 0, minHeight: '100%' }}>
@@ -130,66 +130,43 @@ export default function AnomaliesPage() {
       <div style={{
         background: 'var(--primary)',
         padding: heroPad,
-        paddingBottom: 24,
-        margin: isMobile ? '16px 0 0' : isTablet ? '20px 20px 0' : '24px 32px 0',
         borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-md)',
+        marginBottom: 20
       }}>
+
+        {/* Title row */}
         <div style={{
           display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
           alignItems: isMobile ? 'flex-start' : 'flex-start',
           justifyContent: 'space-between',
           gap: isMobile ? 14 : 0,
-          marginBottom: 0,
+          marginBottom: 24,
         }}>
           <div>
             <div style={{
               fontSize: 10, fontWeight: 700, letterSpacing: '2.5px',
               color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: 8,
             }}>
-              {t('nav.anomalies', 'Anomalies')}
+              {t('attendance.anomalies_badge', 'ANOMALIE & DISCREPANZE')}
             </div>
             <h1 style={{
               fontFamily: 'var(--font-display)',
               fontSize: isMobile ? '1.4rem' : '1.75rem',
               fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.5, lineHeight: 1.2,
             }}>
-              {t('attendance.anomalies_title', 'Attendance Anomalies')}
+              {t('attendance.anomalies_title', 'Rilevamento Anomalie')}
             </h1>
             <div style={{ marginTop: 6, fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
               {t('attendance.anomalies_subtitle', 'Detect late arrivals, no-shows, long breaks, and early exits')}
             </div>
           </div>
-
-          {/* Anomaly type legend */}
-          {!isMobile && (
-            <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
-              {[
-                { label: t('attendance.anomaly_late_arrival', 'Late Arrival'),  color: '#f59e0b' },
-                { label: t('attendance.anomaly_no_show', 'No Show'),            color: '#ef4444' },
-                { label: t('attendance.anomaly_long_break', 'Long Break'),      color: '#a78bfa' },
-                { label: t('attendance.anomaly_early_exit', 'Early Exit'),      color: '#60a5fa' },
-                { label: t('attendance.anomaly_overtime', 'Overtime'),          color: '#c2410c' },
-              ].map(({ label, color }) => (
-                <span key={label} style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '5px 10px', borderRadius: 20,
-                  background: `${color}18`, border: `1px solid ${color}35`,
-                  fontSize: 11, fontWeight: 600, color,
-                }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
       {/* ── Filter bar ────────────────────────────────────────────────────── */}
       <div style={{
-        margin: isMobile ? '12px 0 0' : isTablet ? '16px 20px 0' : '20px 32px 0',
+        margin: '0 0 16px 0',
         padding: filterPad,
         background: 'var(--surface)',
         border: '1px solid var(--border)',
@@ -199,7 +176,7 @@ export default function AnomaliesPage() {
         gap: 12,
         width: 'auto',
         position: 'relative',
-        zIndex: 20,
+        zIndex: 5,
         boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
       }}>
         {/* Search Input */}
