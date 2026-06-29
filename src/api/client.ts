@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // In production (Vercel), set VITE_API_URL to your Railway backend URL.
 // Must include protocol: https://xxxx.up.railway.app (NOT just xxxx.up.railway.app)
-// In development, Vite's proxy forwards /api → localhost:3001.
+// In development, Vite's proxy forwards /api to localhost:3000.
 let apiBase = import.meta.env.VITE_API_URL || '';
 // Defensive: auto-add protocol when the value was set without one.
 // Prefer http for localhost/127.0.0.1/0.0.0.0 and https otherwise.

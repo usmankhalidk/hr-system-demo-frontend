@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarClock,
   Calendar,
+  Copy as CopyIcon,
   Globe2,
   Languages,
   MapPin,
@@ -24,6 +25,7 @@ import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import CareersFooter from '../../components/careers/CareersFooter';
 import CookieConsentBanner from '../../components/legal/CookieConsentBanner';
+import { useToast } from '../../context/ToastContext';
 import './publicCareers.css';
 
 type UiLanguage = 'it' | 'en';
@@ -137,6 +139,9 @@ const COPY: Record<UiLanguage, {
   remoteType: string;
   appliedShort: string;
   location: string;
+  copyJobLink: string;
+  linkCopied: string;
+  linkCopyError: string;
 }> = {
   en: {
     kicker: 'Public Careers',
@@ -192,6 +197,9 @@ const COPY: Record<UiLanguage, {
     remoteType: 'Remote type',
     appliedShort: 'applied',
     location: 'Location',
+    copyJobLink: 'Copy Job Link',
+    linkCopied: 'Link copied!',
+    linkCopyError: 'Failed to copy link',
   },
   it: {
     kicker: 'Careers Pubbliche',
@@ -247,6 +255,9 @@ const COPY: Record<UiLanguage, {
     remoteType: 'Modalita lavoro',
     appliedShort: 'candidature',
     location: 'Posizione',
+    copyJobLink: 'Copia link annuncio',
+    linkCopied: 'Link copiato!',
+    linkCopyError: 'Impossibile copiare il link',
   },
 };
 
@@ -344,6 +355,7 @@ function formatSalary(job: PublicJob, locale: string, notSpecified: string, upTo
 export default function PublicCareersPage() {
   const { companySlug } = useParams<{ companySlug?: string }>();
   const { i18n } = useTranslation();
+  const { showToast } = useToast();
   const uiLanguage: UiLanguage = i18n.language?.toLowerCase().startsWith('it') ? 'it' : 'en';
   const copy = COPY[uiLanguage];
   const locale = uiLanguage === 'it' ? 'it-IT' : 'en-US';
@@ -540,6 +552,50 @@ export default function PublicCareersPage() {
   const applyDraftFilters = () => {
     setFilters(draftFilters);
     setShowFilterModal(false);
+  };
+
+  const buildAbsoluteJobUrl = (detailUrl: string) => {
+    if (typeof window === 'undefined') return detailUrl;
+    return new URL(detailUrl, window.location.origin).toString();
+  };
+
+  const fallbackCopyToClipboard = (text: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      const copied = document.execCommand('copy');
+      if (copied) {
+        showToast(copy.linkCopied, 'success');
+      } else {
+        showToast(copy.linkCopyError, 'error');
+      }
+    } catch {
+      showToast(copy.linkCopyError, 'error');
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  };
+
+  const handleCopyJobLink = async (detailUrl: string) => {
+    const jobUrl = buildAbsoluteJobUrl(detailUrl);
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(jobUrl);
+        showToast(copy.linkCopied, 'success');
+        return;
+      }
+    } catch {
+      // Some browsers only allow clipboard access in secure contexts.
+    }
+
+    fallbackCopyToClipboard(jobUrl);
   };
 
   return (
@@ -787,6 +843,15 @@ export default function PublicCareersPage() {
                       {job.tags.length === 0 && <span>{job.department ?? copy.generalHiring}</span>}
                     </div>
                     <div className="careers-job-actions">
+                      <button
+                        type="button"
+                        className="careers-icon-btn"
+                        onClick={() => void handleCopyJobLink(detailUrl)}
+                        title={copy.copyJobLink}
+                        aria-label={copy.copyJobLink}
+                      >
+                        <CopyIcon size={15} />
+                      </button>
                       <Link to={detailUrl} className="careers-view-details-link">{copy.viewDetails} <ArrowRight size={15} /></Link>
                     </div>
                   </div>

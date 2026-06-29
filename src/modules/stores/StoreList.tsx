@@ -722,6 +722,7 @@ export function StoreList() {
         
         // Store the created store ID and move to step 3 for integration
         setCreatedStoreId(createdStore.id);
+        await loadStores();
         setFormStep(3);
         if (isSuperAdmin) {
           await loadExternalDbData();

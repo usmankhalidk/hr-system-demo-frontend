@@ -672,11 +672,9 @@ export default function SystemCompanyManagement() {
         const created = await createCompany({
           name: formName.trim(),
           groupId: formGroupId,
+          ownerUserId: formOwnerUserId,
           ...payloadFromProfileForm(formProfile),
         });
-        if (formOwnerUserId != null) {
-          await transferCompanyOwnership(created.id, formOwnerUserId);
-        }
         showToast(t('companies.createdSuccess'), 'success');
       } else {
         if (editingCompanyId === null) throw new Error('Missing company id');

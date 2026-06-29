@@ -37,7 +37,7 @@ export async function updateCompany(id: number, payload: { name: string; groupId
   return data.data;
 }
 
-export async function createCompany(payload: { name: string; groupId?: number | null } & CompanyProfilePayload): Promise<Company> {
+export async function createCompany(payload: { name: string; groupId?: number | null; ownerUserId?: number | null } & CompanyProfilePayload): Promise<Company> {
   const { data } = await apiClient.post('/companies', payload);
   return data.data;
 }

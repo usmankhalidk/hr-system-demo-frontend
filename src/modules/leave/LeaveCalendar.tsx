@@ -105,10 +105,8 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
         params.storeId = selectedStoreId;
       }
       const res = await getLeaveRequests(params);
-      // Exclude rejected & cancelled for calendar view
+      // Exclude only cancelled requests; rejected requests remain visible with their current status.
       setRequests(res.requests.filter((r) =>
-        r.status !== 'rejected' &&
-        !r.status.endsWith('rejected') &&
         r.status !== 'cancelled'
       ));
     } catch {

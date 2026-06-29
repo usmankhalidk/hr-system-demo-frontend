@@ -604,8 +604,10 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
 
                 {/* Action buttons — approvers */}
                 {showActions &&
-                  !req.status.includes('approved') &&
                   !req.status.includes('rejected') &&
+                  req.status !== 'approved' &&
+                  req.status !== 'admin_approved' &&
+                  req.currentApproverRole !== null &&
                   req.status !== 'cancelled' &&
                   (user?.isSuperAdmin || req.currentApproverRole === effectiveApproverRole) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

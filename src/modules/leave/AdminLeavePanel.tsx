@@ -5,6 +5,7 @@ import { CalendarDays, CheckCheck, Clock3, FileText, Palmtree, Thermometer, Tras
 import { useAuth } from '../../context/AuthContext';
 import {
   getLeaveRequests,
+  getPendingLeaveApprovals,
   approveLeaveRequest,
   rejectLeaveRequest,
   createLeaveOnBehalf,
@@ -1066,8 +1067,14 @@ export default function AdminLeavePanel() {
       if (dateTo)       params.dateTo      = dateTo;
       if (filterStatus) params.status      = filterStatus as LeaveStatus;
       if (filterType)   params.leaveType   = filterType as 'vacation' | 'sick';
-      const res = await getLeaveRequests(params);
-      setRequests(res.requests);
+      const [res, pendingRes] = await Promise.all([
+        getLeaveRequests(params),
+        getPendingLeaveApprovals().catch(() => ({ requests: [] as LeaveRequest[], total: 0 })),
+      ]);
+      const merged = new Map<number, LeaveRequest>();
+      for (const req of res.requests) merged.set(req.id, req);
+      for (const req of pendingRes.requests) merged.set(req.id, req);
+      setRequests(Array.from(merged.values()));
     } catch {
       setError(t('common.error'));
     } finally {
