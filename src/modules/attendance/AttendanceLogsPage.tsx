@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { listAttendanceEvents, AttendanceEvent, EventType, AttendanceListParams } from '../../api/attendance';
+import { listShifts, Shift } from '../../api/shifts';
 import { getEmployees } from '../../api/employees';
 import { getStores } from '../../api/stores';
 import { useOfflineSync } from '../../context/OfflineSyncContext';
@@ -13,6 +14,135 @@ import { TimePicker } from '../../components/ui/TimePicker';
 import { WeekPicker } from '../../components/ui/WeekPicker';
 import CustomSelect from '../../components/ui/CustomSelect';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { User, MapPin, Calendar, ClipboardList, Clock, Scale, Settings, Eye, ChevronDown, Check, BarChart2, PieChart, Sliders, Building } from 'lucide-react';
+
+export interface SummaryRow {
+  key: string;
+  userId: number;
+  userName: string;
+  userSurname: string;
+  userAvatarFilename?: string | null;
+  userRole?: string;
+  storeId?: number | null;
+  storeName: string;
+  periodLabel: string;
+  dateKey: string;
+  shifts: Shift[];
+  events: AttendanceEvent[];
+  scheduledMinutes: number;
+  workedMinutes: number;
+  varianceMinutes: number;
+}
+
+function formatHoursStr(mins: number): string {
+  const abs = Math.abs(mins);
+  const h = Math.floor(abs / 60);
+  const m = Math.round(abs % 60);
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function getAvatarColor(name: string): string {
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function formatVarianceBadge(
+  mins: number,
+  t: any,
+  overtimeLimit = 5,
+  undertimeLimit = 15,
+  dateKey?: string,
+  rowEvents?: AttendanceEvent[]
+): { text: string; color: string; bg: string; border: string; icon: string } {
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  if (dateKey && dateKey === todayStr) {
+    const evs = rowEvents ?? [];
+    const hasCheckin = evs.some(e => e.eventType === 'checkin');
+    const hasCheckout = evs.some(e => e.eventType === 'checkout');
+
+    if (hasCheckin && !hasCheckout) {
+      return {
+        text: t('attendance.statusInCourse', 'In corso'),
+        color: '#16a34a',
+        bg: 'rgba(22,163,74,0.10)',
+        border: 'rgba(22,163,74,0.25)',
+        icon: '🟢',
+      };
+    } else if (!hasCheckin) {
+      return {
+        text: t('attendance.statusPending', 'In attesa'),
+        color: '#3b82f6',
+        bg: 'rgba(59,130,246,0.10)',
+        border: 'rgba(59,130,246,0.25)',
+        icon: '⏳',
+      };
+    }
+  }
+
+  if (mins > overtimeLimit) {
+    return {
+      text: `+${formatHoursStr(mins)}`,
+      color: '#16a34a',
+      bg: 'rgba(22,163,74,0.10)',
+      border: 'rgba(22,163,74,0.25)',
+      icon: '▲',
+    };
+  } else if (mins < -undertimeLimit) {
+    return {
+      text: `-${formatHoursStr(mins)}`,
+      color: '#dc2626',
+      bg: 'rgba(220,38,38,0.10)',
+      border: 'rgba(220,38,38,0.25)',
+      icon: '▼',
+    };
+  }
+  return {
+    text: t('attendance.onTime', 'In orario'),
+    color: '#2563eb',
+    bg: 'rgba(37,99,235,0.08)',
+    border: 'rgba(37,99,235,0.20)',
+    icon: '•',
+  };
+}
+
+const SHIFT_STATUS_META: Record<string, {
+  bg: string; color: string; border: string; dot: string; icon: string;
+  labelKey: string; defaultLabel: string;
+}> = {
+  scheduled: {
+    bg: 'linear-gradient(135deg, #1E4A7A 0%, #0D2137 100%)',
+    color: '#ffffff',
+    border: 'rgba(58,123,213,0.5)',
+    dot: '#5fa3e0',
+    icon: '🕐',
+    labelKey: 'shifts.status.scheduled',
+    defaultLabel: 'Pianificato',
+  },
+  confirmed: {
+    bg: 'linear-gradient(135deg, #166534 0%, #15803d 100%)',
+    color: '#ffffff',
+    border: 'rgba(22,163,74,0.5)',
+    dot: '#4ade80',
+    icon: '✓',
+    labelKey: 'shifts.status.confirmed',
+    defaultLabel: 'Confermato',
+  },
+  cancelled: {
+    bg: 'rgba(0,0,0,0.05)',
+    color: '#9ca3af',
+    border: 'rgba(229,231,235,0.8)',
+    dot: '#d1d5db',
+    icon: '✕',
+    labelKey: 'shifts.status.cancelled',
+    defaultLabel: 'Annullato',
+  },
+};
 
 // Convert ISO week 'YYYY-WNN' → { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } (Mon–Sun)
 function isoWeekToDateRange(isoWeek: string): { from: string; to: string } | null {
@@ -65,10 +195,42 @@ export default function AttendanceLogsPage() {
   const canDelete = user?.role === 'admin';
 
   const [events, setEvents]       = useState<AttendanceEvent[]>([]);
+  const [shiftsList, setShiftsList] = useState<Shift[]>([]);
   const [total, setTotal]         = useState(0);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [compact, setCompact]     = useState(false);
+
+  // ── View Mode & Summary States ──────────────────────────────────────────────
+  const [viewMode, setViewMode]           = useState<'logs' | 'summary' | 'analytics'>('logs');
+  const [summaryPeriod, setSummaryPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [summaryDrawerItem, setSummaryDrawerItem] = useState<SummaryRow | null>(null);
+  const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+  const viewDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Variance Tolerance Limits (Item 2) ─────────────────────────────────────
+  const [overtimeLimit, setOvertimeLimit]   = useState<number>(() => {
+    const saved = localStorage.getItem('att_overtime_limit');
+    return saved ? parseInt(saved, 10) : 5;
+  });
+  const [undertimeLimit, setUndertimeLimit] = useState<number>(() => {
+    const saved = localStorage.getItem('att_undertime_limit');
+    return saved ? parseInt(saved, 10) : 15;
+  });
+  const [showToleranceModal, setShowToleranceModal] = useState(false);
+  const [tempOvertimeLimit, setTempOvertimeLimit]   = useState(5);
+  const [tempUndertimeLimit, setTempUndertimeLimit] = useState(15);
+
+  useEffect(() => {
+    if (!isViewDropdownOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (!viewDropdownRef.current?.contains(event.target as Node)) {
+        setIsViewDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [isViewDropdownOpen]);
 
   // ── Search Debounce ────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState('');
@@ -277,8 +439,152 @@ export default function AttendanceLogsPage() {
   const [filterSearch, setFilterSearch] = useState('');
   const [filterStoreId, setFilterStoreId] = useState<string>('');
   const [filterUserId, setFilterUserId] = useState<string>('');
-  const [filterEmployees, setFilterEmployees] = useState<Array<{ id: number; name: string; surname: string; storeId: number | null }>>([]);
-  const [filterStores, setFilterStores] = useState<Array<{ id: number; name: string; companyName?: string }>>([]);
+  const [filterEmployees, setFilterEmployees] = useState<Array<{ id: number; name: string; surname: string; storeId: number | null; avatarFilename?: string | null; role?: string }>>([]);
+  const [filterStores, setFilterStores] = useState<Array<{ id: number; name: string; companyName?: string; groupName?: string | null; companyLogoFilename?: string | null; logoFilename?: string | null; employeeCount?: number }>>([]);
+
+  // Analytics Filter States (Request 3)
+  const [analyticsCompany, setAnalyticsCompany]   = useState<string>('');
+  const [analyticsStoreId, setAnalyticsStoreId]   = useState<string>('');
+  const [analyticsUserId, setAnalyticsUserId]     = useState<string>('');
+  const [analyticsDateFrom, setAnalyticsDateFrom] = useState<string>(weekAgo);
+  const [analyticsDateTo, setAnalyticsDateTo]     = useState<string>(today);
+
+  // ── Rich CustomSelect Option Memoizers for Analytics (Request 1 & 3) ───────
+  const companyOptions = useMemo(() => {
+    const companiesMap = new Map<string, { logoUrl?: string | null; groupName?: string | null }>();
+    filterStores.forEach(s => {
+      if (s.companyName && !companiesMap.has(s.companyName)) {
+        companiesMap.set(s.companyName, {
+          logoUrl: getAvatarUrl(s.companyLogoFilename),
+          groupName: s.groupName,
+        });
+      }
+    });
+    return [
+      { value: '', label: t('attendance.allCompanies', 'Tutte le Aziende') },
+      ...Array.from(companiesMap.entries()).map(([compName, info]) => ({
+        value: compName,
+        label: compName,
+        render: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 0' }}>
+            {info.logoUrl ? (
+              <img src={info.logoUrl} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }} />
+            ) : (
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', background: 'rgba(13,33,55,0.08)',
+                color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                border: '1px solid rgba(13,33,55,0.15)',
+              }}>
+                <Building size={15} />
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{compName}</span>
+              {info.groupName && <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{info.groupName}</span>}
+            </div>
+          </div>
+        )
+      }))
+    ];
+  }, [filterStores, t]);
+
+  const storeOptions = useMemo(() => {
+    const storesList = analyticsCompany
+      ? filterStores.filter(s => s.companyName === analyticsCompany)
+      : filterStores;
+    return [
+      { value: '', label: t('attendance.allStores', 'Tutti i Negozi') },
+      ...storesList.map(s => {
+        const storeLogoUrl = getAvatarUrl(s.logoFilename);
+        return {
+          value: String(s.id),
+          label: s.name,
+          render: (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 10, padding: '2px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                {storeLogoUrl ? (
+                  <img src={storeLogoUrl} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }} />
+                ) : (
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', background: 'rgba(201,151,58,0.14)',
+                    color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    border: '1px solid rgba(201,151,58,0.25)',
+                  }}>
+                    <MapPin size={15} />
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
+                  {s.companyName && <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{s.companyName}</span>}
+                </div>
+              </div>
+              {s.employeeCount !== undefined && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)',
+                  background: 'var(--background)', padding: '2px 8px', borderRadius: 12, border: '1px solid var(--border)',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}>
+                  👥 {s.employeeCount}
+                </span>
+              )}
+            </div>
+          )
+        };
+      })
+    ];
+  }, [analyticsCompany, filterStores, t]);
+
+  const analyticsEmployeeOptions = useMemo(() => {
+    let empList = filterEmployees;
+    if (analyticsStoreId) {
+      const sId = parseInt(analyticsStoreId, 10);
+      empList = empList.filter(e => e.storeId === sId);
+    } else if (analyticsCompany) {
+      const storeIdsInCompany = new Set(filterStores.filter(s => s.companyName === analyticsCompany).map(s => s.id));
+      empList = empList.filter(e => e.storeId && storeIdsInCompany.has(e.storeId));
+    }
+    return [
+      { value: '', label: t('attendance.allEmployees', 'Tutti i Dipendenti') },
+      ...empList.map(e => {
+        const fullName = `${e.name} ${e.surname}`.trim();
+        const avatarUrl = getAvatarUrl(e.avatarFilename);
+        const initials = `${e.name?.[0] ?? ''}${e.surname?.[0] ?? ''}`.toUpperCase();
+        return {
+          value: String(e.id),
+          label: fullName,
+          render: (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 10, padding: '2px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }} />
+                ) : (
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', background: 'rgba(201,151,58,0.18)',
+                    color: 'var(--accent)', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    border: '1px solid rgba(201,151,58,0.3)',
+                  }}>
+                    {initials}
+                  </div>
+                )}
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {fullName}
+                </span>
+              </div>
+              {e.role && (
+                <span style={{
+                  fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px',
+                  padding: '2px 7px', borderRadius: 4, background: 'rgba(13,33,55,0.08)', color: 'var(--primary)',
+                  border: '1px solid rgba(13,33,55,0.15)', whiteSpace: 'nowrap', flexShrink: 0,
+                }}>
+                  {t(`roles.${e.role}`, e.role)}
+                </span>
+              )}
+            </div>
+          )
+        };
+      })
+    ];
+  }, [analyticsStoreId, analyticsCompany, filterEmployees, filterStores, t]);
 
   // Filter Modal & Temp States
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -378,6 +684,8 @@ export default function AttendanceLogsPage() {
           name: e.name,
           surname: e.surname,
           storeId: e.storeId ?? null,
+          avatarFilename: e.avatarFilename,
+          role: e.role,
         })),
       );
     } catch {
@@ -387,10 +695,31 @@ export default function AttendanceLogsPage() {
 
   useEffect(() => {
     getStores()
-      .then((stores) => setFilterStores(stores.map((s) => ({ id: s.id, name: s.name, companyName: s.companyName }))))
+      .then((stores) => {
+        const mapped = stores.map((s) => ({
+          id: s.id,
+          name: s.name,
+          companyName: s.companyName,
+          groupName: s.groupName,
+          companyLogoFilename: s.companyLogoFilename,
+          logoFilename: s.logoFilename,
+          employeeCount: s.employeeCount,
+        }));
+        setFilterStores(mapped);
+        if (mapped.length > 0) {
+          const userStore = user?.storeId ? mapped.find(s => s.id === user?.storeId) : null;
+          if (userStore) {
+            setAnalyticsCompany(userStore.companyName ?? mapped[0].companyName ?? '');
+            setAnalyticsStoreId(String(userStore.id));
+          } else {
+            if (mapped[0].companyName) setAnalyticsCompany(mapped[0].companyName);
+            setAnalyticsStoreId(String(mapped[0].id));
+          }
+        }
+      })
       .catch(() => setFilterStores([]));
     void loadFilterEmployees();
-  }, [loadFilterEmployees]);
+  }, [loadFilterEmployees, user?.storeId]);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -401,9 +730,17 @@ export default function AttendanceLogsPage() {
       if (filterStoreId) params.storeId = parseInt(filterStoreId, 10);
       if (filterUserId) params.userId = parseInt(filterUserId, 10);
       if (filterSearch.trim()) params.search = filterSearch.trim();
-      const res = await listAttendanceEvents(params);
+      
+      const [res, shiftsRes] = await Promise.all([
+        listAttendanceEvents(params),
+        listShifts({
+          store_id: filterStoreId ? parseInt(filterStoreId, 10) : undefined,
+          user_id: filterUserId ? parseInt(filterUserId, 10) : undefined,
+        }).catch(() => ({ shifts: [] })),
+      ]);
       setEvents(res.events);
       setTotal(res.total);
+      setShiftsList(shiftsRes.shifts || []);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
       setError(axiosErr?.response?.data?.error ?? t('common.error'));
@@ -413,6 +750,198 @@ export default function AttendanceLogsPage() {
   }, [dateFrom, dateTo, eventType, filterStoreId, filterUserId, filterSearch, lastSyncTime, t]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  const summaryRows = useMemo<SummaryRow[]>(() => {
+    const getGroupInfo = (dateStr: string): { dateKey: string; periodLabel: string } => {
+      if (!dateStr) return { dateKey: 'unknown', periodLabel: '-' };
+      const parts = dateStr.split('T')[0].split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      const dt = new Date(y, (m || 1) - 1, d || 1);
+      if (summaryPeriod === 'weekly') {
+        const tmp = new Date(dt.valueOf());
+        const dayNr = (dt.getDay() + 6) % 7;
+        tmp.setDate(tmp.getDate() - dayNr + 3);
+        const firstThursday = tmp.valueOf();
+        tmp.setMonth(0, 1);
+        if (tmp.getDay() !== 4) {
+          tmp.setMonth(0, 1 + ((4 - tmp.getDay() + 7) % 7));
+        }
+        const weekNum = 1 + Math.round((firstThursday - tmp.valueOf()) / 604800000);
+        const weekKey = `${y}-W${String(weekNum).padStart(2, '0')}`;
+        return { dateKey: weekKey, periodLabel: `Settimana ${weekNum}, ${y}` };
+      } else if (summaryPeriod === 'monthly') {
+        const monthKey = `${y}-${String(m).padStart(2, '0')}`;
+        const monthName = dt.toLocaleDateString(i18n.language === 'en' ? 'en-GB' : 'it-IT', { month: 'long', year: 'numeric' });
+        return { dateKey: monthKey, periodLabel: monthName.charAt(0).toUpperCase() + monthName.slice(1) };
+      }
+      const formatted = dt.toLocaleDateString(i18n.language === 'en' ? 'en-GB' : 'it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      return { dateKey: dateStr.split('T')[0], periodLabel: formatted };
+    };
+
+    const map = new Map<string, SummaryRow>();
+
+    for (const s of shiftsList) {
+      const sDate = s.date.split('T')[0];
+      const { dateKey, periodLabel } = getGroupInfo(sDate);
+      const key = `${s.userId}:${dateKey}`;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          userId: s.userId,
+          userName: s.userName || 'Dipendente',
+          userSurname: s.userSurname || '',
+          userAvatarFilename: s.userAvatarFilename,
+          storeId: s.storeId,
+          storeName: s.storeName || 'Store',
+          periodLabel,
+          dateKey,
+          shifts: [],
+          events: [],
+          scheduledMinutes: 0,
+          workedMinutes: 0,
+          varianceMinutes: 0,
+        });
+      }
+      const row = map.get(key)!;
+      row.shifts.push(s);
+
+      if (s.startTime && s.endTime && !s.isOffDay) {
+        const [sh, sm] = s.startTime.split(':').map(Number);
+        const [eh, em] = s.endTime.split(':').map(Number);
+        let dur = (eh * 60 + em) - (sh * 60 + sm);
+        if (dur < 0) dur += 24 * 60;
+        let bMins = 0;
+        if (s.breakMinutes) {
+          bMins = s.breakMinutes;
+        } else if (s.breakStart && s.breakEnd) {
+          const [bsh, bsm] = s.breakStart.split(':').map(Number);
+          const [beh, bem] = s.breakEnd.split(':').map(Number);
+          bMins = (beh * 60 + bem) - (bsh * 60 + bsm);
+          if (bMins < 0) bMins += 24 * 60;
+        }
+        row.scheduledMinutes += Math.max(0, dur - bMins);
+      }
+    }
+
+    for (const ev of events) {
+      const evDate = ev.eventTime.split('T')[0];
+      const { dateKey, periodLabel } = getGroupInfo(evDate);
+      const key = `${ev.userId}:${dateKey}`;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          userId: ev.userId,
+          userName: ev.userName || 'Dipendente',
+          userSurname: ev.userSurname || '',
+          storeId: ev.storeId,
+          storeName: ev.storeName || 'Store',
+          periodLabel,
+          dateKey,
+          shifts: [],
+          events: [],
+          scheduledMinutes: 0,
+          workedMinutes: 0,
+          varianceMinutes: 0,
+        });
+      }
+      const row = map.get(key)!;
+      row.events.push(ev);
+    }
+
+    const result = Array.from(map.values());
+    for (const row of result) {
+      const dayEventsMap = new Map<string, AttendanceEvent[]>();
+      for (const e of row.events) {
+        const dStr = e.eventTime.split('T')[0];
+        if (!dayEventsMap.has(dStr)) dayEventsMap.set(dStr, []);
+        dayEventsMap.get(dStr)!.push(e);
+      }
+
+      let totalWorked = 0;
+      for (const [, dayEvs] of dayEventsMap) {
+        const checkins = dayEvs.filter(e => e.eventType === 'checkin').sort((a,b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
+        const checkouts = dayEvs.filter(e => e.eventType === 'checkout').sort((a,b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
+        const breakStarts = dayEvs.filter(e => e.eventType === 'break_start').sort((a,b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
+        const breakEnds = dayEvs.filter(e => e.eventType === 'break_end').sort((a,b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
+
+        if (checkins.length > 0 && checkouts.length > 0) {
+          const startMs = new Date(checkins[0].eventTime).getTime();
+          const endMs = new Date(checkouts[0].eventTime).getTime();
+          let spanMins = Math.max(0, Math.round((endMs - startMs) / (60 * 1000)));
+
+          let breakMins = 0;
+          if (breakStarts.length > 0 && breakEnds.length > 0) {
+            const bStartMs = new Date(breakStarts[0].eventTime).getTime();
+            const bEndMs = new Date(breakEnds[0].eventTime).getTime();
+            breakMins = Math.max(0, Math.round((bEndMs - bStartMs) / (60 * 1000)));
+          }
+          totalWorked += Math.max(0, spanMins - breakMins);
+        }
+      }
+      row.workedMinutes = totalWorked;
+      row.varianceMinutes = row.workedMinutes - row.scheduledMinutes;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const filteredResult = result.filter(r => r.dateKey <= todayStr);
+    filteredResult.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+
+    if (filterSearch.trim()) {
+      const q = filterSearch.trim().toLowerCase();
+      return filteredResult.filter(r => `${r.userName} ${r.userSurname}`.toLowerCase().includes(q) || r.storeName.toLowerCase().includes(q));
+    }
+
+    return filteredResult;
+  }, [events, shiftsList, summaryPeriod, filterSearch, i18n.language]);
+
+  const analyticsData = useMemo(() => {
+    let list = summaryRows;
+    if (analyticsCompany) {
+      const storeIdsInCompany = new Set(filterStores.filter(s => s.companyName === analyticsCompany).map(s => s.id));
+      list = list.filter(r => r.storeId && storeIdsInCompany.has(r.storeId));
+    }
+    if (analyticsStoreId) {
+      const sId = parseInt(analyticsStoreId, 10);
+      list = list.filter(r => r.storeId === sId);
+    }
+    if (analyticsUserId) {
+      const uId = parseInt(analyticsUserId, 10);
+      list = list.filter(r => r.userId === uId);
+    }
+    if (analyticsDateFrom && analyticsDateTo) {
+      list = list.filter(r => r.dateKey >= analyticsDateFrom && r.dateKey <= analyticsDateTo);
+    }
+
+    let sumScheduled = 0;
+    let sumWorked = 0;
+    let sumOvertime = 0;
+    let sumUndertime = 0;
+
+    list.forEach(r => {
+      sumScheduled += r.scheduledMinutes;
+      sumWorked += r.workedMinutes;
+      const diff = r.workedMinutes - r.scheduledMinutes;
+      if (diff > 0) {
+        sumOvertime += diff;
+      } else if (diff < 0) {
+        sumUndertime += Math.abs(diff);
+      }
+    });
+
+    return {
+      rows: list,
+      sumScheduled,
+      sumWorked,
+      sumOvertime,
+      sumUndertime,
+      netDiff: sumWorked - sumScheduled,
+      completionRate: sumScheduled > 0 ? Math.round((sumWorked / sumScheduled) * 100) : (sumWorked > 0 ? 100 : 0),
+    };
+  }, [summaryRows, analyticsCompany, analyticsStoreId, analyticsUserId, analyticsDateFrom, analyticsDateTo, filterStores]);
 
   async function handleExport(format: 'csv' | 'xlsx') {
     try {
@@ -462,7 +991,7 @@ export default function AttendanceLogsPage() {
 
   const heroPad = isMobile ? '20px 16px 0' : isTablet ? '24px 20px 0' : '28px 32px 0';
   const contentPad = isMobile ? '12px 0 40px' : isTablet ? '16px 0 60px' : '20px 0 80px';
-  const filterPad = isMobile ? '10px 16px' : '12px 32px';
+  const filterPad = isMobile ? '10px 12px' : '10px 16px';
 
   return (
     <div style={{ padding: 0, minHeight: '100%' }}>
@@ -513,14 +1042,33 @@ export default function AttendanceLogsPage() {
               fontSize: isMobile ? '1.4rem' : '1.75rem',
               fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.5, lineHeight: 1.2,
             }}>
-              {t('attendance.logTitle')}
+              {viewMode === 'logs'
+                ? t('attendance.logTitle')
+                : viewMode === 'summary'
+                ? t('attendance.viewSummary', 'Riepilogo Ore Lavorate')
+                : t('attendance.viewAnalytics', 'Analisi Grafica & Confronto')
+              }
             </h1>
             {!loading && (
               <div style={{ marginTop: 6, fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
-                <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{total}</span>
-                {' '}{t('attendance.title').toLowerCase()} {t('attendance.found')}
-                {total > events.length && (
-                  <span> · {t('attendance.showing')} {events.length}</span>
+                {viewMode === 'logs' ? (
+                  <>
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{total}</span>
+                    {' '}{t('attendance.logsHeroDesc', 'timbrature trovate')}
+                    {total > events.length && (
+                      <span> · {t('attendance.showing')} {events.length}</span>
+                    )}
+                  </>
+                ) : viewMode === 'summary' ? (
+                  <>
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{summaryRows.slice(0, 500).length}</span>
+                    {' '}{t('attendance.summaryHeroDesc', 'riepiloghi dipendenti trovati')}
+                  </>
+                ) : (
+                  <>
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{analyticsData.rows.length}</span>
+                    {' '}{t('attendance.analyticsHeroDesc', 'dipendenti analizzati')}
+                  </>
                 )}
               </div>
             )}
@@ -572,68 +1120,70 @@ export default function AttendanceLogsPage() {
           </div>
         </div>
 
-        {/* Stat tiles — 2 cols on mobile, 4 on tablet+ */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-          gap: isMobile ? 12 : 16,
-          paddingBottom: 24, // Added gap at the bottom of the buttons
-        }}>
-          {(['checkin', 'checkout', 'break_start', 'break_end'] as const).map((type) => {
-            const meta   = EVENT_META[type];
-            const count  = typeCounts[type] ?? 0;
-            const active = eventType === type;
-            return (
-              <button
-                key={type}
-                className="att-stat-card"
-                onClick={() => setEventType(active ? '' : type)}
-                style={{
-                  display: 'flex', alignItems: 'center',
-                  gap: isMobile ? 10 : 14,
-                  padding: isMobile ? '12px 14px' : '16px 20px',
-                  background: active ? 'rgba(201,151,58,0.15)' : 'rgba(255,255,255,0.07)',
-                  border: `1px solid ${active ? 'rgba(201,151,58,0.5)' : 'rgba(255,255,255,0.12)'}`,
-                  borderBottom: `4px solid ${active ? 'var(--accent)' : meta.dot}`,
-                  borderRadius: 14, // Onboarding style radius
-                  cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  textAlign: 'left', outline: 'none',
-                  boxShadow: active ? '0 8px 24px rgba(0,0,0,0.2)' : 'none',
-                }}
-              >
-                <div style={{
-                  width: isMobile ? 32 : 40, height: isMobile ? 32 : 40,
-                  borderRadius: 10,
-                  background: active ? 'var(--accent)' : meta.dot, // Use solid color for better visibility
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: isMobile ? 14 : 18, flexShrink: 0,
-                  color: '#fff', // White icon for clear visibility
-                  boxShadow: `0 4px 12px ${meta.dot}44`,
-                }}>
-                  {meta.icon}
-                </div>
-                <div>
+        {/* Stat tiles — only shown in logs view */}
+        {viewMode === 'logs' && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+            gap: isMobile ? 12 : 16,
+            paddingBottom: 24,
+          }}>
+            {(['checkin', 'checkout', 'break_start', 'break_end'] as const).map((type) => {
+              const meta   = EVENT_META[type];
+              const count  = typeCounts[type] ?? 0;
+              const active = eventType === type;
+              return (
+                <button
+                  key={type}
+                  className="att-stat-card"
+                  onClick={() => setEventType(active ? '' : type)}
+                  style={{
+                    display: 'flex', alignItems: 'center',
+                    gap: isMobile ? 10 : 14,
+                    padding: isMobile ? '12px 14px' : '16px 20px',
+                    background: active ? 'rgba(201,151,58,0.15)' : 'rgba(255,255,255,0.07)',
+                    border: `1px solid ${active ? 'rgba(201,151,58,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                    borderBottom: `4px solid ${active ? 'var(--accent)' : meta.dot}`,
+                    borderRadius: 14,
+                    cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    textAlign: 'left', outline: 'none',
+                    boxShadow: active ? '0 8px 24px rgba(0,0,0,0.2)' : 'none',
+                  }}
+                >
                   <div style={{
-                    fontSize: isMobile ? 17 : 20, fontWeight: 800,
-                    color: count > 0 ? meta.dot : 'rgba(255,255,255,0.3)',
-                    fontFamily: 'var(--font-display)', lineHeight: 1,
-                    opacity: loading ? 0.4 : 1, // Use opacity instead of '—' to prevent layout shake
-                    transition: 'opacity 0.2s',
+                    width: isMobile ? 32 : 40, height: isMobile ? 32 : 40,
+                    borderRadius: 10,
+                    background: active ? 'var(--accent)' : meta.dot,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: isMobile ? 14 : 18, flexShrink: 0,
+                    color: '#fff',
+                    boxShadow: `0 4px 12px ${meta.dot}44`,
                   }}>
-                    {count}
+                    {meta.icon}
                   </div>
-                  <div style={{
-                    fontSize: isMobile ? 9 : 10,
-                    color: 'rgba(255,255,255,0.45)',
-                    textTransform: 'uppercase', letterSpacing: 1, marginTop: 2,
-                  }}>
-                    {t(EVENT_TYPE_LABEL_KEYS[type])}
+                  <div>
+                    <div style={{
+                      fontSize: isMobile ? 17 : 20, fontWeight: 800,
+                      color: count > 0 ? meta.dot : 'rgba(255,255,255,0.3)',
+                      fontFamily: 'var(--font-display)', lineHeight: 1,
+                      opacity: loading ? 0.4 : 1,
+                      transition: 'opacity 0.2s',
+                    }}>
+                      {count}
+                    </div>
+                    <div style={{
+                      fontSize: isMobile ? 9 : 10,
+                      color: 'rgba(255,255,255,0.45)',
+                      textTransform: 'uppercase', letterSpacing: 1, marginTop: 2,
+                    }}>
+                      {t(EVENT_TYPE_LABEL_KEYS[type])}
+                    </div>
                   </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Toolbar Row ─────────────────────────────────────────────────── */}
@@ -644,7 +1194,7 @@ export default function AttendanceLogsPage() {
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)',
         position: 'relative',
-        zIndex: 20,
+        zIndex: 5,
         boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
       }}>
         <div style={{
@@ -652,9 +1202,10 @@ export default function AttendanceLogsPage() {
           alignItems: 'center',
           gap: 12,
           width: '100%',
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
         }}>
-          {/* Search input */}
-          <div style={{ flex: 1, position: 'relative' }}>
+          {/* Search input (Left) */}
+          <div style={{ flex: 1, minWidth: isMobile ? '100%' : 200, position: 'relative' }}>
             <div style={{ position: 'absolute', left: 14, top: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <circle cx="11" cy="11" r="8"></circle>
@@ -678,6 +1229,102 @@ export default function AttendanceLogsPage() {
                 transition: 'all 0.15s',
               }}
             />
+          </div>
+
+          {/* View Mode Switcher Dropdown (Right, before Filter) */}
+          <div ref={viewDropdownRef} style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
+              style={{
+                height: 42,
+                padding: '0 14px',
+                borderRadius: 12,
+                fontSize: 13,
+                fontWeight: 700,
+                border: viewMode === 'summary' ? '1px solid rgba(201,151,58,0.5)' : '1px solid var(--border)',
+                background: viewMode === 'summary' ? 'linear-gradient(135deg, rgba(201,151,58,0.18) 0%, rgba(201,151,58,0.06) 100%)' : 'var(--background)',
+                color: viewMode === 'summary' ? 'var(--accent)' : 'var(--text)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                transition: 'all 0.2s',
+                boxShadow: viewMode === 'summary' ? '0 2px 10px rgba(201,151,58,0.2)' : 'none',
+              }}
+            >
+              {viewMode === 'logs' ? <ClipboardList size={16} style={{ color: 'var(--primary)' }} /> : viewMode === 'summary' ? <BarChart2 size={16} style={{ color: 'var(--accent)' }} /> : <PieChart size={16} style={{ color: '#2563eb' }} />}
+              <span>{viewMode === 'logs' ? t('attendance.viewLogs', 'Registro Log') : viewMode === 'summary' ? t('attendance.viewSummary', 'Riepilogo Ore Lavorate') : t('attendance.viewAnalytics', 'Analisi Grafica & Confronto')}</span>
+              <ChevronDown size={14} style={{ transform: isViewDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', opacity: 0.7 }} />
+            </button>
+
+            {isViewDropdownOpen && (
+              <div style={{
+                position: 'absolute',
+                right: 0,
+                top: '100%',
+                marginTop: 6,
+                width: 250,
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 14,
+                boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+                padding: 6,
+                zIndex: 1000,
+                animation: 'fadeIn 0.15s ease-out',
+              }}>
+                {[
+                  { id: 'logs', label: t('attendance.viewLogs', 'Registro Log'), icon: ClipboardList, desc: 'Timbrature grezze e marcature' },
+                  { id: 'summary', label: t('attendance.viewSummary', 'Riepilogo Ore Lavorate'), icon: BarChart2, desc: 'Ore programmate vs lavorate' },
+                  { id: 'analytics', label: t('attendance.viewAnalytics', 'Analisi Grafica & Confronto'), icon: PieChart, desc: 'Grafici e confronto visivo' },
+                ].map((item) => {
+                  const active = viewMode === item.id;
+                  const IconComp = item.icon;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setViewMode(item.id as 'logs' | 'summary' | 'analytics');
+                        setIsViewDropdownOpen(false);
+                      }}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        cursor: 'pointer',
+                        background: active ? 'linear-gradient(135deg, rgba(201,151,58,0.15) 0%, rgba(201,151,58,0.05) 100%)' : 'transparent',
+                        color: active ? 'var(--accent)' : 'var(--text-primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        transition: 'background 0.15s',
+                        marginBottom: 2,
+                      }}
+                      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          background: active ? 'var(--accent)' : 'var(--background)',
+                          color: active ? '#fff' : 'var(--text-secondary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <IconComp size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>{item.label}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{item.desc}</div>
+                        </div>
+                      </div>
+                      {active && <Check size={16} style={{ color: 'var(--accent)' }} />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Filter Button */}
@@ -860,50 +1507,88 @@ export default function AttendanceLogsPage() {
         </div>
       )}
 
-      {/* Event type pills row */}
-      <div style={{
-        display: 'flex',
-        gap: 6,
-        alignItems: 'center',
-        margin: '0 0 16px 0',
-        flexWrap: isMobile ? undefined : 'wrap',
-        overflowX: isMobile ? 'auto' : undefined,
-        width: isMobile ? '100%' : undefined,
-        paddingBottom: isMobile ? 2 : 0,
-      }}>
-        {eventTypeOptions.map(({ value, labelKey }) => {
-          const meta   = value ? EVENT_META[value] : null;
-          const active = eventType === value;
-          return (
-            <button
-              key={value}
-              className="att-type-btn"
-              onClick={() => setEventType(active ? '' : value)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 20,
-                flexShrink: 0,
-                border: `1.5px solid ${active ? (meta?.dot ?? 'var(--accent)') : 'var(--border)'}`,
-                background: active ? (meta ? meta.bg : 'var(--accent-light)') : 'transparent',
-                color: active ? (meta?.color ?? 'var(--accent)') : 'var(--text-secondary)',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                letterSpacing: 0.3,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                outline: 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {meta && <span style={{ fontSize: 11 }}>{meta.icon}</span>}
-              {t(labelKey)}
-            </button>
-          );
-        })}
-      </div>
+      {/* Sub-toolbar pills row: Event types for logs view, Period tabs for summary view */}
+      {viewMode === 'logs' ? (
+        <div style={{
+          display: 'flex',
+          gap: 6,
+          alignItems: 'center',
+          margin: '0 0 16px 0',
+          flexWrap: isMobile ? undefined : 'wrap',
+          overflowX: isMobile ? 'auto' : undefined,
+          width: isMobile ? '100%' : undefined,
+          paddingBottom: isMobile ? 2 : 0,
+        }}>
+          {eventTypeOptions.map(({ value, labelKey }) => {
+            const meta   = value ? EVENT_META[value] : null;
+            const active = eventType === value;
+            return (
+              <button
+                key={value}
+                className="att-type-btn"
+                onClick={() => setEventType(active ? '' : value)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 20,
+                  flexShrink: 0,
+                  border: `1.5px solid ${active ? (meta?.dot ?? 'var(--accent)') : 'var(--border)'}`,
+                  background: active ? (meta ? meta.bg : 'var(--accent-light)') : 'transparent',
+                  color: active ? (meta?.color ?? 'var(--accent)') : 'var(--text-secondary)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  letterSpacing: 0.3,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  outline: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {meta && <span style={{ fontSize: 11 }}>{meta.icon}</span>}
+                {t(labelKey)}
+              </button>
+            );
+          })}
+        </div>
+      ) : viewMode === 'summary' ? (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          margin: '0 0 16px 0',
+          width: '100%',
+        }}>
+          <button
+            onClick={() => {
+              setTempOvertimeLimit(overtimeLimit);
+              setTempUndertimeLimit(undertimeLimit);
+              setShowToleranceModal(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              borderRadius: 12,
+              fontSize: 13,
+              fontWeight: 700,
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)'; }}
+          >
+            <Sliders size={15} style={{ color: 'var(--accent)' }} />
+            <span>{t('attendance.toleranceSettings', 'Impostazioni Tolleranza Orari')}</span>
+          </button>
+        </div>
+      ) : null}
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
       <div style={{ padding: contentPad, minHeight: '60vh', position: 'relative' }}>
@@ -934,7 +1619,278 @@ export default function AttendanceLogsPage() {
             </div>
           )}
 
-          {/* ── Mobile: card list ─────────────────────────────────────────── */}
+          {viewMode === 'analytics' ? (
+            /* ── ANALYTICS VIEW MODE (Request 3) ───────────────────────── */
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile || isTablet ? '1fr' : '320px 1fr', gap: 24, alignItems: 'start' }}>
+              {/* Left Filters Panel */}
+              <div style={{
+                background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)',
+                padding: 20, boxShadow: '0 4px 16px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 16,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+                  <PieChart size={18} style={{ color: 'var(--accent)' }} />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {t('attendance.viewAnalytics', 'Analisi Grafica & Confronto')}
+                  </span>
+                </div>
+
+                {/* Company Select */}
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
+                    🏢 {t('attendance.analyticsSelectCompany', 'Azienda')}
+                  </label>
+                  <CustomSelect
+                    value={analyticsCompany || null}
+                    onChange={(val) => {
+                      setAnalyticsCompany(val ?? '');
+                      setAnalyticsStoreId('');
+                      setAnalyticsUserId('');
+                    }}
+                    placeholder={t('attendance.analyticsSelectCompany', 'Seleziona Azienda')}
+                    options={companyOptions}
+                    searchable={true}
+                    isClearable={true}
+                    controlMinHeight={40}
+                  />
+                </div>
+
+                {/* Store Select */}
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
+                    📍 {t('attendance.analyticsSelectStore', 'Negozio')}
+                  </label>
+                  <CustomSelect
+                    value={analyticsStoreId || null}
+                    onChange={(val) => {
+                      setAnalyticsStoreId(val ?? '');
+                      setAnalyticsUserId('');
+                    }}
+                    placeholder={t('attendance.analyticsSelectStore', 'Seleziona Negozio')}
+                    options={storeOptions}
+                    searchable={true}
+                    isClearable={true}
+                    controlMinHeight={40}
+                  />
+                </div>
+
+                {/* Employee Select */}
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
+                    👤 {t('attendance.analyticsSelectEmployee', 'Dipendente')}
+                  </label>
+                  <CustomSelect
+                    value={analyticsUserId || null}
+                    onChange={(val) => setAnalyticsUserId(val ?? '')}
+                    placeholder={t('attendance.analyticsSelectEmployee', 'Seleziona Dipendente')}
+                    options={analyticsEmployeeOptions}
+                    searchable={true}
+                    isClearable={true}
+                    controlMinHeight={40}
+                  />
+                </div>
+
+                {/* Date Range */}
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
+                    📅 {t('common.date', 'Periodo')}
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <DatePicker value={analyticsDateFrom} onChange={setAnalyticsDateFrom} placeholder="Data da" />
+                    <DatePicker value={analyticsDateTo} onChange={setAnalyticsDateTo} placeholder="Data a" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Charts & Metrics Panel */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {!analyticsCompany || !analyticsStoreId ? (
+                  <div style={{
+                    background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)',
+                    padding: '60px 32px', textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+                  }}>
+                    <div style={{ fontSize: 44, marginBottom: 16, opacity: 0.3 }}>📊</div>
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' }}>
+                      {t('attendance.analyticsPrompt', 'Seleziona un\'azienda e un negozio per visualizzare l\'analisi grafica delle presenze.')}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
+                      {t('attendance.analyticsPromptSubtitle', 'Utilizza i filtri a sinistra per caricare i grafici e le statistiche di confronto.')}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                {/* Header Card */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #0d2137 0%, #1e4a7a 100%)', borderRadius: 16, padding: '20px 24px',
+                  color: '#fff', boxShadow: '0 4px 16px rgba(13,33,55,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#fff' }}>
+                      {t('attendance.analyticsTitle', 'Analisi Grafica e Confronto Presenze')}
+                    </h3>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+                      {t('attendance.analyticsSubtitle', 'Confronta i turni programmati rispetto alle ore effettivamente lavorate')} ({analyticsDateFrom} → {analyticsDateTo})
+                    </div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(201,151,58,0.2)', border: '1px solid rgba(201,151,58,0.4)',
+                    borderRadius: 12, padding: '8px 14px', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--accent)' }}>
+                      {t('attendance.completionRate', 'Tasso Turni')}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', fontFamily: 'var(--font-display)' }}>
+                      {analyticsData.completionRate}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4 Summary Metric Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
+                  <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                      📋 {t('attendance.totalScheduled', 'Programmate')}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                      {formatHoursStr(analyticsData.sumScheduled)}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                      ⏱ {t('attendance.totalWorked', 'Lavorate')}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                      {formatHoursStr(analyticsData.sumWorked)}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(22,163,74,0.06)', borderRadius: 12, border: '1px solid rgba(22,163,74,0.2)', padding: 14 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: 1 }}>
+                      ▲ {t('attendance.totalOvertime', 'Straordinari Netti')}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                      +{formatHoursStr(analyticsData.sumOvertime)}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(220,38,38,0.06)', borderRadius: 12, border: '1px solid rgba(220,38,38,0.2)', padding: 14 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 1 }}>
+                      ▼ {t('attendance.totalUndertime', 'Ore Mancanti Nette')}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                      -{formatHoursStr(analyticsData.sumUndertime)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visual Comparative Chart Panel */}
+                <div style={{
+                  background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', padding: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>📊 {t('attendance.chartTitle', 'Confronto Grafico Presenze per Dipendente')}</span>
+                  </div>
+
+                  {analyticsData.rows.length === 0 ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      {t('attendance.noSummaryData', 'Nessun dato disponibile per i filtri selezionati.')}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {analyticsData.rows.slice(0, 25).map((r) => {
+                        const pct = r.scheduledMinutes > 0
+                          ? Math.round((r.workedMinutes / r.scheduledMinutes) * 100)
+                          : (r.workedMinutes > 0 ? 100 : 0);
+                        const vBadge = formatVarianceBadge(r.varianceMinutes, t, overtimeLimit, undertimeLimit, r.dateKey, r.events);
+                        const avatarUrl = getAvatarUrl(r.userAvatarFilename);
+                        const initials = `${r.userName?.[0] ?? ''}${r.userSurname?.[0] ?? ''}`.toUpperCase();
+                        return (
+                          <div key={r.key} style={{
+                            background: 'var(--background)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--border)',
+                            display: 'flex', flexDirection: 'column', gap: 10, transition: 'all 0.2s',
+                          }}>
+                            {/* Top row */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                {avatarUrl ? (
+                                  <img src={avatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--border)', flexShrink: 0 }} />
+                                ) : (
+                                  <div style={{
+                                    width: 32, height: 32, borderRadius: '50%', background: 'rgba(201,151,58,0.18)',
+                                    color: 'var(--accent)', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                    border: '1.5px solid rgba(201,151,58,0.3)',
+                                  }}>
+                                    {initials}
+                                  </div>
+                                )}
+                                <div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>{r.userName} {r.userSurname}</span>
+                                    {r.userRole && (
+                                      <span style={{
+                                        fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px',
+                                        padding: '2px 6px', borderRadius: 4, background: 'rgba(13,33,55,0.08)', color: 'var(--primary)',
+                                        border: '1px solid rgba(13,33,55,0.15)', whiteSpace: 'nowrap',
+                                      }}>
+                                        {t(`roles.${r.userRole}`, r.userRole)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>📅 {r.periodLabel}</div>
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                                    {formatHoursStr(r.workedMinutes)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>/ {formatHoursStr(r.scheduledMinutes)}</span>
+                                  </div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textAlign: 'right' }}>
+                                    {pct}% completato
+                                  </div>
+                                </div>
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                                  padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+                                  background: vBadge.bg, color: vBadge.color, border: `1px solid ${vBadge.border}`,
+                                  whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                                }}>
+                                  <span>{vBadge.icon}</span>
+                                  {vBadge.text}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Single Combined Progress Bar */}
+                            <div style={{
+                              height: 8, width: '100%', background: 'var(--surface)', borderRadius: 6,
+                              overflow: 'hidden', border: '1px solid var(--border)', position: 'relative',
+                            }}>
+                              <div style={{
+                                height: '100%',
+                                width: `${Math.min(pct, 100)}%`,
+                                background: r.varianceMinutes > overtimeLimit
+                                  ? 'linear-gradient(90deg, #16a34a 0%, #22c55e 100%)'
+                                  : r.varianceMinutes < -undertimeLimit
+                                  ? 'linear-gradient(90deg, #dc2626 0%, #f87171 100%)'
+                                  : 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)',
+                                borderRadius: 6,
+                                transition: 'width 0.4s ease',
+                              }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+              )}
+              </div>
+            </div>
+          ) : (
+          /* ── Mobile / Desktop Tables Block ── */
+          <>
           {isMobile ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {!loading && events.length === 0 ? (
@@ -1082,131 +2038,140 @@ export default function AttendanceLogsPage() {
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
-                    <thead>
-                      <tr style={{ background: '#0d2137' }}>
-                        {[
-                          { text: t('employees.colName'), icon: (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
-                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                              <circle cx="12" cy="7" r="4" />
-                            </svg>
-                          )},
-                          { text: t('common.store'), icon: (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
-                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                              <polyline points="9 22 9 12 15 12 15 22" />
-                            </svg>
-                          )},
-                          { text: t('attendance.eventType'), icon: (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
-                              <circle cx="12" cy="12" r="10" />
-                              <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                          )},
-                          { text: t('common.date'), icon: (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
-                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                              <line x1="16" y1="2" x2="16" y2="6" />
-                              <line x1="8" y1="2" x2="8" y2="6" />
-                              <line x1="3" y1="10" x2="21" y2="10" />
-                            </svg>
-                          )},
-                          { text: t('attendance.source'), icon: (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
-                              <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                              <line x1="12" y1="18" x2="12.01" y2="18" />
-                            </svg>
-                          )},
-                          ...(canEdit ? [{ text: t('common.actions'), icon: (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
-                              <circle cx="12" cy="12" r="3" />
-                              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                            </svg>
-                          )}] : []),
-                        ].map((col, i) => (
-                          <th key={`${col.text}-${i}`} style={{
-                            padding: compact ? '8px 12px' : (isTablet ? '12px 12px' : '14px 16px'),
-                            textAlign: 'left',
-                            fontSize: compact ? 9 : 10, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
-                            textTransform: 'uppercase', letterSpacing: '1.5px',
-                            borderBottom: '1px solid rgba(255,255,255,0.1)',
-                            ...(i === 0 ? { paddingLeft: 24 } : {}),
-                          }}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                              {col.icon}
-                              <span>{col.text}</span>
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {events.map((ev, idx) => {
-                        const meta     = EVENT_META[ev.eventType] ?? EVENT_META.checkin;
-                        const labelKey = EVENT_TYPE_LABEL_KEYS[ev.eventType] ?? 'attendance.checkin';
-                        const srcBadge = SOURCE_BADGE[ev.source] ?? { label: ev.source.toUpperCase(), color: '#6b7280' };
-                        const dt       = formatDateTime(ev.eventTime);
-                        return (
-                          <tr
-                            key={ev.id}
-                            className="att-row"
-                            style={{
-                              borderBottom: '1px solid var(--border)',
-                              animationDelay: `${Math.min(idx * 18, 300)}ms`,
-                              transition: 'background 0.1s',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
-                          >
-                            <td style={{ padding: compact ? '6px 12px 6px 0' : '11px 16px 11px 0' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                                <div style={{
-                                  width: compact ? 3 : 4, alignSelf: 'stretch', borderRadius: '0 2px 2px 0',
-                                  background: meta.dot, flexShrink: 0, marginRight: compact ? 8 : 12,
-                                }} />
-                                <div style={{
-                                  width: compact ? 24 : 32, height: compact ? 24 : 32, borderRadius: '50%',
-                                  background: meta.bg, color: meta.color,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: compact ? 10 : 12, fontWeight: 800, marginRight: compact ? 8 : 12, flexShrink: 0,
-                                  border: `1px solid ${meta.dot}33`,
-                                }}>
-                                  {ev.userName?.charAt(0)}{ev.userSurname?.charAt(0)}
-                                </div>
-                                <div style={{ fontSize: compact ? 12 : 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
-                                  {(() => {
-                                     const fullName = `${ev.userName} ${ev.userSurname}`;
-                                     const words = fullName.trim().split(/\s+/);
-                                     return words.length > 2 ? words.slice(0, 2).join(' ') + '...' : fullName;
-                                  })()}
-                                </div>
+                  {viewMode === 'logs' ? (
+                    /* ── LOGS TABLE (Request 2: Separate Date and Time columns) ── */
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+                      <thead>
+                        <tr style={{ background: '#0d2137' }}>
+                          {[
+                            { text: t('employees.colName'), icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                              </svg>
+                            )},
+                            { text: t('common.store'), icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                                <polyline points="9 22 9 12 15 12 15 22" />
+                              </svg>
+                            )},
+                            { text: t('attendance.eventType'), icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                              </svg>
+                            )},
+                            { text: t('common.date', 'Data'), icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                              </svg>
+                            )},
+                            { text: t('common.time', 'Ora'), icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 16 14" />
+                              </svg>
+                            )},
+                            { text: t('attendance.source'), icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                                <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                                <line x1="12" y1="18" x2="12.01" y2="18" />
+                              </svg>
+                            )},
+                            ...(canEdit ? [{ text: t('common.actions'), icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 6, opacity: 0.8 }}>
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                              </svg>
+                            )}] : []),
+                          ].map((col, i) => (
+                            <th key={`${col.text}-${i}`} style={{
+                              padding: compact ? '8px 12px' : (isTablet ? '12px 12px' : '14px 16px'),
+                              textAlign: 'left',
+                              fontSize: compact ? 9 : 10, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
+                              textTransform: 'uppercase', letterSpacing: '1.5px',
+                              borderBottom: '1px solid rgba(255,255,255,0.1)',
+                              ...(i === 0 ? { paddingLeft: 24 } : {}),
+                            }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                {col.icon}
+                                <span>{col.text}</span>
                               </div>
-                            </td>
-                            <td style={{ padding: compact ? '6px 12px' : '11px 16px', fontSize: compact ? 12 : 13, color: 'var(--text-secondary)' }}>
-                              {(() => {
-                                 const sName = ev.storeName || '';
-                                 const words = sName.trim().split(/\s+/);
-                                 return words.length > 3 ? words.slice(0, 3).join(' ') + '...' : sName;
-                              })()}
-                            </td>
-                            <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                padding: compact ? '2px 8px' : '4px 11px', borderRadius: 20,
-                                fontSize: compact ? 10 : 11, fontWeight: 800, letterSpacing: '0.8px',
-                                background: meta.bg, color: meta.color,
-                                textTransform: 'uppercase', border: `1px solid ${meta.dot}33`,
-                              }}>
-                                <span>{meta.icon}</span>
-                                {t(labelKey)}
-                              </span>
-                            </td>
-                            <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 8 }}>
-                                <span style={{ fontSize: compact ? 12 : 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                                  {dt.date}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {events.map((ev, idx) => {
+                          const meta     = EVENT_META[ev.eventType] ?? EVENT_META.checkin;
+                          const labelKey = EVENT_TYPE_LABEL_KEYS[ev.eventType] ?? 'attendance.checkin';
+                          const srcBadge = SOURCE_BADGE[ev.source] ?? { label: ev.source.toUpperCase(), color: '#6b7280' };
+                          const dt       = formatDateTime(ev.eventTime);
+                          return (
+                            <tr
+                              key={ev.id}
+                              className="att-row"
+                              style={{
+                                borderBottom: '1px solid var(--border)',
+                                animationDelay: `${Math.min(idx * 18, 300)}ms`,
+                                transition: 'background 0.1s',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
+                            >
+                              <td style={{ padding: compact ? '6px 12px 6px 0' : '11px 16px 11px 0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                                  <div style={{
+                                    width: compact ? 3 : 4, alignSelf: 'stretch', borderRadius: '0 2px 2px 0',
+                                    background: meta.dot, flexShrink: 0, marginRight: compact ? 8 : 12,
+                                  }} />
+                                  <div style={{
+                                    width: compact ? 24 : 32, height: compact ? 24 : 32, borderRadius: '50%',
+                                    background: meta.bg, color: meta.color,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: compact ? 10 : 12, fontWeight: 800, marginRight: compact ? 8 : 12, flexShrink: 0,
+                                    border: `1px solid ${meta.dot}33`,
+                                  }}>
+                                    {ev.userName?.charAt(0)}{ev.userSurname?.charAt(0)}
+                                  </div>
+                                  <div style={{ fontSize: compact ? 12 : 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>
+                                    {(() => {
+                                       const fullName = `${ev.userName} ${ev.userSurname}`;
+                                       const words = fullName.trim().split(/\s+/);
+                                       return words.length > 2 ? words.slice(0, 2).join(' ') + '...' : fullName;
+                                    })()}
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding: compact ? '6px 12px' : '11px 16px', fontSize: compact ? 12 : 13, color: 'var(--text-secondary)' }}>
+                                {(() => {
+                                   const sName = ev.storeName || '';
+                                   const words = sName.trim().split(/\s+/);
+                                   return words.length > 3 ? words.slice(0, 3).join(' ') + '...' : sName;
+                                })()}
+                              </td>
+                              <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  padding: compact ? '2px 8px' : '4px 11px', borderRadius: 20,
+                                  fontSize: compact ? 10 : 11, fontWeight: 800, letterSpacing: '0.8px',
+                                  background: meta.bg, color: meta.color,
+                                  textTransform: 'uppercase', border: `1px solid ${meta.dot}33`,
+                                }}>
+                                  <span>{meta.icon}</span>
+                                  {t(labelKey)}
                                 </span>
+                              </td>
+                              {/* Date Column (Request 2) */}
+                              <td style={{ padding: compact ? '6px 12px' : '11px 16px', fontSize: compact ? 12 : 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                                {dt.date}
+                              </td>
+                              {/* Time Column (Request 2) */}
+                              <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
                                 <span style={{
                                   fontSize: compact ? 11 : 13, fontWeight: 700, color: '#9b7a32',
                                   fontVariantNumeric: 'tabular-nums',
@@ -1215,76 +2180,275 @@ export default function AttendanceLogsPage() {
                                 }}>
                                   {dt.time}
                                 </span>
-                              </div>
-                            </td>
-                            <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
-                              <span style={{
-                                display: 'inline-block', padding: compact ? '1px 6px' : '2px 8px', borderRadius: 4,
-                                fontSize: compact ? 9 : 10, fontWeight: 800, letterSpacing: '1px',
-                                background: `${srcBadge.color}18`, color: srcBadge.color,
-                                border: `1px solid ${srcBadge.color}30`,
-                                fontFamily: 'monospace',
-                              }}>
-                                {srcBadge.label}
-                              </span>
-                            </td>
-                            {canEdit && (
-                              <td style={{ padding: compact ? '6px 12px' : '11px 16px', whiteSpace: 'nowrap' }}>
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                  <button
-                                    onClick={() => openEditModal(ev)}
-                                    title={t('attendance.editEvent', 'Modifica evento')}
-                                    style={{
-                                      padding: compact ? '4px 6px' : '6px 8px', borderRadius: 6,
-                                      border: '1px solid rgba(13,33,55,0.25)',
-                                      background: 'rgba(13,33,55,0.06)',
-                                      color: 'var(--primary)',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      cursor: 'pointer', transition: 'all 0.15s',
-                                    }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(13,33,55,0.14)'; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(13,33,55,0.06)'; }}
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M12 20h9"></path>
-                                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                                    </svg>
-                                  </button>
-                                  {canDelete && (
+                              </td>
+                              <td style={{ padding: compact ? '6px 12px' : '11px 16px' }}>
+                                <span style={{
+                                  display: 'inline-block', padding: compact ? '1px 6px' : '2px 8px', borderRadius: 4,
+                                  fontSize: compact ? 9 : 10, fontWeight: 800, letterSpacing: '1px',
+                                  background: `${srcBadge.color}18`, color: srcBadge.color,
+                                  border: `1px solid ${srcBadge.color}30`,
+                                  fontFamily: 'monospace',
+                                }}>
+                                  {srcBadge.label}
+                                </span>
+                              </td>
+                              {canEdit && (
+                                <td style={{ padding: compact ? '6px 12px' : '11px 16px', whiteSpace: 'nowrap' }}>
+                                  <div style={{ display: 'flex', gap: 6 }}>
                                     <button
-                                      onClick={() => setDeletingEvent(ev)}
-                                      title={t('attendance.deleteEvent', 'Elimina evento')}
+                                      onClick={() => openEditModal(ev)}
+                                      title={t('attendance.editEvent', 'Modifica evento')}
                                       style={{
                                         padding: compact ? '4px 6px' : '6px 8px', borderRadius: 6,
-                                        border: '1px solid rgba(220,38,38,0.25)',
-                                        background: 'rgba(220,38,38,0.06)',
-                                        color: '#dc2626',
+                                        border: '1px solid rgba(13,33,55,0.25)',
+                                        background: 'rgba(13,33,55,0.06)',
+                                        color: 'var(--primary)',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         cursor: 'pointer', transition: 'all 0.15s',
                                       }}
-                                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.14)'; }}
-                                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.06)'; }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(13,33,55,0.14)'; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(13,33,55,0.06)'; }}
                                     >
                                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
                                       </svg>
                                     </button>
-                                  )}
-                                </div>
-                              </td>
-                            )}
+                                    {canDelete && (
+                                      <button
+                                        onClick={() => setDeletingEvent(ev)}
+                                        title={t('attendance.deleteEvent', 'Elimina evento')}
+                                        style={{
+                                          padding: compact ? '4px 6px' : '6px 8px', borderRadius: 6,
+                                          border: '1px solid rgba(220,38,38,0.25)',
+                                          background: 'rgba(220,38,38,0.06)',
+                                          color: '#dc2626',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          cursor: 'pointer', transition: 'all 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.14)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.06)'; }}
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="3 6 5 6 21 6"></polyline>
+                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                          <line x1="10" y1="11" x2="10" y2="17"></line>
+                                          <line x1="14" y1="11" x2="14" y2="17"></line>
+                                        </svg>
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    /* ── SUMMARY TABLE (Request 3, 4, 5) ── */
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
+                      <thead>
+                        <tr style={{ background: '#0d2137' }}>
+                          {[
+                            { icon: <User size={13} style={{ color: 'var(--accent)' }} />, text: t('employees.colName', 'Dipendente') },
+                            { icon: <MapPin size={13} style={{ color: 'var(--accent)' }} />, text: t('common.store', 'Negozio') },
+                            { icon: <Calendar size={13} style={{ color: 'var(--accent)' }} />, text: summaryPeriod === 'daily' ? t('attendance.dateFrom', 'Data') : summaryPeriod === 'weekly' ? t('shifts.week', 'Settimana') : t('shifts.month', 'Mese') },
+                            { icon: <ClipboardList size={13} style={{ color: 'var(--accent)' }} />, text: t('attendance.colShifts', 'Turni') },
+                            { icon: <Clock size={13} style={{ color: 'var(--accent)' }} />, text: t('attendance.colWorkedShort', 'Ore Lav.'), width: 95 },
+                            { icon: <BarChart2 size={13} style={{ color: 'var(--accent)' }} />, text: t('attendance.colProgressShort', 'Avanzamento') },
+                            { icon: <Scale size={13} style={{ color: 'var(--accent)' }} />, text: t('attendance.colVarianceShort', 'Scostamento') },
+                            { icon: <Settings size={13} style={{ color: 'var(--accent)' }} />, text: t('common.actions', 'Azioni'), width: 70, align: 'center' },
+                          ].map((col, i) => (
+                            <th key={`${col.text}-${i}`} style={{
+                              padding: compact ? '8px 10px' : '12px 14px',
+                              textAlign: (col.align as any) || 'left',
+                              width: col.width,
+                              fontSize: compact ? 9 : 10, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
+                              textTransform: 'uppercase', letterSpacing: '1px',
+                              borderBottom: '1px solid rgba(255,255,255,0.1)',
+                              whiteSpace: 'nowrap',
+                              ...(i === 0 ? { paddingLeft: 20 } : {}),
+                            }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: col.align === 'center' ? 'center' : 'flex-start' }}>
+                                {col.icon}
+                                <span>{col.text}</span>
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summaryRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                              {t('attendance.noSummaryData', 'Nessun dato di riepilogo disponibile per il periodo selezionato.')}
+                            </td>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                        ) : (
+                          summaryRows.slice(0, 500).map((row, idx) => {
+                            const vBadge = formatVarianceBadge(row.varianceMinutes, t, overtimeLimit, undertimeLimit, row.dateKey, row.events);
+                            const avatarUrl = getAvatarUrl(row.userAvatarFilename);
+                            const initials = `${row.userName?.[0] ?? ''}${row.userSurname?.[0] ?? ''}`.toUpperCase();
+                            return (
+                              <tr
+                                key={row.key}
+                                className="att-row"
+                                style={{
+                                  borderBottom: '1px solid var(--border)',
+                                  animationDelay: `${Math.min(idx * 18, 300)}ms`,
+                                  transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
+                              >
+                                {/* Name */}
+                                <td style={{ padding: compact ? '6px 10px 6px 20px' : '10px 14px 10px 20px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 8 : 10 }}>
+                                    {avatarUrl ? (
+                                      <img src={avatarUrl} alt="" style={{ width: compact ? 26 : 32, height: compact ? 26 : 32, borderRadius: '50%', objectFit: 'cover' }} />
+                                    ) : (
+                                      <div style={{
+                                        width: compact ? 26 : 32, height: compact ? 26 : 32, borderRadius: '50%',
+                                        background: 'rgba(201,151,58,0.18)', color: 'var(--accent)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: compact ? 10 : 12, fontWeight: 800, border: '1px solid rgba(201,151,58,0.3)',
+                                      }}>
+                                        {initials}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div style={{ fontSize: compact ? 13 : 14, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                                        {row.userName} {row.userSurname}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                {/* Store */}
+                                <td style={{ padding: compact ? '6px 10px' : '10px 14px', fontSize: compact ? 12 : 13, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                  {row.storeName}
+                                </td>
+                                {/* Date / Period */}
+                                <td style={{ padding: compact ? '6px 10px' : '10px 14px', fontSize: compact ? 12 : 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                                  {row.periodLabel}
+                                </td>
+                                {/* Shifts Column */}
+                                <td style={{ padding: compact ? '6px 10px' : '10px 14px' }}>
+                                  {row.shifts.length === 0 ? (
+                                    <span style={{ fontSize: compact ? 11 : 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      {t('attendance.noShiftsAssigned', 'Nessun turno')}
+                                    </span>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 2 : 4 }}>
+                                      {row.shifts.map(s => {
+                                        const sMeta = SHIFT_STATUS_META[s.status] || SHIFT_STATUS_META.scheduled;
+                                        return (
+                                          <span key={s.id} style={{
+                                            fontSize: compact ? 10 : 11, fontWeight: 700, color: sMeta.color,
+                                            background: sMeta.bg, border: `1px solid ${sMeta.border}`,
+                                            padding: compact ? '2px 6px' : '3px 8px', borderRadius: 6,
+                                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.12)',
+                                            width: 'fit-content', whiteSpace: 'nowrap',
+                                          }}>
+                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: sMeta.dot, flexShrink: 0 }} />
+                                            <span>{sMeta.icon} {s.startTime.slice(0,5)} - {s.endTime.slice(0,5)}</span>
+                                            <span style={{ opacity: 0.85, fontSize: compact ? 9 : 10, fontWeight: 600, borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 6 }}>
+                                              {t(sMeta.labelKey, sMeta.defaultLabel)}
+                                            </span>
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </td>
+                                {/* Worked Hours */}
+                                <td style={{ padding: compact ? '6px 10px' : '10px 14px', width: 95, whiteSpace: 'nowrap' }}>
+                                  <span style={{
+                                    fontSize: compact ? 12 : 13, fontWeight: 800, color: 'var(--primary)',
+                                    background: 'var(--background)', padding: compact ? '2px 8px' : '4px 10px',
+                                    borderRadius: 8, border: '1px solid var(--border)', display: 'inline-block',
+                                  }}>
+                                    {formatHoursStr(row.workedMinutes)}
+                                  </span>
+                                </td>
+                                {/* Avanzamento Ore */}
+                                <td style={{ padding: compact ? '6px 10px' : '10px 14px', minWidth: 140 }}>
+                                  {(() => {
+                                    const pct = row.scheduledMinutes > 0
+                                      ? Math.round((row.workedMinutes / row.scheduledMinutes) * 100)
+                                      : (row.workedMinutes > 0 ? 100 : 0);
+                                    return (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: compact ? 10 : 11 }}>
+                                          <span style={{ color: 'var(--text-secondary)', fontWeight: 700 }}>
+                                            {formatHoursStr(row.scheduledMinutes)} / {formatHoursStr(row.workedMinutes)}
+                                          </span>
+                                          <span style={{ color: 'var(--accent)', fontWeight: 800 }}>
+                                            {pct}%
+                                          </span>
+                                        </div>
+                                        <div style={{
+                                          height: compact ? 4 : 5,
+                                          width: '100%',
+                                          background: 'var(--background)',
+                                          borderRadius: 4,
+                                          overflow: 'hidden',
+                                          border: '1px solid var(--border)',
+                                        }}>
+                                          <div style={{
+                                            height: '100%',
+                                            width: `${Math.min(pct, 100)}%`,
+                                            background: 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)',
+                                            borderRadius: 4,
+                                            transition: 'width 0.4s ease',
+                                          }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </td>
+                                {/* Variance / Overtime */}
+                                <td style={{ padding: compact ? '6px 10px' : '10px 14px', whiteSpace: 'nowrap' }}>
+                                  <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                    padding: compact ? '2px 8px' : '4px 10px', borderRadius: 20,
+                                    fontSize: compact ? 11 : 12, fontWeight: 800,
+                                    background: vBadge.bg, color: vBadge.color, border: `1px solid ${vBadge.border}`,
+                                  }}>
+                                    <span>{vBadge.icon}</span>
+                                    {vBadge.text}
+                                  </span>
+                                </td>
+                                {/* Actions */}
+                                <td style={{ padding: compact ? '6px 10px' : '10px 14px', width: 70, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                    <button
+                                      onClick={() => setSummaryDrawerItem(row)}
+                                      title={t('attendance.viewDetailTooltip', 'Visualizza dettagli turno e timbrature')}
+                                      style={{
+                                        padding: compact ? '4px 8px' : '6px 10px', borderRadius: 6,
+                                        border: '1px solid rgba(59,130,246,0.3)',
+                                        background: 'rgba(59,130,246,0.08)',
+                                        color: '#2563eb', cursor: 'pointer', transition: 'all 0.15s',
+                                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: compact ? 11 : 12, fontWeight: 700,
+                                      }}
+                                    >
+                                      <Eye size={compact ? 13 : 15} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
 
@@ -1315,7 +2479,142 @@ export default function AttendanceLogsPage() {
               )}
             </div>
           )}
+          </>
+          )}
         </div>
+
+      {/* ── Variance Tolerance Limits Modal (Item 2) ──────────────────────── */}
+      {showToleranceModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.5)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            padding: '16px', backdropFilter: 'blur(3px)',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowToleranceModal(false); }}
+        >
+          <div style={{
+            background: 'var(--surface)', borderRadius: 20,
+            boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
+            width: '100%', maxWidth: 440,
+            border: '1px solid var(--border)', overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'linear-gradient(135deg, rgba(201,151,58,0.1) 0%, rgba(13,33,55,0.05) 100%)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10, background: 'rgba(201,151,58,0.18)',
+                  color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Sliders size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>
+                    {t('attendance.toleranceSettings', 'Impostazioni Tolleranza Orari')}
+                  </h3>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {t('attendance.toleranceSubtitle', 'Regola le soglie di straordinario e ritardo')}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowToleranceModal(false)}
+                style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  border: '1px solid var(--border)', background: 'var(--background)',
+                  color: 'var(--text-secondary)', fontSize: 18, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', display: 'block', marginBottom: 6 }}>
+                  ▲ {t('attendance.overtimeThreshold', 'Soglia Straordinario (minuti)')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="120"
+                  value={tempOvertimeLimit}
+                  onChange={(e) => setTempOvertimeLimit(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  style={{
+                    width: '100%', height: 42, padding: '0 14px', borderRadius: 10,
+                    border: '1px solid var(--border)', background: 'var(--background)',
+                    color: 'var(--text)', fontSize: 14, fontWeight: 700, outline: 'none',
+                  }}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {t('attendance.overtimeDesc', 'Minuti extra minimi lavorati prima di mostrare il tag verde')}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, fontStyle: 'italic', background: 'rgba(22,163,74,0.06)', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(22,163,74,0.18)', lineHeight: 1.4 }}>
+                  💡 {t('attendance.overtimeLogicExplanation')}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', display: 'block', marginBottom: 6 }}>
+                  ▼ {t('attendance.undertimeThreshold', 'Soglia Ore Mancanti (minuti)')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="120"
+                  value={tempUndertimeLimit}
+                  onChange={(e) => setTempUndertimeLimit(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  style={{
+                    width: '100%', height: 42, padding: '0 14px', borderRadius: 10,
+                    border: '1px solid var(--border)', background: 'var(--background)',
+                    color: 'var(--text)', fontSize: 14, fontWeight: 700, outline: 'none',
+                  }}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {t('attendance.undertimeDesc', 'Minuti mancanti minimi prima di mostrare il tag rosso')}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, fontStyle: 'italic', background: 'rgba(220,38,38,0.06)', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(220,38,38,0.18)', lineHeight: 1.4 }}>
+                  💡 {t('attendance.undertimeLogicExplanation')}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 10 }}>
+                <button
+                  onClick={() => setShowToleranceModal(false)}
+                  style={{
+                    padding: '10px 18px', borderRadius: 10, border: '1px solid var(--border)',
+                    background: 'var(--background)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  {t('common.cancel', 'Annulla')}
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('att_overtime_limit', String(tempOvertimeLimit));
+                    localStorage.setItem('att_undertime_limit', String(tempUndertimeLimit));
+                    setOvertimeLimit(tempOvertimeLimit);
+                    setUndertimeLimit(tempUndertimeLimit);
+                    setShowToleranceModal(false);
+                  }}
+                  style={{
+                    padding: '10px 22px', borderRadius: 10, border: 'none',
+                    background: 'linear-gradient(135deg, var(--accent) 0%, #b48719 100%)',
+                    color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(201,151,58,0.3)',
+                  }}
+                >
+                  {t('attendance.saveSettings', 'Salva Impostazioni')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Edit Event Modal ──────────────────────────────────────────────── */}
       {editingEvent && (
@@ -2153,6 +3452,248 @@ export default function AttendanceLogsPage() {
                   {t('employees.applyFilters', 'Applica filtri')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Summary Detail Sidebar Modal (Drawer) ─────────────────────── */}
+      {summaryDrawerItem && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2500,
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)',
+          display: 'flex', justifyContent: 'flex-end',
+          animation: 'fadeIn 0.2s ease-out',
+        }} onClick={() => setSummaryDrawerItem(null)}>
+          <div style={{
+            width: isMobile ? '100%' : 520, height: '100%',
+            background: 'var(--surface)',
+            boxShadow: '-8px 0 32px rgba(0,0,0,0.25)',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden', zIndex: 2501,
+          }} onClick={(e) => e.stopPropagation()}>
+            {/* Top Color Strip */}
+            <div style={{ height: 4, background: 'linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%)' }} />
+
+            {/* Header */}
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'var(--surface-warm)',
+            }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1.5 }}>
+                  {t('attendance.shiftDetailBadge', 'ANALISI & DISCREPANZE')}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', marginTop: 2 }}>
+                  {t('attendance.shiftDetailTitle', 'Dettaglio Turno e Presenze')}
+                </div>
+              </div>
+              <button
+                onClick={() => setSummaryDrawerItem(null)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 24, color: 'var(--text-muted)', borderRadius: 8,
+                  width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.15s',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Employee & Store Overview Card */}
+              <div style={{
+                background: 'var(--background)', borderRadius: 14, border: '1px solid var(--border)',
+                padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
+              }}>
+                {/* Employee Field */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {getAvatarUrl(summaryDrawerItem.userAvatarFilename) ? (
+                    <img src={getAvatarUrl(summaryDrawerItem.userAvatarFilename)!} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: 44, height: 44, borderRadius: '50%', background: 'rgba(201,151,58,0.18)',
+                      color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, fontWeight: 800, border: '1px solid rgba(201,151,58,0.3)',
+                    }}>
+                      {summaryDrawerItem.userName?.[0]}{summaryDrawerItem.userSurname?.[0]}
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {t('employees.colName', 'Dipendente')}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
+                      {summaryDrawerItem.userName} {summaryDrawerItem.userSurname}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ height: 1, background: 'var(--border)' }} />
+
+                {/* Store & Date Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {t('common.store', 'Negozio')}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>📍</span> {summaryDrawerItem.storeName}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {summaryPeriod === 'daily' ? t('attendance.dateFrom', 'Data') : summaryPeriod === 'weekly' ? t('shifts.week', 'Settimana') : t('shifts.month', 'Mese')}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>📅</span> {summaryDrawerItem.periodLabel}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hours KPI Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                <div style={{ background: 'var(--background)', padding: 12, borderRadius: 12, border: '1px solid var(--border)', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('attendance.scheduledHours', 'Programmate')}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>
+                    {formatHoursStr(summaryDrawerItem.scheduledMinutes)}
+                  </div>
+                </div>
+                <div style={{ background: 'var(--background)', padding: 12, borderRadius: 12, border: '1px solid var(--border)', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('attendance.workedHours', 'Lavorate')}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--primary)', marginTop: 4 }}>
+                    {formatHoursStr(summaryDrawerItem.workedMinutes)}
+                  </div>
+                </div>
+                {(() => {
+                  const vBadge = formatVarianceBadge(summaryDrawerItem.varianceMinutes, t);
+                  return (
+                    <div style={{ background: vBadge.bg, padding: 12, borderRadius: 12, border: `1px solid ${vBadge.border}`, textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: vBadge.color, textTransform: 'uppercase' }}>{t('attendance.variance', 'Scostamento')}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: vBadge.color, marginTop: 4 }}>
+                        {vBadge.text}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Section 1: Shifts Assigned */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>📅</span> {t('attendance.scheduledShifts', 'Turni Programmati Assegnati')} ({summaryDrawerItem.shifts.length})
+                </div>
+                {summaryDrawerItem.shifts.length === 0 ? (
+                  <div style={{ padding: 16, background: 'var(--background)', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
+                    {t('attendance.noShiftsAssigned', 'Nessun turno programmato in questo periodo.')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {summaryDrawerItem.shifts.map(s => {
+                      const sMeta = SHIFT_STATUS_META[s.status] || SHIFT_STATUS_META.scheduled;
+                      return (
+                        <div key={s.id} style={{
+                          padding: 14, background: 'var(--background)', borderRadius: 10, border: '1px solid var(--border)',
+                          display: 'flex', flexDirection: 'column', gap: 6,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--primary)' }}>
+                              {s.startTime.slice(0,5)} → {s.endTime.slice(0,5)}
+                            </span>
+                            <span style={{
+                              fontSize: 11, fontWeight: 700, color: sMeta.color, background: sMeta.bg,
+                              border: `1px solid ${sMeta.border}`, padding: '2px 10px', borderRadius: 20,
+                              display: 'inline-flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: sMeta.dot }} />
+                              {t(sMeta.labelKey, sMeta.defaultLabel)}
+                            </span>
+                          </div>
+                          {s.breakMinutes ? (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              ☕ {t('shifts.break', 'Pausa')}: {s.breakMinutes} min
+                            </div>
+                          ) : null}
+                          {s.notes ? (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                              📝 {s.notes}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Attendance Actions */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>⏱</span> {t('attendance.recordedActions', 'Timbrature & Azioni Rilevate')} ({summaryDrawerItem.events.length})
+                </div>
+                {summaryDrawerItem.events.length === 0 ? (
+                  <div style={{ padding: 16, background: 'var(--background)', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
+                    {t('attendance.noEventsRecorded', 'Nessuna timbratura registrata nel periodo.')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {summaryDrawerItem.events.map(ev => {
+                      const meta = EVENT_META[ev.eventType] ?? EVENT_META.checkin;
+                      const labelKey = EVENT_TYPE_LABEL_KEYS[ev.eventType] ?? 'attendance.checkin';
+                      const srcBadge = SOURCE_BADGE[ev.source] ?? { label: ev.source.toUpperCase(), color: '#6b7280' };
+                      const dt = formatDateTime(ev.eventTime);
+                      return (
+                        <div key={ev.id} style={{
+                          padding: 12, background: 'var(--background)', borderRadius: 10, border: '1px solid var(--border)',
+                          borderLeft: `4px solid ${meta.dot}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{
+                              padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+                              background: meta.bg, color: meta.color, border: `1px solid ${meta.dot}33`,
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}>
+                              <span>{meta.icon}</span>
+                              {t(labelKey)}
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {dt.time} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>({dt.date})</span>
+                            </span>
+                          </div>
+                          <span style={{
+                            padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 800,
+                            background: `${srcBadge.color}18`, color: srcBadge.color, border: `1px solid ${srcBadge.color}30`,
+                            fontFamily: 'monospace',
+                          }}>
+                            {srcBadge.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer (Item 5: Removed print button) */}
+            <div style={{
+              padding: '16px 24px', borderTop: '1px solid var(--border)',
+              background: 'var(--surface-warm)', display: 'flex', justifyContent: 'flex-end', gap: 12,
+            }}>
+              <button
+                onClick={() => setSummaryDrawerItem(null)}
+                style={{
+                  padding: '9px 24px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)',
+                }}
+              >
+                {t('common.close', 'Chiudi')}
+              </button>
             </div>
           </div>
         </div>,
