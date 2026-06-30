@@ -6,6 +6,8 @@ import { listAttendanceEvents, AttendanceEvent, EventType, AttendanceListParams 
 import { listShifts, Shift } from '../../api/shifts';
 import { getEmployees } from '../../api/employees';
 import { getStores } from '../../api/stores';
+import { getLeaveRequests, LeaveRequest } from '../../api/leave';
+import * as XLSX from 'xlsx';
 import { useOfflineSync } from '../../context/OfflineSyncContext';
 import client, { getAvatarUrl } from '../../api/client';
 import { formatLocalDate } from '../../utils/date';
@@ -32,6 +34,9 @@ export interface SummaryRow {
   scheduledMinutes: number;
   workedMinutes: number;
   varianceMinutes: number;
+  vacationMinutes: number;
+  sickMinutes: number;
+  leaveMinutes: number;
 }
 
 function formatHoursStr(mins: number): string {
@@ -192,10 +197,11 @@ export default function AttendanceLogsPage() {
   const { isMobile, isTablet } = useBreakpoint();
 
   const canEdit   = user?.role === 'admin' || user?.role === 'hr';
-  const canDelete = user?.role === 'admin';
+  const canDelete = user?.role === 'admin' || user?.role === 'hr';
 
   const [events, setEvents]       = useState<AttendanceEvent[]>([]);
   const [shiftsList, setShiftsList] = useState<Shift[]>([]);
+  const [leaveRequestsList, setLeaveRequestsList] = useState<LeaveRequest[]>([]);
   const [total, setTotal]         = useState(0);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -725,29 +731,43 @@ export default function AttendanceLogsPage() {
     setLoading(true);
     setError(null);
     try {
-      const params: AttendanceListParams = { dateFrom, dateTo };
-      if (eventType) params.eventType = eventType as EventType;
-      if (filterStoreId) params.storeId = parseInt(filterStoreId, 10);
-      if (filterUserId) params.userId = parseInt(filterUserId, 10);
-      if (filterSearch.trim()) params.search = filterSearch.trim();
+      const activeDateFrom = viewMode === 'analytics' ? analyticsDateFrom : dateFrom;
+      const activeDateTo = viewMode === 'analytics' ? analyticsDateTo : dateTo;
+      const activeStoreId = viewMode === 'analytics' ? analyticsStoreId : filterStoreId;
+      const activeUserId = viewMode === 'analytics' ? analyticsUserId : filterUserId;
+      const activeSearch = viewMode === 'analytics' ? '' : filterSearch;
+      const activeEventType = viewMode === 'analytics' ? undefined : eventType;
+
+      const params: AttendanceListParams = { dateFrom: activeDateFrom, dateTo: activeDateTo };
+      if (activeEventType) params.eventType = activeEventType as EventType;
+      if (activeStoreId) params.storeId = parseInt(activeStoreId, 10);
+      if (activeUserId) params.userId = parseInt(activeUserId, 10);
+      if (activeSearch.trim()) params.search = activeSearch.trim();
       
-      const [res, shiftsRes] = await Promise.all([
+      const [res, shiftsRes, leaveRes] = await Promise.all([
         listAttendanceEvents(params),
         listShifts({
-          store_id: filterStoreId ? parseInt(filterStoreId, 10) : undefined,
-          user_id: filterUserId ? parseInt(filterUserId, 10) : undefined,
+          store_id: activeStoreId ? parseInt(activeStoreId, 10) : undefined,
+          user_id: activeUserId ? parseInt(activeUserId, 10) : undefined,
         }).catch(() => ({ shifts: [] })),
+        getLeaveRequests({
+          dateFrom: activeDateFrom,
+          dateTo: activeDateTo,
+          userId: activeUserId ? parseInt(activeUserId, 10) : undefined,
+          storeId: activeStoreId ? parseInt(activeStoreId, 10) : undefined,
+        }).catch(() => ({ requests: [], total: 0 })),
       ]);
       setEvents(res.events);
       setTotal(res.total);
       setShiftsList(shiftsRes.shifts || []);
+      setLeaveRequestsList(leaveRes.requests || []);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
       setError(axiosErr?.response?.data?.error ?? t('common.error'));
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, eventType, filterStoreId, filterUserId, filterSearch, lastSyncTime, t]);
+  }, [viewMode, dateFrom, dateTo, eventType, filterStoreId, filterUserId, filterSearch, analyticsDateFrom, analyticsDateTo, analyticsStoreId, analyticsUserId, lastSyncTime, t]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
@@ -803,6 +823,9 @@ export default function AttendanceLogsPage() {
           scheduledMinutes: 0,
           workedMinutes: 0,
           varianceMinutes: 0,
+          vacationMinutes: 0,
+          sickMinutes: 0,
+          leaveMinutes: 0,
         });
       }
       const row = map.get(key)!;
@@ -846,10 +869,76 @@ export default function AttendanceLogsPage() {
           scheduledMinutes: 0,
           workedMinutes: 0,
           varianceMinutes: 0,
+          vacationMinutes: 0,
+          sickMinutes: 0,
+          leaveMinutes: 0,
         });
       }
       const row = map.get(key)!;
       row.events.push(ev);
+    }
+
+    // Process approved leave requests
+    const activeLeaves = leaveRequestsList.filter(
+      r => r.status === 'approved' || r.status === 'HR approved' || r.status === 'admin approved' || r.status === 'admin_approved'
+    );
+
+    for (const lr of activeLeaves) {
+      const start = new Date(lr.startDate);
+      const end = new Date(lr.endDate);
+      
+      for (let curr = new Date(start); curr <= end; curr.setDate(curr.getDate() + 1)) {
+        const dayStr = curr.toISOString().split('T')[0];
+        const { dateKey, periodLabel } = getGroupInfo(dayStr);
+        const key = `${lr.userId}:${dateKey}`;
+
+        if (!map.has(key)) {
+          map.set(key, {
+            key,
+            userId: lr.userId,
+            userName: lr.userName || 'Dipendente',
+            userSurname: lr.userSurname || '',
+            userAvatarFilename: lr.userAvatarFilename,
+            storeId: lr.storeId,
+            storeName: lr.storeName || 'Store',
+            periodLabel,
+            dateKey,
+            shifts: [],
+            events: [],
+            scheduledMinutes: 0,
+            workedMinutes: 0,
+            varianceMinutes: 0,
+            vacationMinutes: 0,
+            sickMinutes: 0,
+            leaveMinutes: 0,
+          });
+        }
+        const row = map.get(key)!;
+
+        let dayMins = 0;
+        if (lr.leaveDurationType === 'short_leave' && lr.shortStartTime && lr.shortEndTime) {
+          const [sh, sm] = lr.shortStartTime.split(':').map(Number);
+          const [eh, em] = lr.shortEndTime.split(':').map(Number);
+          dayMins = (eh * 60 + em) - (sh * 60 + sm);
+          if (dayMins < 0) dayMins += 24 * 60;
+        } else {
+          const dayOfWeek = curr.getDay();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          if (!isWeekend) {
+            dayMins = 8 * 60; // 8 hours
+          }
+        }
+
+        if (lr.leaveType === 'vacation') {
+          if (lr.leaveDurationType === 'short_leave') {
+            row.leaveMinutes += dayMins;
+          } else {
+            row.vacationMinutes += dayMins;
+          }
+        } else if (lr.leaveType === 'sick') {
+          row.sickMinutes += dayMins;
+        }
+      }
     }
 
     const result = Array.from(map.values());
@@ -896,7 +985,7 @@ export default function AttendanceLogsPage() {
     }
 
     return filteredResult;
-  }, [events, shiftsList, summaryPeriod, filterSearch, i18n.language]);
+  }, [events, shiftsList, leaveRequestsList, summaryPeriod, filterSearch, i18n.language]);
 
   const analyticsData = useMemo(() => {
     let list = summaryRows;
@@ -945,25 +1034,110 @@ export default function AttendanceLogsPage() {
 
   async function handleExport(format: 'csv' | 'xlsx') {
     try {
-      const params = new URLSearchParams();
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (dateFrom)  params.append('date_from', dateFrom);
-      if (dateTo)    params.append('date_to', dateTo);
-      if (eventType) params.append('event_type', eventType);
-      if (filterStoreId) params.append('store_id', filterStoreId);
-      if (filterUserId) params.append('user_id', filterUserId);
-      if (filterSearch.trim()) params.append('search', filterSearch.trim());
-      if (timezone) params.append('timezone', timezone);
-      params.append('format', format);
-      const res = await client.get(`/attendance?${params.toString()}`, { responseType: 'blob' });
-      const ext = format === 'xlsx' ? 'xlsx' : 'csv';
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `presenze-${dateFrom}-${dateTo}.${ext}`; a.click();
-      URL.revokeObjectURL(url);
+      let headers: string[] = [];
+      let dataRows: any[][] = [];
+      let fileName = '';
+
+      if (viewMode === 'logs') {
+        headers = [
+          t('common.date', 'Data'),
+          t('common.time', 'Ora'),
+          t('employees.colSurname', 'Cognome'),
+          t('employees.colName', 'Nome'),
+          t('common.store', 'Negozio'),
+          t('attendance.eventType', 'Tipo Evento'),
+          t('attendance.colOrigin', 'Origine'),
+          t('attendance.colNotes', 'Note'),
+        ];
+        
+        dataRows = events.map((e) => {
+          const { date, time } = formatDateTime(e.eventTime);
+          return [
+            date,
+            time,
+            e.userSurname ?? '',
+            e.userName ?? '',
+            e.storeName ?? '',
+            t(`attendance.${e.eventType}`, e.eventType),
+            e.source ?? '',
+            e.notes ?? '',
+          ];
+        });
+        
+        fileName = `presenze-logs-${dateFrom}-${dateTo}.${format}`;
+      } else {
+        headers = [
+          t('employees.colSurname', 'Cognome'),
+          t('employees.colName', 'Nome'),
+          t('common.store', 'Negozio'),
+          t('common.period', 'Periodo'),
+          t('attendance.colScheduled', 'Ore Programmate'),
+          t('attendance.colWorked', 'Ore Lavorate'),
+          t('attendance.colVariance', 'Scostamento'),
+          t('leave.type_vacation', 'Ferie'),
+          t('leave.type_sick', 'Malattia'),
+          t('leave.duration_short_leave', 'Permessi')
+        ];
+        
+        const rowsToExport = viewMode === 'analytics' ? analyticsData.rows : summaryRows;
+        
+        dataRows = rowsToExport.map((r) => [
+          r.userSurname ?? '',
+          r.userName ?? '',
+          r.storeName ?? '',
+          r.periodLabel ?? '',
+          formatHoursStr(r.scheduledMinutes),
+          formatHoursStr(r.workedMinutes),
+          r.varianceMinutes > 0 ? `+${formatHoursStr(r.varianceMinutes)}` : (r.varianceMinutes < 0 ? `-${formatHoursStr(r.varianceMinutes)}` : '0h'),
+          formatHoursStr(r.vacationMinutes ?? 0),
+          formatHoursStr(r.sickMinutes ?? 0),
+          formatHoursStr(r.leaveMinutes ?? 0),
+        ]);
+        
+        const activeDateFrom = viewMode === 'analytics' ? analyticsDateFrom : dateFrom;
+        const activeDateTo = viewMode === 'analytics' ? analyticsDateTo : dateTo;
+        fileName = `presenze-riepilogo-${activeDateFrom}-${activeDateTo}.${format}`;
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+      
+      // Auto-width adjustment for columns
+      const cols = headers.map((h, i) => {
+        let maxLen = h.length;
+        for (const r of dataRows) {
+          const val = String(r[i] ?? '');
+          if (val.length > maxLen) {
+            maxLen = val.length;
+          }
+        }
+        return { wch: maxLen + 3 };
+      });
+      ws['!cols'] = cols;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Presenze');
+
+      if (format === 'xlsx') {
+        const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const csvContent = XLSX.utils.sheet_to_csv(ws);
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' }); // UTF-8 BOM
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { error?: string } } };
-      setError(axiosErr?.response?.data?.error ?? t('attendance.exportError'));
+      setError(t('attendance.exportError', 'Errore durante l\'esportazione dei dati.'));
     }
   }
 
@@ -1878,6 +2052,39 @@ export default function AttendanceLogsPage() {
                                 transition: 'width 0.4s ease',
                               }} />
                             </div>
+
+                            {/* Approved Leave Info */}
+                            {(r.vacationMinutes > 0 || r.sickMinutes > 0 || r.leaveMinutes > 0) && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
+                                {r.vacationMinutes > 0 && (
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                                    background: 'rgba(201,151,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
+                                    display: 'inline-flex', alignItems: 'center', gap: 4
+                                  }}>
+                                    🌴 {t('leave.type_vacation', 'Ferie')}: {formatHoursStr(r.vacationMinutes)}
+                                  </span>
+                                )}
+                                {r.sickMinutes > 0 && (
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                                    background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.18)',
+                                    display: 'inline-flex', alignItems: 'center', gap: 4
+                                  }}>
+                                    🤒 {t('leave.type_sick', 'Malattia')}: {formatHoursStr(r.sickMinutes)}
+                                  </span>
+                                )}
+                                {r.leaveMinutes > 0 && (
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                                    background: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.18)',
+                                    display: 'inline-flex', alignItems: 'center', gap: 4
+                                  }}>
+                                    📄 {t('leave.duration_short_leave', 'Permessi')}: {formatHoursStr(r.leaveMinutes)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
