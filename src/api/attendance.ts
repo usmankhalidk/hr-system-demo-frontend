@@ -42,6 +42,7 @@ export interface CheckinPayload {
   // Device binding: fingerprint of the employee's current device.
   // Will be sent as device_fingerprint to the backend.
   deviceFingerprint?: string;
+  deviceMetadata?: Record<string, any>;
   notes?: string;
 }
 

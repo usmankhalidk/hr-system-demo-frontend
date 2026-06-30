@@ -232,6 +232,7 @@ interface CheckResult {
   warn: boolean;
   fix: string;
   problem?: string;
+  valueChecked?: string;
 }
 
 type ComplianceCheck = {
@@ -274,7 +275,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!titleStr.trim(),
       problem: !titleStr.trim() ? "Title is missing. Indeed requires a job title on every posting." : undefined,
       warn: false,
-      fix: "Add a job title before publishing."
+      fix: "Add a job title before publishing.",
+      valueChecked: titleStr.trim() ? `"${titleStr}"` : 'Missing'
     },
     {
       id: 'T2',
@@ -284,7 +286,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: titleStr.length <= 100,
       problem: titleStr.length > 100 ? `Title is ${titleStr.length} characters. Indeed truncates titles over 100 characters in search results, which reduces click-through rate.` : undefined,
       warn: false,
-      fix: `Shorten the title to under 100 characters. Current length: ${titleStr.length}.`
+      fix: `Shorten the title to under 100 characters. Current length: ${titleStr.length}.`,
+      valueChecked: `${titleStr.length} chars`
     },
     {
       id: 'T3',
@@ -294,7 +297,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !/(€|\$|£|salary|stipend|RAL|ral|\d+k|\d+,\d{3})/i.test(titleStr),
       problem: /(€|\$|£|salary|stipend|RAL|ral|\d+k|\d+,\d{3})/i.test(titleStr) ? "Title appears to contain salary or compensation information. Indeed prohibits salary in job titles as it is filtered out by their parser." : undefined,
       warn: false,
-      fix: "Remove the salary reference from the title. Move it to the salary field if you want to display it."
+      fix: "Remove the salary reference from the title. Move it to the salary field if you want to display it.",
+      valueChecked: titleStr ? `"${titleStr}"` : 'Missing'
     },
     {
       id: 'T4',
@@ -313,6 +317,10 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       fix: (() => {
         const words = titleStr.split(/[^a-zA-Z]/).filter((w: string) => w.length >= 3 && w === w.toUpperCase() && !allowedAcronyms.has(w));
         return words.length > 0 ? `Change '${words[0]}' to title case or sentence case.` : "Change shouting ALL CAPS words to title case.";
+      })(),
+      valueChecked: (() => {
+        const words = titleStr.split(/[^a-zA-Z]/).filter((w: string) => w.length >= 3 && w === w.toUpperCase() && !allowedAcronyms.has(w));
+        return words.length > 0 ? `ALL CAPS words: ${words.join(', ')}` : 'No shouting words';
       })()
     },
     {
@@ -326,7 +334,11 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return match ? `Title contains promotional language or symbols: '${match[0]}'. Indeed demotes postings with clickbait titles.` : undefined;
       })(),
       warn: false,
-      fix: "Remove promotional language. Use a clean job title that describes the role."
+      fix: "Remove promotional language. Use a clean job title that describes the role.",
+      valueChecked: (() => {
+        const match = titleStr.match(/[★✓►•*!]{2,}|URGENTE|IMMEDIAT|subito|hiring now/i);
+        return match ? `Found: "${match[0]}"` : 'Clean';
+      })()
     },
 
     // GROUP 2 - Description
@@ -338,7 +350,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!data.description && data.description.trim().length > 0,
       problem: (!data.description || !data.description.trim()) ? "Description is missing. Indeed requires a job description on every posting." : undefined,
       warn: false,
-      fix: "Add a job description before publishing."
+      fix: "Add a job description before publishing.",
+      valueChecked: data.description ? 'Present' : 'Missing'
     },
     {
       id: 'D2',
@@ -348,7 +361,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: strippedDesc.length > 150,
       problem: strippedDesc.length <= 150 ? `Description is only ${strippedDesc.length} characters after stripping HTML. Indeed requires meaningful content — very short descriptions are rejected by the quality filter.` : undefined,
       warn: false,
-      fix: "Expand the description. Aim for at least 300 characters. Describe the role, responsibilities, and requirements."
+      fix: "Expand the description. Aim for at least 300 characters. Describe the role, responsibilities, and requirements.",
+      valueChecked: `${strippedDesc.length} chars (stripped)`
     },
     {
       id: 'D3',
@@ -358,7 +372,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: strippedDesc.length <= 10000,
       problem: strippedDesc.length > 10000 ? `Description is ${strippedDesc.length} characters. Indeed's feed parser silently truncates descriptions over 10,000 characters, which may cut off key information.` : undefined,
       warn: false,
-      fix: `Shorten the description to under 10,000 characters. Current length: ${strippedDesc.length}.`
+      fix: `Shorten the description to under 10,000 characters. Current length: ${strippedDesc.length}.`,
+      valueChecked: `${strippedDesc.length} chars`
     },
     {
       id: 'D4',
@@ -371,7 +386,11 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return matches ? `Description contains escaped HTML entities: '${Array.from(new Set(matches)).join(', ')}'. These render as raw text on the Indeed listing page (e.g. '&amp;' shows as '&amp;' instead of '&').` : undefined;
       })(),
       warn: false,
-      fix: "Unescape the HTML entities before saving, or fix the rich text editor output pipeline."
+      fix: "Unescape the HTML entities before saving, or fix the rich text editor output pipeline.",
+      valueChecked: (() => {
+        const matches = (data.description || '').match(/&amp;|&lt;|&gt;|&quot;|&#/g);
+        return matches ? `Found entities: ${Array.from(new Set(matches)).join(', ')}` : 'Clean (No entities)';
+      })()
     },
     {
       id: 'D5',
@@ -381,7 +400,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !(/style\s*=\s*["\'][^"\']*["\']/i.test(data.description || '')),
       problem: /style\s*=\s*["\'][^"\']*["\']/i.test(data.description || '') ? "Description contains inline CSS style attributes. Indeed strips these, which can break the visual structure of the listing." : undefined,
       warn: false,
-      fix: "Remove all style='...' attributes from the description HTML. Use semantic tags only (ul, li, b, p)."
+      fix: "Remove all style='...' attributes from the description HTML. Use semantic tags only (ul, li, b, p).",
+      valueChecked: /style\s*=\s*["\'][^"\']*["\']/i.test(data.description || '') ? 'Contains inline CSS' : 'Clean'
     },
     {
       id: 'D6',
@@ -394,7 +414,11 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return match ? `Description contains what appears to be salary figures: '${match[0]}'. Indeed requires salary to be in the dedicated salary field, not embedded in the description.` : undefined;
       })(),
       warn: false,
-      fix: "Move salary information to the dedicated salary/compensation field. Remove it from the description body."
+      fix: "Move salary information to the dedicated salary/compensation field. Remove it from the description body.",
+      valueChecked: (() => {
+        const match = (data.description || '').match(/(€|£|\$)\s*\d|RAL\s*\d|\d+\s*€|\d+k\s*(gross|nett|lordo|netto)/i);
+        return match ? `Found: "${match[0]}"` : 'No embedded salary';
+      })()
     },
     {
       id: 'D7',
@@ -404,7 +428,11 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !(/(send.*CV.*to|invia.*CV|manda.*CV|email.*your.*CV|allega.*documento|carta d.identità|codice fiscale|data di nascita|partita IVA)/i.test(data.description || '')),
       problem: (/(send.*CV.*to|invia.*CV|manda.*CV|email.*your.*CV|allega.*documento|carta d.identità|codice fiscale|data di nascita|partita IVA)/i.test(data.description || '')) ? "Description asks candidates to submit personal data (CV by email, ID document, tax code, date of birth). This violates GDPR and Indeed's data collection policy." : undefined,
       warn: false,
-      fix: "Remove personal data collection from the description. Candidates apply via the Indeed Apply form — do not ask for documents in the job text."
+      fix: "Remove personal data collection from the description. Candidates apply via the Indeed Apply form — do not ask for documents in the job text.",
+      valueChecked: (() => {
+        const match = (data.description || '').match(/(send.*CV.*to|invia.*CV|manda.*CV|email.*your.*CV|allega.*documento|carta d.identità|codice fiscale|data di nascita|partita IVA)/i);
+        return match ? `Found GDPR trigger: "${match[0]}"` : 'Clean';
+      })()
     },
     {
       id: 'D8',
@@ -421,7 +449,11 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return (hasExternal && match) ? `Description contains a link to an external domain: '${match[0]}'. Indeed's feed validator flags external links in descriptions as potential spam or redirect risks.` : undefined;
       })(),
       warn: false,
-      fix: "Remove the external URL from the description. If you need to reference company information, put it in the company profile fields."
+      fix: "Remove the external URL from the description. If you need to reference company information, put it in the company profile fields.",
+      valueChecked: (() => {
+        const match = (data.description || '').match(/https?:\/\/(?!(veylohr\.com|localhost|127\.0\.0\.1))[^\s"'<]+/i);
+        return match ? `Found external link: "${match[0]}"` : 'Clean';
+      })()
     },
     {
       id: 'D9',
@@ -431,7 +463,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: /(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || ''),
       problem: !/(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || '') ? "Job description is plain text without paragraph or list structure. In the description editor, break text into paragraphs or add at least one bullet list. Indeed expects <p>, <ul>, or <ol> tags for proper rendering." : undefined,
       warn: false,
-      fix: "Break the description into sections using paragraph tags or bullet lists. Add headings like 'Responsibilities', 'Requirements', 'What we offer'."
+      fix: "Break the description into sections using paragraph tags or bullet lists. Add headings like 'Responsibilities', 'Requirements', 'What we offer'.",
+      valueChecked: /(<ul>|<ol>|<li>|<p>|\n\n|<br)/i.test(data.description || '') ? 'HTML paragraphs/lists structured' : 'Plain text only'
     },
 
     // GROUP 3 - Location
@@ -443,7 +476,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!data.city && data.city.trim().length > 0 || isRemoteJob,
       problem: (!isRemoteJob && (!data.city || !data.city.trim())) ? "City is missing and the role is not marked as fully remote. Indeed requires a city for all on-site and hybrid roles." : undefined,
       warn: false,
-      fix: "Add a city to the job location, or mark the role as 'Fully remote'."
+      fix: "Add a city to the job location, or mark the role as 'Fully remote'.",
+      valueChecked: isRemoteJob ? 'Remote job (no city required)' : (data.city ? `"${data.city}"` : 'Missing')
     },
     {
       id: 'L2',
@@ -453,7 +487,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!data.country && data.country.trim().length > 0,
       problem: (!data.country || !data.country.trim()) ? "Country is missing. Indeed requires a country code on every posting (e.g. IT for Italy)." : undefined,
       warn: false,
-      fix: "Add the country field. For Italian jobs use 'IT'."
+      fix: "Add the country field. For Italian jobs use 'IT'.",
+      valueChecked: data.country ? `"${data.country}"` : 'Missing'
     },
     {
       id: 'L3',
@@ -465,7 +500,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return (!/^[A-Z]{2}$/.test(country) || !['IT', 'US', 'GB', 'FR', 'DE', 'ES', 'NL', 'BE', 'CH', 'AT', 'PL', 'SE', 'NO', 'DK'].includes(country)) ? `Country value '${country || 'missing'}' is not a valid ISO 3166-1 alpha-2 code. Indeed rejects non-standard country codes.` : undefined;
       })(),
       warn: false,
-      fix: "Use the two-letter ISO country code. For Italy: IT. For Germany: DE. For France: FR."
+      fix: "Use the two-letter ISO country code. For Italy: IT. For Germany: DE. For France: FR.",
+      valueChecked: data.country ? `"${data.country}"` : 'Missing'
     },
     {
       id: 'L4',
@@ -475,7 +511,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: true,
       problem: (data.state && /^\d+$/.test(data.state)) ? `State field contains a numeric value '${data.state}'. Indeed expects a province abbreviation or region name (e.g. MI for Milano, Lombardia), not a numeric taxonomy code.` : undefined,
       warn: !!(data.state && /^\d+$/.test(data.state)),
-      fix: "Replace the numeric state code with the correct Italian province abbreviation (MI for Milano, SA for Salerno, etc.) or the full region name (Lombardia, Campania)."
+      fix: "Replace the numeric state code with the correct Italian province abbreviation (MI for Milano, SA for Salerno, etc.) or the full region name (Lombardia, Campania).",
+      valueChecked: data.state ? `"${data.state}"` : 'Not set'
     },
     {
       id: 'L5',
@@ -485,7 +522,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: country === 'IT' ? (/^\d{5}$/.test(data.postalCode || data.jobPostalCode || '') || !(data.postalCode || data.jobPostalCode || '').trim()) : true,
       problem: (country === 'IT' && (data.postalCode && !/^\d{5}$/.test(data.postalCode))) ? `Postal code '${data.postalCode}' does not match the expected format for IT. Italian postal codes must be exactly 5 digits.` : undefined,
       warn: false,
-      fix: "Correct the postal code. Italian postal codes are 5 digits (e.g. 20121 for Milano city centre)."
+      fix: "Correct the postal code. Italian postal codes are 5 digits (e.g. 20121 for Milano city centre).",
+      valueChecked: (data.postalCode || data.jobPostalCode) ? `"${data.postalCode || data.jobPostalCode}"` : 'Not set'
     },
     {
       id: 'L6',
@@ -495,7 +533,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: [null, '', 'onsite', 'remote', 'hybrid'].includes(data.remoteType),
       problem: (![null, '', 'onsite', 'remote', 'hybrid'].includes(data.remoteType)) ? `Remote type value '${data.remoteType}' is not a valid Indeed value. Valid values are: 'remote' (emits 'Fully remote'), 'hybrid' (emits 'Hybrid remote'), or blank for on-site.` : undefined,
       warn: false,
-      fix: "Set remote type to one of the accepted values: remote, hybrid, or leave blank for on-site."
+      fix: "Set remote type to one of the accepted values: remote, hybrid, or leave blank for on-site.",
+      valueChecked: data.remoteType ? `"${data.remoteType}"` : 'Not set (onsite)'
     },
 
     // GROUP 4 - Required feed fields
@@ -514,7 +553,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return undefined;
       })(),
       warn: false,
-      fix: "Fix the reference number format. Valid example: JOB-2 or VY-IT-0042."
+      fix: "Fix the reference number format. Valid example: JOB-2 or VY-IT-0042.",
+      valueChecked: data.referenceId ? `"${data.referenceId}"` : 'Missing'
     },
     {
       id: 'R2',
@@ -524,7 +564,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!jobId,
       problem: !jobId ? "Requisition ID is missing. Indeed requires this field — it tracks the original role and must remain the same if the job is re-posted." : undefined,
       warn: false,
-      fix: `Add a requisition ID. Minimum: use 'REQ-${jobId}'. It must stay the same if this role is ever re-posted.`
+      fix: `Add a requisition ID. Minimum: use 'REQ-${jobId}'. It must stay the same if this role is ever re-posted.`,
+      valueChecked: jobId ? `REQ-${jobId}` : 'Missing'
     },
     {
       id: 'R3',
@@ -534,7 +575,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!companyName && companyName.trim().length > 0,
       problem: (!companyName || !companyName.trim()) ? "Source name is missing. Indeed requires <sourcename> for all ATS developer feeds to identify the parent organisation." : undefined,
       warn: false,
-      fix: "Set the sourcename value. For Fusaro Uomo this should be the parent company or group name (e.g. FUSARO UOMO)."
+      fix: "Set the sourcename value. For Fusaro Uomo this should be the parent company or group name (e.g. FUSARO UOMO).",
+      valueChecked: companyName ? `"${companyName}"` : 'Missing'
     },
     {
       id: 'R4',
@@ -544,7 +586,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!companyEmail && companyEmail.trim().length > 0,
       problem: (!companyEmail || !companyEmail.trim()) ? "Contact email is missing. Indeed's Search Quality team uses this to verify the business entity behind each job posting." : undefined,
       warn: false,
-      fix: "Add a contact email to the company record or job posting. Use the official @fusarouomo.it address."
+      fix: "Add a contact email to the company record or job posting. Use the official @fusarouomo.it address.",
+      valueChecked: companyEmail ? `"${companyEmail}"` : 'Missing'
     },
     {
       id: 'R5',
@@ -554,7 +597,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail),
       problem: (companyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail)) ? `Contact email '${companyEmail}' is not a valid email address format.` : undefined,
       warn: false,
-      fix: "Correct the email address format. Example: hr@fusarouomo.it"
+      fix: "Correct the email address format. Example: hr@fusarouomo.it",
+      valueChecked: companyEmail ? `"${companyEmail}"` : 'Missing'
     },
     {
       id: 'R6',
@@ -564,7 +608,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!data.language,
       problem: !data.language ? "Language field is missing. Indeed uses this to match the posting to the correct regional Indeed site." : undefined,
       warn: false,
-      fix: "Set language to the ISO 639-1 code for the job's language. For Italian jobs: 'it'. For English: 'en'."
+      fix: "Set language to the ISO 639-1 code for the job's language. For Italian jobs: 'it'. For English: 'en'.",
+      valueChecked: data.language ? `"${data.language}"` : 'Missing'
     },
     {
       id: 'R7',
@@ -574,7 +619,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: /^[a-z]{2}(-[A-Z]{2})?$/.test(data.language || ''),
       problem: (data.language && !/^[a-z]{2}(-[A-Z]{2})?$/.test(data.language)) ? `Language value '${data.language}' is not a valid ISO 639-1 language code.` : undefined,
       warn: false,
-      fix: "Use a two-letter ISO language code: 'it' for Italian, 'en' for English, 'de' for German."
+      fix: "Use a two-letter ISO language code: 'it' for Italian, 'en' for English, 'de' for German.",
+      valueChecked: data.language ? `"${data.language}"` : 'Missing'
     },
     {
       id: 'R8',
@@ -584,7 +630,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: ['fulltime', 'parttime', 'contract', 'internship', 'temporary'].includes(data.jobType),
       problem: (data.jobType && !['fulltime', 'parttime', 'contract', 'internship', 'temporary'].includes(data.jobType)) ? `Job type '${data.jobType}' is not a valid Indeed job type value. Valid values are: fulltime, parttime, contract, internship, temporary.` : undefined,
       warn: false,
-      fix: "Set the job type to one of the accepted values."
+      fix: "Set the job type to one of the accepted values.",
+      valueChecked: data.jobType ? `"${data.jobType}"` : 'Not set'
     },
     {
       id: 'R9',
@@ -594,7 +641,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: data.status === 'published',
       problem: data.status !== 'published' ? `Job status is '${data.status}', not 'published'. Indeed will not include unpublished jobs in the feed.` : undefined,
       warn: false,
-      fix: "Publish the job before submitting to Indeed."
+      fix: "Publish the job before submitting to Indeed.",
+      valueChecked: data.status ? `"${data.status}"` : 'Missing'
     },
 
     // GROUP 5 - Apply URL and feed URL
@@ -606,7 +654,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!jobId && !!jobCompanySlug,
       problem: (!jobId || !jobCompanySlug) ? "Apply URL is missing. Indeed requires a valid URL for candidates to apply." : undefined,
       warn: false,
-      fix: "Ensure the job has a company slug and is published so the apply URL can be constructed."
+      fix: "Ensure the job has a company slug and is published so the apply URL can be constructed.",
+      valueChecked: (jobId && jobCompanySlug) ? 'Available' : 'Missing ID or Slug'
     },
     (() => {
       let hostname = '';
@@ -632,7 +681,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         problem: isLocalhost 
           ? "Testing on localhost — passes automatically on production."
           : (!applyUrl.startsWith('https://') ? `Apply URL uses HTTP, not HTTPS: '${applyUrl}'. Indeed requires all URLs in the feed to use HTTPS.` : undefined),
-        fix: "Ensure your domain has a valid SSL certificate and all URLs use https://."
+        fix: "Ensure your domain has a valid SSL certificate and all URLs use https://.",
+        valueChecked: isLocalhost ? `Localhost (${hostname})` : applyUrl
       };
     })(),
     {
@@ -643,7 +693,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: applyUrl.includes('source=Indeed'),
       problem: !applyUrl.includes('source=Indeed') ? `Apply URL is missing the ?source=Indeed tracking parameter. Indeed requires this for click attribution.` : undefined,
       warn: false,
-      fix: `Append ?source=Indeed to the job URL when generating the feed. URL should be: ${applyUrl}?source=Indeed`
+      fix: `Append ?source=Indeed to the job URL when generating the feed. URL should be: ${applyUrl}?source=Indeed`,
+      valueChecked: applyUrl
     },
     {
       id: 'U4',
@@ -653,7 +704,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: true,
       problem: undefined,
       warn: false,
-      fix: "Fix the URL so it returns HTTP 200. If the job is unpublished, publish it first."
+      fix: "Fix the URL so it returns HTTP 200. If the job is unpublished, publish it first.",
+      valueChecked: applyUrl
     },
     {
       id: 'U5',
@@ -663,7 +715,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: applyUrl.includes('/jobs/') || applyUrl.includes('/careers/'),
       problem: !(applyUrl.includes('/jobs/') || applyUrl.includes('/careers/')) ? `Apply URL appears to point to the site root, not a specific job page: '${applyUrl}'. This would cause Indeed's crawler to reject the posting.` : undefined,
       warn: false,
-      fix: `Ensure the URL follows the pattern: https://veylohr.com/careers/{companySlug}/jobs/{jobId}`
+      fix: `Ensure the URL follows the pattern: https://veylohr.com/careers/{companySlug}/jobs/{jobId}`,
+      valueChecked: applyUrl
     },
 
     // GROUP 6 - Date fields
@@ -675,7 +728,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!data.publishedAt || !!data.createdAt,
       problem: (!data.publishedAt && !data.createdAt) ? "Publication date is missing. Indeed requires a date on every job posting." : undefined,
       warn: false,
-      fix: "Set the publication date. This is usually set automatically when the job is published."
+      fix: "Set the publication date. This is usually set automatically when the job is published.",
+      valueChecked: (data.publishedAt || data.createdAt) ? `"${data.publishedAt || data.createdAt}"` : 'Missing'
     },
     {
       id: 'DA2',
@@ -691,7 +745,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(dateVal) ? `Publication date is not in ISO 8601 format: '${dateVal}'. Indeed's current spec requires ISO 8601 (e.g. 2026-05-26T14:12:04Z). Using RFC 2822 format (e.g. Tue, 26 May 2026) may cause feed validation errors.` : undefined;
       })(),
       warn: false,
-      fix: "Change the date serialisation from toUTCString() to toISOString() in jobFeedHandler."
+      fix: "Change the date serialisation from toUTCString() to toISOString() in jobFeedHandler.",
+      valueChecked: (data.publishedAt || data.createdAt) ? `"${data.publishedAt || data.createdAt}"` : 'Missing'
     },
     {
       id: 'DA3',
@@ -701,7 +756,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: new Date(data.publishedAt || data.createdAt) <= new Date(),
       problem: new Date(data.publishedAt || data.createdAt) > new Date() ? `Publication date ${data.publishedAt || data.createdAt} is in the future. Indeed may not index a job with a future publication date.` : undefined,
       warn: false,
-      fix: "Set the publication date to today or a past date."
+      fix: "Set the publication date to today or a past date.",
+      valueChecked: (data.publishedAt || data.createdAt) ? `"${data.publishedAt || data.createdAt}"` : 'Missing'
     },
     {
       id: 'DA4',
@@ -711,7 +767,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !data.expirationDate || new Date(data.expirationDate) > new Date(data.publishedAt || data.createdAt),
       problem: (data.expirationDate && new Date(data.expirationDate) <= new Date(data.publishedAt || data.createdAt)) ? `Expiration date ${data.expirationDate} is before or equal to the publication date ${data.publishedAt || data.createdAt}. This is invalid.` : undefined,
       warn: false,
-      fix: "Set the expiration date to a future date after the publication date."
+      fix: "Set the expiration date to a future date after the publication date.",
+      valueChecked: data.expirationDate ? `"${data.expirationDate}"` : 'None configured'
     },
 
     // GROUP 7 - Indeed Apply readiness
@@ -723,7 +780,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!indeedApplyTokenConfigured,
       problem: !indeedApplyTokenConfigured ? "INDEED_APPLY_API_TOKEN is not configured. Without this, the <indeed-apply-data> block cannot be emitted and the job will not show the 'Easily Apply' button on Indeed." : undefined,
       warn: false,
-      fix: "Register in the Indeed Partner Console and add the API token to your .env file as INDEED_APPLY_API_TOKEN."
+      fix: "Register in the Indeed Partner Console and add the API token to your .env file as INDEED_APPLY_API_TOKEN.",
+      valueChecked: indeedApplyTokenConfigured ? 'Configured' : 'Not Configured'
     },
     {
       id: 'IA2',
@@ -733,7 +791,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
       ok: !!indeedApplyPostUrl && indeedApplyPostUrl.startsWith('https://'),
       problem: (!indeedApplyPostUrl || !indeedApplyPostUrl.startsWith('https://')) ? "Indeed Apply postUrl is missing or not HTTPS. Indeed will not POST candidate applications to a non-HTTPS endpoint." : undefined,
       warn: false,
-      fix: `Set the postUrl to: https://veylohr.com/api/public/indeed-apply/${jobCompanySlug}`
+      fix: `Set the postUrl to: https://veylohr.com/api/public/indeed-apply/${jobCompanySlug}`,
+      valueChecked: indeedApplyPostUrl || 'Missing'
     },
     {
       id: 'IA3',
@@ -763,7 +822,8 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         if (!indeedApplyPostUrl) missing.push('postUrl');
         if (!applyUrl) missing.push('jobUrl');
         return missing.length > 0 ? `Populate the missing fields: ${missing.join(', ')}. See the indeed-apply-data documentation for required parameters.` : "Configure indeed-apply block fields.";
-      })()
+      })(),
+      valueChecked: `Token: ${indeedApplyTokenConfigured ? 'OK' : 'Missing'}, URL: ${indeedApplyPostUrl ? 'OK' : 'Missing'}`
     }
   ];
 
@@ -1176,47 +1236,83 @@ const IndeedComplianceModal: React.FC<IndeedComplianceModalProps> = ({ reference
                             style={{
                               listStyle: 'none',
                               cursor: 'pointer',
-                              padding: '12px 14px',
+                              padding: '8px 12px',
                               display: 'flex',
                               alignItems: 'center',
                               gap: 12,
                               userSelect: 'none',
                             }}
                           >
-                            <span style={{ fontSize: 14, minWidth: 24, display: 'inline-flex', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 13, minWidth: 20, display: 'inline-flex', justifyContent: 'center' }}>
                               {check.warn ? '⚠️' : (check.ok ? '✅' : '❌')}
                             </span>
-                            <span style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-primary)', flex: 1 }}>
-                              {check.name}
-                              <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'monospace', background: '#F1F5F9', color: '#64748B', padding: '1px 5px', borderRadius: 4 }}>
+                            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', flex: 1, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span>{check.name}</span>
+                              <span style={{ fontSize: 9.5, fontFamily: 'monospace', background: '#F1F5F9', color: '#64748B', padding: '1px 5px', borderRadius: 4 }}>
                                 {check.id}
                               </span>
+                              {check.valueChecked && (
+                                <span 
+                                  style={{ 
+                                    fontSize: 11, 
+                                    color: 'var(--text-secondary)',
+                                    background: 'var(--background)',
+                                    padding: '1px 6px',
+                                    borderRadius: 6,
+                                    fontWeight: 450,
+                                    display: 'inline-block',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '300px',
+                                    border: '1px solid var(--border)'
+                                  }}
+                                  title={check.valueChecked}
+                                >
+                                  {t('ats.currentValue', 'Current')}: {check.valueChecked}
+                                </span>
+                              )}
                             </span>
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            <span style={{ fontSize: 11.5, color: check.warn ? '#D97706' : (check.ok ? '#16A34A' : '#DC2626'), fontWeight: 600 }}>
                               {check.warn ? 'Warning' : (check.ok ? 'Pass' : 'Action Required')}
                             </span>
                           </summary>
 
-                          <div style={{ borderTop: '1px solid var(--border)', padding: '12px 14px', background: 'rgba(248,250,252,0.5)', display: 'grid', gap: 8 }}>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                          <div style={{ borderTop: '1px solid var(--border)', padding: '10px 12px', background: 'rgba(248,250,252,0.5)', display: 'grid', gap: 6 }}>
+                            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
                               <strong>Rule:</strong> {check.rule}
                             </div>
+                            {check.valueChecked && (
+                              <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                                <strong>Current Value:</strong> <code style={{ 
+                                  background: check.ok ? '#F0FDF4' : '#FEF2F2', 
+                                  color: check.ok ? '#166534' : '#991B1B', 
+                                  border: check.ok ? '1px solid #BBF7D0' : '1px solid #FCA5A5',
+                                  padding: '2px 6px', 
+                                  borderRadius: 4, 
+                                  fontSize: 12, 
+                                  fontFamily: 'monospace',
+                                  display: 'inline-block',
+                                  marginTop: 2
+                                }}>{check.valueChecked}</code>
+                              </div>
+                            )}
                             {(!check.ok || check.warn) && (
                               <>
                                 {(check.problem || check.warn) && (
-                                  <div style={{ fontSize: 13, color: check.warn ? '#D97706' : '#DC2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                  <div style={{ fontSize: 12.5, color: check.warn ? '#D97706' : '#DC2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                     <span>⚠️</span> <span><strong>{check.warn ? 'Warning' : 'Error'}:</strong> {check.problem}</span>
                                   </div>
                                 )}
                                 <div
                                   style={{
                                     marginTop: 4,
-                                    padding: '10px 12px',
+                                    padding: '8px 10px',
                                     borderRadius: 8,
                                     background: check.warn ? '#FFFDF5' : '#FFFBEB',
                                     border: check.warn ? '1px solid #FDE8E8' : '1px solid #FDE68A',
                                     color: '#92400E',
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     lineHeight: 1.5,
                                   }}
                                 >
@@ -6720,6 +6816,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
   const [copiedGeneral, setCopiedGeneral] = useState(false);
   const [copiedCompany, setCopiedCompany] = useState(false);
   const [complianceRefId, setComplianceRefId] = useState<string | null>(null);
+  const [complianceJobCompanyId, setComplianceJobCompanyId] = useState<number | undefined>(undefined);
   const [expandedJobIds, setExpandedJobIds] = useState<Set<number>>(new Set());
   const [searchParams] = useSearchParams();
   const deepLinkJobId = searchParams.get('jobId') ? Number(searchParams.get('jobId')) : null;
@@ -7464,7 +7561,10 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                                 </Button>
                               )}
                               <button
-                                onClick={() => setComplianceRefId(job.referenceId || String(job.id))}
+                                onClick={() => {
+                                  setComplianceRefId(job.referenceId || String(job.id));
+                                  setComplianceJobCompanyId(job.companyId);
+                                }}
                                 style={{
                                   background: 'none',
                                   border: 'none',
@@ -7808,8 +7908,11 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
       {complianceRefId !== null && (
         <IndeedComplianceModal
           referenceId={complianceRefId}
-          onClose={() => setComplianceRefId(null)}
-          companyId={companyId || defaultCompanyId || undefined}
+          onClose={() => {
+            setComplianceRefId(null);
+            setComplianceJobCompanyId(undefined);
+          }}
+          companyId={complianceJobCompanyId}
         />
       )}
     </div>
