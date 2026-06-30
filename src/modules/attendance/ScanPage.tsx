@@ -158,6 +158,7 @@ export default function ScanPage() {
   const [lastErrorCode, setLastErrorCode] = useState<string | null>(null);
   const [clock, setClock]           = useState(() => new Date());
   const fingerprintRef = useRef<string | null>(null);
+  const deviceMetadataRef = useRef<Record<string, any> | null>(null);
 
   // ── Daily state machine ──────────────────────────────────────────────────
   const [dailyState, setDailyState] = useState<DailyState | null>(null);
@@ -373,7 +374,7 @@ export default function ScanPage() {
     if (!dailyState) return false;
 
     if (!dailyState.hasShift || dailyState.hasLeave) {
-      showToast(t('attendance.noShiftToday'), 'error');
+      showToast(dailyState.hasLeave ? t('attendance.onLeaveToday') : t('attendance.noShiftToday'), 'error');
       return false;
     }
 
@@ -435,6 +436,7 @@ export default function ScanPage() {
       if (!fingerprintRef.current) {
         const fp = await getDeviceFingerprint();
         fingerprintRef.current = fp.fingerprint;
+        deviceMetadataRef.current = fp.metadata;
       }
 
       // If offline, skip the API call and go straight to local queue
@@ -445,7 +447,8 @@ export default function ScanPage() {
       await recordCheckin({ 
         qrToken: token, 
         eventType, 
-        deviceFingerprint: fingerprintRef.current ?? undefined 
+        deviceFingerprint: fingerprintRef.current ?? undefined,
+        deviceMetadata: deviceMetadataRef.current ?? undefined,
       });
       
       setStage('success');
@@ -683,7 +686,7 @@ export default function ScanPage() {
           )}
 
           {/* No-shift banner */}
-          {!stateLoading && dailyState && !dailyState.hasShift && (
+          {!stateLoading && dailyState && (!dailyState.hasShift || dailyState.hasLeave) && (
             <div style={{
               padding: '12px 20px',
               borderRadius: 10,
@@ -693,7 +696,7 @@ export default function ScanPage() {
               fontSize: 14, fontWeight: 600,
               maxWidth: 400, width: '100%', textAlign: 'center',
             }}>
-              {t('attendance.noShiftToday')}
+              {dailyState.hasLeave ? t('attendance.onLeaveToday') : t('attendance.noShiftToday')}
             </div>
           )}
 
