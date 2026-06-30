@@ -87,11 +87,16 @@ export interface LeaveListParams {
   dateFrom?: string;
   dateTo?: string;
   storeId?: number;
+  page?: number;
+  limit?: number;
 }
 
 export interface LeaveListResponse {
   requests: LeaveRequest[];
   total: number;
+  page?: number;
+  limit?: number;
+  pages?: number;
 }
 
 export interface BalanceResponse {

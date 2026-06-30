@@ -960,13 +960,9 @@ export default function AdminLeavePanel() {
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const today       = formatLocalDate(new Date());
-  const now         = new Date();
-  const monthStart  = today.slice(0, 8) + '01';
-  const lastDay     = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const monthEnd    = formatLocalDate(lastDay);
 
-  const [dateFrom, setDateFrom]     = useState(monthStart);
-  const [dateTo,   setDateTo]       = useState(monthEnd);
+  const [dateFrom, setDateFrom]     = useState('');
+  const [dateTo,   setDateTo]       = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType]     = useState('');
   const [filterStoreId, setFilterStoreId] = useState('');
@@ -1003,8 +999,8 @@ export default function AdminLeavePanel() {
     setTempStoreId('');
     setTempStatus('');
     setTempType('');
-    setTempDateFrom(monthStart);
-    setTempDateTo(monthEnd);
+    setTempDateFrom('');
+    setTempDateTo('');
   };
 
   const activeFiltersCount = useMemo(() => {
@@ -1012,10 +1008,10 @@ export default function AdminLeavePanel() {
     if (filterStatus) count++;
     if (filterType) count++;
     if (filterStoreId) count++;
-    if (dateFrom && dateFrom !== monthStart) count++;
-    if (dateTo && dateTo !== monthEnd) count++;
+    if (dateFrom) count++;
+    if (dateTo) count++;
     return count;
-  }, [filterStatus, filterType, filterStoreId, dateFrom, dateTo, monthStart, monthEnd]);
+  }, [filterStatus, filterType, filterStoreId, dateFrom, dateTo]);
 
   // ── Create modal ───────────────────────────────────────────────────────────
   const [createOpen, setCreateOpen]     = useState(false);
@@ -1062,19 +1058,52 @@ export default function AdminLeavePanel() {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string> = {};
+      const params: {
+        dateFrom?: string;
+        dateTo?: string;
+        status?: LeaveStatus;
+        leaveType?: 'vacation' | 'sick';
+      } = {};
       if (dateFrom)     params.dateFrom    = dateFrom;
       if (dateTo)       params.dateTo      = dateTo;
       if (filterStatus) params.status      = filterStatus as LeaveStatus;
       if (filterType)   params.leaveType   = filterType as 'vacation' | 'sick';
-      const [res, pendingRes] = await Promise.all([
-        getLeaveRequests(params),
+      const pageSize = 100;
+      const [firstPage, pendingRes] = await Promise.all([
+        getLeaveRequests({ ...params, page: 1, limit: pageSize }),
         getPendingLeaveApprovals().catch(() => ({ requests: [] as LeaveRequest[], total: 0 })),
       ]);
+      const totalPages = firstPage.pages ?? Math.ceil((firstPage.total ?? firstPage.requests.length) / pageSize);
+      const remainingPages = totalPages > 1
+        ? await Promise.all(
+            Array.from({ length: totalPages - 1 }, (_, index) =>
+              getLeaveRequests({ ...params, page: index + 2, limit: pageSize })
+            )
+          )
+        : [];
+      const allFetchedRequests = [
+        ...firstPage.requests,
+        ...remainingPages.flatMap((page) => page.requests),
+      ];
       const merged = new Map<number, LeaveRequest>();
-      for (const req of res.requests) merged.set(req.id, req);
+      const pendingApprovalIds = new Set(pendingRes.requests.map((req) => req.id));
+      for (const req of allFetchedRequests) merged.set(req.id, req);
       for (const req of pendingRes.requests) merged.set(req.id, req);
-      setRequests(Array.from(merged.values()));
+      const matchesAppliedFilters = (req: LeaveRequest) => {
+        if (filterStatus && req.status !== filterStatus) return false;
+        if (filterType && req.leaveType !== filterType) return false;
+        if (dateFrom && req.startDate < dateFrom) return false;
+        if (dateTo && req.endDate > dateTo) return false;
+        return true;
+      };
+      const sortedRequests = Array.from(merged.values())
+        .filter(matchesAppliedFilters)
+        .sort((a, b) => {
+          const approvalPriority = Number(pendingApprovalIds.has(b.id)) - Number(pendingApprovalIds.has(a.id));
+          if (approvalPriority !== 0) return approvalPriority;
+          return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+        });
+      setRequests(sortedRequests);
     } catch {
       setError(t('common.error'));
     } finally {

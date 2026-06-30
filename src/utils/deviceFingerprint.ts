@@ -7,6 +7,46 @@ export type DeviceFingerprintResult = {
   metadata: Record<string, any>;
 };
 
+const DEVICE_TOKEN_KEY = 'veylohr_device_token';
+const DEVICE_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 5;
+
+function readLocalDeviceToken(): string | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_TOKEN_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalDeviceToken(token: string): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(DEVICE_TOKEN_KEY, token);
+    }
+  } catch {
+    // Some iOS browser contexts can deny storage access; the cookie mirror is the fallback.
+  }
+}
+
+function readCookieDeviceToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const cookie = document.cookie
+    .split('; ')
+    .find((part) => part.startsWith(`${DEVICE_TOKEN_KEY}=`));
+  if (!cookie) return null;
+  try {
+    return decodeURIComponent(cookie.slice(DEVICE_TOKEN_KEY.length + 1));
+  } catch {
+    return null;
+  }
+}
+
+function writeCookieDeviceToken(token: string): void {
+  if (typeof document === 'undefined') return;
+  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${DEVICE_TOKEN_KEY}=${encodeURIComponent(token)}; Max-Age=${DEVICE_TOKEN_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secure}`;
+}
+
 function fnv1aHex(input: string, seed: number): string {
   let h = 0x811c9dc5 ^ seed;
   for (let i = 0; i < input.length; i++) {
@@ -43,13 +83,12 @@ function generateUUID(): string {
 export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
   const nav = typeof navigator !== 'undefined' ? navigator : ({} as any);
 
-  let token = typeof localStorage !== 'undefined' ? localStorage.getItem('veylohr_device_token') : null;
+  let token = readLocalDeviceToken() || readCookieDeviceToken();
   if (!token) {
     token = generateUUID();
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('veylohr_device_token', token);
-    }
   }
+  writeLocalDeviceToken(token);
+  writeCookieDeviceToken(token);
 
   const fingerprint = await sha256Hex(token);
 

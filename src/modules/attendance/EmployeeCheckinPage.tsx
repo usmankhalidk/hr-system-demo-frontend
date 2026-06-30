@@ -116,6 +116,7 @@ export default function EmployeeCheckinPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean; code?: string } | null>(null);
   const fingerprintRef = useRef<string | null>(null);
+  const deviceMetadataRef = useRef<Record<string, any> | null>(null);
 
   // ── QR Security Token state ──────────────────────────────────────────────
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -300,7 +301,7 @@ export default function EmployeeCheckinPage() {
       return false;
     }
     if (!fullDailyState.hasShift || fullDailyState.hasLeave) {
-      showToast(t('attendance.noShiftToday'), 'error');
+      showToast(fullDailyState.hasLeave ? t('attendance.onLeaveToday') : t('attendance.noShiftToday'), 'error');
       return false;
     }
 
@@ -354,6 +355,7 @@ export default function EmployeeCheckinPage() {
       if (!fingerprintRef.current) {
         const fp = await getDeviceFingerprint();
         fingerprintRef.current = fp.fingerprint;
+        deviceMetadataRef.current = fp.metadata;
       }
 
       const eventTime = new Date().toISOString();
@@ -407,6 +409,7 @@ export default function EmployeeCheckinPage() {
           qrToken: activeQrToken,
           eventType,
           deviceFingerprint: fingerprintRef.current || undefined,
+          deviceMetadata: deviceMetadataRef.current || undefined,
         });
         // Update local state to reflect the recorded action
         setFullDailyState((prev) => {
@@ -499,6 +502,7 @@ export default function EmployeeCheckinPage() {
         if (!fingerprintRef.current) {
           const fp = await getDeviceFingerprint();
           fingerprintRef.current = fp.fingerprint;
+          deviceMetadataRef.current = fp.metadata;
         }
         const deviceFingerprint = fingerprintRef.current ?? undefined;
         const res = await listMyAttendanceEvents({ dateFrom, deviceFingerprint });
@@ -607,8 +611,8 @@ export default function EmployeeCheckinPage() {
         </div>
       )}
 
-      {/* No-shift warning */}
-      {!stateLoading && fullDailyState && !fullDailyState.hasShift && (
+      {/* No-shift / leave warning */}
+      {!stateLoading && fullDailyState && (!fullDailyState.hasShift || fullDailyState.hasLeave) && (
         <div style={{
           borderRadius: 'var(--radius-md)',
           padding: '10px 16px', fontSize: 13, fontWeight: 600,
@@ -618,7 +622,7 @@ export default function EmployeeCheckinPage() {
           color: '#dc2626',
         }}>
           <span style={{ fontSize: 16 }}>🚫</span>
-          {t('attendance.noShiftToday')}
+          {fullDailyState.hasLeave ? t('attendance.onLeaveToday') : t('attendance.noShiftToday')}
         </div>
       )}
 
