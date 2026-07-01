@@ -247,6 +247,13 @@ export default function AttendanceLogsPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  // ── Force Logs View Mode for Non-Admin/Non-HR Roles ───────────────────────
+  useEffect(() => {
+    if (user && user.role !== 'admin' && user.role !== 'hr') {
+      setViewMode('logs');
+    }
+  }, [user]);
+
   // ── Edit modal state ───────────────────────────────────────────────────────
   const [editingEvent, setEditingEvent]         = useState<AttendanceEvent | null>(null);
   const [editType, setEditType]                 = useState('');
@@ -1405,101 +1412,103 @@ export default function AttendanceLogsPage() {
             />
           </div>
 
-          {/* View Mode Switcher Dropdown (Right, before Filter) */}
-          <div ref={viewDropdownRef} style={{ position: 'relative', flexShrink: 0 }}>
-            <button
-              onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
-              style={{
-                height: 42,
-                padding: '0 14px',
-                borderRadius: 12,
-                fontSize: 13,
-                fontWeight: 700,
-                border: viewMode === 'summary' ? '1px solid rgba(201,151,58,0.5)' : '1px solid var(--border)',
-                background: viewMode === 'summary' ? 'linear-gradient(135deg, rgba(201,151,58,0.18) 0%, rgba(201,151,58,0.06) 100%)' : 'var(--background)',
-                color: viewMode === 'summary' ? 'var(--accent)' : 'var(--text)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                transition: 'all 0.2s',
-                boxShadow: viewMode === 'summary' ? '0 2px 10px rgba(201,151,58,0.2)' : 'none',
-              }}
-            >
-              {viewMode === 'logs' ? <ClipboardList size={16} style={{ color: 'var(--primary)' }} /> : viewMode === 'summary' ? <BarChart2 size={16} style={{ color: 'var(--accent)' }} /> : <PieChart size={16} style={{ color: '#2563eb' }} />}
-              <span>{viewMode === 'logs' ? t('attendance.viewLogs', 'Registro Log') : viewMode === 'summary' ? t('attendance.viewSummary', 'Riepilogo Ore Lavorate') : t('attendance.viewAnalytics', 'Analisi Grafica & Confronto')}</span>
-              <ChevronDown size={14} style={{ transform: isViewDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', opacity: 0.7 }} />
-            </button>
+          {/* View Mode Switcher Dropdown (Right, before Filter) — admin/hr only */}
+          {(user?.role === 'admin' || user?.role === 'hr') && (
+            <div ref={viewDropdownRef} style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
+                style={{
+                  height: 42,
+                  padding: '0 14px',
+                  borderRadius: 12,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  border: viewMode === 'summary' ? '1px solid rgba(201,151,58,0.5)' : '1px solid var(--border)',
+                  background: viewMode === 'summary' ? 'linear-gradient(135deg, rgba(201,151,58,0.18) 0%, rgba(201,151,58,0.06) 100%)' : 'var(--background)',
+                  color: viewMode === 'summary' ? 'var(--accent)' : 'var(--text)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'all 0.2s',
+                  boxShadow: viewMode === 'summary' ? '0 2px 10px rgba(201,151,58,0.2)' : 'none',
+                }}
+              >
+                {viewMode === 'logs' ? <ClipboardList size={16} style={{ color: 'var(--primary)' }} /> : viewMode === 'summary' ? <BarChart2 size={16} style={{ color: 'var(--accent)' }} /> : <PieChart size={16} style={{ color: '#2563eb' }} />}
+                <span>{viewMode === 'logs' ? t('attendance.viewLogs', 'Registro Log') : viewMode === 'summary' ? t('attendance.viewSummary', 'Riepilogo Ore Lavorate') : t('attendance.viewAnalytics', 'Analisi Grafica & Confronto')}</span>
+                <ChevronDown size={14} style={{ transform: isViewDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', opacity: 0.7 }} />
+              </button>
 
-            {isViewDropdownOpen && (
-              <div style={{
-                position: 'absolute',
-                right: 0,
-                top: '100%',
-                marginTop: 6,
-                width: 250,
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 14,
-                boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
-                padding: 6,
-                zIndex: 1000,
-                animation: 'fadeIn 0.15s ease-out',
-              }}>
-                {[
-                  { id: 'logs', label: t('attendance.viewLogs', 'Registro Log'), icon: ClipboardList, desc: 'Timbrature grezze e marcature' },
-                  { id: 'summary', label: t('attendance.viewSummary', 'Riepilogo Ore Lavorate'), icon: BarChart2, desc: 'Ore programmate vs lavorate' },
-                  { id: 'analytics', label: t('attendance.viewAnalytics', 'Analisi Grafica & Confronto'), icon: PieChart, desc: 'Grafici e confronto visivo' },
-                ].map((item) => {
-                  const active = viewMode === item.id;
-                  const IconComp = item.icon;
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        setViewMode(item.id as 'logs' | 'summary' | 'analytics');
-                        setIsViewDropdownOpen(false);
-                      }}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: 10,
-                        cursor: 'pointer',
-                        background: active ? 'linear-gradient(135deg, rgba(201,151,58,0.15) 0%, rgba(201,151,58,0.05) 100%)' : 'transparent',
-                        color: active ? 'var(--accent)' : 'var(--text-primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        transition: 'background 0.15s',
-                        marginBottom: 2,
-                      }}
-                      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--surface-warm)'; }}
-                      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 8,
-                          background: active ? 'var(--accent)' : 'var(--background)',
-                          color: active ? '#fff' : 'var(--text-secondary)',
+              {isViewDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '100%',
+                  marginTop: 6,
+                  width: 250,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+                  padding: 6,
+                  zIndex: 1000,
+                  animation: 'fadeIn 0.15s ease-out',
+                }}>
+                  {[
+                    { id: 'logs', label: t('attendance.viewLogs', 'Registro Log'), icon: ClipboardList, desc: 'Timbrature grezze e marcature' },
+                    { id: 'summary', label: t('attendance.viewSummary', 'Riepilogo Ore Lavorate'), icon: BarChart2, desc: 'Ore programmate vs lavorate' },
+                    { id: 'analytics', label: t('attendance.viewAnalytics', 'Analisi Grafica & Confronto'), icon: PieChart, desc: 'Grafici e confronto visivo' },
+                  ].map((item) => {
+                    const active = viewMode === item.id;
+                    const IconComp = item.icon;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setViewMode(item.id as 'logs' | 'summary' | 'analytics');
+                          setIsViewDropdownOpen(false);
+                        }}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          cursor: 'pointer',
+                          background: active ? 'linear-gradient(135deg, rgba(201,151,58,0.15) 0%, rgba(201,151,58,0.05) 100%)' : 'transparent',
+                          color: active ? 'var(--accent)' : 'var(--text-primary)',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <IconComp size={16} />
+                          justifyContent: 'space-between',
+                          transition: 'background 0.15s',
+                          marginBottom: 2,
+                        }}
+                        onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                        onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            background: active ? 'var(--accent)' : 'var(--background)',
+                            color: active ? '#fff' : 'var(--text-secondary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            <IconComp size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>{item.label}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{item.desc}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>{item.label}</div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{item.desc}</div>
-                        </div>
+                        {active && <Check size={16} style={{ color: 'var(--accent)' }} />}
                       </div>
-                      {active && <Check size={16} style={{ color: 'var(--accent)' }} />}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Filter Button */}
           <button
