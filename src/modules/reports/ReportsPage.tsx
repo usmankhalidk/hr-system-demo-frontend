@@ -31,8 +31,21 @@ interface ReportData {
   lastSize: string;
   nextRun: string;
   lastGenerated: string | null;
-  day?: number; // 1 (Mon) - 5 (Fri)
+  day?: number;
   time?: string; // HH:MM
+}
+
+function isMonthlyDayBasedReport(reportId: string): boolean {
+  return false;
+}
+
+function getClampedMonthDay(year: number, monthIndex: number, targetDay: number): number {
+  const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
+  return Math.min(Math.max(targetDay, 1), lastDayOfMonth);
+}
+
+function getMonthlyDayLabel(day: number, lang: string): string {
+  return lang === 'it' ? `Giorno ${day}` : `Day ${day}`;
 }
 
 function formatBytes(bytes: number): string {
@@ -70,7 +83,7 @@ function formatExecutionTime(dateStr: string | null, lang: string, isAnomalyDail
   return formatter.format(date).replace(',', ' ·');
 }
 
-function getNextExecution(day: number, time: string, lang: string): string {
+function getNextExecution(day: number, time: string, lang: string, reportId?: string): string {
   if (!day || !time) return '--/--/---- · --:--';
   const [hours, minutes] = time.split(':').map(Number);
   const now = new Date();
@@ -261,7 +274,7 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
     displayFrequency = isIt ? `Lunedì - Venerdì ${formattedTime}` : `Monday - Friday ${formattedTime}`;
   } else {
     displayFrequency = ((report.id === 'hr_weekly' || report.id === 'admin_monthly' || report.id === 'hr_monthly') && report.day && report.time)
-      ? `${t(`reports.days.${report.day}`)} ${report.time}`
+      ? `${isMonthlyDayBasedReport(report.id) ? getMonthlyDayLabel(report.day, i18n.language) : t(`reports.days.${report.day}`)} ${report.time}`
       : t(`reports.data.${report.id}.schedule`);
   }
 
@@ -460,8 +473,10 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
                       fontSize: 14, fontFamily: 'var(--font-body)', outline: 'none'
                     }}
                   >
-                    {[1, 2, 3, 4, 5, 6, 7].map(d => (
-                      <option key={d} value={d}>{t(`reports.days.${d}`)}</option>
+                    {(isMonthlyDayBasedReport(report.id) ? Array.from({ length: 31 }, (_, index) => index + 1) : [1, 2, 3, 4, 5, 6, 7]).map(d => (
+                      <option key={d} value={d}>
+                        {isMonthlyDayBasedReport(report.id) ? d : t(`reports.days.${d}`)}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -588,7 +603,7 @@ export function ReportsPage() {
         if (dbConf) {
           const nextRun = r.id === 'anomaly_daily'
             ? getNextExecutionAnomalyDaily(dbConf.time, i18n.language)
-            : getNextExecution(dbConf.day, dbConf.time, i18n.language);
+            : getNextExecution(dbConf.day, dbConf.time, i18n.language, r.id);
           return {
             ...r,
             day: dbConf.day,
@@ -613,7 +628,7 @@ export function ReportsPage() {
           status: defaultR.status,
           nextRun: r.id === 'anomaly_daily'
             ? getNextExecutionAnomalyDaily(defaultR.time || '07:00', i18n.language)
-            : getNextExecution(defaultR.day || 1, defaultR.time || '07:00', i18n.language),
+            : getNextExecution(defaultR.day || 1, defaultR.time || '07:00', i18n.language, r.id),
           runCount: 0,
           lastGenerated: null
         };
@@ -698,7 +713,7 @@ export function ReportsPage() {
           if (updated.id === 'anomaly_daily') {
             updated.nextRun = getNextExecutionAnomalyDaily(updated.time || '07:00', i18n.language);
           } else if (updated.day && updated.time) {
-            updated.nextRun = getNextExecution(updated.day, updated.time, i18n.language);
+            updated.nextRun = getNextExecution(updated.day, updated.time, i18n.language, updated.id);
           }
           return updated;
         }
@@ -812,8 +827,21 @@ export function ReportsPage() {
         return next;
       } else {
         const next = new Date(now);
-        next.setHours(hours, minutes, 0, 0);
         const targetDay = r.day || 1;
+
+        if (isMonthlyDayBasedReport(r.id)) {
+          next.setFullYear(now.getFullYear(), now.getMonth(), getClampedMonthDay(now.getFullYear(), now.getMonth(), targetDay));
+          next.setHours(hours, minutes, 0, 0);
+          if (next.getTime() <= now.getTime()) {
+            const nextMonth = now.getMonth() === 11 ? 0 : now.getMonth() + 1;
+            const nextYear = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+            next.setFullYear(nextYear, nextMonth, getClampedMonthDay(nextYear, nextMonth, targetDay));
+            next.setHours(hours, minutes, 0, 0);
+          }
+          return next;
+        }
+
+        next.setHours(hours, minutes, 0, 0);
         let daysUntil = (targetDay - now.getDay() + 7) % 7;
         if (daysUntil === 0 && next.getTime() <= now.getTime()) {
           daysUntil = 7;
