@@ -272,8 +272,8 @@ export default function ShiftDrawer({
 
   async function loadAllShiftEmployees(): Promise<Employee[]> {
     const [shiftPlanningEmployees, allActiveEmployees] = await Promise.all([
-      loadEmployeesByPages({ status: 'active', forShiftPlanning: true }),
-      loadEmployeesByPages({ status: 'active' }),
+      loadEmployeesByPages({ status: 'active', forShiftPlanning: true, excludeAdmins: true }),
+      loadEmployeesByPages({ status: 'active', excludeAdmins: true }),
     ]);
 
     const merged = new Map<number, Employee>();

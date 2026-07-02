@@ -127,6 +127,11 @@ export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
       type: uaResult.device.type || null,
     },
     language: nav.language || null,
+    platform: nav.platform || platform || null,
+    vendor: nav.vendor || null,
+    hardwareConcurrency: typeof nav.hardwareConcurrency === 'number' ? nav.hardwareConcurrency : null,
+    deviceMemory: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
+    maxTouchPoints: typeof nav.maxTouchPoints === 'number' ? nav.maxTouchPoints : null,
     timezone: (() => {
       try {
         return new Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -137,6 +142,8 @@ export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
     screen: typeof window !== 'undefined' && window.screen ? {
       width: window.screen.width || null,
       height: window.screen.height || null,
+      colorDepth: window.screen.colorDepth || null,
+      pixelRatio: typeof window.devicePixelRatio === 'number' ? window.devicePixelRatio : null,
     } : null,
   };
 
