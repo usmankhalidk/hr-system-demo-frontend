@@ -274,6 +274,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, mobileOpen, onMobileClose 
     ],
     area_manager: [
       { labelKey: 'nav.dashboard', path: '/', icon: <IconDashboard /> },
+      { labelKey: 'nav.companies', path: '/aziende', icon: <IconBuilding /> },
       { labelKey: 'nav.stores', path: '/negozi', icon: <IconStore />, permissionKey: 'negozi' },
       { labelKey: 'nav.terminals', path: '/terminali', icon: <IconTerminal />, permissionKey: 'terminali' },
       { labelKey: 'nav.employees', path: '/dipendenti', icon: <IconUsers />, permissionKey: 'dipendenti' },

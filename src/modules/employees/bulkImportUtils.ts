@@ -450,10 +450,12 @@ export function exportEmployeesToExcel(employees: Employee[], filename = 'employ
     'Cognome':                 emp.surname ?? '',
     'Email':                   emp.email ?? '',
     'Ruolo':                   emp.role ?? '',
+    'Azienda':                 emp.companyName ?? '',
     'Negozio':                 emp.storeName ?? '',
     'Supervisore':             emp.supervisorName ?? '',
     'Dipartimento':            emp.department ?? '',
     'Data assunzione':         emp.hireDate ?? '',
+    'Orario di lavoro':        emp.workingType === 'full_time' ? 'Tempo Pieno' : emp.workingType === 'part_time' ? 'Part-time' : '',
     'Fine contratto':          emp.contractEndDate ?? '',
     'Tipo contratto':          emp.contractType ?? '',
     'Ore settimanali':         emp.weeklyHours != null ? emp.weeklyHours : '',
@@ -461,6 +463,7 @@ export function exportEmployeesToExcel(employees: Employee[], filename = 'employ
     'Data nascita':            emp.dateOfBirth ?? '',
     'Nazionalità':             emp.nationality ?? '',
     'Genere':                  emp.gender ?? '',
+    'CAP':                     emp.cap ?? '',
     'IBAN':                    emp.iban ?? '',
     'Primo soccorso':          emp.firstAidFlag ? 'Sì' : 'No',
   }));
@@ -471,11 +474,11 @@ export function exportEmployeesToExcel(employees: Employee[], filename = 'employ
 
   // Set uniform column widths for readability
   const colCount = Object.keys(rows[0] ?? {
-    'Nome': '', 'Cognome': '', 'Email': '', 'Ruolo': '', 'Negozio': '',
-    'Supervisore': '', 'Dipartimento': '', 'Data assunzione': '',
+    'Nome': '', 'Cognome': '', 'Email': '', 'Ruolo': '', 'Azienda': '', 'Negozio': '',
+    'Supervisore': '', 'Dipartimento': '', 'Data assunzione': '', 'Orario di lavoro': '',
     'Fine contratto': '', 'Tipo contratto': '', 'Ore settimanali': '',
     'Email personale': '', 'Data nascita': '', 'Nazionalità': '',
-    'Genere': '', 'IBAN': '', 'Primo soccorso': '',
+    'Genere': '', 'CAP': '', 'IBAN': '', 'Primo soccorso': '',
   }).length;
   worksheet['!cols'] = Array(colCount).fill({ wch: 22 });
 

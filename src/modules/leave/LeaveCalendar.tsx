@@ -43,6 +43,13 @@ function formatLeaveStatus(status: string, t: any): string {
   return t(`leave.status_${normalized}`, status || t('leave.status_pending', 'Pending'));
 }
 
+function formatCompactLeaveStatus(status: string, t: any): string {
+  const normalized = String(status ?? '').toLowerCase();
+  if (normalized.includes('rejected')) return t('leave.status_rejected', 'Rejected');
+  if (normalized.includes('pending') || normalized === 'pending') return t('leave.pending_short', 'pend.');
+  return t('leave.approved_label', 'Approved');
+}
+
 function LegendDot({ color, label, icon }: { color: string; label: string; icon?: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
@@ -510,9 +517,7 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
                               color: color,
                               border: `1px solid ${border}`,
                             }}>
-                              {req.status.includes('pending') || req.status === 'pending'
-                                ? t('leave.pending_short', 'pend.')
-                                : t('leave.approved_label', 'Appr.')}
+                              {formatCompactLeaveStatus(req.status, t)}
                             </div>
                           </div>
                         );

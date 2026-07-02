@@ -6871,10 +6871,11 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
 
   const defaultCompanyId = useMemo(() => {
     if (companyId) return companyId;
+    if ((allowedCompanyIds?.length ?? 0) > 1) return null;
     if (targetCompanyId) return targetCompanyId;
     if (user?.companyId) return user.companyId;
     return companies[0]?.id ?? null;
-  }, [companyId, targetCompanyId, user?.companyId, companies]);
+  }, [companyId, targetCompanyId, user?.companyId, companies, allowedCompanyIds]);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -7123,7 +7124,8 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
     const result = Object.keys(groups).map((companyIdStr) => {
       const id = Number(companyIdStr);
       const comp = companyMap.get(id);
-      const name = comp?.name || `Company #${id}`;
+      const jobCompanyName = groups[id].find((job) => job.companyName?.trim())?.companyName?.trim();
+      const name = jobCompanyName || comp?.name || `Company #${id}`;
 
       // Sort: Published -> Draft -> Closed
       const sortedJobs = [...groups[id]].sort((a, b) => {
@@ -11254,12 +11256,13 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
 // ─── Main ATSPage ─────────────────────────────────────────────────────────────
 
 export default function ATSPage() {
-  const { user } = useAuth();
+  const { user, allowedCompanyIds } = useAuth();
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
 
   const isStoreManager = user?.role === 'store_manager';
   const canEdit = !!user && ['admin', 'hr'].includes(user.role);
+  const canViewJobs = !!user && ['admin', 'hr', 'area_manager'].includes(user.role);
   const canViewRisks = !!user && ['admin', 'hr'].includes(user.role);
   const canFeedback = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
   const canTag = !!user && ['admin', 'hr', 'area_manager', 'store_manager'].includes(user.role);
@@ -11302,8 +11305,7 @@ export default function ATSPage() {
   const deepLinkCandidateId = searchParams.get('candidateId') ? Number(searchParams.get('candidateId')) : null;
 
   const isSuperAdmin = !!user?.isSuperAdmin;
-  const isAdmin = user?.role === 'admin';
-  const canFilterCompany = isSuperAdmin || isAdmin;
+  const canFilterCompany = isSuperAdmin || ((allowedCompanyIds?.length ?? 0) > 1);
 
   // Fetch all companies for the filter if authorized
   useEffect(() => {
@@ -11338,7 +11340,7 @@ export default function ATSPage() {
       { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
     ]
     : [
-      ...(canEdit ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
+      ...(canViewJobs ? [{ key: 'jobs', label: t('ats.tabJobs'), icon: '💼' }] : []),
       { key: 'candidates', label: t('ats.tabCandidates'), icon: '👥' },
       { key: 'interviews', label: t('ats.tabInterviews', 'Interviews'), icon: '📋' },
       { key: 'calendar', label: t('ats.tabCalendar', 'Calendar'), icon: '📅' },
@@ -11486,7 +11488,7 @@ export default function ATSPage() {
         )}
       </div>
 
-      {tab === 'jobs' && canEdit && <JobsPanel canEdit={canEdit} companyId={selectedCompanyId} />}
+      {tab === 'jobs' && canViewJobs && <JobsPanel canEdit={canEdit} companyId={selectedCompanyId} />}
       {tab === 'indeed' && canEdit && <IndeedPanel canEdit={canEdit} companyId={selectedCompanyId} />}
       {tab === 'candidates' && <KanbanPanel canEdit={canEdit} canFeedback={canFeedback} canTag={canTag} companyId={selectedCompanyId} preSelectedCandidateId={deepLinkCandidateId} companies={companies} />}
       {tab === 'interviews' && <InterviewsPanel companyId={selectedCompanyId} />}

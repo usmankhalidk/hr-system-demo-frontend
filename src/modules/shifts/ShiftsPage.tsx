@@ -310,6 +310,7 @@ export default function ShiftsPage() {
   }
 
   function handleShiftClick(shift: Shift) {
+    if (user?.role === 'employee') return;
     setEditingShift(shift);
     setPrefillDate(undefined);
     setPrefillUserId(undefined);

@@ -158,13 +158,13 @@ function AppRoutes() {
       } />
 
       <Route path="/aziende" element={
-        <ProtectedRoute roles={['admin', 'hr']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
           <Layout title={t('nav.companies')}><SystemCompanyManagement /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/aziende/:slug" element={
-        <ProtectedRoute roles={['admin', 'hr']}>
+        <ProtectedRoute roles={['admin', 'hr', 'area_manager']}>
           <Layout title={t('nav.companies')}><CompanyDetail /></Layout>
         </ProtectedRoute>
       } />
