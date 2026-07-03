@@ -177,7 +177,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
   const isSuperAdmin = user?.isSuperAdmin === true;
 
-  const isPrivilegedCompanyUser = user?.role === 'admin' || user?.role === 'hr' || isSuperAdmin;
+  const isPrivilegedCompanyUser = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager' || isSuperAdmin;
   const canPickCompany = true;
   const isCompanyEditable = isPrivilegedCompanyUser;
   const canAssignAdminRole = user?.isSuperAdmin === true || user?.role === 'admin';
@@ -219,7 +219,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
 
   // Load companies for admin/hr so grouped users can pick a target company
   useEffect(() => {
-    if (user?.role === 'admin' || user?.role === 'hr' || isSuperAdmin) {
+    if (user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager' || isSuperAdmin) {
       getCompanies()
         .then(setCompanies)
         .catch(() => setCompanies([]));
@@ -357,7 +357,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
     Promise.all([
       getEmployee(employeeId),
       // Pre-load companies if user can pick company
-      (user?.role === 'admin' || user?.role === 'hr' || isSuperAdmin) ? getCompanies() : Promise.resolve([])
+      (user?.role === 'admin' || user?.role === 'hr' || user?.role === 'area_manager' || isSuperAdmin) ? getCompanies() : Promise.resolve([])
     ])
       .then(async ([emp, companiesList]) => {
         if (!mounted) return;
