@@ -1,51 +1,11 @@
 import { UAParser } from 'ua-parser-js';
 
 export type DeviceFingerprintResult = {
-  // Hex-encoded fingerprint (stable for the same device profile).
+  // Deterministic fingerprint built from stable device/browser characteristics.
   fingerprint: string;
   // Raw metadata used to build the fingerprint (stored in DB as JSONB).
   metadata: Record<string, any>;
 };
-
-const DEVICE_TOKEN_KEY = 'veylohr_device_token';
-const DEVICE_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 5;
-
-function readLocalDeviceToken(): string | null {
-  try {
-    return typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_TOKEN_KEY) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLocalDeviceToken(token: string): void {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(DEVICE_TOKEN_KEY, token);
-    }
-  } catch {
-    // Some iOS browser contexts can deny storage access; the cookie mirror is the fallback.
-  }
-}
-
-function readCookieDeviceToken(): string | null {
-  if (typeof document === 'undefined') return null;
-  const cookie = document.cookie
-    .split('; ')
-    .find((part) => part.startsWith(`${DEVICE_TOKEN_KEY}=`));
-  if (!cookie) return null;
-  try {
-    return decodeURIComponent(cookie.slice(DEVICE_TOKEN_KEY.length + 1));
-  } catch {
-    return null;
-  }
-}
-
-function writeCookieDeviceToken(token: string): void {
-  if (typeof document === 'undefined') return;
-  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${DEVICE_TOKEN_KEY}=${encodeURIComponent(token)}; Max-Age=${DEVICE_TOKEN_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secure}`;
-}
 
 function fnv1aHex(input: string, seed: number): string {
   let h = 0x811c9dc5 ^ seed;
@@ -69,28 +29,54 @@ async function sha256Hex(input: string): Promise<string> {
   return fnv1aHex(input, 1) + fnv1aHex(input, 7) + fnv1aHex(input, 13) + fnv1aHex(input, 29);
 }
 
-function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+function normalizeText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizeObject(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, any>) : {};
+}
+
+async function computeDeviceProfileHash(metadata: Record<string, any>): Promise<string> {
+  const root = normalizeObject(metadata);
+  const browser = normalizeObject(root.browser);
+  const os = normalizeObject(root.os);
+  const device = normalizeObject(root.device);
+  const screen = normalizeObject(root.screen);
+
+  const profile = {
+    userAgent: normalizeText(root.userAgent),
+    browserName: normalizeText(browser.name),
+    browserVersion: normalizeText(browser.version),
+    osName: normalizeText(os.name),
+    osVersion: normalizeText(os.version),
+    deviceModel: normalizeText(device.model),
+    deviceVendor: normalizeText(device.vendor),
+    deviceType: normalizeText(device.type),
+    language: normalizeText(root.language),
+    timezone: normalizeText(root.timezone),
+    platform: normalizeText(root.platform),
+    vendor: normalizeText(root.vendor),
+    hardwareConcurrency: normalizeNumber(root.hardwareConcurrency),
+    deviceMemory: normalizeNumber(root.deviceMemory),
+    maxTouchPoints: normalizeNumber(root.maxTouchPoints),
+    screenWidth: normalizeNumber(screen.width),
+    screenHeight: normalizeNumber(screen.height),
+    screenColorDepth: normalizeNumber(screen.colorDepth),
+    screenPixelRatio: normalizeNumber(screen.pixelRatio),
+  };
+
+  return sha256Hex(JSON.stringify(profile));
 }
 
 export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
   const nav = typeof navigator !== 'undefined' ? navigator : ({} as any);
-
-  let token = readLocalDeviceToken() || readCookieDeviceToken();
-  if (!token) {
-    token = generateUUID();
-  }
-  writeLocalDeviceToken(token);
-  writeCookieDeviceToken(token);
-
-  const fingerprint = await sha256Hex(token);
 
   let model: string | null = null;
   let platform: string | null = null;
@@ -147,5 +133,17 @@ export async function getDeviceFingerprint(): Promise<DeviceFingerprintResult> {
     } : null,
   };
 
-  return { fingerprint, metadata };
+  const profileHash = await computeDeviceProfileHash(metadata);
+  const stableMetadata = {
+    ...metadata,
+    stableDevice: {
+      source: 'web-profile-v1',
+      hash: profileHash,
+    },
+  };
+
+  return {
+    fingerprint: `web-profile-v1:${profileHash}`,
+    metadata: stableMetadata,
+  };
 }
