@@ -181,6 +181,7 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   const canPickCompany = true;
   const isCompanyEditable = isPrivilegedCompanyUser;
   const canAssignAdminRole = user?.isSuperAdmin === true || user?.role === 'admin';
+  const isAreaManagerCreator = user?.role === 'area_manager' && !isEditMode;
 
   const selectedCompanyId = formData.companyId ? parseInt(formData.companyId, 10) : NaN;
   const effectiveCompanyId = Number.isNaN(selectedCompanyId)
@@ -335,10 +336,14 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
   // Auto-generate uniqueId and temp password for new employees only
   useEffect(() => {
     if (!isEditMode) {
-      setFormData((prev) => ({ ...prev, uniqueId: generateUniqueId() }));
+      setFormData((prev) => ({
+        ...prev,
+        uniqueId: generateUniqueId(),
+        role: isAreaManagerCreator ? 'employee' : prev.role,
+      }));
       setTempPassword(generateTempPassword());
     }
-  }, [isEditMode]);
+  }, [isAreaManagerCreator, isEditMode]);
 
   useEffect(() => {
     if (!open) return;
@@ -1184,7 +1189,9 @@ export function EmployeeForm({ open = true, employeeId, onSuccess, onCancel, onC
                     <CustomSelect
                       value={formData.role || null}
                       onChange={(value) => set('role', value || '')}
-                      options={[
+                      options={isAreaManagerCreator ? [
+                        { value: 'employee', label: tRole('employee') },
+                      ] : [
                         ...((canAssignAdminRole || formData.role === 'admin') ? [{ value: 'admin', label: tRole('admin') }] : []),
                         { value: 'hr', label: tRole('hr') },
                         { value: 'area_manager', label: tRole('area_manager') },
