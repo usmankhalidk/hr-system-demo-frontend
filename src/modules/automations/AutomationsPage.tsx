@@ -65,7 +65,6 @@ const INITIAL_DATA: AutomationCategory[] = [
       { id: 'anomalia_ritardo', icon: <Clock size={18} />, labelKey: 'automations.items.anomalia_ritardo.label', descKey: 'automations.items.anomalia_ritardo.desc', roles: ['store_manager', 'area_manager'], triggerKey: 'automations.items.anomalia_ritardo.trigger', enabled: true },
       { id: 'anomalia_noshow', icon: <AlertTriangle size={18} />, labelKey: 'automations.items.anomalia_noshow.label', descKey: 'automations.items.anomalia_noshow.desc', roles: ['store_manager', 'area_manager', 'hr'], triggerKey: 'automations.items.anomalia_noshow.trigger', enabled: true },
       { id: 'notifica_turni', icon: <Mail size={18} />, labelKey: 'automations.items.notifica_turni.label', descKey: 'automations.items.notifica_turni.desc', roles: ['employee'], triggerKey: 'automations.items.notifica_turni.trigger', enabled: false },
-      { id: 'turno_scoperto', icon: <Calendar size={18} />, labelKey: 'automations.items.turno_scoperto.label', descKey: 'automations.items.turno_scoperto.desc', roles: ['hr', 'area_manager'], triggerKey: 'automations.items.turno_scoperto.trigger', enabled: true },
       { id: 'approvazione_turni', icon: <CheckCircle size={18} />, labelKey: 'automations.items.approvazione_turni.label', descKey: 'automations.items.approvazione_turni.desc', roles: ['hr'], triggerKey: 'automations.items.approvazione_turni.trigger', enabled: false },
     ],
   },
