@@ -3000,11 +3000,11 @@ const en = {
         desc: 'Notify HR and Area Manager when a shift is planned but has no employee assigned.',
         trigger: '24h before shift start',
       },
-      approvazione_turni: {
-        label: 'Shift approval reminder',
-        desc: 'Remind HR to approve shifts in "Planned" status for more than 48h.',
-        trigger: 'Every 48h if pending shifts',
-      },
+        approvazione_turni: {
+          label: 'Shift approval reminder',
+          desc: 'Remind HR to approve shifts in "Confirmed" status after 24h.',
+          trigger: 'Every 24h if pending shifts',
+        },
       ferie_approvazione: {
         label: 'Leave request notification',
         desc: 'Send notification to the manager when an employee submits a leave or holiday request.',

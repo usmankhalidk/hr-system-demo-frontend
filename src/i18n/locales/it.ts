@@ -3001,11 +3001,11 @@ const it = {
         desc: 'Notifica HR e Area Manager quando un turno è pianificato ma non ha un dipendente assegnato.',
         trigger: '24h prima inizio turno',
       },
-      approvazione_turni: {
-        label: 'Promemoria approvazione turni',
-        desc: 'Ricorda all\'HR di approvare i turni in stato "Pianificato" da più di 48h.',
-        trigger: 'Ogni 48h se ci sono turni in attesa',
-      },
+        approvazione_turni: {
+          label: 'Promemoria approvazione turni',
+          desc: 'Ricorda all\'HR di approvare i turni in stato "Confermato" dopo 24h.',
+          trigger: 'Ogni 24h se ci sono turni in attesa',
+        },
       ferie_approvazione: {
         label: 'Notifica richiesta ferie',
         desc: 'Invia notifica al responsabile quando un dipendente presenta una richiesta di ferie o permesso.',
