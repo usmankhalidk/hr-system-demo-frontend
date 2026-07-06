@@ -44,8 +44,8 @@ export interface StoreManagerHomeData {
   stats?: {
     activeEmployees: number;
     presentEmployees: number;
-    weeklyHours: number;
-    overtime: number;
+    ongoingOnboarding: number;
+    pendingLeaveRequests: number;
   };
 }
 
@@ -558,18 +558,18 @@ export const StoreManagerHome: React.FC<StoreManagerHomeProps> = ({ data }) => {
           description={t('home.storeManager.presentEmployeesDesc')}
         />
         <StatCard
-          label={t('home.storeManager.totalWeeklyHours')}
-          value={stats?.weeklyHours ?? 0}
-          icon={<IconClock />}
+          label={t('home.storeManager.ongoingOnboarding')}
+          value={stats?.ongoingOnboarding ?? 0}
+          icon={<CheckCircle2 size={20} />}
           accent="#15803D"
-          description={t('home.storeManager.totalWeeklyHoursDesc')}
+          description={t('home.storeManager.ongoingOnboardingDesc')}
         />
         <StatCard
-          label={t('home.storeManager.overtime')}
-          value={stats?.overtime ?? 0}
-          icon={<IconTrendingUp />}
+          label={t('home.storeManager.pendingLeaveRequests')}
+          value={stats?.pendingLeaveRequests ?? 0}
+          icon={<CalendarDays size={20} />}
           accent="#7C3AED"
-          description={t('home.storeManager.overtimeDesc')}
+          description={t('home.storeManager.pendingLeaveRequestsDesc')}
         />
       </div>
 
