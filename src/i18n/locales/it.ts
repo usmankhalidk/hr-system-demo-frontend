@@ -3063,6 +3063,8 @@ const it = {
       totalReports: 'Report generati',
       recipients: 'Destinatari',
       runNow: 'Esegui ora',
+      activateSchedule: 'Attiva programmazione',
+      pauseSchedule: 'Sospendi programmazione',
       configure: 'Configura',
       downloadLast: 'Scarica ultimo'
     },
@@ -3075,7 +3077,8 @@ const it = {
       sectionsLabel: 'SEZIONI INCLUSE',
       statusLabel: 'STATO',
       cancel: 'Annulla',
-      save: 'Salva modifiche'
+      save: 'Salva modifiche',
+      saveSuccess: 'Modifiche salvate con successo. Attiva la programmazione per avviare gli invii automatici.'
     },
     archive: {
       title: 'Archivio report recenti',

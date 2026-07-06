@@ -88,14 +88,27 @@ function getNextExecution(day: number, time: string, lang: string, reportId?: st
   const [hours, minutes] = time.split(':').map(Number);
   const now = new Date();
   const next = new Date(now);
-  next.setHours(hours, minutes, 0, 0);
-
-  let daysUntil = (day - now.getDay() + 7) % 7;
-  if (daysUntil === 0 && next.getTime() <= now.getTime()) {
-    daysUntil = 7;
+  if (isMonthlyDayBasedReport(reportId || '')) {
+    next.setFullYear(now.getFullYear(), now.getMonth(), getClampedMonthDay(now.getFullYear(), now.getMonth(), day));
+    next.setHours(hours, minutes, 0, 0);
+    if (next.getTime() <= now.getTime()) {
+      const nextMonth = now.getMonth() === 11 ? 0 : now.getMonth() + 1;
+      const nextYear = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+      next.setFullYear(nextYear, nextMonth, getClampedMonthDay(nextYear, nextMonth, day));
+      next.setHours(hours, minutes, 0, 0);
+    }
+  } else {
+    next.setHours(hours, minutes, 0, 0);
   }
 
-  next.setDate(now.getDate() + daysUntil);
+  if (!isMonthlyDayBasedReport(reportId || '')) {
+    const todayWeekday = now.getDay() === 0 ? 7 : now.getDay();
+    let daysUntil = (day - todayWeekday + 7) % 7;
+    if (daysUntil === 0 && next.getTime() <= now.getTime()) {
+      daysUntil = 7;
+    }
+    next.setDate(now.getDate() + daysUntil);
+  }
 
   const formatter = new Intl.DateTimeFormat(lang, {
     weekday: 'short',
@@ -371,14 +384,14 @@ function ReportCard({ report, onEdit, onRun, onDownloadLast }: {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <rect x="5" y="5" width="14" height="14" rx="1" fill="currentColor" />
                 </svg>
-                STOP
+                {t('reports.card.pauseSchedule')}
               </>
             ) : (
               <>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>
-                {t('reports.card.runNow')}
+                {t('reports.card.activateSchedule')}
               </>
             )}
           </button>
@@ -411,24 +424,22 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
   const [recipients, setRecipients] = useState([...report.recipients]);
   const [newEmail, setNewEmail] = useState('');
   const [sections, setSections] = useState(() => {
-    if (report.id === 'hr_monthly') {
-      const weeklySet = new Set(AVAILABLE_SECTIONS['hr_weekly']);
-      return new Set(report.sections.filter(s => weeklySet.has(s)));
-    }
-    return new Set(report.sections);
+    const availableSections = new Set(AVAILABLE_SECTIONS[report.id] || report.sections);
+    return new Set(report.sections.filter(s => availableSections.has(s)));
   });
   const [day, setDay] = useState<number>(report.day || 1);
   const [time, setTime] = useState<string>(report.time || '07:00');
 
-  const available = report.id === 'hr_monthly'
-    ? AVAILABLE_SECTIONS['hr_weekly']
-    : (AVAILABLE_SECTIONS[report.id] || report.sections);
+  const available = AVAILABLE_SECTIONS[report.id] || report.sections;
 
   const name = t(`reports.data.${report.id}.name`);
 
   const handleSave = () => {
+    const normalizedRecipients = Array.from(
+      new Set(recipients.map((recipient) => recipient.trim()).filter((recipient) => recipient.includes('@')))
+    );
     onSave({
-      recipients,
+      recipients: normalizedRecipients,
       sections: Array.from(sections),
       day,
       time,
@@ -720,7 +731,7 @@ export function ReportsPage() {
         return r;
       }));
 
-      showToast(t('reports.modal.saveSuccess', 'Modifiche salvate con successo. Clicca su "Esegui ora" per attivare la programmazione.'), 'success');
+      showToast(t('reports.modal.saveSuccess', 'Modifiche salvate con successo. Attiva la programmazione per avviare gli invii automatici.'), 'success');
       setEditReport(null);
     } catch (err) {
       console.error('Failed to save report configuration:', err);

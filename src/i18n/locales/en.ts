@@ -3062,6 +3062,8 @@ const en = {
       totalReports: 'Generated reports',
       recipients: 'Recipients',
       runNow: 'Run now',
+      activateSchedule: 'Activate schedule',
+      pauseSchedule: 'Pause schedule',
       configure: 'Configure',
       downloadLast: 'Download last'
     },
@@ -3074,7 +3076,8 @@ const en = {
       sectionsLabel: 'INCLUDED SECTIONS',
       statusLabel: 'STATUS',
       cancel: 'Cancel',
-      save: 'Save changes'
+      save: 'Save changes',
+      saveSuccess: 'Changes saved successfully. Activate the schedule to start automatic deliveries.'
     },
     archive: {
       title: 'Recent report archive',
