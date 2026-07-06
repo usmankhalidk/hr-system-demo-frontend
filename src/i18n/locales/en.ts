@@ -1021,7 +1021,7 @@ const en = {
     DEVICE_NOT_REGISTERED: 'Device not registered. Please register your device first.',
     DEVICE_MISMATCH: 'Your device is different; you cannot check in, check out, or start or end a break from this device.',
     DEVICE_REGISTRATION_NOT_REQUIRED: 'Device registration is not required for your account right now.',
-    DEVICE_ALREADY_REGISTERED: 'You cannot register your account on that device, Other employee account been already register on that device',
+    DEVICE_ALREADY_REGISTERED: 'This device is already registered to another account.',
     ON_HOLIDAY: 'The user is on leave today, so they cannot record attendance.',
     BEFORE_SHIFT_START: 'Action not allowed before shift start.',
     AFTER_SHIFT_END: 'Action not allowed after shift end.',
@@ -3062,6 +3062,8 @@ const en = {
       totalReports: 'Generated reports',
       recipients: 'Recipients',
       runNow: 'Run now',
+      activateSchedule: 'Activate schedule',
+      pauseSchedule: 'Pause schedule',
       configure: 'Configure',
       downloadLast: 'Download last'
     },
@@ -3074,7 +3076,8 @@ const en = {
       sectionsLabel: 'INCLUDED SECTIONS',
       statusLabel: 'STATUS',
       cancel: 'Cancel',
-      save: 'Save changes'
+      save: 'Save changes',
+      saveSuccess: 'Changes saved successfully. Activate the schedule to start automatic deliveries.'
     },
     archive: {
       title: 'Recent report archive',

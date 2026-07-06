@@ -1015,7 +1015,7 @@ const it = {
     DEVICE_NOT_REGISTERED: 'Dispositivo non registrato. Effettua prima la registrazione del dispositivo.',
     DEVICE_MISMATCH: 'Il tuo dispositivo è diverso, non potrai effettuare entrata, uscita, inizio pausa o fine pausa.',
     DEVICE_REGISTRATION_NOT_REQUIRED: 'La registrazione del dispositivo non è richiesta per il tuo account in questo momento.',
-    DEVICE_ALREADY_REGISTERED: 'Non puoi registrare il tuo account su questo dispositivo. Un account di un altro dipendente è già registrato su questo dispositivo.',
+    DEVICE_ALREADY_REGISTERED: 'Questo dispositivo è già registrato su un altro account.',
     ON_HOLIDAY: 'L\'utente è in permesso oggi, quindi non può registrare la presenza.',
     BEFORE_SHIFT_START: "Azione non consentita prima dell'inizio turno.",
     AFTER_SHIFT_END: 'Azione non consentita dopo la fine turno.',
@@ -3063,6 +3063,8 @@ const it = {
       totalReports: 'Report generati',
       recipients: 'Destinatari',
       runNow: 'Esegui ora',
+      activateSchedule: 'Attiva programmazione',
+      pauseSchedule: 'Sospendi programmazione',
       configure: 'Configura',
       downloadLast: 'Scarica ultimo'
     },
@@ -3075,7 +3077,8 @@ const it = {
       sectionsLabel: 'SEZIONI INCLUSE',
       statusLabel: 'STATO',
       cancel: 'Annulla',
-      save: 'Salva modifiche'
+      save: 'Salva modifiche',
+      saveSuccess: 'Modifiche salvate con successo. Attiva la programmazione per avviare gli invii automatici.'
     },
     archive: {
       title: 'Archivio report recenti',
