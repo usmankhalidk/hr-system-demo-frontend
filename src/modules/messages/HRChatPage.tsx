@@ -254,6 +254,7 @@ export default function HRChatPage() {
     const recipientIdStr = searchParams.get('recipientId');
     const recipientName = searchParams.get('recipientName');
     const subject = searchParams.get('subject');
+    const shouldOpenCompose = Boolean(recipientName || subject);
 
     if (recipientIdStr) {
       const recipientId = parseInt(recipientIdStr, 10);
@@ -285,14 +286,16 @@ export default function HRChatPage() {
         
         setSelectedConversationId(recipientId);
 
-        setComposeRecipient({
-          id: recipientId,
-          name: decodedName,
-        });
-        if (subject) {
-          setComposeDefaultSubject(decodeURIComponent(subject));
+        if (shouldOpenCompose) {
+          setComposeRecipient({
+            id: recipientId,
+            name: decodedName,
+          });
+          if (subject) {
+            setComposeDefaultSubject(decodeURIComponent(subject));
+          }
+          setComposeOpen(true);
         }
-        setComposeOpen(true);
 
         // Clear search parameters from the URL immediately
         const newParams = new URLSearchParams(searchParams);
