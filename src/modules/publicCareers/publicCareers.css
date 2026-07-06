@@ -795,6 +795,11 @@
   box-sizing: border-box;
 }
 
+.careers-apply-modal input[type="radio"],
+.careers-apply-modal input[type="checkbox"] {
+  width: auto;
+}
+
 /* Ensure DatePicker components match other inputs */
 .careers-apply-modal .date-picker-wrapper,
 .careers-apply-modal .date-picker-input {
