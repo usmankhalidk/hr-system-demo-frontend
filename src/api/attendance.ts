@@ -54,6 +54,8 @@ export interface AttendanceListParams {
   eventType?: EventType;
   search?: string;
   timezone?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export interface AttendanceListResponse {

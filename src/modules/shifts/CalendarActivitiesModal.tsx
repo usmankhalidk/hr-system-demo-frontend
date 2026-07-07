@@ -7,7 +7,6 @@ import { useAuth } from '../../context/AuthContext';
 import { StoreActivityType, WindowDisplayActivity } from '../../api/windowDisplay';
 import { getEmployees } from '../../api/employees';
 import { getAvatarUrl, getCompanyLogoUrl, getStoreLogoUrl } from '../../api/client';
-import { DatePicker } from '../../components/ui/DatePicker';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Input } from '../../components/ui/Input';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -35,15 +34,14 @@ interface CalendarActivitiesModalProps {
   onSave: (payload: {
     id?: number;
     storeId: number;
-    startDate: string;
-    endDate: string;
+    dates: string[];
     activityType: StoreActivityType;
     activityIcon: string | null;
     customActivityName: string | null;
     durationHours: number | null;
     notes: string | null;
     companyId?: number | null;
-  }) => Promise<void>;
+  }) => Promise<{ created: number; skipped: string[] }>;
   onDelete: (id: number, companyId?: number | null) => Promise<void>;
 }
 
@@ -151,14 +149,15 @@ export default function CalendarActivitiesModal({
   const [monthPickerYear, setMonthPickerYear] = useState(currentDate.getFullYear());
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
-  const [formStartDate, setFormStartDate] = useState('');
-  const [formEndDate, setFormEndDate] = useState('');
+  const [editingActivityId, setEditingActivityId] = useState<number | null>(null);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [formType, setFormType] = useState<StoreActivityType>('window_display');
   const [formIcon, setFormIcon] = useState('');
   const [formCustomActivityName, setFormCustomActivityName] = useState('');
   const [formDurationHours, setFormDurationHours] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [localInfo, setLocalInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [directoryEmployees, setDirectoryEmployees] = useState<Array<{
@@ -295,10 +294,15 @@ export default function CalendarActivitiesModal({
     })
   ), [activities, selectedMonth, selectedCompanyId]);
 
-  const monthActivitiesByStore = useMemo(() => {
-    const map = new Map<number, WindowDisplayActivity>();
+  const activitiesByStore = useMemo(() => {
+    const map = new Map<number, WindowDisplayActivity[]>();
     for (const item of monthActivities) {
-      map.set(item.storeId, item);
+      const list = map.get(item.storeId);
+      if (list) list.push(item);
+      else map.set(item.storeId, [item]);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.startDate.localeCompare(b.startDate));
     }
     return map;
   }, [monthActivities]);
@@ -306,6 +310,26 @@ export default function CalendarActivitiesModal({
   const availableStores = useMemo(() => (
     allStores.filter((store) => (selectedCompanyId == null ? true : store.companyId === selectedCompanyId))
   ), [allStores, selectedCompanyId]);
+
+  // Group stores under their company (ATS Positions pattern): company header + store count.
+  const storesByCompany = useMemo(() => {
+    const groups = new Map<number, { companyId: number; companyName: string; companyLogoFilename: string | null; stores: StoreOption[] }>();
+    for (const store of availableStores) {
+      const key = store.companyId ?? -1;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.stores.push(store);
+      } else {
+        groups.set(key, {
+          companyId: key,
+          companyName: store.companyName,
+          companyLogoFilename: store.companyLogoFilename,
+          stores: [store],
+        });
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => a.companyName.localeCompare(b.companyName));
+  }, [availableStores]);
 
   useEffect(() => {
     if (!open) return;
@@ -336,31 +360,64 @@ export default function CalendarActivitiesModal({
     [availableStores, selectedStoreId],
   );
 
-  const selectedActivity = selectedStoreId ? monthActivitiesByStore.get(selectedStoreId) ?? null : null;
+  const selectedStoreActivities = useMemo(
+    () => (selectedStoreId ? activitiesByStore.get(selectedStoreId) ?? [] : []),
+    [activitiesByStore, selectedStoreId],
+  );
 
-  useEffect(() => {
-    if (!open || !selectedStoreId) return;
+  const editingActivity = useMemo(
+    () => (editingActivityId != null ? selectedStoreActivities.find((a) => a.id === editingActivityId) ?? null : null),
+    [selectedStoreActivities, editingActivityId],
+  );
 
-    if (selectedActivity) {
-      setFormStartDate(selectedActivity.startDate);
-      setFormEndDate(selectedActivity.endDate);
-      setFormType(selectedActivity.activityType);
-      setFormIcon(selectedActivity.activityIcon ?? '');
-      setFormCustomActivityName(selectedActivity.customActivityName ?? '');
-      setFormDurationHours(selectedActivity.durationHours != null ? String(selectedActivity.durationHours) : '');
-      setFormNotes(selectedActivity.notes ?? '');
-      return;
+  // Map every occupied date (expanding any legacy multi-day ranges) to its activity.
+  const activityByDate = useMemo(() => {
+    const map = new Map<string, WindowDisplayActivity>();
+    for (const activity of selectedStoreActivities) {
+      const start = new Date(`${activity.startDate}T12:00:00`);
+      const end = new Date(`${activity.endDate}T12:00:00`);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        map.set(`${y}-${m}-${day}`, activity);
+      }
     }
+    return map;
+  }, [selectedStoreActivities]);
 
-    const firstDay = firstDayOfMonth(selectedMonth);
-    setFormStartDate(firstDay);
-    setFormEndDate(firstDay);
+  // Monday-based calendar grid of the selected month (null = leading blank slot).
+  const monthGrid = useMemo(() => {
+    const total = daysInMonth(selectedMonthParts.year, selectedMonthParts.monthIndex);
+    const firstDow = (new Date(selectedMonthParts.year, selectedMonthParts.monthIndex, 1).getDay() + 6) % 7;
+    const slots: (string | null)[] = [];
+    for (let i = 0; i < firstDow; i += 1) slots.push(null);
+    for (let day = 1; day <= total; day += 1) {
+      slots.push(`${selectedMonth}-${String(day).padStart(2, '0')}`);
+    }
+    return slots;
+  }, [selectedMonth, selectedMonthParts]);
+
+  // Reset to a clean "create" state whenever the modal opens or the store/month changes.
+  useEffect(() => {
+    if (!open) return;
+    setEditingActivityId(null);
+    setSelectedDates([]);
     setFormType('window_display');
     setFormIcon('');
     setFormCustomActivityName('');
     setFormDurationHours('');
     setFormNotes('');
-  }, [open, selectedStoreId, selectedMonth, selectedActivity]);
+    setLocalError(null);
+    setLocalInfo(null);
+  }, [open, selectedStoreId, selectedMonth]);
+
+  // If the activity being edited disappears (deleted/refetched away), drop back to create mode.
+  useEffect(() => {
+    if (editingActivityId != null && !editingActivity) {
+      setEditingActivityId(null);
+    }
+  }, [editingActivityId, editingActivity]);
 
   const storeMetaById = useMemo(() => {
     const employees = directoryEmployees.filter((employee) => employee.status === 'active');
@@ -404,8 +461,6 @@ export default function CalendarActivitiesModal({
   }, [directoryEmployees, allStores]);
 
   const isBusy = busy || saving;
-  const monthMinDate = firstDayOfMonth(selectedMonth);
-  const monthMaxDate = lastDayOfMonth(selectedMonth);
   const monthLabel = new Date(`${selectedMonth}-02T12:00:00`).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
 
   const activityTypeOptions = useMemo<SelectOption[]>(() => {
@@ -454,78 +509,164 @@ export default function CalendarActivitiesModal({
     })
   ), []);
 
-  async function handleSave(): Promise<void> {
+  function extractError(err: unknown): string {
+    const axiosErr = err as { response?: { data?: { error?: string; code?: string } } };
+    const code = axiosErr?.response?.data?.code;
+    const message = axiosErr?.response?.data?.error;
+    if (code) return t(`errors.${code}`, message ?? t('errors.DEFAULT', 'An unexpected error occurred.'));
+    return message || t('errors.DEFAULT', 'An unexpected error occurred.');
+  }
+
+  function beginCreate(): void {
+    setEditingActivityId(null);
+    setSelectedDates([]);
+    setFormType('window_display');
+    setFormIcon('');
+    setFormCustomActivityName('');
+    setFormDurationHours('');
+    setFormNotes('');
+    setLocalError(null);
+    setLocalInfo(null);
+  }
+
+  function beginEditActivity(activity: WindowDisplayActivity): void {
+    setEditingActivityId(activity.id);
+    setSelectedDates([activity.startDate]);
+    setFormType(activity.activityType);
+    setFormIcon(activity.activityIcon ?? '');
+    setFormCustomActivityName(activity.customActivityName ?? '');
+    setFormDurationHours(activity.durationHours != null ? String(activity.durationHours) : '');
+    setFormNotes(activity.notes ?? '');
+    setLocalError(null);
+    setLocalInfo(null);
+  }
+
+  function handleDayClick(day: string): void {
+    if (!canManage || isBusy) return;
+    const occupant = activityByDate.get(day) ?? null;
+
+    // A date owned by another activity → switch to editing that activity.
+    if (occupant && occupant.id !== editingActivityId) {
+      beginEditActivity(occupant);
+      return;
+    }
+
+    // Edit mode: move the edited activity to the clicked (free or own) date.
+    if (editingActivityId != null) {
+      setSelectedDates([day]);
+      setLocalError(null);
+      return;
+    }
+
+    // Create mode: toggle the empty date in the multi-select.
+    setSelectedDates((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+    setLocalError(null);
+  }
+
+  function validateActivityFields(): { ok: false } | { ok: true; customActivityName: string; durationHours: number | null } {
+    const normalizedCustomActivityName = formCustomActivityName.trim();
+    if (isCustomActivityType(formType) && !normalizedCustomActivityName) {
+      setLocalError(t('shifts.customActivityRequired', 'Add a custom activity label.'));
+      return { ok: false };
+    }
+    const durationHours = normalizeNumberInput(formDurationHours);
+    if (formDurationHours.trim().length > 0 && durationHours == null) {
+      setLocalError(t('shifts.windowDisplayDurationInvalid', 'Duration must be a positive number.'));
+      return { ok: false };
+    }
+    return { ok: true, customActivityName: normalizedCustomActivityName, durationHours };
+  }
+
+  async function handleSaveCreate(): Promise<void> {
     if (!selectedStoreId) {
       setLocalError(t('shifts.windowDisplayStoreRequired', 'Select a store first.'));
       return;
     }
-
-    if (!formStartDate || !formEndDate) {
-      setLocalError(t('shifts.windowDisplayDateRequired', 'Select start and end dates.'));
+    if (selectedDates.length === 0) {
+      setLocalError(t('shifts.selectAtLeastOneDate', 'Select at least one date on the calendar.'));
       return;
     }
-
-    if (formEndDate < formStartDate) {
-      setLocalError(t('shifts.windowDisplayEndDateBeforeStart', 'End date must be on or after start date.'));
-      return;
-    }
-
-    if (formStartDate < monthMinDate || formEndDate > monthMaxDate) {
-      setLocalError(t('shifts.windowDisplayDateOutOfMonth', 'Dates must stay within the selected month.'));
-      return;
-    }
-
-    const normalizedCustomActivityName = formCustomActivityName.trim();
-    if (isCustomActivityType(formType) && !normalizedCustomActivityName) {
-      setLocalError(t('shifts.customActivityRequired', 'Add a custom activity label.'));
-      return;
-    }
-
-    const durationHours = normalizeNumberInput(formDurationHours);
-    if (formDurationHours.trim().length > 0 && durationHours == null) {
-      setLocalError(t('shifts.windowDisplayDurationInvalid', 'Duration must be a positive number.'));
-      return;
-    }
+    const validated = validateActivityFields();
+    if (!validated.ok) return;
 
     setLocalError(null);
+    setLocalInfo(null);
     setBusy(true);
     try {
-      const companyId = selectedStore?.companyId ?? selectedActivity?.companyId ?? selectedCompanyId ?? null;
-      await onSave({
-        id: selectedActivity?.id,
+      const companyId = selectedStore?.companyId ?? selectedCompanyId ?? null;
+      const result = await onSave({
         storeId: selectedStoreId,
-        startDate: formStartDate,
-        endDate: formEndDate,
+        dates: [...selectedDates].sort(),
         activityType: formType,
         activityIcon: formIcon.trim() || null,
-        customActivityName: isCustomActivityType(formType) ? normalizedCustomActivityName : null,
-        durationHours,
+        customActivityName: isCustomActivityType(formType) ? validated.customActivityName : null,
+        durationHours: validated.durationHours,
         notes: formNotes.trim() || null,
         companyId,
       });
-    } catch {
-      setLocalError(t('errors.DEFAULT', 'An unexpected error occurred.'));
+
+      if (result && result.skipped.length > 0 && result.created === 0) {
+        setLocalError(t('shifts.allDatesHaveActivities', 'Every selected date already has an activity. Pick other dates.'));
+        return;
+      }
+      if (result && result.skipped.length > 0) {
+        setLocalInfo(t('shifts.someDatesSkipped', {
+          count: result.skipped.length,
+          dates: result.skipped.join(', '),
+          defaultValue: '{{count}} date(s) already had an activity and were skipped: {{dates}}',
+        }));
+      }
+      setSelectedDates([]);
+    } catch (err) {
+      setLocalError(extractError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUpdate(): Promise<void> {
+    if (editingActivityId == null || !selectedStoreId) return;
+    const theDate = selectedDates[0];
+    if (!theDate) {
+      setLocalError(t('shifts.selectAtLeastOneDate', 'Select at least one date on the calendar.'));
+      return;
+    }
+    const validated = validateActivityFields();
+    if (!validated.ok) return;
+
+    setLocalError(null);
+    setLocalInfo(null);
+    setBusy(true);
+    try {
+      const companyId = selectedStore?.companyId ?? editingActivity?.companyId ?? selectedCompanyId ?? null;
+      await onSave({
+        id: editingActivityId,
+        storeId: selectedStoreId,
+        dates: [theDate],
+        activityType: formType,
+        activityIcon: formIcon.trim() || null,
+        customActivityName: isCustomActivityType(formType) ? validated.customActivityName : null,
+        durationHours: validated.durationHours,
+        notes: formNotes.trim() || null,
+        companyId,
+      });
+    } catch (err) {
+      setLocalError(extractError(err));
     } finally {
       setBusy(false);
     }
   }
 
   async function handleDelete(): Promise<void> {
-    if (!selectedActivity) return;
+    if (!editingActivity) return;
     setLocalError(null);
+    setLocalInfo(null);
     setBusy(true);
     try {
-      await onDelete(selectedActivity.id, selectedActivity.companyId);
-      const firstDay = firstDayOfMonth(selectedMonth);
-      setFormStartDate(firstDay);
-      setFormEndDate(firstDay);
-      setFormType('window_display');
-      setFormIcon('');
-      setFormCustomActivityName('');
-      setFormDurationHours('');
-      setFormNotes('');
-    } catch {
-      setLocalError(t('errors.DEFAULT', 'An unexpected error occurred.'));
+      await onDelete(editingActivity.id, editingActivity.companyId);
+      beginCreate();
+    } catch (err) {
+      setLocalError(extractError(err));
     } finally {
       setBusy(false);
     }
@@ -1152,9 +1293,46 @@ export default function CalendarActivitiesModal({
                 {t('shifts.noStoresAvailable', 'No stores available for this view.')}
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {availableStores.map((store) => {
-                  const activity = monthActivitiesByStore.get(store.id) ?? null;
+              <div style={{ display: 'grid', gap: 14 }}>
+                {storesByCompany.map((group) => (
+                  <div key={`company-${group.companyId}`} style={{ display: 'grid', gap: 8 }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      padding: '2px 2px 6px',
+                      borderBottom: '1px solid var(--border)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        {(() => {
+                          const compLogo = getCompanyLogoUrl(group.companyLogoFilename);
+                          return (
+                            <span style={{
+                              width: 22, height: 22, borderRadius: 6, overflow: 'hidden',
+                              border: '1px solid var(--border)', background: 'rgba(13,33,55,0.1)',
+                              color: '#0D2137', display: 'inline-flex', alignItems: 'center',
+                              justifyContent: 'center', flexShrink: 0, fontSize: 9, fontWeight: 800,
+                            }}>
+                              {compLogo
+                                ? <img src={compLogo} alt={group.companyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : group.companyName.slice(0, 2).toUpperCase()}
+                            </span>
+                          );
+                        })()}
+                        <span style={{ fontWeight: 800, fontSize: 12.5, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {group.companyName}
+                        </span>
+                      </div>
+                      <span style={{
+                        borderRadius: 999, border: '1px solid var(--border)', background: 'var(--surface)',
+                        color: 'var(--text-secondary)', fontSize: 10, fontWeight: 800, padding: '2px 8px',
+                        whiteSpace: 'nowrap', flexShrink: 0,
+                      }}>
+                        {group.stores.length} {group.stores.length === 1 ? t('stores.single', 'Store') : t('stores.title', 'Stores')}
+                      </span>
+                    </div>
+                    {group.stores.map((store) => {
                   const selected = selectedStoreId === store.id;
                   const meta = storeMetaById.get(store.id);
                   const storeLogo = getStoreLogoUrl(store.logoFilename);
@@ -1164,7 +1342,6 @@ export default function CalendarActivitiesModal({
                   const areaManagerAvatar = getAvatarUrl(meta?.areaManagerAvatarFilename ?? null);
                   const hrInitials = initialsFromName(meta?.hrName ?? null);
                   const areaManagerInitials = initialsFromName(meta?.areaManagerName ?? null);
-                  const activityIcon = activity ? getActivityIcon(activity.activityType, activity.activityIcon) : null;
 
                   return (
                     <button
@@ -1206,9 +1383,6 @@ export default function CalendarActivitiesModal({
                         <span style={{ minWidth: 0, flex: 1 }}>
                           <span style={{ display: 'block', fontWeight: 800, fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {store.name}
-                          </span>
-                          <span style={{ display: 'block', marginTop: 1, fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {store.companyName}
                           </span>
                         </span>
                         <span style={{
@@ -1285,39 +1459,11 @@ export default function CalendarActivitiesModal({
                           </div>
                         </div>
                       </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        {activity ? (
-                          (() => {
-                            const palette = getActivityPalette(activity.activityType);
-                            return (
-                              <span style={{
-                                borderRadius: 999,
-                                border: `1px solid ${palette.border}`,
-                                borderLeft: `3px solid ${palette.accentBorder}`,
-                                background: palette.background,
-                                color: palette.color,
-                                fontSize: 10,
-                                fontWeight: 800,
-                                padding: '2px 8px',
-                                lineHeight: 1.2,
-                              }}>
-                                {activityIcon} {getActivityTypeLabel(t, activity.activityType, activity.customActivityName)}
-                              </span>
-                            );
-                          })()
-                        ) : (
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>
-                            {t('shifts.noActivitySet', 'No activity set')}
-                          </span>
-                        )}
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>
-                          {activity ? `${activity.startDate}${activity.startDate !== activity.endDate ? ` → ${activity.endDate}` : ''}` : selectedMonth}
-                        </span>
-                      </div>
                     </button>
                   );
-                })}
+                    })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1392,16 +1538,16 @@ export default function CalendarActivitiesModal({
                   </div>
                   <div style={{
                     borderRadius: 999,
-                    border: selectedActivity ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(148,163,184,0.25)',
-                    background: selectedActivity ? 'rgba(34,197,94,0.1)' : 'rgba(148,163,184,0.1)',
-                    color: selectedActivity ? '#166534' : '#475569',
+                    border: selectedStoreActivities.length > 0 ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(148,163,184,0.25)',
+                    background: selectedStoreActivities.length > 0 ? 'rgba(34,197,94,0.1)' : 'rgba(148,163,184,0.1)',
+                    color: selectedStoreActivities.length > 0 ? '#166534' : '#475569',
                     fontSize: 11,
                     fontWeight: 800,
                     padding: '4px 10px',
                     lineHeight: 1.2,
                   }}>
-                    {selectedActivity
-                      ? t('shifts.activityConfigured', 'Activity configured')
+                    {selectedStoreActivities.length > 0
+                      ? t('shifts.activitiesCount', { count: selectedStoreActivities.length, defaultValue: '{{count}} activities' })
                       : t('shifts.activityNotConfigured', 'No activity configured')}
                   </div>
                 </div>
@@ -1417,6 +1563,20 @@ export default function CalendarActivitiesModal({
                     fontWeight: 700,
                   }}>
                     {localError}
+                  </div>
+                )}
+
+                {localInfo && (
+                  <div style={{
+                    borderRadius: 8,
+                    border: '1px solid rgba(217,119,6,0.32)',
+                    background: 'rgba(254,243,199,0.6)',
+                    color: '#92400e',
+                    fontSize: 12,
+                    padding: '8px 10px',
+                    fontWeight: 700,
+                  }}>
+                    {localInfo}
                   </div>
                 )}
 
@@ -1484,23 +1644,106 @@ export default function CalendarActivitiesModal({
                     </div>
                   )}
 
-                  {/* Date Range - Full Width Row with Two DatePickers */}
-                  <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-                    <DatePicker
-                      label={t('shifts.activityStartDate', 'Start Date')}
-                      value={formStartDate}
-                      onChange={setFormStartDate}
-                      disabled={!canManage || isBusy}
-                    />
-                    <DatePicker
-                      label={t('shifts.activityEndDate', 'End Date')}
-                      value={formEndDate}
-                      onChange={setFormEndDate}
-                      disabled={!canManage || isBusy}
-                    />
+                  {/* Multi-date selector (one activity per selected date) */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                        {editingActivityId != null
+                          ? t('shifts.activityDateEditHint', 'Activity date — click another day to move it')
+                          : t('shifts.activitySelectDates', 'Select date(s)')}
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>
+                          {editingActivityId != null
+                            ? (selectedDates[0] ?? '')
+                            : t('shifts.datesSelectedCount', { count: selectedDates.length, defaultValue: '{{count}} selected' })}
+                        </span>
+                        {editingActivityId == null && selectedDates.length > 0 && canManage && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDates([])}
+                            style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                          >
+                            {t('common.clear', 'Clear')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4,
+                      background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                      borderRadius: 12, padding: 8,
+                    }}>
+                      {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
+                        <div key={`dow-${i}`} style={{ textAlign: 'center', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 4 }}>{day}</div>
+                      ))}
+                      {monthGrid.map((dateStr, i) => {
+                        if (!dateStr) return <div key={`empty-${i}`} />;
+                        const occupant = activityByDate.get(dateStr) ?? null;
+                        const dayNum = dateStr.split('-')[2];
+                        const isEditingThis = editingActivityId != null && occupant?.id === editingActivityId;
+                        const isEditTarget = editingActivityId != null && selectedDates[0] === dateStr;
+                        const isPicked = editingActivityId == null && selectedDates.includes(dateStr);
+                        const isActive = isEditingThis || isEditTarget || isPicked;
+                        const occupantOther = occupant != null && occupant.id !== editingActivityId;
+                        const palette = occupant ? getActivityPalette(occupant.activityType) : null;
+                        const occIcon = occupant ? getActivityIcon(occupant.activityType, occupant.activityIcon) : null;
+
+                        let background = 'rgba(148,163,184,0.10)';
+                        let color: string = 'var(--text-primary)';
+                        let border = '1px solid transparent';
+                        if (isActive) {
+                          background = 'var(--accent)';
+                          color = '#fff';
+                        } else if (occupantOther && palette) {
+                          background = palette.background;
+                          color = palette.color;
+                          border = `1px solid ${palette.border}`;
+                        }
+
+                        return (
+                          <button
+                            key={dateStr}
+                            type="button"
+                            disabled={!canManage || isBusy}
+                            onClick={() => handleDayClick(dateStr)}
+                            title={occupant ? `${getActivityTypeLabel(t, occupant.activityType, occupant.customActivityName)} · ${dateStr}` : dateStr}
+                            style={{
+                              aspectRatio: '1',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 1,
+                              borderRadius: 8,
+                              border,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: canManage && !isBusy ? 'pointer' : 'default',
+                              background,
+                              color,
+                            }}
+                          >
+                            <span>{dayNum}</span>
+                            {(occupant && !isActive) || isEditingThis ? (
+                              <span style={{ fontSize: 10, lineHeight: 1 }}>{occIcon}</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--accent)' }} /> {t('common.selected', 'Selected')}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 3, background: 'rgba(217,119,6,0.32)' }} /> {t('shifts.hasActivity', 'Has activity')}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Duration and Month in same row */}
                   <Input
                     label={t('shifts.activityDurationHours', 'Duration (hours)')}
                     type="number"
@@ -1510,13 +1753,6 @@ export default function CalendarActivitiesModal({
                     disabled={!canManage || isBusy}
                     onChange={(e) => setFormDurationHours(e.target.value)}
                     placeholder={t('shifts.activityDurationPlaceholder', 'Optional')}
-                  />
-
-                  <Input
-                    label={t('shifts.activityMonth', 'Month')}
-                    value={selectedMonth}
-                    readOnly
-                    style={{ background: 'var(--background)' }}
                   />
 
                   <div style={{ display: 'grid', gap: 4, gridColumn: '1 / -1' }}>
@@ -1551,36 +1787,135 @@ export default function CalendarActivitiesModal({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {canManage
-                      ? t('shifts.activityMappingHint', 'Activities can span multiple days within a month.')
+                      ? (editingActivityId != null
+                        ? t('shifts.activityEditHint', 'Editing an activity — change its details or move its date, then Update.')
+                        : t('shifts.activityCreateHint', 'Pick one or more dates, set the activity, then Save. One activity per date.'))
                       : t('shifts.activityReadOnlyHint', 'Read-only mode: you can view activities but cannot edit.')}
-                    <span style={{ display: 'block', marginTop: 2 }}>
-                      {t('shifts.activityMonthLimitHint', 'Allowed date range')}: {monthMinDate} - {monthMaxDate}
-                    </span>
                   </div>
 
                   {canManage && (
                     <div style={{ display: 'flex', gap: 8 }}>
-                      {selectedActivity && (
+                      {editingActivityId != null && (
                         <button
                           type="button"
-                          className="btn btn-danger"
                           disabled={isBusy}
-                          onClick={handleDelete}
+                          onClick={beginCreate}
+                          style={{
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            color: 'var(--text-primary)',
+                            borderRadius: 'var(--radius)',
+                            padding: '0 14px',
+                            height: 38,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: isBusy ? 'default' : 'pointer',
+                          }}
                         >
-                          {isBusy ? t('common.loading', 'Loading...') : t('common.remove', 'Remove')}
+                          {t('shifts.newActivity', '+ New')}
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={isBusy || !selectedStoreId}
-                        onClick={handleSave}
-                      >
-                        {isBusy ? t('common.loading', 'Loading...') : t('common.save', 'Save')}
-                      </button>
+                      {editingActivityId != null ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            disabled={isBusy}
+                            onClick={handleDelete}
+                          >
+                            {isBusy ? t('common.loading', 'Loading...') : t('common.delete', 'Delete')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={isBusy || selectedDates.length === 0}
+                            onClick={handleUpdate}
+                          >
+                            {isBusy ? t('common.loading', 'Loading...') : t('common.update', 'Update')}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={isBusy || !selectedStoreId || selectedDates.length === 0}
+                          onClick={handleSaveCreate}
+                        >
+                          {isBusy ? t('common.loading', 'Loading...') : t('common.save', 'Save')}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {/* This store's activities for the selected month */}
+                {selectedStoreActivities.length > 0 && (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.4,
+                    }}>
+                      {t('shifts.storeActivitiesThisMonth', 'Activities this month')} ({selectedStoreActivities.length})
+                    </div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {selectedStoreActivities.map((activity) => {
+                        const palette = getActivityPalette(activity.activityType);
+                        const icon = getActivityIcon(activity.activityType, activity.activityIcon);
+                        const isEditing = activity.id === editingActivityId;
+                        const dateLabel = activity.startDate === activity.endDate
+                          ? activity.startDate
+                          : `${activity.startDate} → ${activity.endDate}`;
+                        return (
+                          <button
+                            key={activity.id}
+                            type="button"
+                            onClick={() => { if (canManage) beginEditActivity(activity); }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 10,
+                              textAlign: 'left',
+                              width: '100%',
+                              border: isEditing ? '1px solid var(--primary)' : '1px solid var(--border)',
+                              background: isEditing ? 'rgba(30,74,122,0.08)' : 'var(--surface)',
+                              borderRadius: 10,
+                              padding: '8px 10px',
+                              cursor: canManage ? 'pointer' : 'default',
+                            }}
+                          >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                              <span style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 8,
+                                flexShrink: 0,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: palette.background,
+                                border: `1px solid ${palette.border}`,
+                                borderLeft: `3px solid ${palette.accentBorder}`,
+                                fontSize: 14,
+                              }}>
+                                {icon}
+                              </span>
+                              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {getActivityTypeLabel(t, activity.activityType, activity.customActivityName)}
+                              </span>
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {dateLabel}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

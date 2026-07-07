@@ -46,11 +46,18 @@ export interface WindowDisplayActivity {
   updatedAt: string;
 }
 
-export async function getWindowDisplay(storeId: number, month: string): Promise<WindowDisplayActivity | null> {
+export interface CreateWindowDisplayResult {
+  created: WindowDisplayActivity[];
+  skipped: string[];
+}
+
+export async function getWindowDisplay(storeId: number, month: string): Promise<WindowDisplayActivity[]> {
   const res = await client.get('/window-display', {
     params: { storeId, month },
   });
-  return (res.data.data ?? null) as WindowDisplayActivity | null;
+  const data = res.data.data;
+  if (Array.isArray(data)) return data as WindowDisplayActivity[];
+  return data ? [data as WindowDisplayActivity] : [];
 }
 
 export async function listWindowDisplayActivities(month: string, storeId?: number, companyId?: number): Promise<WindowDisplayActivity[]> {
@@ -70,21 +77,23 @@ export async function listWindowDisplayActivities(month: string, storeId?: numbe
 
 export async function createWindowDisplay(payload: {
   storeId: number;
-  date?: string; // Deprecated: use startDate/endDate
+  date?: string; // Deprecated: use startDate/endDate/dates
   startDate?: string;
   endDate?: string;
+  dates?: string[]; // Preferred: one single-day activity per date
   activityType?: StoreActivityType;
   activityIcon?: string | null;
   customActivityName?: string | null;
   durationHours?: number | null;
   notes?: string | null;
   companyId?: number | null;
-}): Promise<WindowDisplayActivity> {
+}): Promise<CreateWindowDisplayResult> {
   const requestBody = {
     store_id: payload.storeId,
     date: payload.date, // Deprecated
     start_date: payload.startDate,
     end_date: payload.endDate,
+    dates: payload.dates,
     activity_type: payload.activityType,
     activity_icon: payload.activityIcon,
     custom_activity_name: payload.customActivityName,
@@ -92,11 +101,14 @@ export async function createWindowDisplay(payload: {
     notes: payload.notes,
     company_id: payload.companyId,
   };
-  
-  console.log('Creating window display:', requestBody);
-  
+
   const res = await client.post('/window-display', requestBody);
-  return res.data.data as WindowDisplayActivity;
+  const data = res.data.data;
+  if (data && Array.isArray(data.created)) {
+    return { created: data.created as WindowDisplayActivity[], skipped: (data.skipped ?? []) as string[] };
+  }
+  // Legacy single-object response
+  return { created: data ? [data as WindowDisplayActivity] : [], skipped: [] };
 }
 
 export async function updateWindowDisplay(
@@ -124,9 +136,7 @@ export async function updateWindowDisplay(
     notes: payload.notes,
     company_id: payload.companyId,
   };
-  
-  console.log('Updating window display:', { id, requestBody });
-  
+
   const res = await client.put(`/window-display/${id}`, requestBody);
   return res.data.data as WindowDisplayActivity;
 }

@@ -31,12 +31,17 @@ export interface SummaryRow {
   dateKey: string;
   shifts: Shift[];
   events: AttendanceEvent[];
-  scheduledMinutes: number;
+  scheduledMinutes: number;        // gross scheduled work (all due, non-cancelled shifts)
   workedMinutes: number;
-  varianceMinutes: number;
+  varianceMinutes: number;         // workedMinutes − effectiveScheduledMinutes
   vacationMinutes: number;
   sickMinutes: number;
-  leaveMinutes: number;
+  leaveMinutes: number;            // short-leave / permessi
+  neutralizedMinutes: number;      // scheduled time excused by approved leave (removed from the deficit)
+  effectiveScheduledMinutes: number; // scheduledMinutes − neutralizedMinutes (basis of the variance)
+  absentMinutes: number;           // scheduled time on past days with no clock-in and no leave (stays in the deficit)
+  leaveApprovedAfter: boolean;     // person worked, then leave was approved after the fact → leave ignored
+  status: 'leave' | 'absent' | 'pending' | 'in_progress' | 'worked';
 }
 
 function formatHoursStr(mins: number): string {
@@ -45,6 +50,33 @@ function formatHoursStr(mins: number): string {
   const m = Math.round(abs % 60);
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+// Per-shift scheduled work in minutes (span − break). Ignores status so the value
+// can also label cancelled shifts; the summary calc excludes cancelled separately.
+function shiftDurationMinutes(s: Shift): number {
+  if (!s.startTime || !s.endTime || s.isOffDay) return 0;
+  const [sh, sm] = s.startTime.split(':').map(Number);
+  const [eh, em] = s.endTime.split(':').map(Number);
+  let dur = (eh * 60 + em) - (sh * 60 + sm);
+  if (dur < 0) dur += 24 * 60;
+  let bMins = 0;
+  if (s.breakMinutes) {
+    bMins = s.breakMinutes;
+  } else if (s.breakStart && s.breakEnd) {
+    const [bsh, bsm] = s.breakStart.split(':').map(Number);
+    const [beh, bem] = s.breakEnd.split(':').map(Number);
+    bMins = (beh * 60 + bem) - (bsh * 60 + bsm);
+    if (bMins < 0) bMins += 24 * 60;
+  }
+  return Math.max(0, dur - bMins);
+}
+
+// Compact "8:00 H" style label for a shift's scheduled work duration.
+function formatShiftDuration(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return `${h}:${String(m).padStart(2, '0')} H`;
 }
 
 function getAvatarColor(name: string): string {
@@ -56,64 +88,41 @@ function getAvatarColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function formatVarianceBadge(
-  mins: number,
+export type VarianceKind = 'leave' | 'absent' | 'pending' | 'in_progress' | 'on_time' | 'overtime' | 'undertime';
+
+// Single source of truth for how a row's variance is shown. The precomputed
+// row.status already resolves leave / absent / pending / in-progress; here we only
+// apply the over/under-time tolerance for the "worked" case.
+//   - Summary UI  → applyTolerance = true  (small +/- shown as "On time")
+//   - Analytics   → applyTolerance = false (real minutes, so rows reconcile with totals)
+function varianceDisplay(
+  row: Pick<SummaryRow, 'status' | 'varianceMinutes'>,
   t: any,
-  overtimeLimit = 5,
-  undertimeLimit = 15,
-  dateKey?: string,
-  rowEvents?: AttendanceEvent[]
-): { text: string; color: string; bg: string; border: string; icon: string } {
-  const todayStr = new Date().toISOString().split('T')[0];
+  opts?: { applyTolerance?: boolean; overtimeLimit?: number; undertimeLimit?: number },
+): { kind: VarianceKind; text: string; color: string; bg: string; border: string; icon: string } {
+  const applyTolerance = opts?.applyTolerance ?? false;
+  const otLim = applyTolerance ? (opts?.overtimeLimit ?? 5) : 0;
+  const utLim = applyTolerance ? (opts?.undertimeLimit ?? 15) : 0;
 
-  if (dateKey && dateKey === todayStr) {
-    const evs = rowEvents ?? [];
-    const hasCheckin = evs.some(e => e.eventType === 'checkin');
-    const hasCheckout = evs.some(e => e.eventType === 'checkout');
-
-    if (hasCheckin && !hasCheckout) {
-      return {
-        text: t('attendance.statusInCourse', 'In corso'),
-        color: '#16a34a',
-        bg: 'rgba(22,163,74,0.10)',
-        border: 'rgba(22,163,74,0.25)',
-        icon: '🟢',
-      };
-    } else if (!hasCheckin) {
-      return {
-        text: t('attendance.statusPending', 'In attesa'),
-        color: '#3b82f6',
-        bg: 'rgba(59,130,246,0.10)',
-        border: 'rgba(59,130,246,0.25)',
-        icon: '⏳',
-      };
-    }
+  switch (row.status) {
+    case 'leave':
+      return { kind: 'leave', text: t('attendance.statusOnLeave', 'Congedo'), color: '#c9973a', bg: 'rgba(201,151,58,0.10)', border: 'rgba(201,151,58,0.25)', icon: '🌴' };
+    case 'pending':
+      return { kind: 'pending', text: t('attendance.statusPending', 'In attesa'), color: '#3b82f6', bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.25)', icon: '⏳' };
+    case 'in_progress':
+      return { kind: 'in_progress', text: t('attendance.statusInCourse', 'In corso'), color: '#16a34a', bg: 'rgba(22,163,74,0.10)', border: 'rgba(22,163,74,0.25)', icon: '🟢' };
+    case 'absent':
+      return { kind: 'absent', text: t('attendance.statusAbsent', 'Assente'), color: '#dc2626', bg: 'rgba(220,38,38,0.10)', border: 'rgba(220,38,38,0.25)', icon: '⚠' };
+    default: break;
   }
-
-  if (mins > overtimeLimit) {
-    return {
-      text: `+${formatHoursStr(mins)}`,
-      color: '#16a34a',
-      bg: 'rgba(22,163,74,0.10)',
-      border: 'rgba(22,163,74,0.25)',
-      icon: '▲',
-    };
-  } else if (mins < -undertimeLimit) {
-    return {
-      text: `-${formatHoursStr(mins)}`,
-      color: '#dc2626',
-      bg: 'rgba(220,38,38,0.10)',
-      border: 'rgba(220,38,38,0.25)',
-      icon: '▼',
-    };
+  const mins = row.varianceMinutes;
+  if (mins > otLim) {
+    return { kind: 'overtime', text: `+${formatHoursStr(mins)}`, color: '#16a34a', bg: 'rgba(22,163,74,0.10)', border: 'rgba(22,163,74,0.25)', icon: '▲' };
   }
-  return {
-    text: t('attendance.onTime', 'In orario'),
-    color: '#2563eb',
-    bg: 'rgba(37,99,235,0.08)',
-    border: 'rgba(37,99,235,0.20)',
-    icon: '•',
-  };
+  if (mins < -utLim) {
+    return { kind: 'undertime', text: `-${formatHoursStr(mins)}`, color: '#dc2626', bg: 'rgba(220,38,38,0.10)', border: 'rgba(220,38,38,0.25)', icon: '▼' };
+  }
+  return { kind: 'on_time', text: t('attendance.onTimeShort', 'In orario'), color: '#2563eb', bg: 'rgba(37,99,235,0.08)', border: 'rgba(37,99,235,0.20)', icon: '✓' };
 }
 
 const SHIFT_STATUS_META: Record<string, {
@@ -204,12 +213,15 @@ export default function AttendanceLogsPage() {
   const [leaveRequestsList, setLeaveRequestsList] = useState<LeaveRequest[]>([]);
   const [total, setTotal]         = useState(0);
   const [loading, setLoading]     = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [compact, setCompact]     = useState(false);
 
   // ── View Mode & Summary States ──────────────────────────────────────────────
   const [viewMode, setViewMode]           = useState<'logs' | 'summary' | 'analytics'>('logs');
   const [summaryPeriod, setSummaryPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  // Shift-status filter pills for the summary view (null = all statuses shown)
+  const [summaryStatusFilter, setSummaryStatusFilter] = useState<'scheduled' | 'confirmed' | 'cancelled' | null>(null);
   const [summaryDrawerItem, setSummaryDrawerItem] = useState<SummaryRow | null>(null);
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
   const viewDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -442,11 +454,14 @@ export default function AttendanceLogsPage() {
   }
 
   const today       = formatLocalDate(new Date());
-  const weekAgoDate = new Date();
-  weekAgoDate.setDate(weekAgoDate.getDate() - 7);
-  const weekAgo = formatLocalDate(weekAgoDate);
+  // Default look-back window. Kept wide (30 days) so the most recent attendance
+  // activity is always visible on load without touching filters — the events
+  // endpoint is capped at 500 most-recent rows, so a wider window is cheap.
+  const defaultFromDate = new Date();
+  defaultFromDate.setDate(defaultFromDate.getDate() - 30);
+  const defaultFrom = formatLocalDate(defaultFromDate);
 
-  const [dateFrom, setDateFrom]   = useState(weekAgo);
+  const [dateFrom, setDateFrom]   = useState(defaultFrom);
   const [dateTo, setDateTo]       = useState(today);
   const [eventType, setEventType] = useState<string>('');
   const [filterSearch, setFilterSearch] = useState('');
@@ -459,7 +474,7 @@ export default function AttendanceLogsPage() {
   const [analyticsCompany, setAnalyticsCompany]   = useState<string>('');
   const [analyticsStoreId, setAnalyticsStoreId]   = useState<string>('');
   const [analyticsUserId, setAnalyticsUserId]     = useState<string>('');
-  const [analyticsDateFrom, setAnalyticsDateFrom] = useState<string>(weekAgo);
+  const [analyticsDateFrom, setAnalyticsDateFrom] = useState<string>(defaultFrom);
   const [analyticsDateTo, setAnalyticsDateTo]     = useState<string>(today);
 
   // ── Rich CustomSelect Option Memoizers for Analytics (Request 1 & 3) ───────
@@ -640,7 +655,7 @@ export default function AttendanceLogsPage() {
         value: empObj ? `${empObj.name} ${empObj.surname}` : filterUserId,
       });
     }
-    if (dateFrom !== weekAgo || dateTo !== today) {
+    if (dateFrom !== defaultFrom || dateTo !== today) {
       tags.push({
         key: 'date',
         label: t('common.date', 'Periodo'),
@@ -656,7 +671,7 @@ export default function AttendanceLogsPage() {
       });
     }
     return tags;
-  }, [filterStoreId, filterUserId, dateFrom, dateTo, eventType, filterStores, filterEmployees, weekAgo, today, t]);
+  }, [filterStoreId, filterUserId, dateFrom, dateTo, eventType, filterStores, filterEmployees, defaultFrom, today, t]);
 
   const hasActiveFilters = activeFilterTags.length > 0;
 
@@ -666,7 +681,7 @@ export default function AttendanceLogsPage() {
     } else if (key === 'employee') {
       setFilterUserId('');
     } else if (key === 'date') {
-      setDateFrom(weekAgo);
+      setDateFrom(defaultFrom);
       setDateTo(today);
     } else if (key === 'eventType') {
       setEventType('');
@@ -676,7 +691,7 @@ export default function AttendanceLogsPage() {
   const resetAllFilters = () => {
     setFilterStoreId('');
     setFilterUserId('');
-    setDateFrom(weekAgo);
+    setDateFrom(defaultFrom);
     setDateTo(today);
     setEventType('');
     setSearchInput('');
@@ -734,47 +749,72 @@ export default function AttendanceLogsPage() {
     void loadFilterEmployees();
   }, [loadFilterEmployees, user?.storeId]);
 
+  // Logs load a small page at a time (fast) + "Load more"; the summary/analytics
+  // views pull a complete scoped dataset so their aggregates are exact.
+  const LOGS_PAGE_SIZE = 100;
+  const SUMMARY_FETCH_LIMIT = 20000;
+
+  // Active scope resolves to the summary/logs filters, or the analytics panel's
+  // own filters when the analytics view is open.
+  const buildActiveParams = useCallback((): AttendanceListParams => {
+    const storeId = viewMode === 'analytics' ? analyticsStoreId : filterStoreId;
+    const userId  = viewMode === 'analytics' ? analyticsUserId : filterUserId;
+    const params: AttendanceListParams = {
+      dateFrom: viewMode === 'analytics' ? analyticsDateFrom : dateFrom,
+      dateTo:   viewMode === 'analytics' ? analyticsDateTo : dateTo,
+    };
+    if (viewMode === 'logs' && eventType) params.eventType = eventType as EventType;
+    if (viewMode === 'logs' && filterSearch.trim()) params.search = filterSearch.trim();
+    if (storeId) params.storeId = parseInt(storeId, 10);
+    if (userId) params.userId = parseInt(userId, 10);
+    return params;
+  }, [viewMode, dateFrom, dateTo, eventType, filterSearch, filterStoreId, filterUserId, analyticsDateFrom, analyticsDateTo, analyticsStoreId, analyticsUserId]);
+
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const activeDateFrom = viewMode === 'analytics' ? analyticsDateFrom : dateFrom;
-      const activeDateTo = viewMode === 'analytics' ? analyticsDateTo : dateTo;
-      const activeStoreId = viewMode === 'analytics' ? analyticsStoreId : filterStoreId;
-      const activeUserId = viewMode === 'analytics' ? analyticsUserId : filterUserId;
-      const activeSearch = viewMode === 'analytics' ? '' : filterSearch;
-      const activeEventType = viewMode === 'analytics' ? undefined : eventType;
-
-      const params: AttendanceListParams = { dateFrom: activeDateFrom, dateTo: activeDateTo };
-      if (activeEventType) params.eventType = activeEventType as EventType;
-      if (activeStoreId) params.storeId = parseInt(activeStoreId, 10);
-      if (activeUserId) params.userId = parseInt(activeUserId, 10);
-      if (activeSearch.trim()) params.search = activeSearch.trim();
-      
-      const [res, shiftsRes, leaveRes] = await Promise.all([
-        listAttendanceEvents(params),
-        listShifts({
-          store_id: activeStoreId ? parseInt(activeStoreId, 10) : undefined,
-          user_id: activeUserId ? parseInt(activeUserId, 10) : undefined,
-        }).catch(() => ({ shifts: [] })),
-        getLeaveRequests({
-          dateFrom: activeDateFrom,
-          dateTo: activeDateTo,
-          userId: activeUserId ? parseInt(activeUserId, 10) : undefined,
-          storeId: activeStoreId ? parseInt(activeStoreId, 10) : undefined,
-        }).catch(() => ({ requests: [], total: 0 })),
-      ]);
-      setEvents(res.events);
-      setTotal(res.total);
-      setShiftsList(shiftsRes.shifts || []);
-      setLeaveRequestsList(leaveRes.requests || []);
+      const params = buildActiveParams();
+      if (viewMode === 'logs') {
+        // Raw event log — first page only; more rows via loadMoreLogs().
+        const res = await listAttendanceEvents({ ...params, limit: LOGS_PAGE_SIZE, offset: 0 });
+        setEvents(res.events);
+        setTotal(res.total);
+      } else {
+        // Summary / analytics need ALL event types (to pair check-in/out) across the
+        // full period, plus shifts and approved leave — never a filtered subset.
+        const [res, shiftsRes, leaveRes] = await Promise.all([
+          listAttendanceEvents({ ...params, eventType: undefined, search: undefined, limit: SUMMARY_FETCH_LIMIT, offset: 0 }),
+          listShifts({ store_id: params.storeId, user_id: params.userId }).catch(() => ({ shifts: [] })),
+          getLeaveRequests({ dateFrom: params.dateFrom, dateTo: params.dateTo, userId: params.userId, storeId: params.storeId }).catch(() => ({ requests: [], total: 0 })),
+        ]);
+        setEvents(res.events);
+        setTotal(res.total);
+        setShiftsList(shiftsRes.shifts || []);
+        setLeaveRequestsList(leaveRes.requests || []);
+      }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
       setError(axiosErr?.response?.data?.error ?? t('common.error'));
     } finally {
       setLoading(false);
     }
-  }, [viewMode, dateFrom, dateTo, eventType, filterStoreId, filterUserId, filterSearch, analyticsDateFrom, analyticsDateTo, analyticsStoreId, analyticsUserId, lastSyncTime, t]);
+  }, [viewMode, buildActiveParams, lastSyncTime, t]);
+
+  const loadMoreLogs = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const params = buildActiveParams();
+      const res = await listAttendanceEvents({ ...params, limit: LOGS_PAGE_SIZE, offset: events.length });
+      setEvents(prev => [...prev, ...res.events]);
+      setTotal(res.total);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      setError(axiosErr?.response?.data?.error ?? t('common.error'));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [buildActiveParams, events.length, t]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
@@ -807,192 +847,184 @@ export default function AttendanceLogsPage() {
       return { dateKey: dateStr.split('T')[0], periodLabel: formatted };
     };
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const activeFrom = viewMode === 'analytics' ? analyticsDateFrom : dateFrom;
+    const activeTo   = viewMode === 'analytics' ? analyticsDateTo : dateTo;
+    // A day is in scope when it sits inside the selected range and is not in the
+    // future (future shifts exist in the data but must not count as worked/missing).
+    const inRange = (dayStr: string) =>
+      (!activeFrom || dayStr >= activeFrom) && (!activeTo || dayStr <= activeTo) && dayStr <= todayStr;
+
     const map = new Map<string, SummaryRow>();
+    const shiftsByDay = new Map<string, Shift[]>();          // `${userId}:${dayStr}`
+    const eventsByDay = new Map<string, AttendanceEvent[]>();
+    type LeaveDay = { type: 'vacation' | 'sick' | 'permission'; windowMins: number | null; approvedAt: number | null };
+    const leaveByDay = new Map<string, LeaveDay>();
+    const userDays = new Set<string>();                      // `${userId}:${dayStr}`
+
+    const ensureRow = (
+      userId: number, dayStr: string,
+      meta: { userName?: string; userSurname?: string; userAvatarFilename?: string | null; storeId?: number | null; storeName?: string | null },
+    ): SummaryRow => {
+      const { dateKey, periodLabel } = getGroupInfo(dayStr);
+      const key = `${userId}:${dateKey}`;
+      let row = map.get(key);
+      if (!row) {
+        row = {
+          key, userId,
+          userName: meta.userName || 'Dipendente', userSurname: meta.userSurname || '',
+          userAvatarFilename: meta.userAvatarFilename ?? null,
+          storeId: meta.storeId, storeName: meta.storeName || 'Store',
+          periodLabel, dateKey, shifts: [], events: [],
+          scheduledMinutes: 0, workedMinutes: 0, varianceMinutes: 0,
+          vacationMinutes: 0, sickMinutes: 0, leaveMinutes: 0,
+          neutralizedMinutes: 0, effectiveScheduledMinutes: 0, absentMinutes: 0,
+          leaveApprovedAfter: false, status: 'worked',
+        };
+        map.set(key, row);
+      } else if (!row.userAvatarFilename && meta.userAvatarFilename) {
+        row.userAvatarFilename = meta.userAvatarFilename;
+      }
+      return row;
+    };
 
     for (const s of shiftsList) {
-      const sDate = s.date.split('T')[0];
-      const { dateKey, periodLabel } = getGroupInfo(sDate);
-      const key = `${s.userId}:${dateKey}`;
-
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          userId: s.userId,
-          userName: s.userName || 'Dipendente',
-          userSurname: s.userSurname || '',
-          userAvatarFilename: s.userAvatarFilename,
-          storeId: s.storeId,
-          storeName: s.storeName || 'Store',
-          periodLabel,
-          dateKey,
-          shifts: [],
-          events: [],
-          scheduledMinutes: 0,
-          workedMinutes: 0,
-          varianceMinutes: 0,
-          vacationMinutes: 0,
-          sickMinutes: 0,
-          leaveMinutes: 0,
-        });
-      }
-      const row = map.get(key)!;
+      const dayStr = s.date.split('T')[0];
+      if (!inRange(dayStr)) continue;
+      const row = ensureRow(s.userId, dayStr, { userName: s.userName, userSurname: s.userSurname, userAvatarFilename: s.userAvatarFilename, storeId: s.storeId, storeName: s.storeName });
       row.shifts.push(s);
-
-      if (s.startTime && s.endTime && !s.isOffDay) {
-        const [sh, sm] = s.startTime.split(':').map(Number);
-        const [eh, em] = s.endTime.split(':').map(Number);
-        let dur = (eh * 60 + em) - (sh * 60 + sm);
-        if (dur < 0) dur += 24 * 60;
-        let bMins = 0;
-        if (s.breakMinutes) {
-          bMins = s.breakMinutes;
-        } else if (s.breakStart && s.breakEnd) {
-          const [bsh, bsm] = s.breakStart.split(':').map(Number);
-          const [beh, bem] = s.breakEnd.split(':').map(Number);
-          bMins = (beh * 60 + bem) - (bsh * 60 + bsm);
-          if (bMins < 0) bMins += 24 * 60;
-        }
-        row.scheduledMinutes += Math.max(0, dur - bMins);
-      }
+      const dkey = `${s.userId}:${dayStr}`;
+      (shiftsByDay.get(dkey) ?? shiftsByDay.set(dkey, []).get(dkey)!).push(s);
+      userDays.add(dkey);
     }
 
     for (const ev of events) {
-      const evDate = ev.eventTime.split('T')[0];
-      const { dateKey, periodLabel } = getGroupInfo(evDate);
-      const key = `${ev.userId}:${dateKey}`;
-
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          userId: ev.userId,
-          userName: ev.userName || 'Dipendente',
-          userSurname: ev.userSurname || '',
-          storeId: ev.storeId,
-          storeName: ev.storeName || 'Store',
-          periodLabel,
-          dateKey,
-          shifts: [],
-          events: [],
-          scheduledMinutes: 0,
-          workedMinutes: 0,
-          varianceMinutes: 0,
-          vacationMinutes: 0,
-          sickMinutes: 0,
-          leaveMinutes: 0,
-        });
-      }
-      const row = map.get(key)!;
+      const dayStr = ev.eventTime.split('T')[0];
+      if (!inRange(dayStr)) continue;
+      const row = ensureRow(ev.userId, dayStr, { userName: ev.userName, userSurname: ev.userSurname, storeId: ev.storeId, storeName: ev.storeName });
       row.events.push(ev);
+      const dkey = `${ev.userId}:${dayStr}`;
+      (eventsByDay.get(dkey) ?? eventsByDay.set(dkey, []).get(dkey)!).push(ev);
+      userDays.add(dkey);
     }
 
-    // Process approved leave requests
     const activeLeaves = leaveRequestsList.filter(
-      r => r.status === 'approved' || r.status === 'HR approved' || r.status === 'admin approved' || r.status === 'admin_approved'
+      r => r.status === 'approved' || r.status === 'HR approved' || r.status === 'admin approved' || r.status === 'admin_approved',
     );
-
     for (const lr of activeLeaves) {
+      const type: LeaveDay['type'] = lr.leaveType === 'sick'
+        ? 'sick'
+        : (lr.leaveDurationType === 'short_leave' ? 'permission' : 'vacation');
+      const approvedAt = lr.latestActionAt ? new Date(lr.latestActionAt).getTime()
+        : (lr.updatedAt ? new Date(lr.updatedAt).getTime() : null);
+      let windowMins: number | null = null;
+      if (lr.leaveDurationType === 'short_leave' && lr.shortStartTime && lr.shortEndTime) {
+        const [sh, sm] = lr.shortStartTime.split(':').map(Number);
+        const [eh, em] = lr.shortEndTime.split(':').map(Number);
+        windowMins = (eh * 60 + em) - (sh * 60 + sm);
+        if (windowMins < 0) windowMins += 24 * 60;
+      }
       const start = new Date(lr.startDate);
       const end = new Date(lr.endDate);
-      
       for (let curr = new Date(start); curr <= end; curr.setDate(curr.getDate() + 1)) {
         const dayStr = curr.toISOString().split('T')[0];
-        const { dateKey, periodLabel } = getGroupInfo(dayStr);
-        const key = `${lr.userId}:${dateKey}`;
+        if (!inRange(dayStr)) continue;
+        ensureRow(lr.userId, dayStr, { userName: lr.userName, userSurname: lr.userSurname, userAvatarFilename: lr.userAvatarFilename, storeId: lr.storeId, storeName: lr.storeName });
+        leaveByDay.set(`${lr.userId}:${dayStr}`, { type, windowMins, approvedAt });
+        userDays.add(`${lr.userId}:${dayStr}`);
+      }
+    }
 
-        if (!map.has(key)) {
-          map.set(key, {
-            key,
-            userId: lr.userId,
-            userName: lr.userName || 'Dipendente',
-            userSurname: lr.userSurname || '',
-            userAvatarFilename: lr.userAvatarFilename,
-            storeId: lr.storeId,
-            storeName: lr.storeName || 'Store',
-            periodLabel,
-            dateKey,
-            shifts: [],
-            events: [],
-            scheduledMinutes: 0,
-            workedMinutes: 0,
-            varianceMinutes: 0,
-            vacationMinutes: 0,
-            sickMinutes: 0,
-            leaveMinutes: 0,
-          });
-        }
-        const row = map.get(key)!;
+    const computeDayWorked = (evs: AttendanceEvent[]): number => {
+      const checkins = evs.filter(e => e.eventType === 'checkin').sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
+      const checkouts = evs.filter(e => e.eventType === 'checkout').sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
+      const breakStarts = evs.filter(e => e.eventType === 'break_start').sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
+      const breakEnds = evs.filter(e => e.eventType === 'break_end').sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
+      if (checkins.length === 0 || checkouts.length === 0) return 0;
+      const spanMins = Math.max(0, Math.round((new Date(checkouts[0].eventTime).getTime() - new Date(checkins[0].eventTime).getTime()) / 60000));
+      let breakMins = 0;
+      if (breakStarts.length > 0 && breakEnds.length > 0) {
+        breakMins = Math.max(0, Math.round((new Date(breakEnds[0].eventTime).getTime() - new Date(breakStarts[0].eventTime).getTime()) / 60000));
+      }
+      return Math.max(0, spanMins - breakMins);
+    };
 
-        let dayMins = 0;
-        if (lr.leaveDurationType === 'short_leave' && lr.shortStartTime && lr.shortEndTime) {
-          const [sh, sm] = lr.shortStartTime.split(':').map(Number);
-          const [eh, em] = lr.shortEndTime.split(':').map(Number);
-          dayMins = (eh * 60 + em) - (sh * 60 + sm);
-          if (dayMins < 0) dayMins += 24 * 60;
+    // ── Per user-day pass: apply leave/absent rules, then fold into period rows ──
+    for (const dkey of userDays) {
+      const sep = dkey.indexOf(':');
+      const userId = parseInt(dkey.slice(0, sep), 10);
+      const dayStr = dkey.slice(sep + 1);
+      const { dateKey } = getGroupInfo(dayStr);
+      const row = map.get(`${userId}:${dateKey}`);
+      if (!row) continue;
+
+      const dayShifts = (shiftsByDay.get(dkey) ?? []).filter(s => s.status !== 'cancelled');
+      const dayScheduled = dayShifts.reduce((sum, s) => sum + shiftDurationMinutes(s), 0);
+      const dayEvents = eventsByDay.get(dkey) ?? [];
+      const hasEvents = dayEvents.length > 0;
+      const worked = hasEvents ? computeDayWorked(dayEvents) : 0;
+      const leave = leaveByDay.get(dkey);
+      const isPast = dayStr < todayStr;
+
+      row.scheduledMinutes += dayScheduled;
+      row.workedMinutes += worked;
+
+      let neutralize = 0;
+      if (leave) {
+        const displayMins = leave.windowMins != null ? leave.windowMins : (dayScheduled > 0 ? dayScheduled : 8 * 60);
+        if (leave.type === 'vacation') row.vacationMinutes += displayMins;
+        else if (leave.type === 'sick') row.sickMinutes += displayMins;
+        else row.leaveMinutes += displayMins;
+
+        if (!hasEvents) {
+          // Approved before → the person could not clock in → excuse the scheduled time.
+          neutralize = leave.windowMins != null ? Math.min(leave.windowMins, dayScheduled) : dayScheduled;
+          row.neutralizedMinutes += neutralize;
         } else {
-          const dayOfWeek = curr.getDay();
-          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-          if (!isWeekend) {
-            dayMins = 8 * 60; // 8 hours
-          }
+          // The person worked that day → leave was recorded/approved after the fact:
+          // it must NOT change the numbers. Flag it so the UI can say so (in red).
+          row.leaveApprovedAfter = true;
         }
+      }
 
-        if (lr.leaveType === 'vacation') {
-          if (lr.leaveDurationType === 'short_leave') {
-            row.leaveMinutes += dayMins;
-          } else {
-            row.vacationMinutes += dayMins;
-          }
-        } else if (lr.leaveType === 'sick') {
-          row.sickMinutes += dayMins;
-        }
+      // Absent = a past scheduled day with no clock-in and no covering leave.
+      // Stays in the deficit (client's rule), only surfaced with an "Absent" label.
+      const remainingScheduled = dayScheduled - neutralize;
+      if (isPast && remainingScheduled > 0 && !hasEvents) {
+        row.absentMinutes += remainingScheduled;
       }
     }
 
     const result = Array.from(map.values());
     for (const row of result) {
-      const dayEventsMap = new Map<string, AttendanceEvent[]>();
-      for (const e of row.events) {
-        const dStr = e.eventTime.split('T')[0];
-        if (!dayEventsMap.has(dStr)) dayEventsMap.set(dStr, []);
-        dayEventsMap.get(dStr)!.push(e);
+      row.effectiveScheduledMinutes = Math.max(0, row.scheduledMinutes - row.neutralizedMinutes);
+      row.varianceMinutes = row.workedMinutes - row.effectiveScheduledMinutes;
+
+      // Row status — daily rows resolve to clean per-day states (incl. today's
+      // pending/in-progress); weekly/monthly rows collapse to leave/absent/worked.
+      if (summaryPeriod === 'daily' && row.dateKey === todayStr) {
+        const hasCheckin = row.events.some(e => e.eventType === 'checkin');
+        const hasCheckout = row.events.some(e => e.eventType === 'checkout');
+        if (hasCheckin && !hasCheckout) { row.status = 'in_progress'; continue; }
+        if (!hasCheckin && row.scheduledMinutes > 0) { row.status = 'pending'; continue; }
       }
-
-      let totalWorked = 0;
-      for (const [, dayEvs] of dayEventsMap) {
-        const checkins = dayEvs.filter(e => e.eventType === 'checkin').sort((a,b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
-        const checkouts = dayEvs.filter(e => e.eventType === 'checkout').sort((a,b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
-        const breakStarts = dayEvs.filter(e => e.eventType === 'break_start').sort((a,b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
-        const breakEnds = dayEvs.filter(e => e.eventType === 'break_end').sort((a,b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
-
-        if (checkins.length > 0 && checkouts.length > 0) {
-          const startMs = new Date(checkins[0].eventTime).getTime();
-          const endMs = new Date(checkouts[0].eventTime).getTime();
-          let spanMins = Math.max(0, Math.round((endMs - startMs) / (60 * 1000)));
-
-          let breakMins = 0;
-          if (breakStarts.length > 0 && breakEnds.length > 0) {
-            const bStartMs = new Date(breakStarts[0].eventTime).getTime();
-            const bEndMs = new Date(breakEnds[0].eventTime).getTime();
-            breakMins = Math.max(0, Math.round((bEndMs - bStartMs) / (60 * 1000)));
-          }
-          totalWorked += Math.max(0, spanMins - breakMins);
-        }
-      }
-      row.workedMinutes = totalWorked;
-      row.varianceMinutes = row.workedMinutes - row.scheduledMinutes;
+      if (row.workedMinutes === 0 && row.effectiveScheduledMinutes === 0 && row.neutralizedMinutes > 0) row.status = 'leave';
+      else if (row.workedMinutes === 0 && row.effectiveScheduledMinutes > 0) row.status = 'absent';
+      else row.status = 'worked';
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const filteredResult = result.filter(r => r.dateKey <= todayStr);
-    filteredResult.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+    result.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
 
+    let filtered = result;
+    if (viewMode === 'summary' && summaryStatusFilter) {
+      filtered = filtered.filter(r => r.shifts.some(s => s.status === summaryStatusFilter));
+    }
     if (filterSearch.trim()) {
       const q = filterSearch.trim().toLowerCase();
-      return filteredResult.filter(r => `${r.userName} ${r.userSurname}`.toLowerCase().includes(q) || r.storeName.toLowerCase().includes(q));
+      filtered = filtered.filter(r => `${r.userName} ${r.userSurname}`.toLowerCase().includes(q) || r.storeName.toLowerCase().includes(q));
     }
-
-    return filteredResult;
-  }, [events, shiftsList, leaveRequestsList, summaryPeriod, filterSearch, i18n.language]);
+    return filtered;
+  }, [events, shiftsList, leaveRequestsList, summaryPeriod, filterSearch, i18n.language, viewMode, dateFrom, dateTo, analyticsDateFrom, analyticsDateTo, summaryStatusFilter]);
 
   const analyticsData = useMemo(() => {
     let list = summaryRows;
@@ -1012,30 +1044,45 @@ export default function AttendanceLogsPage() {
       list = list.filter(r => r.dateKey >= analyticsDateFrom && r.dateKey <= analyticsDateTo);
     }
 
-    let sumScheduled = 0;
+    let sumScheduled = 0;      // gross scheduled (all due shifts)
+    let sumEffective = 0;      // scheduled after leave is excused
     let sumWorked = 0;
     let sumOvertime = 0;
     let sumUndertime = 0;
+    let sumLeave = 0;
+    let sumAbsent = 0;
+    let shiftCount = 0;
+    const employeeIds = new Set<number>();
 
     list.forEach(r => {
       sumScheduled += r.scheduledMinutes;
+      sumEffective += r.effectiveScheduledMinutes;
       sumWorked += r.workedMinutes;
-      const diff = r.workedMinutes - r.scheduledMinutes;
-      if (diff > 0) {
-        sumOvertime += diff;
-      } else if (diff < 0) {
-        sumUndertime += Math.abs(diff);
-      }
+      sumLeave += r.neutralizedMinutes;
+      sumAbsent += r.absentMinutes;
+      shiftCount += r.shifts.length;
+      employeeIds.add(r.userId);
+      // Pending / in-progress days aren't "due" yet — exclude from over/undertime so
+      // the buckets always reconcile with the net balance. No tolerance in analytics.
+      if (r.status === 'pending' || r.status === 'in_progress') return;
+      if (r.varianceMinutes > 0) sumOvertime += r.varianceMinutes;
+      else if (r.varianceMinutes < 0) sumUndertime += Math.abs(r.varianceMinutes);
     });
 
     return {
       rows: list,
       sumScheduled,
+      sumEffective,
       sumWorked,
       sumOvertime,
       sumUndertime,
-      netDiff: sumWorked - sumScheduled,
-      completionRate: sumScheduled > 0 ? Math.round((sumWorked / sumScheduled) * 100) : (sumWorked > 0 ? 100 : 0),
+      sumLeave,
+      sumAbsent,
+      shiftCount,
+      employeeCount: employeeIds.size,
+      netBalance: sumOvertime - sumUndertime,   // overall balance (overtime − missing)
+      netDiff: sumWorked - sumEffective,
+      completionRate: sumEffective > 0 ? Math.round((sumWorked / sumEffective) * 100) : (sumWorked > 0 ? 100 : 0),
     };
   }, [summaryRows, analyticsCompany, analyticsStoreId, analyticsUserId, analyticsDateFrom, analyticsDateTo, filterStores]);
 
@@ -1738,11 +1785,39 @@ export default function AttendanceLogsPage() {
       ) : viewMode === 'summary' ? (
         <div style={{
           display: 'flex',
-          justifyContent: 'flex-end',
+          justifyContent: 'space-between',
           alignItems: 'center',
+          gap: 12,
           margin: '0 0 16px 0',
           width: '100%',
+          flexWrap: 'wrap',
         }}>
+          {/* Shift-status filter pills (like the event-type pills in the logs view) */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {(['scheduled', 'confirmed', 'cancelled'] as const).map(st => {
+              const meta = SHIFT_STATUS_META[st];
+              const active = summaryStatusFilter === st;
+              return (
+                <button
+                  key={st}
+                  onClick={() => setSummaryStatusFilter(active ? null : st)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 20, flexShrink: 0,
+                    border: `1.5px solid ${active ? meta.border : 'var(--border)'}`,
+                    background: active ? meta.bg : 'transparent',
+                    color: active ? meta.color : 'var(--text-secondary)',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                    display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+                    boxShadow: active ? '0 2px 6px rgba(0,0,0,0.12)' : 'none',
+                  }}
+                >
+                  <span style={{ fontSize: 11 }}>{meta.icon}</span>
+                  {t(meta.labelKey, meta.defaultLabel)}
+                </button>
+              );
+            })}
+          </div>
+
           <button
             onClick={() => {
               setTempOvertimeLimit(overtimeLimit);
@@ -1750,19 +1825,10 @@ export default function AttendanceLogsPage() {
               setShowToleranceModal(true);
             }}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              borderRadius: 12,
-              fontSize: 13,
-              fontWeight: 700,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+              border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)',
+              cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
             }}
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)'; }}
@@ -1819,8 +1885,8 @@ export default function AttendanceLogsPage() {
 
                 {/* Company Select */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
-                    🏢 {t('attendance.analyticsSelectCompany', 'Azienda')}
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Building size={13} style={{ color: 'var(--accent)' }} /> {t('attendance.analyticsSelectCompany', 'Azienda')}
                   </label>
                   <CustomSelect
                     value={analyticsCompany || null}
@@ -1839,8 +1905,8 @@ export default function AttendanceLogsPage() {
 
                 {/* Store Select */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
-                    📍 {t('attendance.analyticsSelectStore', 'Negozio')}
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <MapPin size={13} style={{ color: 'var(--accent)' }} /> {t('attendance.analyticsSelectStore', 'Negozio')}
                   </label>
                   <CustomSelect
                     value={analyticsStoreId || null}
@@ -1858,8 +1924,8 @@ export default function AttendanceLogsPage() {
 
                 {/* Employee Select */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
-                    👤 {t('attendance.analyticsSelectEmployee', 'Dipendente')}
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <User size={13} style={{ color: 'var(--accent)' }} /> {t('attendance.analyticsSelectEmployee', 'Dipendente')}
                   </label>
                   <CustomSelect
                     value={analyticsUserId || null}
@@ -1874,8 +1940,8 @@ export default function AttendanceLogsPage() {
 
                 {/* Date Range */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
-                    📅 {t('common.date', 'Periodo')}
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Calendar size={13} style={{ color: 'var(--accent)' }} /> {t('common.date', 'Periodo')}
                   </label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <DatePicker value={analyticsDateFrom} onChange={setAnalyticsDateFrom} placeholder="Data da" />
@@ -1927,44 +1993,80 @@ export default function AttendanceLogsPage() {
                   </div>
                 </div>
 
-                {/* 4 Summary Metric Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
-                  <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      📋 {t('attendance.totalScheduled', 'Programmate')}
+                {/* Overall balance headline (client request: overtime − missing, clear final view) */}
+                {(() => {
+                  const net = analyticsData.netBalance;
+                  const positive = net >= 0;
+                  const col = positive ? '#16a34a' : '#dc2626';
+                  return (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+                      background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)',
+                      borderLeft: `4px solid ${col}`, padding: '14px 20px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Scale size={15} style={{ color: col }} /> {t('attendance.overallBalance', 'Saldo Complessivo')}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {t('attendance.overallBalanceDesc', 'Straordinari netti − Ore mancanti nette')}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: col, fontFamily: 'var(--font-display)' }}>
+                        {positive ? '+' : '−'}{formatHoursStr(net)}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                      {formatHoursStr(analyticsData.sumScheduled)}
-                    </div>
-                  </div>
+                  );
+                })()}
 
-                  <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      ⏱ {t('attendance.totalWorked', 'Lavorate')}
+                {/* 4 Summary Metric Cards — each shows the population it is measured against */}
+                {(() => {
+                  const empCount = analyticsData.employeeCount;
+                  const countByShift = !!analyticsUserId;
+                  const otUtCount = countByShift ? analyticsData.shiftCount : empCount;
+                  const empChip = (n: number, byShift = false) => (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {byShift ? '📋' : '👥'} {n} {byShift ? t('attendance.shiftsCount', 'turni') : t('attendance.employeesCount', 'dipendenti')}
+                    </span>
+                  );
+                  const cardHeader = (label: React.ReactNode, chip: React.ReactNode) => (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+                      {chip}
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                      {formatHoursStr(analyticsData.sumWorked)}
-                    </div>
-                  </div>
+                  );
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
+                      <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
+                        {cardHeader(<>📋 {t('attendance.totalScheduled', 'Programmate')}</>, empChip(empCount))}
+                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                          {formatHoursStr(analyticsData.sumScheduled)}
+                        </div>
+                      </div>
 
-                  <div style={{ background: 'rgba(22,163,74,0.06)', borderRadius: 12, border: '1px solid rgba(22,163,74,0.2)', padding: 14 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      ▲ {t('attendance.totalOvertime', 'Straordinari Netti')}
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                      +{formatHoursStr(analyticsData.sumOvertime)}
-                    </div>
-                  </div>
+                      <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
+                        {cardHeader(<>⏱ {t('attendance.totalWorked', 'Lavorate')}</>, empChip(empCount))}
+                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                          {formatHoursStr(analyticsData.sumWorked)}
+                        </div>
+                      </div>
 
-                  <div style={{ background: 'rgba(220,38,38,0.06)', borderRadius: 12, border: '1px solid rgba(220,38,38,0.2)', padding: 14 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      ▼ {t('attendance.totalUndertime', 'Ore Mancanti Nette')}
+                      <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
+                        {cardHeader(<span style={{ color: '#16a34a' }}>▲ {t('attendance.totalOvertime', 'Straordinari Netti')}</span>, empChip(otUtCount, countByShift))}
+                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                          <span style={{ color: '#16a34a' }}>+{formatHoursStr(analyticsData.sumOvertime)}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
+                        {cardHeader(<span style={{ color: '#dc2626' }}>▼ {t('attendance.totalUndertime', 'Ore Mancanti Nette')}</span>, empChip(otUtCount, countByShift))}
+                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                          <span style={{ color: '#dc2626' }}>−{formatHoursStr(analyticsData.sumUndertime)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                      -{formatHoursStr(analyticsData.sumUndertime)}
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Visual Comparative Chart Panel */}
                 <div style={{
@@ -1980,120 +2082,79 @@ export default function AttendanceLogsPage() {
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {analyticsData.rows.slice(0, 25).map((r) => {
-                        const pct = r.scheduledMinutes > 0
-                          ? Math.round((r.workedMinutes / r.scheduledMinutes) * 100)
-                          : (r.workedMinutes > 0 ? 100 : 0);
-                        const vBadge = formatVarianceBadge(r.varianceMinutes, t, overtimeLimit, undertimeLimit, r.dateKey, r.events);
+                      {analyticsData.rows.slice(0, 60).map((r) => {
+                        const denom = r.effectiveScheduledMinutes;
+                        const pctRaw = denom > 0 ? Math.round((r.workedMinutes / denom) * 100) : (r.workedMinutes > 0 ? 100 : 0);
+                        const pct = Math.min(pctRaw, 100);
+                        const completed = denom > 0 && pctRaw >= 100;
+                        // Analytics shows the REAL variance (no tolerance) so rows reconcile with the totals.
+                        const vBadge = varianceDisplay(r, t, { applyTolerance: false });
+                        const barColor = r.status === 'absent'
+                          ? 'linear-gradient(90deg, #dc2626 0%, #f87171 100%)'
+                          : r.varianceMinutes > 0
+                          ? 'linear-gradient(90deg, #16a34a 0%, #22c55e 100%)'
+                          : r.varianceMinutes < 0
+                          ? 'linear-gradient(90deg, #dc2626 0%, #f87171 100%)'
+                          : 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)';
                         const avatarUrl = getAvatarUrl(r.userAvatarFilename);
                         const initials = `${r.userName?.[0] ?? ''}${r.userSurname?.[0] ?? ''}`.toUpperCase();
                         return (
                           <div key={r.key} style={{
-                            background: 'var(--background)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--border)',
-                            display: 'flex', flexDirection: 'column', gap: 10, transition: 'all 0.2s',
+                            background: 'var(--background)', borderRadius: 10, padding: '9px 12px', border: '1px solid var(--border)',
+                            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
                           }}>
-                            {/* Top row */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                {avatarUrl ? (
-                                  <img src={avatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--border)', flexShrink: 0 }} />
-                                ) : (
-                                  <div style={{
-                                    width: 32, height: 32, borderRadius: '50%', background: 'rgba(201,151,58,0.18)',
-                                    color: 'var(--accent)', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                                    border: '1.5px solid rgba(201,151,58,0.3)',
-                                  }}>
-                                    {initials}
-                                  </div>
-                                )}
-                                <div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>{r.userName} {r.userSurname}</span>
-                                    {r.userRole && (
-                                      <span style={{
-                                        fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px',
-                                        padding: '2px 6px', borderRadius: 4, background: 'rgba(13,33,55,0.08)', color: 'var(--primary)',
-                                        border: '1px solid rgba(13,33,55,0.15)', whiteSpace: 'nowrap',
-                                      }}>
-                                        {t(`roles.${r.userRole}`, r.userRole)}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>📅 {r.periodLabel}</div>
+                            {/* Identity */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 190px', minWidth: 170 }}>
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                              ) : (
+                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(201,151,58,0.18)', color: 'var(--accent)', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {initials}
                                 </div>
+                              )}
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.userName} {r.userSurname}</span>
+                                  {r.userRole && (
+                                    <span style={{ fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', padding: '1px 5px', borderRadius: 4, background: 'rgba(13,33,55,0.08)', color: 'var(--primary)', whiteSpace: 'nowrap' }}>
+                                      {t(`roles.${r.userRole}`, r.userRole)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{r.periodLabel}</div>
                               </div>
+                            </div>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div style={{ textAlign: 'right' }}>
-                                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
-                                    {formatHoursStr(r.workedMinutes)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>/ {formatHoursStr(r.scheduledMinutes)}</span>
-                                  </div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textAlign: 'right' }}>
-                                    {pct}% completato
-                                  </div>
-                                </div>
-                                <span style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                                  padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800,
-                                  background: vBadge.bg, color: vBadge.color, border: `1px solid ${vBadge.border}`,
-                                  whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                                }}>
-                                  <span>{vBadge.icon}</span>
-                                  {vBadge.text}
+                            {/* Compact progress */}
+                            <div style={{ flex: '1 1 150px', minWidth: 130 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5, marginBottom: 3 }}>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                                  {formatHoursStr(r.workedMinutes)} <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>/ {formatHoursStr(denom)}</span>
+                                </span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 800, color: completed ? '#16a34a' : 'var(--accent)' }}>
+                                  {completed && <Check size={11} />}{pct}%
                                 </span>
                               </div>
-                            </div>
-
-                            {/* Single Combined Progress Bar */}
-                            <div style={{
-                              height: 8, width: '100%', background: 'var(--surface)', borderRadius: 6,
-                              overflow: 'hidden', border: '1px solid var(--border)', position: 'relative',
-                            }}>
-                              <div style={{
-                                height: '100%',
-                                width: `${Math.min(pct, 100)}%`,
-                                background: r.varianceMinutes > overtimeLimit
-                                  ? 'linear-gradient(90deg, #16a34a 0%, #22c55e 100%)'
-                                  : r.varianceMinutes < -undertimeLimit
-                                  ? 'linear-gradient(90deg, #dc2626 0%, #f87171 100%)'
-                                  : 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)',
-                                borderRadius: 6,
-                                transition: 'width 0.4s ease',
-                              }} />
-                            </div>
-
-                            {/* Approved Leave Info */}
-                            {(r.vacationMinutes > 0 || r.sickMinutes > 0 || r.leaveMinutes > 0) && (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
-                                {r.vacationMinutes > 0 && (
-                                  <span style={{
-                                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
-                                    background: 'rgba(201,151,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)',
-                                    display: 'inline-flex', alignItems: 'center', gap: 4
-                                  }}>
-                                    🌴 {t('leave.type_vacation', 'Ferie')}: {formatHoursStr(r.vacationMinutes)}
-                                  </span>
-                                )}
-                                {r.sickMinutes > 0 && (
-                                  <span style={{
-                                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
-                                    background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.18)',
-                                    display: 'inline-flex', alignItems: 'center', gap: 4
-                                  }}>
-                                    🤒 {t('leave.type_sick', 'Malattia')}: {formatHoursStr(r.sickMinutes)}
-                                  </span>
-                                )}
-                                {r.leaveMinutes > 0 && (
-                                  <span style={{
-                                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
-                                    background: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.18)',
-                                    display: 'inline-flex', alignItems: 'center', gap: 4
-                                  }}>
-                                    📄 {t('leave.duration_short_leave', 'Permessi')}: {formatHoursStr(r.leaveMinutes)}
-                                  </span>
-                                )}
+                              <div style={{ height: 5, width: '100%', background: 'var(--surface)', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 4, transition: 'width 0.4s ease' }} />
                               </div>
-                            )}
+                            </div>
+
+                            {/* Variance (real) + leave chips */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flex: '0 1 auto' }}>
+                              {r.vacationMinutes > 0 && (
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(201,151,58,0.1)', color: 'var(--accent)' }}>🌴 {formatHoursStr(r.vacationMinutes)}</span>
+                              )}
+                              {r.sickMinutes > 0 && (
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', color: '#ef4444' }}>🤒 {formatHoursStr(r.sickMinutes)}</span>
+                              )}
+                              {r.leaveMinutes > 0 && (
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>📄 {formatHoursStr(r.leaveMinutes)}</span>
+                              )}
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 800, color: vBadge.color, whiteSpace: 'nowrap', minWidth: 62, justifyContent: 'flex-end' }}>
+                                <span style={{ fontSize: 11 }}>{vBadge.icon}</span>{vBadge.text}
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
@@ -2507,7 +2568,7 @@ export default function AttendanceLogsPage() {
                           </tr>
                         ) : (
                           summaryRows.slice(0, 500).map((row, idx) => {
-                            const vBadge = formatVarianceBadge(row.varianceMinutes, t, overtimeLimit, undertimeLimit, row.dateKey, row.events);
+                            const vBadge = varianceDisplay(row, t, { applyTolerance: true, overtimeLimit, undertimeLimit });
                             const avatarUrl = getAvatarUrl(row.userAvatarFilename);
                             const initials = `${row.userName?.[0] ?? ''}${row.userSurname?.[0] ?? ''}`.toUpperCase();
                             return (
@@ -2552,7 +2613,7 @@ export default function AttendanceLogsPage() {
                                 <td style={{ padding: compact ? '6px 10px' : '10px 14px', fontSize: compact ? 12 : 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                                   {row.periodLabel}
                                 </td>
-                                {/* Shifts Column */}
+                                {/* Shifts Column — colour = status, icon kept; dot & status-word removed; per-shift worked hours shown */}
                                 <td style={{ padding: compact ? '6px 10px' : '10px 14px' }}>
                                   {row.shifts.length === 0 ? (
                                     <span style={{ fontSize: compact ? 11 : 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
@@ -2562,99 +2623,111 @@ export default function AttendanceLogsPage() {
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 2 : 4 }}>
                                       {row.shifts.map(s => {
                                         const sMeta = SHIFT_STATUS_META[s.status] || SHIFT_STATUS_META.scheduled;
+                                        const dur = shiftDurationMinutes(s);
                                         return (
-                                          <span key={s.id} style={{
+                                          <span key={s.id} title={t(sMeta.labelKey, sMeta.defaultLabel)} style={{
                                             fontSize: compact ? 10 : 11, fontWeight: 700, color: sMeta.color,
                                             background: sMeta.bg, border: `1px solid ${sMeta.border}`,
-                                            padding: compact ? '2px 6px' : '3px 8px', borderRadius: 6,
+                                            padding: compact ? '2px 7px' : '3px 9px', borderRadius: 6,
                                             display: 'inline-flex', alignItems: 'center', gap: 6,
                                             boxShadow: '0 2px 4px rgba(0,0,0,0.12)',
                                             width: 'fit-content', whiteSpace: 'nowrap',
                                           }}>
-                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: sMeta.dot, flexShrink: 0 }} />
                                             <span>{sMeta.icon} {s.startTime.slice(0,5)} - {s.endTime.slice(0,5)}</span>
-                                            <span style={{ opacity: 0.85, fontSize: compact ? 9 : 10, fontWeight: 600, borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 6 }}>
-                                              {t(sMeta.labelKey, sMeta.defaultLabel)}
-                                            </span>
+                                            {!s.isOffDay && s.startTime && s.endTime && (
+                                              <span style={{ opacity: 0.9, fontSize: compact ? 9 : 10, fontWeight: 700, borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 6 }}>
+                                                {formatShiftDuration(dur)}
+                                              </span>
+                                            )}
                                           </span>
                                         );
                                       })}
                                     </div>
                                   )}
                                 </td>
-                                {/* Worked Hours */}
+                                {/* Worked Hours — "__:__" placeholder when nothing was clocked */}
                                 <td style={{ padding: compact ? '6px 10px' : '10px 14px', width: 95, whiteSpace: 'nowrap' }}>
-                                  <span style={{
-                                    fontSize: compact ? 12 : 13, fontWeight: 800, color: 'var(--primary)',
-                                    background: 'var(--background)', padding: compact ? '2px 8px' : '4px 10px',
-                                    borderRadius: 8, border: '1px solid var(--border)', display: 'inline-block',
-                                  }}>
-                                    {formatHoursStr(row.workedMinutes)}
-                                  </span>
+                                  {row.workedMinutes === 0 ? (
+                                    <span style={{ fontSize: compact ? 13 : 14, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 1, fontFamily: 'monospace' }}>
+                                      __:__
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      fontSize: compact ? 12 : 13, fontWeight: 800, color: 'var(--primary)',
+                                      background: 'var(--background)', padding: compact ? '2px 8px' : '4px 10px',
+                                      borderRadius: 8, border: '1px solid var(--border)', display: 'inline-block',
+                                    }}>
+                                      {formatHoursStr(row.workedMinutes)}
+                                    </span>
+                                  )}
                                 </td>
-                                {/* Avanzamento Ore */}
+                                {/* Avanzamento — capped at 100% + tick when complete; over-100% lives in Variance */}
                                 <td style={{ padding: compact ? '6px 10px' : '10px 14px', minWidth: 140 }}>
-                                  {(() => {
-                                    const pct = row.scheduledMinutes > 0
-                                      ? Math.round((row.workedMinutes / row.scheduledMinutes) * 100)
-                                      : (row.workedMinutes > 0 ? 100 : 0);
+                                  {(row.status === 'leave' || row.status === 'pending') ? (
+                                    <span style={{ fontSize: compact ? 12 : 13, fontWeight: 700, color: 'var(--text-muted)' }}>—</span>
+                                  ) : (() => {
+                                    const denom = row.effectiveScheduledMinutes;
+                                    const pctRaw = denom > 0 ? Math.round((row.workedMinutes / denom) * 100) : (row.workedMinutes > 0 ? 100 : 0);
+                                    const pct = Math.min(pctRaw, 100);
+                                    const completed = denom > 0 && pctRaw >= 100;
+                                    const barColor = row.status === 'absent'
+                                      ? 'linear-gradient(90deg, #dc2626 0%, #f87171 100%)'
+                                      : completed
+                                      ? 'linear-gradient(90deg, #16a34a 0%, #22c55e 100%)'
+                                      : 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)';
                                     return (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: compact ? 10 : 11 }}>
-                                          <span style={{ color: 'var(--text-secondary)', fontWeight: 700 }}>
-                                            {formatHoursStr(row.scheduledMinutes)} / {formatHoursStr(row.workedMinutes)}
+                                          <span style={{ color: 'var(--text-secondary)', fontWeight: 700, fontFamily: 'monospace' }}>
+                                            {formatHoursStr(row.workedMinutes)} <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>/ {formatHoursStr(denom)}</span>
                                           </span>
-                                          <span style={{ color: 'var(--accent)', fontWeight: 800 }}>
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: completed ? '#16a34a' : 'var(--accent)', fontWeight: 800 }}>
+                                            {completed && <Check size={compact ? 11 : 12} />}
                                             {pct}%
                                           </span>
                                         </div>
                                         <div style={{
-                                          height: compact ? 4 : 5,
-                                          width: '100%',
-                                          background: 'var(--background)',
-                                          borderRadius: 4,
-                                          overflow: 'hidden',
-                                          border: '1px solid var(--border)',
+                                          height: compact ? 4 : 5, width: '100%', background: 'var(--background)',
+                                          borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)',
                                         }}>
-                                          <div style={{
-                                            height: '100%',
-                                            width: `${Math.min(pct, 100)}%`,
-                                            background: 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)',
-                                            borderRadius: 4,
-                                            transition: 'width 0.4s ease',
-                                          }} />
+                                          <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 4, transition: 'width 0.4s ease' }} />
                                         </div>
                                       </div>
                                     );
                                   })()}
                                 </td>
-                                {/* Variance / Overtime */}
+                                {/* Variance — coloured text (no tag); "Absent"/"On time"/"+/-"; red note if leave was approved after the fact */}
                                 <td style={{ padding: compact ? '6px 10px' : '10px 14px', whiteSpace: 'nowrap' }}>
-                                  <span style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                                    padding: compact ? '2px 8px' : '4px 10px', borderRadius: 20,
-                                    fontSize: compact ? 11 : 12, fontWeight: 800,
-                                    background: vBadge.bg, color: vBadge.color, border: `1px solid ${vBadge.border}`,
-                                  }}>
-                                    <span>{vBadge.icon}</span>
-                                    {vBadge.text}
-                                  </span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    <span style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                                      fontSize: compact ? 12 : 13, fontWeight: 800, color: vBadge.color,
+                                    }}>
+                                      <span style={{ fontSize: compact ? 11 : 12 }}>{vBadge.icon}</span>
+                                      {vBadge.text}
+                                    </span>
+                                    {row.leaveApprovedAfter && (
+                                      <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626' }}>
+                                        {t('attendance.leaveApprovedAfter', 'Congedo approvato dopo — non conteggiato')}
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
-                                {/* Actions */}
+                                {/* Actions — plain ghost icon */}
                                 <td style={{ padding: compact ? '6px 10px' : '10px 14px', width: 70, textAlign: 'center', whiteSpace: 'nowrap' }}>
                                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                     <button
                                       onClick={() => setSummaryDrawerItem(row)}
                                       title={t('attendance.viewDetailTooltip', 'Visualizza dettagli turno e timbrature')}
                                       style={{
-                                        padding: compact ? '4px 8px' : '6px 10px', borderRadius: 6,
-                                        border: '1px solid rgba(59,130,246,0.3)',
-                                        background: 'rgba(59,130,246,0.08)',
-                                        color: '#2563eb', cursor: 'pointer', transition: 'all 0.15s',
-                                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: compact ? 11 : 12, fontWeight: 700,
+                                        padding: 6, borderRadius: 8, border: 'none', background: 'transparent',
+                                        color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.15s',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                       }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--surface-warm)'; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
                                     >
-                                      <Eye size={compact ? 13 : 15} />
+                                      <Eye size={compact ? 15 : 17} />
                                     </button>
                                   </div>
                                 </td>
@@ -2682,14 +2755,27 @@ export default function AttendanceLogsPage() {
                       : <><strong>{total}</strong> {t('attendance.found')}</>
                     }
                   </div>
-                  {total > 500 && (
-                    <div style={{
-                      fontSize: 11, color: '#b45309',
-                      background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
-                      padding: '3px 10px', borderRadius: 4, fontWeight: 600,
-                    }}>
-                      {t('attendance.maxResults')}
-                    </div>
+                  {viewMode === 'logs' && events.length < total && (
+                    <button
+                      onClick={loadMoreLogs}
+                      disabled={loadingMore}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '7px 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                        border: '1px solid var(--border)', background: 'var(--surface)',
+                        color: loadingMore ? 'var(--text-muted)' : 'var(--accent)',
+                        cursor: loadingMore ? 'default' : 'pointer', transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={(e) => { if (!loadingMore) e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    >
+                      {loadingMore ? (
+                        <span style={{ width: 13, height: 13, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                      ) : (
+                        <ChevronDown size={14} />
+                      )}
+                      {t('attendance.loadMore', 'Carica altre')} (+{Math.min(LOGS_PAGE_SIZE, total - events.length)})
+                    </button>
                   )}
                 </div>
               )}
@@ -3618,7 +3704,7 @@ export default function AttendanceLogsPage() {
                 onClick={() => {
                   setTempStoreId('');
                   setTempUserId('');
-                  setTempDateFrom(weekAgo);
+                  setTempDateFrom(defaultFrom);
                   setTempDateTo(today);
                 }}
                 style={{
@@ -3779,25 +3865,61 @@ export default function AttendanceLogsPage() {
                   <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>
                     {formatHoursStr(summaryDrawerItem.scheduledMinutes)}
                   </div>
+                  {summaryDrawerItem.neutralizedMinutes > 0 && (
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', marginTop: 2 }}>
+                      {t('attendance.effectiveShort', 'Effettive')}: {formatHoursStr(summaryDrawerItem.effectiveScheduledMinutes)}
+                    </div>
+                  )}
                 </div>
                 <div style={{ background: 'var(--background)', padding: 12, borderRadius: 12, border: '1px solid var(--border)', textAlign: 'center' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('attendance.workedHours', 'Lavorate')}</div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--primary)', marginTop: 4 }}>
-                    {formatHoursStr(summaryDrawerItem.workedMinutes)}
+                    {summaryDrawerItem.workedMinutes === 0 ? '__:__' : formatHoursStr(summaryDrawerItem.workedMinutes)}
                   </div>
                 </div>
                 {(() => {
-                  const vBadge = formatVarianceBadge(summaryDrawerItem.varianceMinutes, t);
+                  const vBadge = varianceDisplay(summaryDrawerItem, t, { applyTolerance: true, overtimeLimit, undertimeLimit });
                   return (
                     <div style={{ background: vBadge.bg, padding: 12, borderRadius: 12, border: `1px solid ${vBadge.border}`, textAlign: 'center' }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: vBadge.color, textTransform: 'uppercase' }}>{t('attendance.variance', 'Scostamento')}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: vBadge.color, marginTop: 4 }}>
-                        {vBadge.text}
+                      <div style={{ fontSize: 15, fontWeight: 800, color: vBadge.color, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span>{vBadge.icon}</span>{vBadge.text}
                       </div>
                     </div>
                   );
                 })()}
               </div>
+
+              {/* Leave / absence breakdown + "approved after" flag */}
+              {(summaryDrawerItem.vacationMinutes > 0 || summaryDrawerItem.sickMinutes > 0 || summaryDrawerItem.leaveMinutes > 0 || summaryDrawerItem.absentMinutes > 0 || summaryDrawerItem.leaveApprovedAfter) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {summaryDrawerItem.vacationMinutes > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: 'rgba(201,151,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)' }}>
+                      🌴 {t('leave.type_vacation', 'Ferie')}: {formatHoursStr(summaryDrawerItem.vacationMinutes)}
+                    </span>
+                  )}
+                  {summaryDrawerItem.sickMinutes > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.18)' }}>
+                      🤒 {t('leave.type_sick', 'Malattia')}: {formatHoursStr(summaryDrawerItem.sickMinutes)}
+                    </span>
+                  )}
+                  {summaryDrawerItem.leaveMinutes > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.18)' }}>
+                      📄 {t('leave.duration_short_leave', 'Permessi')}: {formatHoursStr(summaryDrawerItem.leaveMinutes)}
+                    </span>
+                  )}
+                  {summaryDrawerItem.absentMinutes > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: 'rgba(220,38,38,0.08)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.18)' }}>
+                      ⚠ {t('attendance.statusAbsent', 'Assente')}: {formatHoursStr(summaryDrawerItem.absentMinutes)}
+                    </span>
+                  )}
+                  {summaryDrawerItem.leaveApprovedAfter && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: 'rgba(220,38,38,0.08)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.18)', width: '100%' }}>
+                      {t('attendance.leaveApprovedAfterFull', 'Un congedo è stato approvato dopo che il dipendente aveva già timbrato: non incide sul calcolo.')}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Section 1: Shifts Assigned */}
               <div>
@@ -3818,15 +3940,19 @@ export default function AttendanceLogsPage() {
                           display: 'flex', flexDirection: 'column', gap: 6,
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--primary)' }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                               {s.startTime.slice(0,5)} → {s.endTime.slice(0,5)}
+                              {!s.isOffDay && s.startTime && s.endTime && (
+                                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'rgba(201,151,58,0.12)', padding: '1px 7px', borderRadius: 6 }}>
+                                  {formatShiftDuration(shiftDurationMinutes(s))}
+                                </span>
+                              )}
                             </span>
                             <span style={{
                               fontSize: 11, fontWeight: 700, color: sMeta.color, background: sMeta.bg,
                               border: `1px solid ${sMeta.border}`, padding: '2px 10px', borderRadius: 20,
                               display: 'inline-flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                             }}>
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: sMeta.dot }} />
                               {t(sMeta.labelKey, sMeta.defaultLabel)}
                             </span>
                           </div>
