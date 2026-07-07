@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Cake, PartyPopper, CalendarDays, Palmtree, Thermometer, CheckCircle2, Coffee, AlertCircle, RefreshCw } from 'lucide-react';
+import { Cake, PartyPopper, CalendarDays, Palmtree, Thermometer, CheckCircle2, Coffee, AlertCircle, RefreshCw, ClipboardList, FileText, FileSignature, ChevronRight, MessageSquare, Image as ImageIcon } from 'lucide-react';
 import { Card } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
-import client from '../../api/client';
+import client, { getAvatarUrl } from '../../api/client';
+import { EmployeeDocument, getMyDocuments } from '../../api/documents';
+import { getMessages } from '../../api/messages';
+import { Message } from '../../types';
+import { getEmployeeTasks, OnboardingTask } from '../../api/onboarding';
 
 interface EmployeeProfile {
   id: number;
@@ -44,6 +48,26 @@ interface EmployeeHomeProps {
   data: EmployeeHomeData;
 }
 
+interface DashboardMessageActivity {
+  id: number;
+  senderId: number;
+  senderName: string;
+  senderAvatarFilename?: string | null;
+  createdAt: string;
+  isImage: boolean;
+}
+
+interface ActivityItem {
+  id: string;
+  type: 'task' | 'document';
+  title: string;
+  subtitle: string;
+  dateLabel: string;
+  completed: boolean;
+  sortDate: number;
+  actionPath: string;
+}
+
 // ── Next shift status colors ───────────────────────────────────────────────
 const STATUS_META: Record<string, { bg: string; color: string; labelKey: string }> = {
   confirmed:  { bg: 'rgba(21,128,61,0.10)',  color: '#15803d', labelKey: 'shifts.status.confirmed' },
@@ -76,6 +100,93 @@ function isTomorrow(dateStr: string): boolean {
 
 function fmt(t: string): string {
   return t ? t.slice(0, 5) : '';
+}
+
+function formatActivityDate(dateStr: string | null | undefined, locale: string): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getActivityTimestamp(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  const time = new Date(dateStr).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+const AVATAR_COLORS = ['#0284C7', '#15803D', '#7C3AED', '#C9973A', '#0891B2', '#DC2626', '#D97706'];
+
+function avatarColor(name: string): string {
+  const safeName = name.trim() || 'U';
+  return AVATAR_COLORS[safeName.charCodeAt(0) % AVATAR_COLORS.length];
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return (parts[0] || 'U').slice(0, 2).toUpperCase();
+}
+
+function formatMessageDateTime(dateStr: string, locale: string): string {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString(locale, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function ProgressCircle({ percentage }: { percentage: number }) {
+  const safePercentage = Math.max(0, Math.min(100, percentage));
+  const size = 74;
+  const stroke = 8;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - safePercentage / 100);
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="rgba(13,33,55,0.10)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: 'stroke-dashoffset 0.4s ease' }}
+        />
+      </svg>
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', lineHeight: 1 }}>
+          {safePercentage}%
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Leave balance progress bar ─────────────────────────────────────────────
@@ -132,6 +243,36 @@ function BalanceBar({ balance, locale }: { balance: LeaveBalance; locale: string
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
+const EmployeeAvatar: React.FC<{ name: string; avatarFilename?: string | null }> = ({ name, avatarFilename }) => {
+  const color = avatarColor(name);
+  const avatarUrl = getAvatarUrl(avatarFilename);
+
+  return (
+    <div style={{
+      width: 42,
+      height: 42,
+      borderRadius: '50%',
+      overflow: 'hidden',
+      flexShrink: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: `${color}18`,
+      border: `1px solid ${color}33`,
+      color,
+      fontWeight: 800,
+      fontSize: 15,
+      fontFamily: 'var(--font-display)',
+    }}>
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        initials(name)
+      )}
+    </div>
+  );
+};
+
 export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
   // Defensive check: if data is null, render a loading state.
   if (!data) {
@@ -142,7 +283,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
     );
   }
 
-  const { permissions, user } = useAuth();
+  const { permissions, user, targetCompanyId } = useAuth();
   const { profile, nextShift, leaveBalance = [], isBirthday = false, showLeaveBalance, showShifts } = data;
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -151,6 +292,10 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
   const [dailyState, setDailyState] = useState<any>(null);
   const [stateLoading, setStateLoading] = useState(true);
   const [showRegWarning, setShowRegWarning] = useState(true);
+  const [onboardingTasks, setOnboardingTasks] = useState<OnboardingTask[]>([]);
+  const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -172,6 +317,104 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
     }
     return () => { active = false; };
   }, [profile]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadActivities = async () => {
+      if (!profile?.id) {
+        if (active) setActivitiesLoading(false);
+        return;
+      }
+
+      try {
+        setActivitiesLoading(true);
+        const [tasksResult, docsResult, messagesResult] = await Promise.all([
+          permissions.onboarding === true ? getEmployeeTasks(profile.id) : Promise.resolve({ tasks: [] } as { tasks: OnboardingTask[] }),
+          permissions.documenti === true ? getMyDocuments() : Promise.resolve([] as EmployeeDocument[]),
+          permissions.messaggi === true ? getMessages(targetCompanyId ?? user?.companyId ?? undefined) : Promise.resolve([] as Message[]),
+        ]);
+
+        if (!active) return;
+        setOnboardingTasks(tasksResult.tasks ?? []);
+        setDocuments(docsResult ?? []);
+        setMessages(messagesResult ?? []);
+      } catch (err) {
+        console.error('Error loading employee dashboard activities:', err);
+        if (active) {
+          setOnboardingTasks([]);
+          setDocuments([]);
+          setMessages([]);
+        }
+      } finally {
+        if (active) setActivitiesLoading(false);
+      }
+    };
+
+    void loadActivities();
+    return () => { active = false; };
+  }, [permissions.documenti, permissions.messaggi, permissions.onboarding, profile?.id, targetCompanyId, user?.companyId]);
+
+  const activityItems = useMemo<ActivityItem[]>(() => {
+    const taskItems: ActivityItem[] = onboardingTasks.map((task) => ({
+      id: `task-${task.id}`,
+      type: 'task',
+      title: task.templateName,
+      subtitle: task.completed
+        ? t('home.employee.activityTaskCompleted')
+        : task.dueDate
+          ? t('home.employee.activityTaskDue', { date: formatActivityDate(task.dueDate, locale) })
+          : t('home.employee.activityTaskAssigned'),
+      dateLabel: formatActivityDate(task.updatedAt || task.createdAt, locale),
+      completed: task.completed,
+      sortDate: getActivityTimestamp(task.updatedAt || task.createdAt),
+      actionPath: '/onboarding',
+    }));
+
+    const signatureDocuments = documents.filter((doc) => doc.requiresSignature);
+    const documentItems: ActivityItem[] = signatureDocuments.map((doc) => ({
+      id: `document-${doc.id}`,
+      type: 'document',
+      title: doc.fileName,
+      subtitle: doc.signedAt
+        ? t('home.employee.activityDocumentSigned')
+        : t('home.employee.activityDocumentPending'),
+      dateLabel: formatActivityDate(doc.updatedAt || doc.createdAt, locale),
+      completed: Boolean(doc.signedAt),
+      sortDate: getActivityTimestamp(doc.updatedAt || doc.createdAt),
+      actionPath: '/documenti',
+    }));
+
+    return [...taskItems, ...documentItems].sort((a, b) => b.sortDate - a.sortDate);
+  }, [documents, locale, onboardingTasks, t]);
+
+  const signatureDocuments = useMemo(
+    () => documents.filter((doc) => doc.requiresSignature),
+    [documents],
+  );
+
+  const completedActivities = activityItems.filter((item) => item.completed).length;
+  const totalActivities = activityItems.length;
+  const activityCompletionPercentage = totalActivities === 0 ? 0 : Math.round((completedActivities / totalActivities) * 100);
+
+  const recentDocuments = useMemo(
+    () => [...documents].sort((a, b) => getActivityTimestamp(b.updatedAt || b.createdAt) - getActivityTimestamp(a.updatedAt || a.createdAt)),
+    [documents],
+  );
+
+  const recentMessages = useMemo<DashboardMessageActivity[]>(() => {
+    return messages
+      .filter((message) => message.direction === 'received')
+      .sort((a, b) => getActivityTimestamp(b.createdAt) - getActivityTimestamp(a.createdAt))
+      .map((message) => ({
+        id: message.id,
+        senderId: message.senderId,
+        senderName: message.senderName || t('common.unknownUser', 'Unknown user'),
+        senderAvatarFilename: message.senderAvatarFilename ?? null,
+        createdAt: message.createdAt,
+        isImage: Boolean(message.attachmentFilename),
+      }));
+  }, [messages, t]);
 
   const tRole = (role: string) => (t as (k: string) => string)(`roles.${role}`);
 
@@ -235,6 +478,408 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
           </div>
         </Card>
       )}
+
+      <Card
+        title={t('home.employee.activitiesTitle')}
+        actions={
+          <button
+            onClick={() => navigate('/onboarding')}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 11,
+              color: 'var(--accent)',
+              fontWeight: 600,
+              padding: '4px 8px',
+              borderRadius: 6,
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            {t('home.employee.activitiesAction')}
+          </button>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            padding: '14px 16px',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--surface-warm)',
+            border: '1px solid var(--border-light)',
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                {t('home.employee.activitiesProgressLabel')}
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                {t('home.employee.activitiesProgressValue', { completed: completedActivities, total: totalActivities })}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {t('home.employee.activitiesBreakdown', {
+                  tasks: onboardingTasks.length,
+                  docs: signatureDocuments.length,
+                })}
+              </div>
+            </div>
+            <ProgressCircle percentage={activityCompletionPercentage} />
+          </div>
+
+          <div
+            style={{
+              maxHeight: 258,
+              overflowY: 'auto',
+              paddingRight: 4,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            {activitiesLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 160 }}>
+                <div className="animate-spin" style={{ width: 24, height: 24, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%' }} />
+              </div>
+            ) : activityItems.length === 0 ? (
+              <div style={{
+                minHeight: 160,
+                borderRadius: 'var(--radius-lg)',
+                border: '1px dashed var(--border)',
+                background: 'var(--surface-warm)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                padding: '20px',
+                color: 'var(--text-muted)',
+                fontSize: 13,
+              }}>
+                {t('home.employee.noActivities')}
+              </div>
+            ) : (
+              activityItems.map((item) => {
+                const isTask = item.type === 'task';
+                const color = isTask ? '#1d4ed8' : '#b45309';
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => navigate(item.actionPath)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border-light)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 10,
+                      flexShrink: 0,
+                      background: isTask ? 'rgba(37,99,235,0.12)' : 'rgba(180,83,9,0.12)',
+                      color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      {isTask ? <ClipboardList size={18} /> : <FileSignature size={18} />}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.title}
+                        </div>
+                        <span style={{
+                          flexShrink: 0,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: 99,
+                          background: item.completed ? 'rgba(21,128,61,0.10)' : 'rgba(201,151,58,0.12)',
+                          color: item.completed ? '#15803d' : '#b45309',
+                        }}>
+                          {item.completed ? t('home.employee.activitiesDone') : t('home.employee.activitiesPending')}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}>
+                        {item.subtitle}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {item.dateLabel}
+                      </div>
+                    </div>
+
+                    <ChevronRight size={16} color="var(--text-muted)" />
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 16,
+          }}>
+            <div style={{
+              border: '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--surface)',
+              padding: 14,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              minHeight: 290,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {t('home.employee.recentDocumentsTitle')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {t('home.employee.recentDocumentsSubtitle')}
+                  </div>
+                </div>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(37,99,235,0.10)',
+                  color: '#2563eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <FileText size={18} />
+                </div>
+              </div>
+
+              <div style={{
+                flex: 1,
+                maxHeight: 228,
+                overflowY: 'auto',
+                paddingRight: 4,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}>
+                {activitiesLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 160 }}>
+                    <div className="animate-spin" style={{ width: 24, height: 24, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%' }} />
+                  </div>
+                ) : recentDocuments.length === 0 ? (
+                  <div style={{
+                    minHeight: 160,
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px dashed var(--border)',
+                    background: 'var(--surface-warm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    padding: '20px',
+                    color: 'var(--text-muted)',
+                    fontSize: 13,
+                  }}>
+                    {t('home.employee.noRecentDocuments')}
+                  </div>
+                ) : (
+                  recentDocuments.map((doc) => (
+                    <button
+                      key={doc.id}
+                      onClick={() => navigate(`/documenti?search=${encodeURIComponent(doc.fileName)}`)}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'var(--surface-warm)',
+                        border: '1px solid var(--border-light)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 10,
+                        flexShrink: 0,
+                        background: doc.requiresSignature ? 'rgba(180,83,9,0.12)' : 'rgba(37,99,235,0.12)',
+                        color: doc.requiresSignature ? '#b45309' : '#2563eb',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {doc.requiresSignature ? <FileSignature size={18} /> : <FileText size={18} />}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+                          {doc.fileName}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                          <span style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: 99,
+                            background: doc.requiresSignature ? 'rgba(201,151,58,0.12)' : 'rgba(21,128,61,0.10)',
+                            color: doc.requiresSignature ? '#b45309' : '#15803d',
+                          }}>
+                            {doc.requiresSignature
+                              ? t('home.employee.documentNeedsSignature')
+                              : t('home.employee.documentNoSignature')}
+                          </span>
+                          {doc.requiresSignature && (
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 99,
+                              background: doc.signedAt ? 'rgba(21,128,61,0.10)' : 'rgba(220,38,38,0.08)',
+                              color: doc.signedAt ? '#15803d' : '#dc2626',
+                            }}>
+                              {doc.signedAt ? t('home.employee.activitiesDone') : t('home.employee.activitiesPending')}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {formatActivityDate(doc.updatedAt || doc.createdAt, locale)}
+                        </div>
+                      </div>
+
+                      <ChevronRight size={16} color="var(--text-muted)" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div style={{
+              border: '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--surface)',
+              padding: 14,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              minHeight: 290,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {t('home.employee.messagesTitle')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {t('home.employee.messagesSubtitle')}
+                  </div>
+                </div>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(124,58,237,0.10)',
+                  color: '#7c3aed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <MessageSquare size={18} />
+                </div>
+              </div>
+
+              <div style={{
+                flex: 1,
+                maxHeight: 228,
+                overflowY: 'auto',
+                paddingRight: 4,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}>
+                {activitiesLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 160 }}>
+                    <div className="animate-spin" style={{ width: 24, height: 24, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%' }} />
+                  </div>
+                ) : recentMessages.length === 0 ? (
+                  <div style={{
+                    minHeight: 160,
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px dashed var(--border)',
+                    background: 'var(--surface-warm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    padding: '20px',
+                    color: 'var(--text-muted)',
+                    fontSize: 13,
+                  }}>
+                    {t('home.employee.noMessages')}
+                  </div>
+                ) : (
+                  recentMessages.map((message) => (
+                    <button
+                      key={message.id}
+                      onClick={() => navigate(`/hr-chat?recipientId=${message.senderId}`)}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'var(--surface-warm)',
+                        border: '1px solid var(--border-light)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                      }}
+                    >
+                      <EmployeeAvatar name={message.senderName} avatarFilename={message.senderAvatarFilename} />
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {message.senderName}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', flexShrink: 0 }}>
+                            {formatMessageDateTime(message.createdAt, locale)}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+                          {message.isImage ? <ImageIcon size={14} color="#7c3aed" /> : <MessageSquare size={14} color="#7c3aed" />}
+                          <span style={{ fontSize: 12.5 }}>
+                            {message.isImage
+                              ? t('home.employee.messageSentImage', { name: message.senderName })
+                              : t('home.employee.messageSentText', { name: message.senderName })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <ChevronRight size={16} color="var(--text-muted)" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Next shift */}
       {showShifts !== false && permissions.turni === true && (

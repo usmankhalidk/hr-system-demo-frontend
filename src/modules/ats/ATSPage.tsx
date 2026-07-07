@@ -67,7 +67,7 @@ import { Company, Employee, Store } from '../../types';
 import {
   getJobs, createJob, updateJob, deleteJob, publishJob, getJobCompliance,
   getCandidates, getCandidate, createCandidate, updateCandidateStage, updateCandidateTags, deleteCandidate,
-  getInterviews, createInterview, updateInterview, deleteInterview,
+  getInterviews, getAllInterviews, createInterview, updateInterview, deleteInterview,
   getInterviewFeedbackComments, addInterviewFeedbackComment, deleteInterviewFeedbackComment,
   getInterviewNotifications, sendInterviewEmail,
   getAlerts, getRisks, getAllInterviewFeedbackComments,
@@ -6809,6 +6809,13 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editJob, setEditJob] = useState<JobPosting | null>(null);
+  const [viewJob, setViewJob] = useState<JobPosting | null>(null);
+  const [viewCandidates, setViewCandidates] = useState<Candidate[]>([]);
+  const [viewInterviews, setViewInterviews] = useState<Interview[]>([]);
+  const [viewFeedbacks, setViewFeedbacks] = useState<AllInterviewFeedbackComment[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [deleteTargetJob, setDeleteTargetJob] = useState<JobPosting | null>(null);
+  const [deletingJob, setDeletingJob] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -7087,13 +7094,24 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
   };
 
   const handleDelete = async (job: JobPosting) => {
-    if (!confirm(t('ats.confirmDeleteJob', { title: job.title }))) return;
+    setDeletingJob(true);
     try {
       await deleteJob(job.id, { companyId: job.companyId });
       setJobs((prev) => prev.filter((j) => j.id !== job.id));
+      if (viewJob?.id === job.id) {
+        setViewJob(null);
+        setViewCandidates([]);
+        setViewInterviews([]);
+        setViewFeedbacks([]);
+      }
+      setDeleteTargetJob(null);
       await fetch();
       showToast(t('ats.jobDeleted'), 'success');
-    } catch { showToast(t('ats.errorDelete'), 'error'); }
+    } catch {
+      showToast(t('ats.errorDelete'), 'error');
+    } finally {
+      setDeletingJob(false);
+    }
   };
 
   const handlePublish = async (job: JobPosting) => {
@@ -7104,6 +7122,30 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
       showToast(t('ats.jobPublished'), 'success');
     } catch { showToast(t('ats.errorPublish'), 'error'); }
   };
+
+  const openJobDetails = useCallback(async (job: JobPosting) => {
+    setViewJob(job);
+    setViewLoading(true);
+    try {
+      const [candidatesResult, interviewsResult, feedbacksResult] = await Promise.all([
+        getCandidates({ jobId: job.id, companyId: job.companyId }),
+        getAllInterviews({ positionId: job.id, companyId: job.companyId }),
+        getAllInterviewFeedbackComments({ companyId: job.companyId }),
+      ]);
+
+      const candidateIds = new Set(candidatesResult.map((candidate) => candidate.id));
+      setViewCandidates(candidatesResult);
+      setViewInterviews(interviewsResult.interviews ?? []);
+      setViewFeedbacks(feedbacksResult.filter((feedback) => candidateIds.has(feedback.candidateId)));
+    } catch {
+      setViewCandidates([]);
+      setViewInterviews([]);
+      setViewFeedbacks([]);
+      showToast(t('ats.errorLoad'), 'error');
+    } finally {
+      setViewLoading(false);
+    }
+  }, [showToast, t]);
 
   // Status counts
   const counts = { all: jobs.length, draft: jobs.filter((j) => j.status === 'draft').length, published: jobs.filter((j) => j.status === 'published').length, closed: jobs.filter((j) => j.status === 'closed').length };
@@ -7555,8 +7597,16 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                           })()}
 
                           {/* Actions */}
-                          {canEdit && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => { void openJobDetails(job); }}
+                              >
+                                {t('common.view', 'View')}
+                              </Button>
+                              {canEdit && (
+                                <>
                               {job.status === 'draft' && (
                                 <Button variant="accent" size="sm" onClick={() => handlePublish(job)} style={{ marginRight: 4 }}>
                                   {t('ats.publishPosition', 'Publish position')}
@@ -7617,34 +7667,9 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                               >
                                 <Edit size={16} />
                               </button>
-                              <button
-                                onClick={() => handleDelete(job)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  padding: '6px',
-                                  borderRadius: '50%',
-                                  color: 'var(--text-muted)',
-                                  transition: 'all 0.2s ease',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'rgba(239,68,68,0.08)';
-                                  e.currentTarget.style.color = 'var(--danger)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = 'none';
-                                  e.currentTarget.style.color = 'var(--text-muted)';
-                                }}
-                                title={t('common.delete')}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          )}
+                                </>
+                              )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -7666,6 +7691,355 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
           onClose={() => { setShowModal(false); setEditJob(null); }}
           saving={saving}
         />
+      )}
+
+      {viewJob && (
+        <ModalBackdrop
+          onClose={() => {
+            if (deletingJob) return;
+            setViewJob(null);
+            setViewCandidates([]);
+            setViewInterviews([]);
+            setViewFeedbacks([]);
+          }}
+          width={1080}
+          closeOnBackdropClick={!deletingJob}
+        >
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+            <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 18, fontWeight: 800 }}>
+                  {viewJob.title}
+                </h3>
+                <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{
+                    background: `${STATUS_COLOR[viewJob.status]}08`,
+                    color: STATUS_COLOR[viewJob.status],
+                    border: `1px solid ${STATUS_COLOR[viewJob.status]}33`,
+                    borderRadius: 99,
+                    padding: '2px 10px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}>
+                    {t(`ats.status_${viewJob.status}`)}
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {viewJob.companyName || `Company #${viewJob.companyId}`}
+                  </span>
+                  {viewJob.storeName && (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {viewJob.storeName}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (deletingJob) return;
+                  setViewJob(null);
+                  setViewCandidates([]);
+                  setViewInterviews([]);
+                  setViewFeedbacks([]);
+                }}
+                style={{ background: 'none', border: 'none', cursor: deletingJob ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ padding: '18px 22px', display: 'grid', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+                {[
+                  { label: t('ats.tabCandidates'), value: viewCandidates.length, color: '#0284C7' },
+                  { label: t('ats.tabInterviews'), value: viewInterviews.length, color: '#7C3AED' },
+                  { label: t('ats.feedbackSection', 'Feedback'), value: viewFeedbacks.length, color: '#C9973A' },
+                ].map((item) => (
+                  <div key={item.label} style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                    background: 'var(--background)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>{item.label}</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: item.color }}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', background: 'var(--background)', display: 'grid', gap: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {t('publicCareers.viewDetails', 'View details')}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  {[
+                    { label: t('ats.jobType', 'Job type'), value: t(`ats.jobType_${JOB_TYPE_LABEL[viewJob.jobType]}`) },
+                    { label: t('ats.workArrangement', 'Work arrangement'), value: t(`ats.remoteType_${viewJob.remoteType}`, viewJob.remoteType) },
+                    { label: t('ats.weeklyHours', 'Weekly hours'), value: viewJob.weeklyHours != null ? `${viewJob.weeklyHours} ${t('ats.hoursPerWeek', 'hrs/week')}` : t('common.notSet', 'Not set') },
+                    { label: t('ats.salaryPeriod', 'Salary period'), value: viewJob.salaryPeriod ? t(`ats.salaryPeriod${viewJob.salaryPeriod.charAt(0).toUpperCase()}${viewJob.salaryPeriod.slice(1)}`, viewJob.salaryPeriod) : t('common.notSet', 'Not set') },
+                    { label: t('ats.salaryMin', 'Salary min (€)'), value: viewJob.salaryMin != null ? `€${viewJob.salaryMin}` : t('common.notSet', 'Not set') },
+                    { label: t('ats.salaryMax', 'Salary max (€)'), value: viewJob.salaryMax != null ? `€${viewJob.salaryMax}` : t('common.notSet', 'Not set') },
+                    { label: t('ats.contractType', 'Contract type'), value: viewJob.contractType || t('common.notSet', 'Not set') },
+                    { label: t('ats.department', 'Department'), value: viewJob.department || t('common.notSet', 'Not set') },
+                  ].map((item) => (
+                    <div key={item.label} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 4 }}>
+                        {item.label}
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
+                        {item.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>
+                    {t('ats.locationSection', 'Job location')}
+                  </div>
+                  <div style={{ display: 'grid', gap: 4, fontSize: 13, color: 'var(--text-primary)' }}>
+                    <div>{[viewJob.jobCity || viewJob.city, viewJob.jobState || viewJob.state, viewJob.jobCountry || viewJob.country].filter(Boolean).join(', ') || t('common.notSet', 'Not set')}</div>
+                    {(viewJob.jobPostalCode || viewJob.postalCode || viewJob.jobAddress || viewJob.address) && (
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        {[viewJob.jobPostalCode || viewJob.postalCode, viewJob.jobAddress || viewJob.address].filter(Boolean).join(' • ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>
+                    {t('common.tags', 'Tags')}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {viewJob.tags && viewJob.tags.length > 0 ? viewJob.tags.map((tag) => (
+                      <span key={`${viewJob.id}-modal-tag-${tag}`} style={{
+                        background: 'rgba(201,151,58,0.06)',
+                        color: 'var(--accent)',
+                        border: '1px solid rgba(201,151,58,0.15)',
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}>
+                        {tag}
+                      </span>
+                    )) : (
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('ats.noTags', 'No tags')}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {viewJob.description && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', background: 'var(--background)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                    {t('common.description', 'Description')}
+                  </div>
+                  <div
+                    style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}
+                    dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(viewJob.description) }}
+                  />
+                </div>
+              )}
+
+              {viewLoading ? (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {[1, 2, 3].map((item) => (
+                    <div key={item} className="skeleton" style={{ height: 94, borderRadius: 12 }} />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(2,132,199,0.06)', fontWeight: 700, color: '#0369A1' }}>
+                      {t('ats.tabCandidates')} ({viewCandidates.length})
+                    </div>
+                    {viewCandidates.length === 0 ? (
+                      <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData', 'No data available')}</div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 10, padding: '12px' }}>
+                        {viewCandidates.map((candidate) => (
+                          <div key={candidate.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{candidate.fullName}</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                                  {candidate.email || candidate.phone || t('common.noData', 'No data available')}
+                                </div>
+                              </div>
+                              <span style={{
+                                background: `${STAGE_COLOR[candidate.status]}12`,
+                                color: STAGE_COLOR[candidate.status],
+                                border: `1px solid ${STAGE_COLOR[candidate.status]}25`,
+                                borderRadius: 99,
+                                padding: '3px 10px',
+                                fontSize: 11,
+                                fontWeight: 700,
+                              }}>
+                                {t(`ats.stage_${candidate.status}`)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(124,58,237,0.06)', fontWeight: 700, color: '#6D28D9' }}>
+                      {t('ats.tabInterviews')} ({viewInterviews.length})
+                    </div>
+                    {viewInterviews.length === 0 ? (
+                      <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData', 'No data available')}</div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 10, padding: '12px' }}>
+                        {viewInterviews.map((interview) => (
+                          <div key={interview.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {interview.candidateName} {interview.candidateSurname}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                                  {new Date(interview.scheduledAt).toLocaleString(locale)}{interview.location ? ` • ${interview.location}` : ''}
+                                </div>
+                              </div>
+                              <span style={{
+                                background: 'rgba(124,58,237,0.10)',
+                                color: '#6D28D9',
+                                borderRadius: 99,
+                                padding: '3px 10px',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                textTransform: 'capitalize',
+                              }}>
+                                {interview.interviewType === 'phone' ? t('ats.stage_phone_interview') : t('ats.stage_interview')}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(201,151,58,0.08)', fontWeight: 700, color: '#A16207' }}>
+                      {t('ats.feedbackSection', 'Feedback')} ({viewFeedbacks.length})
+                    </div>
+                    {viewFeedbacks.length === 0 ? (
+                      <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text-muted)' }}>{t('ats.noFeedback', 'No candidate feedback recorded yet')}</div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 10, padding: '12px' }}>
+                        {viewFeedbacks.map((feedback) => (
+                          <div key={feedback.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {[feedback.authorName, feedback.authorSurname].filter(Boolean).join(' ') || t('common.noData', 'No data available')}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                                  {feedback.candidateName}
+                                </div>
+                              </div>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {new Date(feedback.createdAt).toLocaleString(locale)}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55, background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', whiteSpace: 'pre-wrap' }}>
+                              {feedback.body}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '16px 22px 18px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div>
+                {canEdit && (
+                  <Button
+                    variant="danger"
+                    onClick={() => setDeleteTargetJob(viewJob)}
+                    disabled={deletingJob}
+                  >
+                    {t('common.delete', 'Delete')}
+                  </Button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {canEdit && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setViewJob(null);
+                      setViewCandidates([]);
+                      setViewInterviews([]);
+                      setViewFeedbacks([]);
+                      setEditJob(viewJob);
+                      setShowModal(true);
+                    }}
+                    disabled={deletingJob}
+                  >
+                    {t('common.edit', 'Edit')}
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (deletingJob) return;
+                    setViewJob(null);
+                    setViewCandidates([]);
+                    setViewInterviews([]);
+                    setViewFeedbacks([]);
+                  }}
+                  disabled={deletingJob}
+                >
+                  {t('common.close', 'Close')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {deleteTargetJob && (
+        <ModalBackdrop onClose={() => !deletingJob && setDeleteTargetJob(null)} width={460} closeOnBackdropClick={!deletingJob}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+            <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                {t('common.delete', 'Delete')} {deleteTargetJob.title}
+              </h3>
+            </div>
+            <div style={{ padding: '18px 22px', display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 12, background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.18)' }}>
+                <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                  If you delete this position, all candidates, interviews, and feedback related to this position will be permanently deleted from the Recruiting page.
+                  Candidates already hired from this job will be removed from the ATS hired column, but their employee record will remain in the Employees page.
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 22px 18px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <Button variant="secondary" onClick={() => setDeleteTargetJob(null)} disabled={deletingJob}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button variant="danger" onClick={() => void handleDelete(deleteTargetJob)} loading={deletingJob}>
+                {t('common.delete', 'Delete')}
+              </Button>
+            </div>
+          </div>
+        </ModalBackdrop>
       )}
 
       {showLinksModal && (() => {
@@ -9710,8 +10084,8 @@ const KanbanPanel: React.FC<{
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
                 <div className="skeleton" style={{ height: 12, width: '55%' }} />
               </div>
-              <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[1, 2].map((i) => (
+              <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 468, overflowY: 'auto' }}>
+                {[1, 2, 3, 4].map((i) => (
                   <div key={i} style={{ background: 'var(--surface)', borderRadius: 10, padding: '12px' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <div className="skeleton" style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }} />
@@ -9766,7 +10140,7 @@ const KanbanPanel: React.FC<{
                 </div>
 
                 {/* Cards */}
-                <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 80 }}>
+                <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 80, maxHeight: 468, overflowY: 'auto' }}>
                   {cols.length === 0 && (
                     <div style={{
                       textAlign: 'center', padding: '20px 8px',
@@ -10917,6 +11291,7 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
   const [alerts, setAlerts] = useState<HRAlert[]>([]);
   const [risks, setRisks] = useState<JobRisk[]>([]);
   const [feedbacks, setFeedbacks] = useState<AllInterviewFeedbackComment[]>([]);
+  const [visibleFeedbackCount, setVisibleFeedbackCount] = useState(8);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -10958,6 +11333,10 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
     };
   }, [canViewRisks, companyId]);
 
+  useEffect(() => {
+    setVisibleFeedbackCount(8);
+  }, [companyId, feedbacks.length]);
+
   const ALERT_ICON: Record<string, string> = {
     new_candidates: '👤',
     interview_today: '🗓',
@@ -10995,6 +11374,11 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
   );
 
   const atRiskJobs = risks.filter((r) => r.riskLevel !== 'ok');
+  const sortedFeedbacks = [...feedbacks].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const visibleFeedbacks = sortedFeedbacks.slice(0, visibleFeedbackCount);
+  const hasMoreFeedbacks = visibleFeedbacks.length < sortedFeedbacks.length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -11167,8 +11551,9 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-            {feedbacks.map((fb) => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+            {visibleFeedbacks.map((fb) => {
               const d = new Date(fb.createdAt);
               const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
               const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -11245,6 +11630,14 @@ const AlertsPanel: React.FC<{ canViewRisks: boolean; companyId?: number }> = ({ 
                 </div>
               );
             })}
+            </div>
+            {hasMoreFeedbacks && (
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <Button variant="secondary" onClick={() => setVisibleFeedbackCount((prev) => prev + 8)}>
+                  {t('common.loadMore', 'Load More')}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

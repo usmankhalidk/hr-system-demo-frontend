@@ -1854,7 +1854,7 @@ export default function PublicJobDetailPage() {
                                         checked={isChecked}
                                         onChange={(e) => setScreenerAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
                                         required={q.required}
-                                        style={{ accentColor: '#C9973A' }}
+                                        style={{ accentColor: '#C9973A', width: 'auto' }}
                                       />
                                       {opt.label}
                                     </label>
@@ -1884,7 +1884,7 @@ export default function PublicJobDetailPage() {
                                         value={opt.value}
                                         checked={isChecked}
                                         onChange={handleCheckboxChange}
-                                        style={{ accentColor: '#C9973A' }}
+                                        style={{ accentColor: '#C9973A', width: 'auto' }}
                                       />
                                       {opt.label}
                                     </label>
