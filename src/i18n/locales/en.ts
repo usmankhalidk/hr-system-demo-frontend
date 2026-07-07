@@ -2989,7 +2989,7 @@ const en = {
     items: {
       benvenuto_email: {
         label: 'Welcome email',
-        desc: 'Automatically send a welcome email to new employees with access credentials.',
+        desc: 'Automatically send a welcome email.',
         trigger: 'Employee creation',
       },
       onboarding_reminder: {
@@ -3009,7 +3009,7 @@ const en = {
       },
       anomalia_ritardo: {
         label: 'Late arrival alert',
-        desc: 'Notify Store Manager and Area Manager when an employee arrives more than 10 minutes late.',
+        desc: 'Notify when an employee arrives more than 10 minutes late.',
         trigger: 'Late check-in',
       },
       anomalia_noshow: {
@@ -3019,7 +3019,7 @@ const en = {
       },
       notifica_turni: {
         label: 'Employee shifts',
-        desc: 'Automatically send a work schedule email to employees when a new shift is assigned to them.',
+        desc: 'Automatically send a work schedule email when a new shift is assigned.',
         trigger: 'Shift assignment',
       },
       turno_scoperto: {
@@ -3029,22 +3029,22 @@ const en = {
       },
         approvazione_turni: {
           label: 'Shift approval reminder',
-          desc: 'Remind HR to approve shifts in "Confirmed" status after 24h.',
+          desc: 'Reminder to approve shifts in "Confirmed" status after 24h.',
           trigger: 'Every 24h if pending shifts',
         },
       ferie_approvazione: {
         label: 'Leave request notification',
-        desc: 'Send notification to the manager when an employee submits a leave or holiday request.',
+        desc: 'Send notification when an employee submits a leave or holiday request.',
         trigger: 'New leave request',
       },
       ferie_esito: {
         label: 'Leave result notification',
-        desc: 'Inform the employee via in-app and email when the request is approved or rejected.',
+        desc: 'Inform when the employee\'s leave request is approved or rejected.',
         trigger: 'Request status change',
       },
       document_signature: {
         label: 'Signature email automation',
-        desc: 'Automatically send an email notification to the assigned user when a document requires signature.',
+        desc: 'Automatically send an email notification when a document requires signature for employees.',
         trigger: 'Document assigned with signature required',
       },
     },
