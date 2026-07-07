@@ -10116,7 +10116,10 @@ const KanbanPanel: React.FC<{
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
                 <div className="skeleton" style={{ height: 12, width: '55%' }} />
               </div>
-              <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 468, overflowY: 'auto' }}>
+              <div
+                className="no-scrollbar"
+                style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 468, overflowY: 'auto' }}
+              >
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} style={{ background: 'var(--surface)', borderRadius: 10, padding: '12px' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -10172,7 +10175,10 @@ const KanbanPanel: React.FC<{
                 </div>
 
                 {/* Cards */}
-                <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 80, maxHeight: 468, overflowY: 'auto' }}>
+                <div
+                  className="no-scrollbar"
+                  style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 80, maxHeight: 468, overflowY: 'auto' }}
+                >
                   {cols.length === 0 && (
                     <div style={{
                       textAlign: 'center', padding: '20px 8px',
