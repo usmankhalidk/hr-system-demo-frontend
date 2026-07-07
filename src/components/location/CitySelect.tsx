@@ -13,6 +13,14 @@ interface CitySelectProps {
   error?: string;
   isClearable?: boolean;
   highlightSelected?: boolean;
+  /**
+   * When the location dataset has no cities for the selected country/province
+   * (e.g. several Italian provinces such as Como return an empty city list),
+   * fall back to a free-text input so the user can still enter a city name.
+   * Enabled by default — it only activates when the dropdown would otherwise
+   * be empty and unusable.
+   */
+  allowFreeText?: boolean;
 }
 
 export function CitySelect({
@@ -26,6 +34,7 @@ export function CitySelect({
   error,
   isClearable = true,
   highlightSelected = false,
+  allowFreeText = true,
 }: CitySelectProps) {
   const [cities, setCities] = useState<CityOption[]>([]);
   const [loading, setLoading] = useState(Boolean(countryCode));
@@ -80,6 +89,10 @@ export function CitySelect({
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [cities]);
 
+  // When a country/state is selected but the dataset returns no cities for it,
+  // switch to a free-text input instead of leaving a disabled, empty dropdown.
+  const freeTextMode = allowFreeText && Boolean(countryCode) && !loading && options.length === 0;
+
   // Prevent parent onChange updates from triggering the effect loop
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -87,11 +100,12 @@ export function CitySelect({
   useEffect(() => {
     if (!value) return;
     if (loading) return; // Wait until options are loaded before validating
+    if (freeTextMode) return; // Keep manually-entered value when no dataset options exist
     if (options.some((option) => option.value === value)) return;
     onChangeRef.current(null);
-  }, [value, options, loading]);
+  }, [value, options, loading, freeTextMode]);
 
-  const isDisabled = disabled || !countryCode || options.length === 0 || loading;
+  const isDisabled = disabled || !countryCode || (options.length === 0 && !freeTextMode) || loading;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 4 }}>
@@ -100,22 +114,48 @@ export function CitySelect({
           {label}
         </label>
       )}
-      <CustomSelect
-        options={options}
-        value={value}
-        onChange={onChange}
-        placeholder={
-          loading
-            ? 'Loading cities...'
-            : countryCode
-            ? placeholder
-            : 'Select country first'
-        }
-        disabled={isDisabled}
-        error={error}
-        isClearable={isClearable}
-        highlightSelected={highlightSelected}
-      />
+      {freeTextMode ? (
+        <input
+          type="text"
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value.trim() === '' ? null : e.target.value)}
+          disabled={disabled}
+          placeholder={placeholder}
+          style={{
+            width: '100%',
+            minHeight: 40,
+            padding: '8px 12px',
+            border: error ? '1px solid var(--danger)' : '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            background: disabled ? 'var(--background-muted)' : '#ffffff',
+            color: 'var(--text-primary)',
+            fontFamily: 'inherit',
+            fontSize: 14,
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+        />
+      ) : (
+        <CustomSelect
+          options={options}
+          value={value}
+          onChange={onChange}
+          placeholder={
+            loading
+              ? 'Loading cities...'
+              : countryCode
+              ? placeholder
+              : 'Select country first'
+          }
+          disabled={isDisabled}
+          error={error}
+          isClearable={isClearable}
+          highlightSelected={highlightSelected}
+        />
+      )}
+      {freeTextMode && error && (
+        <span style={{ marginTop: 4, fontSize: 12, color: 'var(--danger)', display: 'block' }}>{error}</span>
+      )}
     </div>
   );
 }

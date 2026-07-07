@@ -15,6 +15,7 @@ import {
   Globe2,
   Heart,
   Languages,
+  Mail,
   MapPin,
   Pencil,
   Phone,
@@ -2635,9 +2636,12 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
   // Indeed Readiness calculation
   const isIndeedCheck1Pass = title.trim() !== '' && title.length < 100 && !/hiring|urgente|subito/i.test(title);
   const isIndeedCheck2Pass = (description || '').includes('<p>') && ((description || '').includes('<ul>') || (description || '').includes('<ol>'));
-  const isIndeedCheck3Pass = (locationOverride.city || '').trim() !== '' && 
-                             /^[A-Z]{2}$/.test((locationOverride.state || '').trim()) && 
-                             (locationOverride.postalCode || '').trim() !== '';
+  // Minimal location validation: Indeed only requires a city + country for
+  // on-site/hybrid roles (province code is normalised automatically on save,
+  // postal code is optional). Fully-remote roles need no location at all.
+  const isIndeedCheck3Pass = remoteType === 'remote' ||
+                             ((locationOverride.city || '').trim() !== '' &&
+                              (locationOverride.country || '').trim() !== '');
   const isIndeedCheck4Pass = parseFloat(salaryMinInput) > 0;
   const isIndeedCheck5Pass = questions.length > 0;
 
@@ -2815,146 +2819,6 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                 </div>
               </div>
 
-              {/* Indeed Readiness Section */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 10, display: 'grid', gap: 7 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7 }}>
-                  <span style={{ color: '#CBD5E1', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
-                    Indeed Readiness
-                  </span>
-                  <span style={{ color: '#F8FAFC', fontSize: 11, fontWeight: 700 }}>
-                    {indeedScore}/5
-                  </span>
-                </div>
-                
-                <div style={{ height: 4, borderRadius: 99, background: 'rgba(234, 194, 110, 0.1)', overflow: 'hidden' }}>
-                  <div style={{ width: `${(indeedScore / 5) * 100}%`, height: '100%', background: indeedProgressGradient, borderRadius: 99, transition: 'all 0.3s ease' }} />
-                </div>
-
-                <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
-                  {/* Check 1 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
-                    {isIndeedCheck1Pass ? (
-                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
-                    ) : (
-                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
-                    )}
-                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck1Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
-                        Titolo valido
-                      </span>
-                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
-                        Title valid
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Check 2 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
-                    {isIndeedCheck2Pass ? (
-                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
-                    ) : (
-                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
-                    )}
-                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck2Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
-                        Descrizione strutturata
-                      </span>
-                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
-                        Description structured
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Check 3 */}
-                  <div 
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}
-                    title={!isIndeedCheck3Pass ? "Inserisci città, codice provincia (es. NA, MI) e CAP / Enter city, province code (e.g. NA, MI) and ZIP" : undefined}
-                  >
-                    {isIndeedCheck3Pass ? (
-                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
-                    ) : (
-                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
-                    )}
-                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck3Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
-                        Posizione completa
-                      </span>
-                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
-                        Location complete
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Check 4 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
-                    {isIndeedCheck4Pass ? (
-                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
-                    ) : (
-                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
-                    )}
-                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck4Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
-                        Retribuzione indicata
-                      </span>
-                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
-                        Salary provided
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Check 5 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
-                    {isIndeedCheck5Pass ? (
-                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
-                    ) : (
-                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
-                    )}
-                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck5Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
-                        Domande di screening
-                      </span>
-                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
-                        Screener questions
-                      </span>
-                      {!isIndeedCheck5Pass && (
-                        <span 
-                          onClick={() => setStep(3)}
-                          style={{ 
-                            fontSize: '11px', 
-                            color: '#F8D98B', 
-                            cursor: 'pointer', 
-                            textDecoration: 'underline',
-                            marginTop: 2,
-                            fontWeight: 600,
-                            display: 'inline-block'
-                          }}
-                        >
-                          → Step 3 (Screening questions)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 6, display: 'grid', gap: 2, paddingLeft: 8 }}>
-                  {indeedScore === 5 && (
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#4ADE80' }}>
-                      Pronto per Indeed ✓ <span style={{ fontSize: '10px', color: 'rgba(74,222,128,0.7)', fontWeight: 400 }}>(Ready for Indeed)</span>
-                    </span>
-                  )}
-                  {indeedScore === 4 && (
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#EAC26E' }}>
-                      Quasi pronto — 1 verifica mancante <span style={{ fontSize: '10px', color: 'rgba(234,194,110,0.7)', fontWeight: 400 }}>(Almost ready — 1 check missing)</span>
-                    </span>
-                  )}
-                  {indeedScore < 4 && (
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#F87171' }}>
-                      {5 - indeedScore} verifiche mancanti <span style={{ fontSize: '10px', color: 'rgba(248,113,113,0.7)', fontWeight: 400 }}>({5 - indeedScore} checks missing)</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 10, display: 'grid', gap: 5 }}>
                 <div style={{ display: 'grid', gap: 5, marginTop: 2 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#F8FAFC' }}>
@@ -3041,6 +2905,146 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                       </span>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Indeed Readiness Section */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 10, display: 'grid', gap: 7 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7 }}>
+                  <span style={{ color: '#CBD5E1', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                    Indeed Readiness
+                  </span>
+                  <span style={{ color: '#F8FAFC', fontSize: 11, fontWeight: 700 }}>
+                    {indeedScore}/5
+                  </span>
+                </div>
+                
+                <div style={{ height: 4, borderRadius: 99, background: 'rgba(234, 194, 110, 0.1)', overflow: 'hidden' }}>
+                  <div style={{ width: `${(indeedScore / 5) * 100}%`, height: '100%', background: indeedProgressGradient, borderRadius: 99, transition: 'all 0.3s ease' }} />
+                </div>
+
+                <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+                  {/* Check 1 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck1Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck1Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Titolo valido
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Title valid
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 2 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck2Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck2Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Descrizione strutturata
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Description structured
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 3 */}
+                  <div 
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}
+                    title={!isIndeedCheck3Pass ? "Inserisci città e paese / Enter city and country" : undefined}
+                  >
+                    {isIndeedCheck3Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck3Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Posizione completa
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Location complete
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 4 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck4Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck4Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Retribuzione indicata
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Salary provided
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Check 5 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 8 }}>
+                    {isIndeedCheck5Pass ? (
+                      <CheckCircle2 size={16} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    ) : (
+                      <Circle size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2, flexShrink: 0 }} />
+                    )}
+                    <div style={{ display: 'grid', lineHeight: 1.25 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: isIndeedCheck5Pass ? '#F8FAFC' : 'rgba(255,255,255,0.6)' }}>
+                        Domande di screening
+                      </span>
+                      <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)' }}>
+                        Screener questions
+                      </span>
+                      {!isIndeedCheck5Pass && (
+                        <span 
+                          onClick={() => setStep(3)}
+                          style={{ 
+                            fontSize: '11px', 
+                            color: '#F8D98B', 
+                            cursor: 'pointer', 
+                            textDecoration: 'underline',
+                            marginTop: 2,
+                            fontWeight: 600,
+                            display: 'inline-block'
+                          }}
+                        >
+                          → Step 3 (Screening questions)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 6, display: 'grid', gap: 2, paddingLeft: 8 }}>
+                  {indeedScore === 5 && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#4ADE80' }}>
+                      Pronto per Indeed ✓ <span style={{ fontSize: '10px', color: 'rgba(74,222,128,0.7)', fontWeight: 400 }}>(Ready for Indeed)</span>
+                    </span>
+                  )}
+                  {indeedScore === 4 && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#EAC26E' }}>
+                      Quasi pronto — 1 verifica mancante <span style={{ fontSize: '10px', color: 'rgba(234,194,110,0.7)', fontWeight: 400 }}>(Almost ready — 1 check missing)</span>
+                    </span>
+                  )}
+                  {indeedScore < 4 && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#F87171' }}>
+                      {5 - indeedScore} verifiche mancanti <span style={{ fontSize: '10px', color: 'rgba(248,113,113,0.7)', fontWeight: 400 }}>({5 - indeedScore} checks missing)</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -4093,6 +4097,476 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
 // ─── Candidate detail panel ────────────────────────────────────────────────────
 
+// Reusable job-post summary (details + creator) — shared by the candidate modal
+// and the position view modal so both render the job the same way.
+const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription?: boolean }> = ({ appliedJob, showFullDescription = false }) => {
+  const { t, i18n } = useTranslation();
+  const formatDate = (date: string | null | undefined, format: 'long' | 'short' = 'long'): string => {
+    if (!date) return '';
+    const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
+    return new Date(date).toLocaleDateString(locale, {
+      year: 'numeric',
+      month: format === 'long' ? 'long' : 'short',
+      day: 'numeric',
+    });
+  };
+  return (
+    <>
+              <div style={{
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                background: '#fff',
+                padding: '14px 16px',
+              }}>
+                {/* Header Row with Title and Target Role Tag */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                    💼 {t('ats.jobPostDetails', 'Job Post Details')}
+                  </div>
+                  {appliedJob.targetRole && (
+                    <span style={{
+                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: '#fff',
+                      borderRadius: 99,
+                      padding: '3px 10px',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      boxShadow: '0 2px 6px rgba(16, 185, 129, 0.25)',
+                    }}>
+                      {appliedJob.targetRole.replace('_', ' ')}
+                    </span>
+                  )}
+                </div>
+
+                {/* Title Row with Status Tag */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1, minWidth: 0 }}>
+                    {appliedJob.title}
+                  </h3>
+                  <span style={{
+                    borderRadius: 999,
+                    border: '1px solid rgba(13,33,55,0.18)',
+                    background: STATUS_COLOR[appliedJob.status] + '15',
+                    color: STATUS_COLOR[appliedJob.status],
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '3px 8px',
+                    textTransform: 'uppercase',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {t(`ats.status_${appliedJob.status}`, appliedJob.status)}
+                  </span>
+                </div>
+
+                {/* Description Row */}
+                {appliedJob.description && (
+                  showFullDescription ? (
+                    <div
+                      style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 10px 0' }}
+                      dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(appliedJob.description) }}
+                    />
+                  ) : (
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, margin: '0 0 10px 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                      {appliedJob.description.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
+                    </p>
+                  )
+                )}
+
+                {/* First Row: Location and Work Arrangement */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 8 }}>
+                  {/* Location with Flag */}
+                  {(appliedJob.jobCountry || appliedJob.country) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                      <span style={{ fontSize: 14 }}>📍</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('common.location', 'Location')}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          {(appliedJob.jobCountry || appliedJob.country) && (
+                            <ReactCountryFlag
+                              countryCode={appliedJob.jobCountry || appliedJob.country || ''}
+                              svg
+                              style={{ width: '0.95em', height: '0.95em' }}
+                            />
+                          )}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {[appliedJob.jobCity || appliedJob.city, appliedJob.jobState || appliedJob.state].filter(Boolean).join(', ') || (appliedJob.jobCountry || appliedJob.country)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remote Type */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                    <Globe2 size={14} color="var(--text-muted)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {t('ats.workArrangement', 'Work Arrangement')}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Second Row: Department, Hours, Job Type */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
+                  {appliedJob.department && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                      <span style={{ fontSize: 14 }}>🏢</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('ats.department', 'Department')}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {appliedJob.department}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {appliedJob.weeklyHours && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                      <Clock3 size={14} color="var(--text-muted)" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('ats.weeklyHours', 'Weekly Hours')}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {appliedJob.weeklyHours}h/week
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Job Type */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
+                    <BriefcaseBusiness size={14} color="var(--text-muted)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {t('ats.jobType', 'Job Type')}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {t(`ats.jobType_${JOB_TYPE_LABEL[appliedJob.jobType]}`, appliedJob.jobType)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Salary Range */}
+                {(appliedJob.salaryMin || appliedJob.salaryMax) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)', borderRadius: 6, border: '1px solid #BBF7D0' }}>
+                    <span style={{ fontSize: 16 }}>💰</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+                        {t('ats.salaryRange', 'Salary Range')}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#15803D' }}>
+                        {appliedJob.salaryMin && appliedJob.salaryMax
+                          ? `€${appliedJob.salaryMin.toLocaleString()} - €${appliedJob.salaryMax.toLocaleString()}`
+                          : appliedJob.salaryMin
+                            ? `€${appliedJob.salaryMin.toLocaleString()}+`
+                            : `€${appliedJob.salaryMax?.toLocaleString()}`}
+                        {appliedJob.salaryPeriod && (
+                          <span style={{ fontSize: 10, fontWeight: 500, color: '#16A34A', marginLeft: 4 }}>
+                            / {appliedJob.salaryPeriod}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Job Tags */}
+                {appliedJob.tags && appliedJob.tags.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                      {t('ats.jobTags', 'Job Tags')}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {appliedJob.tags.map((tag) => (
+                        <span key={tag} style={{
+                          background: 'rgba(59,130,246,0.08)',
+                          color: '#2563EB',
+                          border: '1px solid rgba(59,130,246,0.2)',
+                          borderRadius: 99,
+                          padding: '3px 10px',
+                          fontSize: 11,
+                          fontWeight: 500,
+                        }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Job Post Creator Section - Enhanced */}
+              <div style={{
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                background: '#fff',
+                padding: '16px 18px',
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+                  👨‍💼 {t('ats.jobPostCreator', 'Job Post Creator')}
+                </div>
+
+                {/* Creator Info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+                  {appliedJob.createdByAvatarFilename && getAvatarUrl(appliedJob.createdByAvatarFilename) ? (
+                    <img
+                      src={getAvatarUrl(appliedJob.createdByAvatarFilename) || ''}
+                      alt={appliedJob.createdByName || 'User'}
+                      style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 44, height: 44, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 700, fontSize: 16, border: '2px solid var(--border)',
+                    }}>
+                      {appliedJob.createdByName ? appliedJob.createdByName[0].toUpperCase() : '?'}
+                    </div>
+                  )}
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {appliedJob.createdByName} {appliedJob.createdBySurname}
+                      {appliedJob.createdByRole && (
+                        <span style={{
+                          marginLeft: 8,
+                          fontSize: 11,
+                          fontWeight: 500,
+                          color: 'var(--text-muted)',
+                          textTransform: 'capitalize'
+                        }}>
+                          · {appliedJob.createdByRole.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      <strong>{t('ats.created', 'Created')}:</strong> {formatDate(appliedJob.createdAt)}
+                      {appliedJob.publishedAt && (
+                        <span style={{ marginLeft: 8 }}>
+                          · <strong>{t('ats.published', 'Published')}:</strong> {formatDate(appliedJob.publishedAt, 'short')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Company Info */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                    {t('common.company', 'Company')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
+                    {appliedJob.companyLogoFilename && getCompanyLogoUrl(appliedJob.companyLogoFilename) ? (
+                      <img
+                        src={getCompanyLogoUrl(appliedJob.companyLogoFilename) || ''}
+                        alt={appliedJob.companyName || 'Company'}
+                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 8,
+                        background: 'var(--primary)', color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 14,
+                      }}>
+                        {appliedJob.companyName ? appliedJob.companyName[0].toUpperCase() : 'C'}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {appliedJob.companyName || 'N/A'}
+                        </span>
+                        {appliedJob.companyCountry && (
+                          <ReactCountryFlag
+                            countryCode={appliedJob.companyCountry}
+                            svg
+                            style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }}
+                          />
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {appliedJob.companyGroupName && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: 'var(--accent)',
+                            background: 'var(--accent-light)',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                          }}>
+                            {appliedJob.companyGroupName}
+                          </span>
+                        )}
+                        {(appliedJob.companyOwnerName || appliedJob.companyOwnerSurname) && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            {appliedJob.companyOwnerAvatarFilename && getAvatarUrl(appliedJob.companyOwnerAvatarFilename) ? (
+                              <img
+                                src={getAvatarUrl(appliedJob.companyOwnerAvatarFilename) || ''}
+                                alt={`${appliedJob.companyOwnerName} ${appliedJob.companyOwnerSurname}`}
+                                style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: 14, height: 14, borderRadius: '50%',
+                                background: 'var(--primary)', color: '#fff',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 7, fontWeight: 700,
+                              }}>
+                                {appliedJob.companyOwnerName ? appliedJob.companyOwnerName[0].toUpperCase() : 'O'}
+                              </div>
+                            )}
+                            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                              {appliedJob.companyOwnerName} {appliedJob.companyOwnerSurname}
+                            </span>
+                          </div>
+                        )}
+                        {appliedJob.companyStoreCount != null && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            · {appliedJob.companyStoreCount} {t('employees.storesLabel', 'Stores')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Store Info */}
+                {appliedJob.storeName && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                      {t('common.store', 'Store')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
+                      {appliedJob.storeLogoFilename && getStoreLogoUrl(appliedJob.storeLogoFilename) ? (
+                        <img
+                          src={getStoreLogoUrl(appliedJob.storeLogoFilename) || ''}
+                          alt={appliedJob.storeName}
+                          style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 8,
+                          background: 'var(--accent)', color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 700, fontSize: 14,
+                        }}>
+                          {appliedJob.storeName[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {appliedJob.storeName}
+                          </span>
+                          {appliedJob.storeCountry && (
+                            <ReactCountryFlag
+                              countryCode={appliedJob.storeCountry}
+                              svg
+                              style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }}
+                            />
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          {(appliedJob.storeHrName || appliedJob.storeHrSurname) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>HR:</span>
+                              {appliedJob.storeHrAvatarFilename && getAvatarUrl(appliedJob.storeHrAvatarFilename) ? (
+                                <img
+                                  src={getAvatarUrl(appliedJob.storeHrAvatarFilename) || ''}
+                                  alt={`${appliedJob.storeHrName} ${appliedJob.storeHrSurname}`}
+                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%',
+                                  background: 'var(--primary)', color: '#fff',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 8, fontWeight: 700,
+                                }}>
+                                  {appliedJob.storeHrName ? appliedJob.storeHrName[0].toUpperCase() : 'H'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                {appliedJob.storeHrName} {appliedJob.storeHrSurname}
+                              </span>
+                            </div>
+                          )}
+                          {(appliedJob.storeAreaManagerName || appliedJob.storeAreaManagerSurname) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Area Manager:</span>
+                              {appliedJob.storeAreaManagerAvatarFilename && getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) ? (
+                                <img
+                                  src={getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) || ''}
+                                  alt={`${appliedJob.storeAreaManagerName} ${appliedJob.storeAreaManagerSurname}`}
+                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%',
+                                  background: '#059669', color: '#fff',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 8, fontWeight: 700,
+                                }}>
+                                  {appliedJob.storeAreaManagerName ? appliedJob.storeAreaManagerName[0].toUpperCase() : 'A'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                {appliedJob.storeAreaManagerName} {appliedJob.storeAreaManagerSurname}
+                              </span>
+                            </div>
+                          )}
+                          {(appliedJob.storeManagerName || appliedJob.storeManagerSurname) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{t('common.manager', 'Manager')}:</span>
+                              {appliedJob.storeManagerAvatarFilename && getAvatarUrl(appliedJob.storeManagerAvatarFilename) ? (
+                                <img
+                                  src={getAvatarUrl(appliedJob.storeManagerAvatarFilename) || ''}
+                                  alt={`${appliedJob.storeManagerName} ${appliedJob.storeManagerSurname}`}
+                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%',
+                                  background: 'var(--accent)', color: '#fff',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 8, fontWeight: 700,
+                                }}>
+                                  {appliedJob.storeManagerName ? appliedJob.storeManagerName[0].toUpperCase() : 'M'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                {appliedJob.storeManagerName} {appliedJob.storeManagerSurname}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+    </>
+  );
+};
+
 interface CandidateModalProps {
   candidate: Candidate;
   jobs: JobPosting[];
@@ -5036,455 +5510,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             )}
           </div>
 
-          {/* Job Post Details - Enhanced */}
-          {appliedJob && (
-            <>
-              <div style={{
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                background: '#fff',
-                padding: '14px 16px',
-              }}>
-                {/* Header Row with Title and Target Role Tag */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                    💼 {t('ats.jobPostDetails', 'Job Post Details')}
-                  </div>
-                  {appliedJob.targetRole && (
-                    <span style={{
-                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                      color: '#fff',
-                      borderRadius: 99,
-                      padding: '3px 10px',
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      boxShadow: '0 2px 6px rgba(16, 185, 129, 0.25)',
-                    }}>
-                      {appliedJob.targetRole.replace('_', ' ')}
-                    </span>
-                  )}
-                </div>
-
-                {/* Title Row with Status Tag */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1, minWidth: 0 }}>
-                    {appliedJob.title}
-                  </h3>
-                  <span style={{
-                    borderRadius: 999,
-                    border: '1px solid rgba(13,33,55,0.18)',
-                    background: STATUS_COLOR[appliedJob.status] + '15',
-                    color: STATUS_COLOR[appliedJob.status],
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    textTransform: 'uppercase',
-                    flexShrink: 0,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {t(`ats.status_${appliedJob.status}`, appliedJob.status)}
-                  </span>
-                </div>
-
-                {/* Description Row */}
-                {appliedJob.description && (
-                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, margin: '0 0 10px 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                    {appliedJob.description.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
-                  </p>
-                )}
-
-                {/* First Row: Location and Work Arrangement */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 8 }}>
-                  {/* Location with Flag */}
-                  {(appliedJob.jobCountry || appliedJob.country) && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
-                      <span style={{ fontSize: 14 }}>📍</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {t('common.location', 'Location')}
-                        </div>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                          {(appliedJob.jobCountry || appliedJob.country) && (
-                            <ReactCountryFlag
-                              countryCode={appliedJob.jobCountry || appliedJob.country || ''}
-                              svg
-                              style={{ width: '0.95em', height: '0.95em' }}
-                            />
-                          )}
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {[appliedJob.jobCity || appliedJob.city, appliedJob.jobState || appliedJob.state].filter(Boolean).join(', ') || (appliedJob.jobCountry || appliedJob.country)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Remote Type */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
-                    <Globe2 size={14} color="var(--text-muted)" />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        {t('ats.workArrangement', 'Work Arrangement')}
-                      </div>
-                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
-                        {t(`ats.remoteType_${appliedJob.remoteType}`, appliedJob.remoteType)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Second Row: Department, Hours, Job Type */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
-                  {appliedJob.department && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
-                      <span style={{ fontSize: 14 }}>🏢</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {t('ats.department', 'Department')}
-                        </div>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {appliedJob.department}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {appliedJob.weeklyHours && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
-                      <Clock3 size={14} color="var(--text-muted)" />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {t('ats.weeklyHours', 'Weekly Hours')}
-                        </div>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
-                          {appliedJob.weeklyHours}h/week
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Job Type */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'var(--background)', borderRadius: 6 }}>
-                    <BriefcaseBusiness size={14} color="var(--text-muted)" />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        {t('ats.jobType', 'Job Type')}
-                      </div>
-                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)' }}>
-                        {t(`ats.jobType_${JOB_TYPE_LABEL[appliedJob.jobType]}`, appliedJob.jobType)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Salary Range */}
-                {(appliedJob.salaryMin || appliedJob.salaryMax) && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)', borderRadius: 6, border: '1px solid #BBF7D0' }}>
-                    <span style={{ fontSize: 16 }}>💰</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
-                        {t('ats.salaryRange', 'Salary Range')}
-                      </div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#15803D' }}>
-                        {appliedJob.salaryMin && appliedJob.salaryMax
-                          ? `€${appliedJob.salaryMin.toLocaleString()} - €${appliedJob.salaryMax.toLocaleString()}`
-                          : appliedJob.salaryMin
-                            ? `€${appliedJob.salaryMin.toLocaleString()}+`
-                            : `€${appliedJob.salaryMax?.toLocaleString()}`}
-                        {appliedJob.salaryPeriod && (
-                          <span style={{ fontSize: 10, fontWeight: 500, color: '#16A34A', marginLeft: 4 }}>
-                            / {appliedJob.salaryPeriod}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Job Tags */}
-                {appliedJob.tags && appliedJob.tags.length > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                      {t('ats.jobTags', 'Job Tags')}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {appliedJob.tags.map((tag) => (
-                        <span key={tag} style={{
-                          background: 'rgba(59,130,246,0.08)',
-                          color: '#2563EB',
-                          border: '1px solid rgba(59,130,246,0.2)',
-                          borderRadius: 99,
-                          padding: '3px 10px',
-                          fontSize: 11,
-                          fontWeight: 500,
-                        }}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Job Post Creator Section - Enhanced */}
-              <div style={{
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                background: '#fff',
-                padding: '16px 18px',
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
-                  👨‍💼 {t('ats.jobPostCreator', 'Job Post Creator')}
-                </div>
-
-                {/* Creator Info */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
-                  {appliedJob.createdByAvatarFilename && getAvatarUrl(appliedJob.createdByAvatarFilename) ? (
-                    <img
-                      src={getAvatarUrl(appliedJob.createdByAvatarFilename) || ''}
-                      alt={appliedJob.createdByName || 'User'}
-                      style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
-                    />
-                  ) : (
-                    <div style={{
-                      width: 44, height: 44, borderRadius: '50%',
-                      background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', color: '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: 700, fontSize: 16, border: '2px solid var(--border)',
-                    }}>
-                      {appliedJob.createdByName ? appliedJob.createdByName[0].toUpperCase() : '?'}
-                    </div>
-                  )}
-
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                      {appliedJob.createdByName} {appliedJob.createdBySurname}
-                      {appliedJob.createdByRole && (
-                        <span style={{
-                          marginLeft: 8,
-                          fontSize: 11,
-                          fontWeight: 500,
-                          color: 'var(--text-muted)',
-                          textTransform: 'capitalize'
-                        }}>
-                          · {appliedJob.createdByRole.replace('_', ' ')}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                      <strong>{t('ats.created', 'Created')}:</strong> {formatDate(appliedJob.createdAt)}
-                      {appliedJob.publishedAt && (
-                        <span style={{ marginLeft: 8 }}>
-                          · <strong>{t('ats.published', 'Published')}:</strong> {formatDate(appliedJob.publishedAt, 'short')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Company Info */}
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
-                    {t('common.company', 'Company')}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
-                    {appliedJob.companyLogoFilename && getCompanyLogoUrl(appliedJob.companyLogoFilename) ? (
-                      <img
-                        src={getCompanyLogoUrl(appliedJob.companyLogoFilename) || ''}
-                        alt={appliedJob.companyName || 'Company'}
-                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div style={{
-                        width: 36, height: 36, borderRadius: 8,
-                        background: 'var(--primary)', color: '#fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 700, fontSize: 14,
-                      }}>
-                        {appliedJob.companyName ? appliedJob.companyName[0].toUpperCase() : 'C'}
-                      </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {appliedJob.companyName || 'N/A'}
-                        </span>
-                        {appliedJob.companyCountry && (
-                          <ReactCountryFlag
-                            countryCode={appliedJob.companyCountry}
-                            svg
-                            style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }}
-                          />
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        {appliedJob.companyGroupName && (
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: 'var(--accent)',
-                            background: 'var(--accent-light)',
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                          }}>
-                            {appliedJob.companyGroupName}
-                          </span>
-                        )}
-                        {(appliedJob.companyOwnerName || appliedJob.companyOwnerSurname) && (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            {appliedJob.companyOwnerAvatarFilename && getAvatarUrl(appliedJob.companyOwnerAvatarFilename) ? (
-                              <img
-                                src={getAvatarUrl(appliedJob.companyOwnerAvatarFilename) || ''}
-                                alt={`${appliedJob.companyOwnerName} ${appliedJob.companyOwnerSurname}`}
-                                style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: 14, height: 14, borderRadius: '50%',
-                                background: 'var(--primary)', color: '#fff',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: 7, fontWeight: 700,
-                              }}>
-                                {appliedJob.companyOwnerName ? appliedJob.companyOwnerName[0].toUpperCase() : 'O'}
-                              </div>
-                            )}
-                            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                              {appliedJob.companyOwnerName} {appliedJob.companyOwnerSurname}
-                            </span>
-                          </div>
-                        )}
-                        {appliedJob.companyStoreCount != null && (
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                            · {appliedJob.companyStoreCount} {t('employees.storesLabel', 'Stores')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Store Info */}
-                {appliedJob.storeName && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
-                      {t('common.store', 'Store')}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px', background: 'var(--background)', borderRadius: 8 }}>
-                      {appliedJob.storeLogoFilename && getStoreLogoUrl(appliedJob.storeLogoFilename) ? (
-                        <img
-                          src={getStoreLogoUrl(appliedJob.storeLogoFilename) || ''}
-                          alt={appliedJob.storeName}
-                          style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
-                        />
-                      ) : (
-                        <div style={{
-                          width: 36, height: 36, borderRadius: 8,
-                          background: 'var(--accent)', color: '#fff',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 700, fontSize: 14,
-                        }}>
-                          {appliedJob.storeName[0].toUpperCase()}
-                        </div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {appliedJob.storeName}
-                          </span>
-                          {appliedJob.storeCountry && (
-                            <ReactCountryFlag
-                              countryCode={appliedJob.storeCountry}
-                              svg
-                              style={{ width: '0.9em', height: '0.9em', flexShrink: 0 }}
-                            />
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          {(appliedJob.storeHrName || appliedJob.storeHrSurname) && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>HR:</span>
-                              {appliedJob.storeHrAvatarFilename && getAvatarUrl(appliedJob.storeHrAvatarFilename) ? (
-                                <img
-                                  src={getAvatarUrl(appliedJob.storeHrAvatarFilename) || ''}
-                                  alt={`${appliedJob.storeHrName} ${appliedJob.storeHrSurname}`}
-                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
-                                />
-                              ) : (
-                                <div style={{
-                                  width: 16, height: 16, borderRadius: '50%',
-                                  background: 'var(--primary)', color: '#fff',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: 8, fontWeight: 700,
-                                }}>
-                                  {appliedJob.storeHrName ? appliedJob.storeHrName[0].toUpperCase() : 'H'}
-                                </div>
-                              )}
-                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                                {appliedJob.storeHrName} {appliedJob.storeHrSurname}
-                              </span>
-                            </div>
-                          )}
-                          {(appliedJob.storeAreaManagerName || appliedJob.storeAreaManagerSurname) && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Area Manager:</span>
-                              {appliedJob.storeAreaManagerAvatarFilename && getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) ? (
-                                <img
-                                  src={getAvatarUrl(appliedJob.storeAreaManagerAvatarFilename) || ''}
-                                  alt={`${appliedJob.storeAreaManagerName} ${appliedJob.storeAreaManagerSurname}`}
-                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
-                                />
-                              ) : (
-                                <div style={{
-                                  width: 16, height: 16, borderRadius: '50%',
-                                  background: '#059669', color: '#fff',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: 8, fontWeight: 700,
-                                }}>
-                                  {appliedJob.storeAreaManagerName ? appliedJob.storeAreaManagerName[0].toUpperCase() : 'A'}
-                                </div>
-                              )}
-                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                                {appliedJob.storeAreaManagerName} {appliedJob.storeAreaManagerSurname}
-                              </span>
-                            </div>
-                          )}
-                          {(appliedJob.storeManagerName || appliedJob.storeManagerSurname) && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{t('common.manager', 'Manager')}:</span>
-                              {appliedJob.storeManagerAvatarFilename && getAvatarUrl(appliedJob.storeManagerAvatarFilename) ? (
-                                <img
-                                  src={getAvatarUrl(appliedJob.storeManagerAvatarFilename) || ''}
-                                  alt={`${appliedJob.storeManagerName} ${appliedJob.storeManagerSurname}`}
-                                  style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }}
-                                />
-                              ) : (
-                                <div style={{
-                                  width: 16, height: 16, borderRadius: '50%',
-                                  background: 'var(--accent)', color: '#fff',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: 8, fontWeight: 700,
-                                }}>
-                                  {appliedJob.storeManagerName ? appliedJob.storeManagerName[0].toUpperCase() : 'M'}
-                                </div>
-                              )}
-                              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                                {appliedJob.storeManagerName} {appliedJob.storeManagerSurname}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+          {appliedJob && <JobPostSummaryCard appliedJob={appliedJob} />}
 
           {/* Candidate Tags */}
           <div>
@@ -7583,21 +7609,96 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-                          {/* Date */}
-                          {job.publishedAt && (() => {
-                            const dateObj = new Date(job.publishedAt);
-                            const dateStr = dateObj.toLocaleDateString(locale === 'it-IT' ? 'it-IT' : 'en-GB');
-                            const hourStr = String(dateObj.getHours()).padStart(2, '0');
-                            const minStr = String(dateObj.getMinutes()).padStart(2, '0');
-                            return (
-                              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                                {t('ats.publishedLabel', 'Published')}: {dateStr} {hourStr}:{minStr}
-                              </span>
-                            );
-                          })()}
+                          {/* Dates */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            {job.publishedAt && (() => {
+                              const dateObj = new Date(job.publishedAt);
+                              const dateStr = dateObj.toLocaleDateString(locale === 'it-IT' ? 'it-IT' : 'en-GB');
+                              const hourStr = String(dateObj.getHours()).padStart(2, '0');
+                              const minStr = String(dateObj.getMinutes()).padStart(2, '0');
+                              return (
+                                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                                  {t('ats.publishedLabel', 'Published')}: {dateStr} {hourStr}:{minStr}
+                                </span>
+                              );
+                            })()}
+                            {job.status === 'closed' && job.closedAt && (() => {
+                              const closedStr = new Date(job.closedAt).toLocaleDateString(locale === 'it-IT' ? 'it-IT' : 'en-GB');
+                              return (
+                                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                                  {t('ats.closedLabel', 'Closed')}: {closedStr}
+                                </span>
+                              );
+                            })()}
+                          </div>
 
                           {/* Actions */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {canEdit && job.status === 'draft' && (
+                                <Button variant="accent" size="sm" onClick={() => handlePublish(job)} style={{ marginRight: 4 }}>
+                                  {t('ats.publishPosition', 'Publish position')}
+                                </Button>
+                              )}
+                              {canEdit && (
+                                <button
+                                  onClick={() => {
+                                    setComplianceRefId(job.referenceId || String(job.id));
+                                    setComplianceJobCompanyId(job.companyId);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '6px',
+                                    borderRadius: '50%',
+                                    color: 'var(--text-muted)',
+                                    transition: 'all 0.2s ease',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(2,132,199,0.08)';
+                                    e.currentTarget.style.color = 'var(--primary)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'none';
+                                    e.currentTarget.style.color = 'var(--text-muted)';
+                                  }}
+                                  title="Indeed Compliance Check"
+                                >
+                                  <FileCheck size={16} />
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button
+                                  onClick={() => { setEditJob(job); setShowModal(true); }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '6px',
+                                    borderRadius: '50%',
+                                    color: 'var(--text-muted)',
+                                    transition: 'all 0.2s ease',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(13,33,55,0.05)';
+                                    e.currentTarget.style.color = 'var(--text-primary)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'none';
+                                    e.currentTarget.style.color = 'var(--text-muted)';
+                                  }}
+                                  title={t('common.edit')}
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              )}
+                              {/* View — placed on the right, after the edit icon */}
                               <Button
                                 variant="secondary"
                                 size="sm"
@@ -7605,70 +7706,6 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                               >
                                 {t('common.view', 'View')}
                               </Button>
-                              {canEdit && (
-                                <>
-                              {job.status === 'draft' && (
-                                <Button variant="accent" size="sm" onClick={() => handlePublish(job)} style={{ marginRight: 4 }}>
-                                  {t('ats.publishPosition', 'Publish position')}
-                                </Button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setComplianceRefId(job.referenceId || String(job.id));
-                                  setComplianceJobCompanyId(job.companyId);
-                                }}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  padding: '6px',
-                                  borderRadius: '50%',
-                                  color: 'var(--text-muted)',
-                                  transition: 'all 0.2s ease',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'rgba(2,132,199,0.08)';
-                                  e.currentTarget.style.color = 'var(--primary)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = 'none';
-                                  e.currentTarget.style.color = 'var(--text-muted)';
-                                }}
-                                title="Indeed Compliance Check"
-                              >
-                                <FileCheck size={16} />
-                              </button>
-                              <button
-                                onClick={() => { setEditJob(job); setShowModal(true); }}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  padding: '6px',
-                                  borderRadius: '50%',
-                                  color: 'var(--text-muted)',
-                                  transition: 'all 0.2s ease',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'rgba(13,33,55,0.05)';
-                                  e.currentTarget.style.color = 'var(--text-primary)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = 'none';
-                                  e.currentTarget.style.color = 'var(--text-muted)';
-                                }}
-                                title={t('common.edit')}
-                              >
-                                <Edit size={16} />
-                              </button>
-                                </>
-                              )}
                           </div>
                         </div>
                       </div>
@@ -7750,105 +7787,9 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
               </button>
             </div>
 
-            <div style={{ padding: '18px 22px', display: 'grid', gap: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-                {[
-                  { label: t('ats.tabCandidates'), value: viewCandidates.length, color: '#0284C7' },
-                  { label: t('ats.tabInterviews'), value: viewInterviews.length, color: '#7C3AED' },
-                  { label: t('ats.feedbackSection', 'Feedback'), value: viewFeedbacks.length, color: '#C9973A' },
-                ].map((item) => (
-                  <div key={item.label} style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    background: 'var(--background)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>{item.label}</span>
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: item.color }}>{item.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', background: 'var(--background)', display: 'grid', gap: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  {t('publicCareers.viewDetails', 'View details')}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-                  {[
-                    { label: t('ats.jobType', 'Job type'), value: t(`ats.jobType_${JOB_TYPE_LABEL[viewJob.jobType]}`) },
-                    { label: t('ats.workArrangement', 'Work arrangement'), value: t(`ats.remoteType_${viewJob.remoteType}`, viewJob.remoteType) },
-                    { label: t('ats.weeklyHours', 'Weekly hours'), value: viewJob.weeklyHours != null ? `${viewJob.weeklyHours} ${t('ats.hoursPerWeek', 'hrs/week')}` : t('common.notSet', 'Not set') },
-                    { label: t('ats.salaryPeriod', 'Salary period'), value: viewJob.salaryPeriod ? t(`ats.salaryPeriod${viewJob.salaryPeriod.charAt(0).toUpperCase()}${viewJob.salaryPeriod.slice(1)}`, viewJob.salaryPeriod) : t('common.notSet', 'Not set') },
-                    { label: t('ats.salaryMin', 'Salary min (€)'), value: viewJob.salaryMin != null ? `€${viewJob.salaryMin}` : t('common.notSet', 'Not set') },
-                    { label: t('ats.salaryMax', 'Salary max (€)'), value: viewJob.salaryMax != null ? `€${viewJob.salaryMax}` : t('common.notSet', 'Not set') },
-                    { label: t('ats.contractType', 'Contract type'), value: viewJob.contractType || t('common.notSet', 'Not set') },
-                    { label: t('ats.department', 'Department'), value: viewJob.department || t('common.notSet', 'Not set') },
-                  ].map((item) => (
-                    <div key={item.label} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 4 }}>
-                        {item.label}
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
-                        {item.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>
-                    {t('ats.locationSection', 'Job location')}
-                  </div>
-                  <div style={{ display: 'grid', gap: 4, fontSize: 13, color: 'var(--text-primary)' }}>
-                    <div>{[viewJob.jobCity || viewJob.city, viewJob.jobState || viewJob.state, viewJob.jobCountry || viewJob.country].filter(Boolean).join(', ') || t('common.notSet', 'Not set')}</div>
-                    {(viewJob.jobPostalCode || viewJob.postalCode || viewJob.jobAddress || viewJob.address) && (
-                      <div style={{ color: 'var(--text-secondary)' }}>
-                        {[viewJob.jobPostalCode || viewJob.postalCode, viewJob.jobAddress || viewJob.address].filter(Boolean).join(' • ')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>
-                    {t('common.tags', 'Tags')}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {viewJob.tags && viewJob.tags.length > 0 ? viewJob.tags.map((tag) => (
-                      <span key={`${viewJob.id}-modal-tag-${tag}`} style={{
-                        background: 'rgba(201,151,58,0.06)',
-                        color: 'var(--accent)',
-                        border: '1px solid rgba(201,151,58,0.15)',
-                        borderRadius: 6,
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}>
-                        {tag}
-                      </span>
-                    )) : (
-                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('ats.noTags', 'No tags')}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {viewJob.description && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', background: 'var(--background)' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
-                    {t('common.description', 'Description')}
-                  </div>
-                  <div
-                    style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}
-                    dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(viewJob.description) }}
-                  />
-                </div>
-              )}
+            <div style={{ padding: '18px 22px', display: 'grid', gap: 18 }}>
+              {/* Job position — same layout as the candidate modal (details + creator) */}
+              <JobPostSummaryCard appliedJob={viewJob} showFullDescription />
 
               {viewLoading ? (
                 <div style={{ display: 'grid', gap: 12 }}>
@@ -7857,114 +7798,205 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                   ))}
                 </div>
               ) : (
-                <div style={{ display: 'grid', gap: 16 }}>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(2,132,199,0.06)', fontWeight: 700, color: '#0369A1' }}>
-                      {t('ats.tabCandidates')} ({viewCandidates.length})
+                <>
+                  {/* Candidates */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <User2 size={16} color="#0284C7" />
+                      <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                        {t('ats.tabCandidates')}
+                      </span>
+                      <span style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 99, fontSize: 11, fontWeight: 700, padding: '1px 8px' }}>
+                        {viewCandidates.length}
+                      </span>
                     </div>
                     {viewCandidates.length === 0 ? (
-                      <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData', 'No data available')}</div>
+                      <div style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)', background: 'var(--background)', border: '1px dashed var(--border)', borderRadius: 12, textAlign: 'center' }}>
+                        {t('common.noData', 'No data available')}
+                      </div>
                     ) : (
-                      <div style={{ display: 'grid', gap: 10, padding: '12px' }}>
-                        {viewCandidates.map((candidate) => (
-                          <div key={candidate.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                              <div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{candidate.fullName}</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                                  {candidate.email || candidate.phone || t('common.noData', 'No data available')}
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        {viewCandidates.map((candidate) => {
+                          const candStageColor = STAGE_COLOR[candidate.status];
+                          const appliedSource = candidate.appliedAt ?? candidate.createdAt;
+                          return (
+                            <div key={candidate.id} style={{ border: '1px solid var(--border)', borderLeft: `3px solid ${candStageColor}`, borderRadius: 12, padding: '12px 14px', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>
+                                {initials(candidate.fullName)}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{candidate.fullName}</span>
+                                  <span style={{ background: `${candStageColor}12`, color: candStageColor, border: `1px solid ${candStageColor}25`, borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>
+                                    {t(`ats.stage_${candidate.status}`)}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                                  {candidate.email && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Mail size={12} /> {candidate.email}</span>
+                                  )}
+                                  {candidate.phone && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={12} /> {candidate.phone}</span>
+                                  )}
+                                  {appliedSource && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CalendarDays size={12} /> {t('ats.appliedOnLabel', 'Applied')}: {fmtDate(appliedSource)}</span>
+                                  )}
                                 </div>
                               </div>
-                              <span style={{
-                                background: `${STAGE_COLOR[candidate.status]}12`,
-                                color: STAGE_COLOR[candidate.status],
-                                border: `1px solid ${STAGE_COLOR[candidate.status]}25`,
-                                borderRadius: 99,
-                                padding: '3px 10px',
-                                fontSize: 11,
-                                fontWeight: 700,
-                              }}>
-                                {t(`ats.stage_${candidate.status}`)}
-                              </span>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
 
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(124,58,237,0.06)', fontWeight: 700, color: '#6D28D9' }}>
-                      {t('ats.tabInterviews')} ({viewInterviews.length})
+                  {/* Interviews & feedback */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <CalendarDays size={16} color="#7C3AED" />
+                      <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                        {t('ats.tabInterviews')}
+                      </span>
+                      <span style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 99, fontSize: 11, fontWeight: 700, padding: '1px 8px' }}>
+                        {viewInterviews.length}
+                      </span>
                     </div>
                     {viewInterviews.length === 0 ? (
-                      <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text-muted)' }}>{t('common.noData', 'No data available')}</div>
+                      <div style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)', background: 'var(--background)', border: '1px dashed var(--border)', borderRadius: 12, textAlign: 'center' }}>
+                        {t('ats.noInterviews', 'No interviews scheduled')}
+                      </div>
                     ) : (
-                      <div style={{ display: 'grid', gap: 10, padding: '12px' }}>
-                        {viewInterviews.map((interview) => (
-                          <div key={interview.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                              <div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                                  {interview.candidateName} {interview.candidateSurname}
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        {viewInterviews.map((interview) => {
+                          const ivFeedback = viewFeedbacks.filter((f) => f.interviewId === interview.id);
+                          const ivDate = new Date(interview.scheduledAt);
+                          const isPast = ivDate < new Date();
+                          const ivStatusColor = isPast ? '#6b7280' : '#059669';
+                          const ivStatusBg = isPast ? 'rgba(107,114,128,0.1)' : 'rgba(5,150,105,0.1)';
+                          const ivCandidateName = [interview.candidateName, interview.candidateSurname].filter(Boolean).join(' ') || t('ats.candidate', 'Candidate');
+                          const ivCandidateAvatar = getAvatarUrl(interview.candidateAvatarFilename ?? null);
+                          const ivInterviewerName = interview.interviewerName ? [interview.interviewerName, interview.interviewerSurname].filter(Boolean).join(' ') : null;
+                          const ivInterviewerAvatar = getAvatarUrl(interview.interviewerAvatarFilename ?? null);
+                          return (
+                            <div key={interview.id} style={{ border: '1px solid var(--border)', borderLeft: `3px solid ${STAGE_COLOR.interview}`, borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
+                              {/* Top row: candidate + date/status */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                  <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: ivCandidateAvatar ? 'transparent' : 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                                    {ivCandidateAvatar ? <img src={ivCandidateAvatar} alt={ivCandidateName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(ivCandidateName)}
+                                  </div>
+                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{ivCandidateName}</span>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                                  {new Date(interview.scheduledAt).toLocaleString(locale)}{interview.location ? ` • ${interview.location}` : ''}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>🕐 {fmtDateTime(interview.scheduledAt)}</span>
+                                  <span style={{ background: ivStatusBg, color: ivStatusColor, borderRadius: 99, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                    {isPast ? t('ats.interviewPast', 'Past') : t('ats.interviewUpcoming', 'Upcoming')}
+                                  </span>
                                 </div>
                               </div>
-                              <span style={{
-                                background: 'rgba(124,58,237,0.10)',
-                                color: '#6D28D9',
-                                borderRadius: 99,
-                                padding: '3px 10px',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                textTransform: 'capitalize',
-                              }}>
-                                {interview.interviewType === 'phone' ? t('ats.stage_phone_interview') : t('ats.stage_interview')}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
 
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(201,151,58,0.08)', fontWeight: 700, color: '#A16207' }}>
-                      {t('ats.feedbackSection', 'Feedback')} ({viewFeedbacks.length})
-                    </div>
-                    {viewFeedbacks.length === 0 ? (
-                      <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text-muted)' }}>{t('ats.noFeedback', 'No candidate feedback recorded yet')}</div>
-                    ) : (
-                      <div style={{ display: 'grid', gap: 10, padding: '12px' }}>
-                        {viewFeedbacks.map((feedback) => (
-                          <div key={feedback.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-                              <div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                                  {[feedback.authorName, feedback.authorSurname].filter(Boolean).join(' ') || t('common.noData', 'No data available')}
-                                </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                                  {feedback.candidateName}
-                                </div>
+                              {/* Tags row: type, duration, location, store */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--background)', padding: '2px 8px', borderRadius: 999 }}>
+                                  {interview.interviewType === 'phone' ? '📞 ' + t('ats.interviewType.phone', 'Phone') : '🤝 ' + t('ats.interviewType.in_person', 'In-person')}
+                                </span>
+                                {interview.durationMinutes && (
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--background)', padding: '2px 8px', borderRadius: 999 }}>⏱ {interview.durationMinutes}min</span>
+                                )}
+                                {interview.location && (
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--background)', padding: '2px 8px', borderRadius: 999 }}>📍 {interview.location}</span>
+                                )}
+                                {interview.storeName && (
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--background)', padding: '2px 8px', borderRadius: 999 }}>🏬 {interview.storeName}</span>
+                                )}
                               </div>
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                {new Date(feedback.createdAt).toLocaleString(locale)}
-                              </span>
+
+                              {/* Interviewer */}
+                              {ivInterviewerName && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                                  <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: ivInterviewerAvatar ? 'transparent' : 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700 }}>
+                                    {ivInterviewerAvatar ? <img src={ivInterviewerAvatar} alt={ivInterviewerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(ivInterviewerName)}
+                                  </div>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{ivInterviewerName}</div>
+                                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{t('ats.interviewer', 'Interviewer')}{interview.interviewerRole ? ' · ' + t(`roles.${interview.interviewerRole}`, interview.interviewerRole) : ''}</div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Feedback for this interview */}
+                              {ivFeedback.length > 0 && (
+                                <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10, display: 'grid', gap: 8 }}>
+                                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    💬 {t('ats.feedbackSection', 'Feedback')} ({ivFeedback.length})
+                                  </div>
+                                  {ivFeedback.map((fb) => {
+                                    const fbAuthor = [fb.authorName, fb.authorSurname].filter(Boolean).join(' ') || t('common.noData', 'No data available');
+                                    const fbAvatar = getAvatarUrl(fb.authorAvatarFilename ?? null);
+                                    return (
+                                      <div key={fb.id} style={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                                            <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: fbAvatar ? 'transparent' : 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700 }}>
+                                              {fbAvatar ? <img src={fbAvatar} alt={fbAuthor} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(fbAuthor)}
+                                            </div>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{fbAuthor}</span>
+                                            {fb.authorRole && (
+                                              <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>· {t(`roles.${fb.authorRole}`, fb.authorRole)}</span>
+                                            )}
+                                          </div>
+                                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{fmtDateTime(fb.createdAt)}</span>
+                                        </div>
+                                        <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{fb.body}</div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55, background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', whiteSpace: 'pre-wrap' }}>
-                              {feedback.body}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
+
+                    {/* Feedback not linked to a loaded interview */}
+                    {(() => {
+                      const interviewIds = new Set(viewInterviews.map((iv) => iv.id));
+                      const orphan = viewFeedbacks.filter((f) => !interviewIds.has(f.interviewId));
+                      if (orphan.length === 0) return null;
+                      return (
+                        <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            💬 {t('ats.feedbackSection', 'Feedback')}
+                          </div>
+                          {orphan.map((fb) => {
+                            const fbAuthor = [fb.authorName, fb.authorSurname].filter(Boolean).join(' ') || t('common.noData', 'No data available');
+                            const fbAvatar = getAvatarUrl(fb.authorAvatarFilename ?? null);
+                            return (
+                              <div key={fb.id} style={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                                    <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: fbAvatar ? 'transparent' : 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700 }}>
+                                      {fbAvatar ? <img src={fbAvatar} alt={fbAuthor} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(fbAuthor)}
+                                    </div>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{fbAuthor}</span>
+                                    {fb.candidateName && (
+                                      <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>· {fb.candidateName}</span>
+                                    )}
+                                  </div>
+                                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{fmtDateTime(fb.createdAt)}</span>
+                                </div>
+                                <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{fb.body}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
-                </div>
+                </>
               )}
             </div>
-
             <div style={{ padding: '16px 22px 18px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
               <div>
                 {canEdit && (
@@ -10084,7 +10116,10 @@ const KanbanPanel: React.FC<{
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
                 <div className="skeleton" style={{ height: 12, width: '55%' }} />
               </div>
-              <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 468, overflowY: 'auto' }}>
+              <div
+                className="no-scrollbar"
+                style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 468, overflowY: 'auto' }}
+              >
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} style={{ background: 'var(--surface)', borderRadius: 10, padding: '12px' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -10140,7 +10175,10 @@ const KanbanPanel: React.FC<{
                 </div>
 
                 {/* Cards */}
-                <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 80, maxHeight: 468, overflowY: 'auto' }}>
+                <div
+                  className="no-scrollbar"
+                  style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 80, maxHeight: 468, overflowY: 'auto' }}
+                >
                   {cols.length === 0 && (
                     <div style={{
                       textAlign: 'center', padding: '20px 8px',

@@ -16,6 +16,7 @@ import ShiftDrawer from './ShiftDrawer';
 import ShiftTemplatesPanel from './ShiftTemplatesPanel';
 import ExternalAffluenceLivePanel from './ExternalAffluenceLivePanel';
 import CalendarActivitiesModal from './CalendarActivitiesModal';
+import ShiftExportModal, { ExportFormat } from './ShiftExportModal';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 
@@ -169,10 +170,14 @@ export default function ShiftsPage() {
   const [transferBlocks, setTransferBlocks] = useState<TransferAssignment[]>([]);
   const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
   const [windowDisplayActivities, setWindowDisplayActivities] = useState<WindowDisplayActivity[]>([]);
+  // Raw (non-expanded) activities — one entry per stored activity — for the mapping modal.
+  const [windowDisplayActivitiesRaw, setWindowDisplayActivitiesRaw] = useState<WindowDisplayActivity[]>([]);
   const [windowDisplaySaving, setWindowDisplaySaving] = useState(false);
   const [activitiesModalOpen, setActivitiesModalOpen] = useState(false);
   const [activitiesModalDate, setActivitiesModalDate] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
   const mobileActionGridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
@@ -221,7 +226,10 @@ export default function ShiftsPage() {
       .flat()
       .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
-    // Expand activities across their date range
+    // Keep the raw list (one entry per activity) for the mapping modal.
+    setWindowDisplayActivitiesRaw(activities);
+
+    // Expand activities across their date range (for calendar day rendering).
     const expandedActivities: WindowDisplayActivity[] = [];
     for (const activity of activities) {
       const start = new Date(activity.startDate + 'T12:00:00');
@@ -330,7 +338,9 @@ export default function ShiftsPage() {
     if (refreshNeeded) fetchShifts();
   }
 
-  async function handleExport(format: 'csv' | 'xlsx' | 'pdf') {
+  async function handleExport(format: ExportFormat) {
+    if (exportingFormat) return;
+    setExportingFormat(format);
     try {
       const blob = await exportShifts({ week: formatIsoWeek(currentDate), store_id: storeFilter ?? undefined, format });
       const ext = format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'csv';
@@ -340,9 +350,12 @@ export default function ShiftsPage() {
       a.download = `turni-${formatIsoWeek(currentDate)}.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
+      setExportModalOpen(false);
     } catch (err: any) {
       const code: string | undefined = err?.response?.data?.code;
       setError(code ? t(`errors.${code}`, t('shifts.exportError')) : t('shifts.exportError'));
+    } finally {
+      setExportingFormat(null);
     }
   }
 
@@ -446,22 +459,23 @@ export default function ShiftsPage() {
   async function handleWindowDisplaySave(payload: {
     id?: number;
     storeId: number;
-    startDate: string;
-    endDate: string;
+    dates: string[];
     activityType: StoreActivityType;
     activityIcon: string | null;
     customActivityName: string | null;
     durationHours: number | null;
     notes: string | null;
     companyId?: number | null;
-  }) {
+  }): Promise<{ created: number; skipped: string[] }> {
     setWindowDisplaySaving(true);
     setError(null);
     try {
       if (payload.id) {
+        // Update an existing single activity (single date).
+        const theDate = payload.dates[0];
         await updateWindowDisplay(payload.id, {
-          startDate: payload.startDate,
-          endDate: payload.endDate,
+          startDate: theDate,
+          endDate: theDate,
           activityType: payload.activityType,
           activityIcon: payload.activityIcon,
           customActivityName: payload.customActivityName,
@@ -469,23 +483,29 @@ export default function ShiftsPage() {
           notes: payload.notes,
           companyId: payload.companyId,
         });
-      } else {
-        await createWindowDisplay({
-          storeId: payload.storeId,
-          startDate: payload.startDate,
-          endDate: payload.endDate,
-          activityType: payload.activityType,
-          activityIcon: payload.activityIcon,
-          customActivityName: payload.customActivityName,
-          durationHours: payload.durationHours,
-          notes: payload.notes,
-          companyId: payload.companyId,
-        });
+        await fetchWindowDisplayActivities();
+        setSuccess(t('shifts.windowDisplaySaved', 'Store activity saved.'));
+        setTimeout(() => setSuccess(null), 3000);
+        return { created: 1, skipped: [] };
       }
 
+      const result = await createWindowDisplay({
+        storeId: payload.storeId,
+        dates: payload.dates,
+        activityType: payload.activityType,
+        activityIcon: payload.activityIcon,
+        customActivityName: payload.customActivityName,
+        durationHours: payload.durationHours,
+        notes: payload.notes,
+        companyId: payload.companyId,
+      });
+
       await fetchWindowDisplayActivities();
-      setSuccess(t('shifts.windowDisplaySaved', 'Window display activity saved.'));
-      setTimeout(() => setSuccess(null), 3000);
+      if (result.created.length > 0) {
+        setSuccess(t('shifts.windowDisplaySaved', 'Store activity saved.'));
+        setTimeout(() => setSuccess(null), 3000);
+      }
+      return { created: result.created.length, skipped: result.skipped };
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { code?: string; error?: string } } };
       const code = axiosErr?.response?.data?.code;
@@ -627,17 +647,9 @@ export default function ShiftsPage() {
                       <IconCopy />
                       {t('shifts.copyWeek')}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => handleExport('csv')}>
+                    <button className="btn btn-secondary" onClick={() => setExportModalOpen(true)}>
                       <IconDownload />
-                      {t('shifts.export')}
-                    </button>
-                    <button className="btn btn-secondary" onClick={() => handleExport('xlsx')}>
-                      <i className="ri-file-excel-line" style={{ marginRight: 6 }}></i>
-                      {t('shifts.exportExcel')}
-                    </button>
-                    <button className="btn btn-secondary" onClick={() => handleExport('pdf')}>
-                      <i className="ri-file-pdf-line" style={{ marginRight: 6 }}></i>
-                      {t('shifts.exportPdf', 'Export PDF')}
+                      {t('shifts.exportBtn', 'Export')}
                     </button>
                     <button className="btn btn-secondary" onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null); }}>
                       <IconUpload />
@@ -1211,10 +1223,17 @@ export default function ShiftsPage() {
         initialDate={activitiesModalDate}
         stores={stores}
         canManage={canManageWindowDisplay}
-        activities={windowDisplayActivities}
+        activities={windowDisplayActivitiesRaw}
         saving={windowDisplaySaving}
         onSave={handleWindowDisplaySave}
         onDelete={handleWindowDisplayDelete}
+      />
+
+      <ShiftExportModal
+        open={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        onExport={handleExport}
+        exporting={exportingFormat}
       />
 
       {/* ── Mobile Options Sidebar ──────────────────────────────────── */}
@@ -1509,11 +1528,11 @@ export default function ShiftsPage() {
                     </div>
                   </button>
 
-                  {/* Export CSV */}
+                  {/* Export */}
                   <button
                     onClick={() => {
-                      handleExport('csv');
                       setMobileMenuOpen(false);
+                      setExportModalOpen(true);
                     }}
                     style={{
                       width: '100%',
@@ -1547,84 +1566,10 @@ export default function ShiftsPage() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
-                        {t('shifts.export', 'Export CSV')}
+                        {t('shifts.exportBtn', 'Export')}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
-                        {t('shifts.exportDesc', 'Download as CSV file')}
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Export Excel */}
-                  <button
-                    onClick={() => {
-                      handleExport('xlsx');
-                      setMobileMenuOpen(false);
-                    }}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '14px 20px',
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--text-primary)',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'background 0.15s',
-                      borderBottom: '1px solid var(--border)',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      background: 'rgba(30,74,122,0.12)',
-                      color: 'var(--primary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      <IconDownload />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
-                        {t('shifts.exportExcel', 'Export Excel')}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
-                        {t('shifts.exportExcelDesc', 'Download as Excel file')}
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Export PDF */}
-                  <button
-                    className="att-card"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 16,
-                      padding: 16, borderRadius: 12, background: 'var(--surface)',
-                      border: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left',
-                      transition: 'all 0.2s', width: '100%',
-                    }}
-                    onClick={() => handleExport('pdf')}
-                  >
-                    <div style={{
-                      width: 44, height: 44, borderRadius: 10,
-                      background: 'rgba(239,68,68,0.1)', color: '#ef4444',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
-                    }}>
-                      <i className="ri-file-pdf-line"></i>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>
-                        {t('shifts.exportPdf', 'Export PDF')}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                        {t('shifts.exportPdfDesc', 'Download as PDF file')}
+                        {t('shifts.exportSubtitle', 'Choose a format to download')}
                       </div>
                     </div>
                   </button>
