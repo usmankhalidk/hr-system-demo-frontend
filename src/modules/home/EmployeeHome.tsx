@@ -529,6 +529,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
           </div>
 
           <div
+            className="no-scrollbar"
             style={{
               maxHeight: 258,
               overflowY: 'auto',
@@ -665,7 +666,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
                 </div>
               </div>
 
-              <div style={{
+              <div className="no-scrollbar" style={{
                 flex: 1,
                 maxHeight: 228,
                 overflowY: 'auto',
@@ -802,7 +803,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ data }) => {
                 </div>
               </div>
 
-              <div style={{
+              <div className="no-scrollbar" style={{
                 flex: 1,
                 maxHeight: 228,
                 overflowY: 'auto',
