@@ -27,6 +27,10 @@ interface CalendarActivitiesModalProps {
   viewMode: 'day' | 'week' | 'month';
   currentDate: Date;
   initialDate?: string | null;
+  /** Preselect this store when the modal is opened from a calendar activity block. */
+  initialStoreId?: number | null;
+  /** Focus (open in edit mode) this activity when the modal is opened from a calendar activity block. */
+  initialActivityId?: number | null;
   stores: Store[];
   canManage: boolean;
   activities: WindowDisplayActivity[];
@@ -132,6 +136,8 @@ export default function CalendarActivitiesModal({
   viewMode,
   currentDate,
   initialDate,
+  initialStoreId,
+  initialActivityId,
   stores,
   canManage,
   activities,
@@ -145,6 +151,10 @@ export default function CalendarActivitiesModal({
   const isStoreManager = user?.role === 'store_manager';
   const [selectedMonth, setSelectedMonth] = useState(formatIsoMonth(currentDate));
   const monthPickerRef = useRef<HTMLDivElement | null>(null);
+  // Store/activity to jump to when the modal is opened from a calendar activity block.
+  // Held in a ref so the reset-on-open effect cannot clobber it mid-flush.
+  const pendingFocusRef = useRef<{ storeId: number; activityId: number | null } | null>(null);
+  const selectedStoreRef = useRef<HTMLButtonElement | null>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [monthPickerYear, setMonthPickerYear] = useState(currentDate.getFullYear());
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
@@ -187,7 +197,15 @@ export default function CalendarActivitiesModal({
     setMonthPickerOpen(false);
     setSelectedCompanyId(null);
     setLocalError(null);
-  }, [open, initialDate, currentDate]);
+
+    // Opened from a calendar activity block → preselect that store and focus its activity.
+    if (initialStoreId != null) {
+      pendingFocusRef.current = { storeId: initialStoreId, activityId: initialActivityId ?? null };
+      setSelectedStoreId(initialStoreId);
+    } else {
+      pendingFocusRef.current = null;
+    }
+  }, [open, initialDate, currentDate, initialStoreId, initialActivityId]);
 
   useEffect(() => {
     setMonthPickerYear(selectedMonthParts.year);
@@ -333,6 +351,8 @@ export default function CalendarActivitiesModal({
 
   useEffect(() => {
     if (!open) return;
+    // A store was explicitly picked from the calendar — don't auto-select over it.
+    if (pendingFocusRef.current) return;
     if (isStoreManager && user?.storeId) {
       setSelectedStoreId(user.storeId);
       return;
@@ -418,6 +438,30 @@ export default function CalendarActivitiesModal({
       setEditingActivityId(null);
     }
   }, [editingActivityId, editingActivity]);
+
+  // Apply the focus requested by a calendar activity click. Declared after the reset effect
+  // above so that, in the same commit, this runs last and wins.
+  useEffect(() => {
+    if (!open) return;
+    const pending = pendingFocusRef.current;
+    if (!pending || selectedStoreId !== pending.storeId) return;
+
+    if (pending.activityId == null) {
+      pendingFocusRef.current = null;
+      return;
+    }
+
+    const activity = selectedStoreActivities.find((item) => item.id === pending.activityId);
+    if (!activity) return; // activities for this store/month not loaded yet — retry on next change
+    pendingFocusRef.current = null;
+    beginEditActivity(activity);
+  }, [open, selectedStoreId, selectedStoreActivities]);
+
+  // Bring the selected store into view in the (possibly long) grouped store list.
+  useEffect(() => {
+    if (!open || !selectedStoreId) return;
+    selectedStoreRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [open, selectedStoreId]);
 
   const storeMetaById = useMemo(() => {
     const employees = directoryEmployees.filter((employee) => employee.status === 'active');
@@ -1347,7 +1391,11 @@ export default function CalendarActivitiesModal({
                     <button
                       key={store.id}
                       type="button"
-                      onClick={() => setSelectedStoreId(store.id)}
+                      ref={selected ? selectedStoreRef : undefined}
+                      onClick={() => {
+                        pendingFocusRef.current = null;
+                        setSelectedStoreId(store.id);
+                      }}
                       style={{
                         width: '100%',
                         textAlign: 'left',

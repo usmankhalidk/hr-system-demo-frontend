@@ -18,7 +18,7 @@ interface DayCalendarProps {
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
   windowDisplayActivities?: WindowDisplayActivity[];
-  onWindowDisplayClick?: (date: string) => void;
+  onWindowDisplayClick?: (date: string, activity?: WindowDisplayActivity) => void;
 }
 
 const START_HOUR = 0;   // 00:00
@@ -727,7 +727,7 @@ export default function DayCalendar({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onWindowDisplayClick?.(dateStr);
+                        onWindowDisplayClick?.(dateStr, rowActivities[0]);
                       }}
                       style={{
                         margin: '4px 8px 0',
