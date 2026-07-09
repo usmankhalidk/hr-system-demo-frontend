@@ -17,7 +17,7 @@ interface MonthlyCalendarProps {
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
   windowDisplayActivities?: WindowDisplayActivity[];
-  onWindowDisplayClick?: (date: string) => void;
+  onWindowDisplayClick?: (date: string, activity?: WindowDisplayActivity) => void;
   stores?: StoreModel[];
 }
 
@@ -564,7 +564,7 @@ export default function MonthlyCalendar({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              onWindowDisplayClick?.(dateStr);
+                              onWindowDisplayClick?.(dateStr, item);
                             }}
                             style={{
                               display: 'inline-flex',
@@ -711,7 +711,7 @@ export default function MonthlyCalendar({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onWindowDisplayClick?.(dateStr);
+                                  onWindowDisplayClick?.(dateStr, item);
                                 }}
                                 style={{
                                   display: 'inline-flex',

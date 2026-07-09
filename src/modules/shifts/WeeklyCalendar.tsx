@@ -68,7 +68,7 @@ interface WeeklyCalendarProps {
   leaveBlocks?: LeaveBlock[];
   transferBlocks?: TransferAssignment[];
   windowDisplayActivities?: WindowDisplayActivity[];
-  onWindowDisplayClick?: (date: string) => void;
+  onWindowDisplayClick?: (date: string, activity?: WindowDisplayActivity) => void;
   /** Admin / HR / Area manager: show weekly approve control per row */
   canApproveWeek?: boolean;
   onApproveWeekForUser?: (userId: number) => void;
@@ -671,7 +671,7 @@ export default function WeeklyCalendar({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onWindowDisplayClick?.(dateStr);
+                                onWindowDisplayClick?.(dateStr, activity);
                               }}
                               style={{
                                 marginBottom: 4,

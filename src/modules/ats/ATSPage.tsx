@@ -212,6 +212,28 @@ const italianProvinceCode = (cityName: string, stateName: string): string => {
   return resolveItalianProvince(cityName, stateName);
 };
 
+// Maps every salary period the API may return (including legacy Italian values
+// and 'annually') onto the option values used by the salary period select.
+const SALARY_PERIOD_ALIASES: Record<string, string> = {
+  hourly: 'hourly',
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+  yearly: 'yearly',
+  annually: 'yearly',
+  "all'ora": 'hourly',
+  'al giorno': 'daily',
+  'a settimana': 'weekly',
+  'al mese': 'monthly',
+  'per anno': 'yearly',
+};
+
+function canonicalSalaryPeriod(value: string | null | undefined): string {
+  if (!value) return '';
+  const normalized = value.trim().toLowerCase().replace(/’/g, "'");
+  return SALARY_PERIOD_ALIASES[normalized] ?? '';
+}
+
 function countryNameFromCode(value: string | null | undefined): string {
   const code = normalizeCountryCode(value);
   if (!code) return '-';
@@ -1820,7 +1842,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
   const [weeklyHoursInput, setWeeklyHoursInput] = useState(job?.weeklyHours !== null && job?.weeklyHours !== undefined ? String(job.weeklyHours) : '');
   const [salaryMinInput, setSalaryMinInput] = useState(job?.salaryMin !== null && job?.salaryMin !== undefined ? String(job.salaryMin) : '');
   const [salaryMaxInput, setSalaryMaxInput] = useState(job?.salaryMax !== null && job?.salaryMax !== undefined ? String(job.salaryMax) : '');
-  const [salaryPeriod, setSalaryPeriod] = useState(job?.salaryPeriod ?? '');
+  const [salaryPeriod, setSalaryPeriod] = useState(canonicalSalaryPeriod(job?.salaryPeriod));
   const [contractType, setContractType] = useState(job?.contractType ?? '');
   const [targetRole, setTargetRole] = useState(job?.targetRole ?? '');
   const [errors, setErrors] = useState<JobModalErrors>({});

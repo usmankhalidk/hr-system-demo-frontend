@@ -175,6 +175,8 @@ export default function ShiftsPage() {
   const [windowDisplaySaving, setWindowDisplaySaving] = useState(false);
   const [activitiesModalOpen, setActivitiesModalOpen] = useState(false);
   const [activitiesModalDate, setActivitiesModalDate] = useState<string | null>(null);
+  const [activitiesModalStoreId, setActivitiesModalStoreId] = useState<number | null>(null);
+  const [activitiesModalActivityId, setActivitiesModalActivityId] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
@@ -534,8 +536,12 @@ export default function ShiftsPage() {
     }
   }
 
-  function openActivitiesModal(date?: string) {
+  function openActivitiesModal(date?: string, activity?: WindowDisplayActivity) {
     setActivitiesModalDate(date ?? formatDateDisplay(currentDate));
+    // When opened from an activity block in the calendar, preselect that store
+    // and focus the clicked activity in the modal.
+    setActivitiesModalStoreId(activity?.storeId ?? null);
+    setActivitiesModalActivityId(activity?.id ?? null);
     setActivitiesModalOpen(true);
   }
 
@@ -920,7 +926,7 @@ export default function ShiftsPage() {
               leaveBlocks={leaveBlocks}
               transferBlocks={transferBlocks}
               windowDisplayActivities={windowDisplayActivities}
-              onWindowDisplayClick={(date) => openActivitiesModal(date)}
+              onWindowDisplayClick={(date, activity) => openActivitiesModal(date, activity)}
             />
           ) : viewMode === 'week' ? (
             <WeeklyCalendar
@@ -932,7 +938,7 @@ export default function ShiftsPage() {
               leaveBlocks={leaveBlocks}
               transferBlocks={transferBlocks}
               windowDisplayActivities={windowDisplayActivities}
-              onWindowDisplayClick={(date) => openActivitiesModal(date)}
+              onWindowDisplayClick={(date, activity) => openActivitiesModal(date, activity)}
               canApproveWeek={canApproveWeek}
               onApproveWeekForUser={handleApproveWeekForUser}
               approvingUserId={approvingUserId}
@@ -945,7 +951,7 @@ export default function ShiftsPage() {
               transferBlocks={transferBlocks}
               windowDisplayActivities={windowDisplayActivities}
               stores={stores}
-              onWindowDisplayClick={(date) => openActivitiesModal(date)}
+              onWindowDisplayClick={(date, activity) => openActivitiesModal(date, activity)}
               onDayClick={(date) => {
                 setCurrentDate(new Date(date + 'T12:00:00'));
                 setViewMode('day');
@@ -1221,6 +1227,8 @@ export default function ShiftsPage() {
         viewMode={viewMode}
         currentDate={currentDate}
         initialDate={activitiesModalDate}
+        initialStoreId={activitiesModalStoreId}
+        initialActivityId={activitiesModalActivityId}
         stores={stores}
         canManage={canManageWindowDisplay}
         activities={windowDisplayActivitiesRaw}

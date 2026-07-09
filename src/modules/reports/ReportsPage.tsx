@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -434,6 +435,18 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
 
   const name = t(`reports.data.${report.id}.name`);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
   const handleSave = () => {
     const normalizedRecipients = Array.from(
       new Set(recipients.map((recipient) => recipient.trim()).filter((recipient) => recipient.includes('@')))
@@ -447,18 +460,23 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
     });
   };
 
-  return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-      background: 'rgba(13,33,55,0.55)', backdropFilter: 'blur(4px)',
-      zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
+  return ReactDOM.createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: 'fixed', inset: 0, padding: 16,
+        background: 'rgba(13,33,55,0.55)', backdropFilter: 'blur(4px)',
+        zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }} onClick={onClose}>
       <div style={{
-        background: '#FFF', borderRadius: 16, width: 'min(560px, 95vw)', maxHeight: '85vh',
-        overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+        background: 'var(--surface)', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: '0 24px 72px rgba(0,0,0,0.22)',
+        animation: 'popIn 0.22s cubic-bezier(0.16,1,0.3,1)',
       }} onClick={e => e.stopPropagation()}>
         {/* Modal header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{t('reports.modal.title')}</h2>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0' }}>{name}</p>
@@ -468,7 +486,7 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
           </button>
         </div>
 
-        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24, overflowY: 'auto', flex: 1 }}>
           {/* Frequency Selection */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>{t('reports.modal.frequencyLabel')}</label>
@@ -544,12 +562,13 @@ function ConfigModal({ report, onClose, onSave }: { report: ReportData; onClose:
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: isMobile ? 'space-between' : 'flex-end' }}>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: isMobile ? 'space-between' : 'flex-end', flexShrink: 0 }}>
           <button onClick={onClose} style={{ flex: isMobile ? 1 : 'none', padding: '9px 20px', background: 'transparent', color: 'var(--text-secondary)', border: '1.5px solid var(--border)', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>{t('reports.modal.cancel')}</button>
           <button onClick={handleSave} style={{ flex: isMobile ? 1 : 'none', padding: '9px 20px', background: 'var(--primary)', color: '#FFF', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>{t('reports.modal.save')}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.getElementById('modal-root') || document.body
   );
 }
 
