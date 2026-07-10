@@ -1659,6 +1659,7 @@ const it = {
     statusPending: 'In attesa',
     statusAbsent: 'Assente',
     statusOnLeave: 'Congedo',
+    statusCancelled: 'Annullato',
     onTimeShort: 'In orario',
     effectiveShort: 'Effettive',
     leaveApprovedAfter: 'Congedo approvato dopo — non conteggiato',

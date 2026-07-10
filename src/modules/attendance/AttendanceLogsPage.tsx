@@ -41,7 +41,7 @@ export interface SummaryRow {
   effectiveScheduledMinutes: number; // scheduledMinutes − neutralizedMinutes (basis of the variance)
   absentMinutes: number;           // scheduled time on past days with no clock-in and no leave (stays in the deficit)
   leaveApprovedAfter: boolean;     // person worked, then leave was approved after the fact → leave ignored
-  status: 'leave' | 'absent' | 'pending' | 'in_progress' | 'worked';
+  status: 'leave' | 'absent' | 'pending' | 'in_progress' | 'worked' | 'cancelled';
 }
 
 function formatHoursStr(mins: number): string {
@@ -88,7 +88,7 @@ function getAvatarColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export type VarianceKind = 'leave' | 'absent' | 'pending' | 'in_progress' | 'on_time' | 'overtime' | 'undertime';
+export type VarianceKind = 'leave' | 'absent' | 'pending' | 'in_progress' | 'on_time' | 'overtime' | 'undertime' | 'cancelled';
 
 // Single source of truth for how a row's variance is shown. The precomputed
 // row.status already resolves leave / absent / pending / in-progress; here we only
@@ -105,6 +105,8 @@ function varianceDisplay(
   const utLim = applyTolerance ? (opts?.undertimeLimit ?? 15) : 0;
 
   switch (row.status) {
+    case 'cancelled':
+      return { kind: 'cancelled', text: t('attendance.statusCancelled', 'Annullato'), color: '#9ca3af', bg: 'rgba(156,163,175,0.10)', border: 'rgba(156,163,175,0.30)', icon: '✕' };
     case 'leave':
       return { kind: 'leave', text: t('attendance.statusOnLeave', 'Congedo'), color: '#c9973a', bg: 'rgba(201,151,58,0.10)', border: 'rgba(201,151,58,0.25)', icon: '🌴' };
     case 'pending':
@@ -1009,6 +1011,10 @@ export default function AttendanceLogsPage() {
         if (!hasCheckin && row.scheduledMinutes > 0) { row.status = 'pending'; continue; }
       }
       if (row.workedMinutes === 0 && row.effectiveScheduledMinutes === 0 && row.neutralizedMinutes > 0) row.status = 'leave';
+      // Nothing due, nothing worked, no leave — but the period's shift(s) were cancelled.
+      // Without this the row would fall through to 'worked' with a 0 variance → "On time".
+      else if (row.workedMinutes === 0 && row.effectiveScheduledMinutes === 0 && row.neutralizedMinutes === 0
+               && row.shifts.length > 0 && row.shifts.every(s => s.status === 'cancelled')) row.status = 'cancelled';
       else if (row.workedMinutes === 0 && row.effectiveScheduledMinutes > 0) row.status = 'absent';
       else row.status = 'worked';
     }
@@ -1062,9 +1068,10 @@ export default function AttendanceLogsPage() {
       sumAbsent += r.absentMinutes;
       shiftCount += r.shifts.length;
       employeeIds.add(r.userId);
-      // Pending / in-progress days aren't "due" yet — exclude from over/undertime so
-      // the buckets always reconcile with the net balance. No tolerance in analytics.
-      if (r.status === 'pending' || r.status === 'in_progress') return;
+      // Pending / in-progress days aren't "due" yet, and cancelled shifts were never
+      // due at all — exclude all three from over/undertime so the buckets always
+      // reconcile with the net balance. No tolerance in analytics.
+      if (r.status === 'pending' || r.status === 'in_progress' || r.status === 'cancelled') return;
       if (r.varianceMinutes > 0) sumOvertime += r.varianceMinutes;
       else if (r.varianceMinutes < 0) sumUndertime += Math.abs(r.varianceMinutes);
     });
@@ -2663,7 +2670,7 @@ export default function AttendanceLogsPage() {
                                 </td>
                                 {/* Avanzamento — capped at 100% + tick when complete; over-100% lives in Variance */}
                                 <td style={{ padding: compact ? '6px 10px' : '10px 14px', minWidth: 140 }}>
-                                  {(row.status === 'leave' || row.status === 'pending') ? (
+                                  {(row.status === 'leave' || row.status === 'pending' || row.status === 'cancelled') ? (
                                     <span style={{ fontSize: compact ? 12 : 13, fontWeight: 700, color: 'var(--text-muted)' }}>—</span>
                                   ) : (() => {
                                     const denom = row.effectiveScheduledMinutes;
