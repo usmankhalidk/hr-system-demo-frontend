@@ -1665,6 +1665,7 @@ const en = {
     statusPending: 'Pending',
     statusAbsent: 'Absent',
     statusOnLeave: 'On leave',
+    statusCancelled: 'Cancelled',
     onTimeShort: 'On time',
     effectiveShort: 'Effective',
     leaveApprovedAfter: 'Leave approved afterwards — not counted',
