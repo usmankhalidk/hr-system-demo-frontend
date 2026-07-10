@@ -3169,18 +3169,34 @@ const it = {
         desc: 'Report mensile direzionale con KPI completi: organico, funnel ATS, onboarding in corso, copertura turni, scadenze contratti.',
         schedule: '1° del mese alle 07:00'
       },
+      admin_weekly: {
+        name: 'Report Admin Settimanale',
+        desc: 'Riepilogo settimanale aziendale: turni pianificati e completati, anomalie per sede e ferie da approvare.',
+        schedule: 'Ogni lunedì alle 07:00'
+      },
       hr_monthly: {
         name: 'Report HR Mensile',
         desc: 'Report mensile HR con focus su personale: variazioni organico, ferie & permessi, scadenze formazioni, scadenze visite mediche e contratti in scadenza.',
         schedule: '1° del mese alle 08:00'
       },
       anomaly_daily: {
-        name: 'Alert Giornaliero HR (ATS)',
-        desc: 'Riepilogo operativo giornaliero della pipeline ATS: posizioni create, candidati ricevuti, in esame, interviste telefoniche, interviste di persona, assunti e rifiutati.',
+        name: 'Alert Giornaliero HR',
+        desc: 'Riepilogo giornaliero del negozio: anomalie del giorno precedente, assenze e ritardi, per intervenire la mattina stessa.',
         schedule: 'Ogni giorno (lun–ven) alle 08:00'
       }
     },
     sections: {
+      // Chiavi canoniche usate dal generatore di report.
+      attendance: 'Presenze per collaboratore',
+      anomalies: 'Anomalie',
+      shifts: 'Copertura turni per sede',
+      leave: 'Ferie e permessi',
+      onboarding: 'Onboarding in corso',
+      trainings: 'Scadenze formazione',
+      medical: 'Scadenze visite mediche',
+      contracts: 'Contratti in scadenza',
+      workforce: 'Variazioni organico',
+      ats: 'Pipeline selezione',
       'Riepilogo presenze': 'Riepilogo presenze',
       'Anomalie rilevate': 'Anomalie rilevate',
       'Turni confermati': 'Turni confermati',

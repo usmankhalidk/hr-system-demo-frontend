@@ -3168,18 +3168,34 @@ const en = {
         desc: 'Monthly executive report with full KPIs: staff, ATS funnel, onboarding in process, shift coverage, contract deadlines.',
         schedule: '1st of the month at 07:00'
       },
+      admin_weekly: {
+        name: 'Weekly Admin Report',
+        desc: 'Weekly company-wide summary: shifts planned vs completed, anomalies by store, and leave awaiting approval.',
+        schedule: 'Every Monday at 07:00'
+      },
       hr_monthly: {
         name: 'Monthly HR Report',
         desc: 'Monthly HR report focusing on personnel: staff variations, leave & permissions, training deadlines, medical exam deadlines, and expiring contracts.',
         schedule: '1st of the month at 08:00'
       },
       anomaly_daily: {
-        name: 'Daily HR Alert (ATS)',
-        desc: 'Daily operational summary of the ATS pipeline: positions created, received, in review, phone interview, in-person interview, hired, and rejected candidates.',
+        name: 'Daily HR Alert',
+        desc: 'Daily store summary: yesterday\'s anomalies, no-shows and late arrivals, so they can be handled the same morning.',
         schedule: 'Every day (Mon–Fri) at 08:00'
       }
     },
     sections: {
+      // Canonical section keys used by the report generator.
+      attendance: 'Attendance by employee',
+      anomalies: 'Anomalies',
+      shifts: 'Shift coverage by store',
+      leave: 'Leave & permissions',
+      onboarding: 'Onboarding in progress',
+      trainings: 'Training deadlines',
+      medical: 'Medical exam deadlines',
+      contracts: 'Expiring contracts',
+      workforce: 'Staff variations',
+      ats: 'Recruitment pipeline',
       'Riepilogo presenze': 'Attendance summary',
       'Anomalie rilevate': 'Anomalies detected',
       'Turni confermati': 'Confirmed shifts',
