@@ -4589,6 +4589,58 @@ const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription
   );
 };
 
+interface DisplayAnswer {
+  questionText: string;
+  answerText: string;
+}
+
+function getDisplayAnswers(
+  candidate: Candidate,
+  screenerQuestions: ScreenerQuestion[]
+): DisplayAnswer[] {
+  if (!candidate.sourceRef) return [];
+  try {
+    const parsed = JSON.parse(candidate.sourceRef);
+    const answers = parsed.screener_answers || parsed.screenerQuestionsAndAnswers || [];
+    if (!Array.isArray(answers)) return [];
+
+    return answers.map((ans: any) => {
+      if (ans.questionId !== undefined) {
+        const q = screenerQuestions.find(sq => sq.id === ans.questionId);
+        return {
+          questionText: q ? q.question_text : `Question #${ans.questionId}`,
+          answerText: ans.answer || '',
+        };
+      }
+      
+      const qId = ans.id || '';
+      const qText = ans.label || ans.question || ans.questionText || '';
+      const aText = ans.value || ans.answer || '';
+      
+      if (qId) {
+        const dbId = parseInt(qId.replace('q_', ''), 10);
+        if (!Number.isNaN(dbId)) {
+          const q = screenerQuestions.find(sq => sq.id === dbId);
+          if (q) {
+            return {
+              questionText: q.question_text,
+              answerText: aText,
+            };
+          }
+        }
+      }
+
+      return {
+        questionText: qText || 'Question',
+        answerText: aText,
+      };
+    }).filter(item => item.questionText.trim() !== '' && item.answerText.trim() !== '');
+  } catch (e) {
+    console.error('Error parsing display answers', e);
+    return [];
+  }
+}
+
 interface CandidateModalProps {
   candidate: Candidate;
   jobs: JobPosting[];
@@ -4612,6 +4664,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   companies = [],
 }) => {
   const { t, i18n } = useTranslation();
+  const isIt = i18n.language === 'it';
   const { showToast } = useToast();
   const { user } = useAuth();
   const { isMobile } = useBreakpoint();
@@ -4751,6 +4804,25 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [savingRejection, setSavingRejection] = useState(false);
+
+  const [screenerQuestions, setScreenerQuestions] = useState<ScreenerQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+  useEffect(() => {
+    if (candidate.jobPostingId) {
+      setLoadingQuestions(true);
+      listScreenerQuestions(candidate.jobPostingId, candidate.companyId)
+        .then(setScreenerQuestions)
+        .catch((err) => console.error('Failed to load screener questions', err))
+        .finally(() => setLoadingQuestions(false));
+    } else {
+      setScreenerQuestions([]);
+    }
+  }, [candidate.jobPostingId, candidate.companyId]);
+
+  const displayAnswers = useMemo(() => {
+    return getDisplayAnswers(candidate, screenerQuestions);
+  }, [candidate, screenerQuestions]);
 
   const appliedJob = candidate.jobPostingId
     ? jobs.find((j) => j.id === candidate.jobPostingId) ?? null
@@ -5531,6 +5603,54 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Screener Questions */}
+          {displayAnswers.length > 0 && (
+            <div style={{
+              background: 'var(--background)', borderRadius: 12, padding: '14px 16px',
+              border: '1px solid var(--border)',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+                📋 {t('ats.screenerQuestions', 'Screener Questions')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {displayAnswers.map((item, idx) => {
+                  const isYesNo = ['sì', 'si', 'yes', 'no'].includes(item.answerText.toLowerCase().trim());
+                  const isPositive = ['sì', 'si', 'yes'].includes(item.answerText.toLowerCase().trim());
+                  
+                  return (
+                    <div key={idx} style={{
+                      padding: '10px 12px', background: 'var(--surface)', borderRadius: 8,
+                      border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6
+                    }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                        {item.questionText}
+                      </div>
+                      <div style={{ display: 'flex' }}>
+                        {isYesNo ? (
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                            background: isPositive ? 'rgba(21,128,61,0.1)' : 'rgba(220,38,38,0.1)',
+                            color: isPositive ? '#15803d' : '#dc2626',
+                            textTransform: 'uppercase', border: isPositive ? '1px solid rgba(21,128,61,0.18)' : '1px solid rgba(220,38,38,0.18)'
+                          }}>
+                            {isPositive ? (isIt ? 'Sì' : 'Yes') : 'No'}
+                          </span>
+                        ) : (
+                          <div style={{
+                            fontSize: 12.5, color: 'var(--text-secondary)', background: 'var(--surface-warm)',
+                            padding: '6px 10px', borderRadius: 6, width: '100%', borderLeft: '3px solid var(--accent)'
+                          }}>
+                            {item.answerText}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {appliedJob && <JobPostSummaryCard appliedJob={appliedJob} />}
 
