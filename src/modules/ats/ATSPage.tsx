@@ -4121,7 +4121,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
 // Reusable job-post summary (details + creator) — shared by the candidate modal
 // and the position view modal so both render the job the same way.
-const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription?: boolean }> = ({ appliedJob, showFullDescription = false }) => {
+const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription?: boolean; screenerQuestions?: ScreenerQuestion[] }> = ({ appliedJob, showFullDescription = false, screenerQuestions = [] }) => {
   const { t, i18n } = useTranslation();
   const formatDate = (date: string | null | undefined, format: 'long' | 'short' = 'long'): string => {
     if (!date) return '';
@@ -4325,6 +4325,55 @@ const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription
                           {tag}
                         </span>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Screener Questions for this Job */}
+                {screenerQuestions.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                      📋 {t('ats.screenerQuestions', 'Screener Questions')}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {screenerQuestions.map((q, idx) => {
+                        let optionsArr: string[] = [];
+                        if (q.options) {
+                          try {
+                            const raw = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+                            if (Array.isArray(raw)) {
+                              optionsArr = raw.map((o: any) => typeof o === 'string' ? o : (o.label || o.value || ''));
+                            }
+                          } catch { /* ignore */ }
+                        }
+                        return (
+                          <div key={q.id ?? idx} style={{
+                            padding: '8px 10px', background: 'var(--background)', borderRadius: 6,
+                            border: '1px solid var(--border)',
+                          }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: optionsArr.length > 0 ? 4 : 0 }}>
+                              {q.question_text}
+                              {q.is_knockout && (
+                                <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#dc2626', background: 'rgba(220,38,38,0.08)', padding: '1px 5px', borderRadius: 4, verticalAlign: 'middle' }}>
+                                  KO
+                                </span>
+                              )}
+                            </div>
+                            {optionsArr.length > 0 && (
+                              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                {optionsArr.map((opt, oi) => (
+                                  <span key={oi} style={{
+                                    fontSize: 10, color: 'var(--text-secondary)', background: 'var(--surface)',
+                                    border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px',
+                                  }}>
+                                    {opt}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -4595,37 +4644,36 @@ interface DisplayAnswer {
 }
 
 function getDisplayAnswers(
-  candidate: Candidate,
+  sourceRef: string | null,
   screenerQuestions: ScreenerQuestion[]
 ): DisplayAnswer[] {
-  if (!candidate.sourceRef) return [];
+  if (!sourceRef) return [];
   try {
-    const parsed = JSON.parse(candidate.sourceRef);
-    const answers = parsed.screener_answers || parsed.screenerQuestionsAndAnswers || [];
-    if (!Array.isArray(answers)) return [];
+    const parsed = JSON.parse(sourceRef);
+    const answers: any[] = parsed.screener_answers || parsed.screenerQuestionsAndAnswers || [];
+    if (!Array.isArray(answers) || answers.length === 0) return [];
 
     return answers.map((ans: any) => {
+      // Direct portal apply: { questionId: number, answer: string }
       if (ans.questionId !== undefined) {
         const q = screenerQuestions.find(sq => sq.id === ans.questionId);
         return {
-          questionText: q ? q.question_text : `Question #${ans.questionId}`,
-          answerText: ans.answer || '',
+          questionText: q?.question_text || ans.label || ans.question || `Question #${ans.questionId}`,
+          answerText: String(ans.answer ?? ''),
         };
       }
-      
+
+      // Indeed apply or other formats: { id: "q_N", label: "...", value: "..." }
       const qId = ans.id || '';
       const qText = ans.label || ans.question || ans.questionText || '';
-      const aText = ans.value || ans.answer || '';
-      
+      const aText = String(ans.value ?? ans.answer ?? '');
+
       if (qId) {
-        const dbId = parseInt(qId.replace('q_', ''), 10);
+        const dbId = parseInt(String(qId).replace('q_', ''), 10);
         if (!Number.isNaN(dbId)) {
           const q = screenerQuestions.find(sq => sq.id === dbId);
           if (q) {
-            return {
-              questionText: q.question_text,
-              answerText: aText,
-            };
+            return { questionText: q.question_text, answerText: aText };
           }
         }
       }
@@ -4634,9 +4682,10 @@ function getDisplayAnswers(
         questionText: qText || 'Question',
         answerText: aText,
       };
-    }).filter(item => item.questionText.trim() !== '' && item.answerText.trim() !== '');
-  } catch (e) {
-    console.error('Error parsing display answers', e);
+    }).filter((item): item is DisplayAnswer => {
+      return item.questionText.trim() !== '' && item.answerText.trim() !== '';
+    });
+  } catch {
     return [];
   }
 }
@@ -4806,23 +4855,30 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [savingRejection, setSavingRejection] = useState(false);
 
   const [screenerQuestions, setScreenerQuestions] = useState<ScreenerQuestion[]>([]);
-  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const screenerFetchedRef = useRef<string>('');
 
   useEffect(() => {
+    const fetchKey = `${candidate.jobPostingId ?? ''}-${candidate.companyId ?? ''}`;
+    if (screenerFetchedRef.current === fetchKey) return;
+    screenerFetchedRef.current = fetchKey;
+
     if (candidate.jobPostingId) {
       setLoadingQuestions(true);
       listScreenerQuestions(candidate.jobPostingId, candidate.companyId)
         .then(setScreenerQuestions)
-        .catch((err) => console.error('Failed to load screener questions', err))
+        .catch(() => setScreenerQuestions([]))
         .finally(() => setLoadingQuestions(false));
     } else {
       setScreenerQuestions([]);
+      setLoadingQuestions(false);
     }
   }, [candidate.jobPostingId, candidate.companyId]);
 
   const displayAnswers = useMemo(() => {
-    return getDisplayAnswers(candidate, screenerQuestions);
-  }, [candidate, screenerQuestions]);
+    if (loadingQuestions) return [];
+    return getDisplayAnswers(candidate.sourceRef, screenerQuestions);
+  }, [candidate.sourceRef, screenerQuestions, loadingQuestions]);
 
   const appliedJob = candidate.jobPostingId
     ? jobs.find((j) => j.id === candidate.jobPostingId) ?? null
@@ -5652,7 +5708,7 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             </div>
           )}
 
-          {appliedJob && <JobPostSummaryCard appliedJob={appliedJob} />}
+          {appliedJob && <JobPostSummaryCard appliedJob={appliedJob} screenerQuestions={screenerQuestions} />}
 
           {/* Candidate Tags */}
           <div>
