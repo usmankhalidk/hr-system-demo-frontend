@@ -36,10 +36,33 @@ const CADENCE_COLOR: Record<ReportCadence, string> = {
   daily: '#DC2626',
 };
 
-/** Detail sections a report can include, per owner role. */
 const SECTIONS_BY_ROLE: Record<'admin' | 'hr', string[]> = {
   admin: ['workforce', 'shifts', 'anomalies', 'leave', 'contracts', 'ats'],
-  hr: ['attendance', 'anomalies', 'shifts', 'leave', 'onboarding', 'trainings', 'medical', 'contracts'],
+  hr: ['attendance', 'anomalies', 'shifts', 'leave', 'onboarding', 'trainings', 'medical', 'contracts', 'ats'],
+};
+
+const DEFAULT_SECTIONS: Record<string, string[]> = {
+  admin_monthly: ['workforce', 'shifts', 'anomalies', 'leave', 'contracts', 'ats'],
+  admin_weekly: ['shifts', 'anomalies', 'leave'],
+  hr_monthly: ['workforce', 'leave', 'trainings', 'medical', 'contracts'],
+  hr_weekly: ['attendance', 'anomalies', 'shifts', 'leave', 'onboarding'],
+  anomaly_daily: ['ats'],
+};
+
+const DEFAULT_TIME: Record<string, string> = {
+  admin_monthly: '07:00',
+  admin_weekly: '07:00',
+  hr_monthly: '08:00',
+  hr_weekly: '07:00',
+  anomaly_daily: '08:00',
+};
+
+const DEFAULT_DAY: Record<string, number> = {
+  admin_monthly: 1,
+  admin_weekly: 1,
+  hr_monthly: 1,
+  hr_weekly: 1,
+  anomaly_daily: 1,
 };
 
 /** A report's row in report_configurations, merged with its registry definition. */
@@ -631,10 +654,10 @@ export function ReportsPage() {
       ownerUserId: owner.userId,
       storeId: owner.storeId,
       status: (saved?.status ?? def.defaultStatus) as ReportRow['status'],
-      day: saved?.day ?? 1,
-      time: saved?.time ?? '07:00',
+      day: saved?.day ?? DEFAULT_DAY[def.reportId] ?? 1,
+      time: saved?.time ?? DEFAULT_TIME[def.reportId] ?? '07:00',
       recipients: saved?.recipients ?? [],
-      sections: saved?.sections ?? [],
+      sections: saved?.sections ?? DEFAULT_SECTIONS[def.reportId] ?? [],
       runCount: saved?.runCount ?? 0,
       lastGenerated: saved?.lastGenerated ?? null,
     };

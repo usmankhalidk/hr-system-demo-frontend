@@ -3180,8 +3180,8 @@ const en = {
         schedule: '1st of the month at 08:00'
       },
       anomaly_daily: {
-        name: 'Daily HR Alert',
-        desc: 'Daily store summary: yesterday\'s anomalies, no-shows and late arrivals, so they can be handled the same morning.',
+        name: 'Daily ATS Alert',
+        desc: 'Daily recruitment pipeline summary: open job postings, received applications, scheduled interviews, and selection outcomes over the last 24 hours.',
         schedule: 'Every day (Mon–Fri) at 08:00'
       }
     },

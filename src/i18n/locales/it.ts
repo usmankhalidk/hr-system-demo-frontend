@@ -3181,8 +3181,8 @@ const it = {
         schedule: '1° del mese alle 08:00'
       },
       anomaly_daily: {
-        name: 'Alert Giornaliero HR',
-        desc: 'Riepilogo giornaliero del negozio: anomalie del giorno precedente, assenze e ritardi, per intervenire la mattina stessa.',
+        name: 'Avviso ATS Giornaliero',
+        desc: 'Riepilogo giornaliero del processo di selezione: posizioni aperte, candidati ricevuti, interviste pianificate ed esiti della selezione nelle ultime 24 ore.',
         schedule: 'Ogni giorno (lun–ven) alle 08:00'
       }
     },
