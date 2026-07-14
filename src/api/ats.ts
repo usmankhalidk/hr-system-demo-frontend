@@ -649,6 +649,7 @@ export interface ScreenerQuestion {
   is_knockout: boolean;
   knockout_value: string | null;
   display_order: number;
+  is_required?: boolean;
   created_at?: string;
   updated_at?: string;
 }

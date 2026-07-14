@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Layers, Globe, Plus } from 'lucide-react';
+import { Layers, Globe, Plus, ShieldAlert } from 'lucide-react';
 import { Toggle } from '../../components/ui/Toggle';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
@@ -11,8 +11,10 @@ import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
 import { getCompanyGroups, getGroupRoleVisibility, updateGroupRoleVisibility } from '../../api/companyGroups';
 import { getCompanies } from '../../api/companies';
+import { getEmployees } from '../../api/employees';
+import { getAvatarUrl } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import type { Company } from '../../types';
+import type { Company, Employee } from '../../types';
 import { GroupManagementModal } from './GroupManagementModal';
 
 import type { CompanyGroup, GroupRoleVisibility, GroupVisibilityCompany } from '../../api/companyGroups';
@@ -41,14 +43,21 @@ export default function GroupRoleVisibilityPanel() {
     localVisibility.hr !== serverVisibility.hr || localVisibility.areaManager !== serverVisibility.areaManager
   ), [localVisibility, serverVisibility]);
 
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
   useEffect(() => {
     void (async () => {
       setLoading(true);
       setErrorMsg(null);
       try {
-        const [g, companies] = await Promise.all([getCompanyGroups(), getCompanies()]);
+        const [g, companies, empData] = await Promise.all([
+          getCompanyGroups(),
+          getCompanies(),
+          getEmployees({ limit: 500 })
+        ]);
         setGroups(g);
         setAllCompanies(companies);
+        setEmployees(empData.employees || []);
         setGroupId((prev) => prev ?? (g[0]?.id ?? -1));
       } catch {
         setErrorMsg(t('permissions.groupVisibility.errorLoadGroups'));
@@ -230,135 +239,81 @@ export default function GroupRoleVisibilityPanel() {
         </div>
       )}
 
-      {/* Unified Companies list under selection */}
-      {groupId != null && (
-        <div style={{
-          padding: '12px 20px',
-          borderBottom: '1px solid var(--border-light)',
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'nowrap',
-          overflowX: 'auto',
-          background: 'var(--surface-warm)',
-          alignItems: 'center',
-          scrollbarWidth: 'none',
-          WebkitOverflowScrolling: 'touch',
-        }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 4, flexShrink: 0 }}>
-            {isIsolatedSelection 
-              ? t('permissions.groupVisibility.isolatedCompanies', { defaultValue: 'Isolated Companies:' })
-              : t('permissions.groupVisibility.groupCompanies', { defaultValue: 'Group Companies:' })}
-          </span>
-          {selectedCompanies.length === 0 ? (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {isIsolatedSelection
-                ? t('permissions.groupVisibility.noIsolatedCompanies', { defaultValue: 'No isolated companies found.' })
-                : t('permissions.groupVisibility.noCompaniesInGroup', { defaultValue: 'No companies linked to this group yet.' })}
-            </span>
-          ) : (
-            selectedCompanies.map((company) => (
-              <span
-                key={company.id}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--text-primary)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  flexShrink: 0
-                }}
-              >
-                <span style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: company.isActive ? '#22C55E' : '#9CA3AF'
-                }} />
-                {company.name}
-              </span>
-            ))
-          )}
-        </div>
-      )}
-
       {/* Visibility toggles */}
       {groupId == null ? (
         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
           {t('common.noData')}
         </div>
       ) : (
-        <div style={{ padding: '16px 20px', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{
+          padding: '16px 20px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: 16
+        }}>
           {ROLE_ITEMS.map(({ key, label, hint, color }) => (
             <div
               key={key}
               style={{
-                flex: 1,
-                minWidth: 220,
                 border: `1px solid ${localVisibility[key] ? `${color}30` : 'var(--border-light)'}`,
                 borderRadius: 'var(--radius)',
-                padding: '14px 16px',
+                padding: '16px',
                 background: localVisibility[key] ? `${color}08` : 'var(--surface-warm)',
                 display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                gap: 12,
-                flexWrap: 'wrap',
+                flexDirection: 'column',
+                gap: 14,
                 transition: 'background 0.2s, border-color 0.2s',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: `${color}18`,
-                  border: `2px solid ${color}30`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color,
-                  flexShrink: 0,
-                }}>
-                  <Globe size={14} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-display)' }}>{label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{hint}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 3 }}>
-                    {(() => {
-                      const coverageCompanies = selectedCompanies;
-                      const activeForRoleSafe = coverageCompanies.filter((c) => key === 'hr' ? c.hasActiveHr : c.hasActiveAreaManager).length;
-                      return t('permissions.groupVisibility.coverageSummary', {
-                        active: activeForRoleSafe,
-                        total: coverageCompanies.length,
-                        role: label,
-                        defaultValue: `${activeForRoleSafe}/${coverageCompanies.length} companies have active ${label}`,
-                      });
-                    })()}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: `${color}18`,
+                    border: `2px solid ${color}30`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color,
+                    flexShrink: 0,
+                  }}>
+                    <Globe size={14} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-display)' }}>{label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{hint}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 3 }}>
+                      {(() => {
+                        const coverageCompanies = selectedCompanies;
+                        const activeForRoleSafe = coverageCompanies.filter((c) => key === 'hr' ? c.hasActiveHr : c.hasActiveAreaManager).length;
+                        return t('permissions.groupVisibility.coverageSummary', {
+                          active: activeForRoleSafe,
+                          total: coverageCompanies.length,
+                          role: label,
+                          defaultValue: `${activeForRoleSafe}/${coverageCompanies.length} companies have active ${label}`,
+                        });
+                      })()}
+                    </div>
                   </div>
                 </div>
+                <Toggle
+                  checked={localVisibility[key]}
+                  onChange={() => setLocalVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
+                  disabled={saving || isIsolatedSelection}
+                />
               </div>
-              <Toggle
-                checked={localVisibility[key]}
-                onChange={() => setLocalVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
-                disabled={saving || isIsolatedSelection}
-              />
 
+              {/* Companies and Employees list inside role card */}
               <div style={{
-                marginTop: 10,
-                paddingTop: 10,
+                marginTop: 4,
+                paddingTop: 14,
                 borderTop: '1px solid var(--border-light)',
                 display: 'flex',
-                gap: 6,
-                flexWrap: 'nowrap',
-                overflowX: 'auto',
+                flexDirection: 'column',
+                gap: 12,
                 width: '100%',
-                paddingBottom: '6px'
               }}>
                 {(() => {
                   const displayCompanies = selectedCompanies;
@@ -374,40 +329,160 @@ export default function GroupRoleVisibilityPanel() {
                   }
 
                   return displayCompanies.map((company) => {
-                    const roleActive = key === 'hr' ? company.hasActiveHr : company.hasActiveAreaManager;
+                    const fullComp = allCompanies.find((c) => c.id === company.id);
+                    const ownerName = fullComp?.ownerName ? `${fullComp.ownerName} ${fullComp.ownerSurname || ''}` : null;
+                    const companyUsers = employees.filter(
+                      (e) => e.companyId === company.id && (key === 'hr' ? e.role === 'hr' : e.role === 'area_manager')
+                    );
+
                     return (
-                      <span
+                      <div
                         key={`${key}-${company.id}`}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border-light)',
+                          borderRadius: 10,
+                          padding: 12,
+                          display: 'flex',
+                          flexDirection: 'column',
                           gap: 6,
-                          padding: '4px 8px',
-                          borderRadius: 999,
-                          border: `1px solid ${roleActive ? '#15803D55' : 'var(--border)'}`,
-                          background: roleActive ? 'rgba(21,128,61,0.10)' : 'var(--surface)',
-                          color: roleActive ? '#166534' : 'var(--text-secondary)',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          flexShrink: 0
                         }}
                       >
-                        <span>{company.name}</span>
-                        {roleActive && (
-                          <span style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            color: '#166534',
-                            border: '1px solid #16A34A66',
-                            borderRadius: 999,
-                            padding: '0 5px',
-                            lineHeight: 1.5,
-                            background: 'rgba(34,197,94,0.14)',
-                          }}>
-                            {t('permissions.groupVisibility.activeTag', { defaultValue: 'Active' })}
-                          </span>
-                        )}
-                      </span>
+                        {/* Company row: name on left, owner on right */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: company.isActive ? '#22C55E' : '#9CA3AF',
+                              flexShrink: 0
+                            }} />
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {company.name}
+                            </span>
+                          </div>
+                          
+                          {/* Owner Info */}
+                          {ownerName ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                              {fullComp?.ownerAvatarFilename && getAvatarUrl(fullComp.ownerAvatarFilename) ? (
+                                <img
+                                  src={getAvatarUrl(fullComp.ownerAvatarFilename) || ''}
+                                  alt={ownerName}
+                                  style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: 14,
+                                  height: 14,
+                                  borderRadius: '50%',
+                                  background: 'var(--primary)',
+                                  color: '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 7,
+                                  fontWeight: 800,
+                                }}>
+                                  {fullComp?.ownerName ? fullComp.ownerName[0].toUpperCase() : 'O'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: 9.5, fontWeight: 550, color: 'var(--text-secondary)' }} title={`Owner: ${ownerName}`}>
+                                {ownerName}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 9.5, color: 'var(--text-disabled)', fontStyle: 'italic' }}>
+                              {t('common.noOwner', 'No owner')}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Divider line */}
+                        <div style={{ height: 1, background: 'var(--border-light)', margin: '2px 0' }} />
+
+                        {/* Employees List */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {companyUsers.length === 0 ? (
+                            <div style={{ padding: '6px 8px', fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-warm)', borderRadius: 6, border: '1px dashed var(--border-light)', textAlign: 'center' }}>
+                              {key === 'hr'
+                                ? t('permissions.groupVisibility.noHr', 'No active HR')
+                                : t('permissions.groupVisibility.noAreaManagers', 'No active Area Managers')}
+                            </div>
+                          ) : (
+                            companyUsers.map((emp) => {
+                              const initials = `${emp.name[0] || ''}${emp.surname[0] || ''}`.toUpperCase();
+                              const isActive = emp.status === 'active';
+                              const roleColor = key === 'hr' ? '#0284C7' : '#15803D';
+
+                              return (
+                                <div
+                                  key={emp.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 8,
+                                    padding: '4px 6px',
+                                    background: 'var(--surface-warm)',
+                                    borderRadius: 6,
+                                    border: '1px solid var(--border-light)',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                    {/* User avatar */}
+                                    {emp.avatarFilename && getAvatarUrl(emp.avatarFilename) ? (
+                                      <img
+                                        src={getAvatarUrl(emp.avatarFilename) || ''}
+                                        alt={`${emp.name} ${emp.surname}`}
+                                        style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                                      />
+                                    ) : (
+                                      <div style={{
+                                        width: 18,
+                                        height: 18,
+                                        borderRadius: '50%',
+                                        background: `${roleColor}18`,
+                                        border: `1px solid ${roleColor}30`,
+                                        color: roleColor,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 7.5,
+                                        fontWeight: 800,
+                                        flexShrink: 0,
+                                      }}>
+                                        {initials}
+                                      </div>
+                                    )}
+
+                                    {/* User details */}
+                                    <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {emp.name} {emp.surname}
+                                    </span>
+                                  </div>
+
+                                  {/* Status Badge */}
+                                  <span style={{
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    padding: '1px 4px',
+                                    borderRadius: 4,
+                                    background: isActive ? 'rgba(34,197,94,0.1)' : 'rgba(156,163,175,0.1)',
+                                    color: isActive ? '#166534' : '#4b5563',
+                                    textTransform: 'uppercase',
+                                    border: isActive ? '1px solid rgba(34,197,94,0.18)' : '1px solid rgba(156,163,175,0.18)',
+                                    flexShrink: 0,
+                                  }}>
+                                    {isActive ? t('common.active', 'Active') : t('common.inactive', 'Inactive')}
+                                  </span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
                     );
                   });
                 })()}

@@ -19,6 +19,8 @@ import {
   Clipboard,
   Bell,
   Zap,
+  Building2,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   getCompaniesPermissions,
@@ -26,13 +28,17 @@ import {
   CompanyPermissions,
   SystemPermissionUpdate,
 } from '../../api/systemPermissions';
+import { getCompanyById } from '../../api/companies';
+import { getCompanyLogoUrl, getAvatarUrl } from '../../api/client';
+import { Company } from '../../types';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { translateApiError } from '../../utils/apiErrors';
 import { useToast } from '../../context/ToastContext';
 import GroupRoleVisibilityPanel from './GroupRoleVisibilityPanel';
-import { ManagedRoleKey, SystemModuleKey, isRoleEligibleForModule } from './permissionCatalog';
+import { ManagedRoleKey, SystemModuleKey, isRoleEligibleForModule, MODULE_ROLE_ELIGIBILITY } from './permissionCatalog';
 import PermissionGridTable, { GridModuleDef } from './PermissionGridTable';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 
 const SYSTEM_MODULES: GridModuleDef[] = [
   { key: 'negozi',      implemented: true, icon: <Store size={15} /> },
@@ -91,6 +97,15 @@ const SystemPermissionsPanel: React.FC = () => {
   const [lastSaved, setLastSaved]     = useState<Record<number, string>>({});
   const [errorMsg, setErrorMsg]       = useState<string | null>(null);
 
+  // Company details for modal UI (logo, owner info)
+  const [companyDetails, setCompanyDetails] = useState<Record<number, Company>>({});
+
+  // Confirmation modal state for disabling modules for Admin
+  const [confirmDisable, setConfirmDisable] = useState<{ moduleKey: string; moduleLabel: string } | null>(null);
+
+  // Admin-required modal state: shown when trying to enable a non-admin role while admin is disabled
+  const [adminRequired, setAdminRequired] = useState<{ moduleKey: string; moduleLabel: string } | null>(null);
+
   useEffect(() => {
     setLoading(true);
     getCompaniesPermissions()
@@ -109,13 +124,22 @@ const SystemPermissionsPanel: React.FC = () => {
 
   const activeCompany = companies.find(c => c.id === selectedCompanyId);
 
-  const handleToggle = async (mod: string, role: ManagedRoleKey): Promise<void> => {
+  // Fetch company details (logo, owner) when company selection changes
+  useEffect(() => {
+    if (selectedCompanyId == null) return;
+    if (companyDetails[selectedCompanyId]) return; // already cached
+    getCompanyById(selectedCompanyId)
+      .then((detail) => {
+        setCompanyDetails((prev) => ({ ...prev, [selectedCompanyId]: detail }));
+      })
+      .catch(() => { /* silently ignore — modal will degrade gracefully */ });
+  }, [selectedCompanyId]);
+
+  const executeToggle = async (mod: string, role: ManagedRoleKey, newValue: boolean): Promise<void> => {
     if (!activeCompany) return;
     const sysMod = mod as SystemModuleKey;
-    if (!isRoleEligibleForModule(role, sysMod)) return;
     const cid = activeCompany.id;
     const cellKey = `${mod}:${role}`;
-    const newValue = !(grids[cid]?.[sysMod]?.[role] ?? false);
 
     // Optimistic update
     setGrids((prev) => ({
@@ -136,7 +160,6 @@ const SystemPermissionsPanel: React.FC = () => {
       await updateCompanyPermissions(cid, updates);
       setLastSaved((prev) => ({ ...prev, [cid]: cellKey }));
       setTimeout(() => setLastSaved((prev) => ({ ...prev, [cid]: prev[cid] === cellKey ? '' : prev[cid] })), 1800);
-      // Notify other open tabs to refresh their permissions immediately
       localStorage.setItem('hr_permissions_updated', Date.now().toString());
     } catch (err) {
       // Revert
@@ -155,6 +178,109 @@ const SystemPermissionsPanel: React.FC = () => {
         return { ...prev, [cid]: next };
       });
     }
+  };
+
+  const handleToggle = async (mod: string, role: ManagedRoleKey): Promise<void> => {
+    if (!activeCompany) return;
+    const sysMod = mod as SystemModuleKey;
+    if (!isRoleEligibleForModule(role, sysMod)) return;
+
+    const cid = activeCompany.id;
+    const currentValue = grids[cid]?.[sysMod]?.[role] ?? false;
+    const newValue = !currentValue;
+
+    // If trying to ENABLE a non-admin role, check if admin is enabled for this module
+    if (role !== 'admin' && newValue === true) {
+      const adminEnabled = grids[cid]?.[sysMod]?.['admin'] ?? false;
+      if (!adminEnabled) {
+        setAdminRequired({
+          moduleKey: mod,
+          moduleLabel: t(`permissions.modules.${mod}`, mod),
+        });
+        return;
+      }
+    }
+
+    // If role is 'admin' and current value is enabled (true), we are disabling it: show confirm modal
+    if (role === 'admin' && currentValue) {
+      setConfirmDisable({
+        moduleKey: mod,
+        moduleLabel: t(`permissions.modules.${mod}`, mod),
+      });
+      return;
+    }
+
+    await executeToggle(mod, role, newValue);
+  };
+
+  const handleConfirmDisable = async (): Promise<void> => {
+    if (!confirmDisable || !activeCompany) return;
+    const { moduleKey } = confirmDisable;
+    setConfirmDisable(null);
+
+    const cid = activeCompany.id;
+    const sysMod = moduleKey as SystemModuleKey;
+    const cellKey = `${moduleKey}:admin`;
+
+    // Disable for admin and all other eligible roles
+    const updates: SystemPermissionUpdate[] = [{ module: sysMod, role: 'admin', enabled: false }];
+    const eligibleRoles = MODULE_ROLE_ELIGIBILITY[sysMod] || [];
+    eligibleRoles.forEach((r) => {
+      if (r !== 'admin') {
+        updates.push({ module: sysMod, role: r, enabled: false });
+      }
+    });
+
+    const previousState = { ...grids[cid]?.[sysMod] };
+
+    // Optimistic update of state
+    setGrids((prev) => {
+      const nextGrids = { ...prev };
+      nextGrids[cid] = {
+        ...nextGrids[cid],
+        [sysMod]: { ...nextGrids[cid]?.[sysMod] },
+      };
+      updates.forEach((upd) => {
+        nextGrids[cid][sysMod][upd.role] = false;
+      });
+      return nextGrids;
+    });
+
+    setSaving((prev) => ({
+      ...prev,
+      [cid]: { ...(prev[cid] ?? {}), [cellKey]: true },
+    }));
+    setLastSaved((prev) => ({ ...prev, [cid]: '' }));
+
+    try {
+      await updateCompanyPermissions(cid, updates);
+      setLastSaved((prev) => ({ ...prev, [cid]: cellKey }));
+      setTimeout(() => setLastSaved((prev) => ({ ...prev, [cid]: prev[cid] === cellKey ? '' : prev[cid] })), 1800);
+      localStorage.setItem('hr_permissions_updated', Date.now().toString());
+    } catch (err) {
+      // Revert state
+      setGrids((prev) => {
+        const nextGrids = { ...prev };
+        nextGrids[cid] = {
+          ...nextGrids[cid],
+          [sysMod]: { ...nextGrids[cid]?.[sysMod], ...previousState },
+        };
+        return nextGrids;
+      });
+      showToast(translateApiError(err, t, t('permissions.errorSave')) ?? t('permissions.errorSave'), 'error');
+    } finally {
+      setSaving((prev) => {
+        const next = { ...prev[cid] };
+        delete next[cellKey];
+        return { ...prev, [cid]: next };
+      });
+    }
+  };
+
+  const getDeactivatedRolesList = (moduleKey: string): string => {
+    const roles = MODULE_ROLE_ELIGIBILITY[moduleKey as SystemModuleKey] || [];
+    const otherRoles = roles.filter(r => r !== 'admin');
+    return otherRoles.map(r => t(`roles.${r}`, r)).join(', ');
   };
 
   if (loading) {
@@ -245,6 +371,149 @@ const SystemPermissionsPanel: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* Deactivation confirmation modal with company/admin info */}
+      <ConfirmModal
+        open={!!confirmDisable}
+        onCancel={() => setConfirmDisable(null)}
+        onConfirm={handleConfirmDisable}
+        title={t('permissions.disableModuleConfirmTitle', 'Disattivare modulo?')}
+        message={t('permissions.disableModuleConfirmMessage', {
+          module: confirmDisable?.moduleLabel || '',
+          roles: confirmDisable ? getDeactivatedRolesList(confirmDisable.moduleKey) : '',
+        })}
+        confirmLabel={t('common.confirm', 'Conferma')}
+        cancelLabel={t('common.cancel', 'Annulla')}
+        variant="danger"
+      >
+        {/* Company and Admin info card */}
+        {activeCompany && (() => {
+          const detail = companyDetails[activeCompany.id];
+          const companyLogoUrl = detail ? getCompanyLogoUrl(detail.logoFilename) : null;
+          const adminAvatarUrl = detail ? getAvatarUrl(detail.ownerAvatarFilename) : null;
+          const adminFullName = detail ? [detail.ownerName, detail.ownerSurname].filter(Boolean).join(' ') : null;
+          const companyInitial = activeCompany.name?.charAt(0)?.toUpperCase() || 'C';
+          const adminInitial = adminFullName ? adminFullName.charAt(0).toUpperCase() : 'A';
+
+          return (
+            <div style={{
+              background: 'var(--bg-secondary, rgba(13,33,55,0.03))',
+              borderRadius: 12,
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              border: '1px solid var(--border)',
+            }}>
+              {/* Company row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: companyLogoUrl ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark, #0a1e38))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', flexShrink: 0,
+                  border: '1.5px solid var(--border)',
+                }}>
+                  {companyLogoUrl ? (
+                    <img src={companyLogoUrl} alt={activeCompany.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <Building2 size={16} color="#fff" />
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                    {activeCompany.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+                    {t('common.company', 'Company')}
+                  </div>
+                </div>
+              </div>
+              {/* Admin row */}
+              {adminFullName && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 999,
+                    background: adminAvatarUrl ? 'transparent' : 'linear-gradient(135deg, #e74c3c, #c0392b)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    overflow: 'hidden', flexShrink: 0,
+                    border: '1.5px solid var(--border)',
+                  }}>
+                    {adminAvatarUrl ? (
+                      <img src={adminAvatarUrl} alt={adminFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{adminInitial}</span>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                      {adminFullName}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+                      Admin
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </ConfirmModal>
+
+      {/* Admin-required info modal: shown when trying to enable non-admin role but admin is disabled */}
+      <ConfirmModal
+        open={!!adminRequired}
+        onCancel={() => setAdminRequired(null)}
+        onConfirm={() => setAdminRequired(null)}
+        title={t('permissions.adminRequiredTitle', 'Admin role required')}
+        message={t('permissions.adminRequiredMessage', {
+          module: adminRequired?.moduleLabel || '',
+        })}
+        confirmLabel={t('permissions.adminRequiredOk', 'Got it')}
+        cancelLabel={t('common.cancel', 'Annulla')}
+        variant="warning"
+      >
+        {activeCompany && (() => {
+          const detail = companyDetails[activeCompany.id];
+          const companyLogoUrl = detail ? getCompanyLogoUrl(detail.logoFilename) : null;
+          const companyInitial = activeCompany.name?.charAt(0)?.toUpperCase() || 'C';
+
+          return (
+            <div style={{
+              background: 'rgba(201,151,58,0.06)',
+              borderRadius: 12,
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              border: '1px solid rgba(201,151,58,0.2)',
+            }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 10,
+                background: companyLogoUrl ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark, #0a1e38))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', flexShrink: 0,
+                border: '1.5px solid var(--border)',
+              }}>
+                {companyLogoUrl ? (
+                  <img src={companyLogoUrl} alt={activeCompany.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <Building2 size={15} color="#fff" />
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                  {activeCompany.name}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                  <ShieldAlert size={12} />
+                  Admin: {t('common.disabled', 'Disabled')}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </ConfirmModal>
     </div>
   );
 };
