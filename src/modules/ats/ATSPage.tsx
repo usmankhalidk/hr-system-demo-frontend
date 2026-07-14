@@ -1616,6 +1616,7 @@ interface UIQuestion {
   knockout_value: string;
   display_order: number;
   isDeleted?: boolean;
+  is_required?: boolean;
 }
 
 interface JobModalProps {
@@ -1798,12 +1799,13 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
           }
           return {
             id: q.id,
-            question_text: q.question_text,
-            question_type: q.question_type,
+            question_text: (q as any).questionText || q.question_text || '',
+            question_type: (q as any).questionType || q.question_type,
             options: opts,
-            is_knockout: q.is_knockout,
-            knockout_value: q.knockout_value ?? '',
-            display_order: q.display_order,
+            is_knockout: !!((q as any).isKnockout || q.is_knockout),
+            knockout_value: (q as any).knockoutValue ?? q.knockout_value ?? '',
+            display_order: (q as any).displayOrder ?? q.display_order ?? 0,
+            is_required: q.is_required !== false,
           };
         });
         setQuestions(mapped);
@@ -1900,6 +1902,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
         is_knockout: false,
         knockout_value: '',
         display_order: prev.filter((q) => !q.isDeleted).length,
+        is_required: true,
       },
     ]);
     setNewQuestionText('');
@@ -3799,31 +3802,82 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                     <div style={{ display: 'grid', gap: 14, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
                       {sortedQuestions.map((q, qIndex) => {
                         const uiType = getUiType(q);
+                        const isRequired = q.is_required !== false;
+
                         return (
                           <div key={q.id ? `q-id-${q.id}` : `q-temp-${q.tempId}`} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 14, background: '#fdfdfd', display: 'grid', gap: 10, position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              {/* Display Order Controls */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {/* Header row with question number, required tag, order controls and delete button */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: 8, marginBottom: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                                  {t('ats.questionNumber', { defaultValue: 'Domanda #{{number}}', number: qIndex + 1 })}
+                                </span>
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: isRequired ? '#dc2626' : '#475569',
+                                  background: isRequired ? 'rgba(220,38,38,0.08)' : 'rgba(71,85,105,0.08)',
+                                  border: isRequired ? '1px solid rgba(220,38,38,0.16)' : '1px solid rgba(71,85,105,0.16)',
+                                  borderRadius: 6,
+                                  padding: '2px 6px',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.04em'
+                                }}>
+                                  {isRequired ? t('ats.questionRequired', 'Obbligatoria') : t('ats.questionOptional', 'Facoltativa')}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {/* Up / Down order controls */}
+                                <div style={{ display: 'flex', gap: 2, background: 'var(--background)', borderRadius: 6, padding: 2, border: '1px solid var(--border-light)' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveQuestion(qIndex, 'up')}
+                                    disabled={qIndex === 0}
+                                    style={{ background: 'none', border: 'none', cursor: qIndex === 0 ? 'not-allowed' : 'pointer', color: qIndex === 0 ? '#cbd5e1' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}
+                                  >
+                                    <ChevronUp size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveQuestion(qIndex, 'down')}
+                                    disabled={qIndex === sortedQuestions.length - 1}
+                                    style={{ background: 'none', border: 'none', cursor: qIndex === sortedQuestions.length - 1 ? 'not-allowed' : 'pointer', color: qIndex === sortedQuestions.length - 1 ? '#cbd5e1' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}
+                                  >
+                                    <ChevronDown size={15} />
+                                  </button>
+                                </div>
+                                {/* Delete button */}
                                 <button
                                   type="button"
-                                  onClick={() => moveQuestion(qIndex, 'up')}
-                                  disabled={qIndex === 0}
-                                  style={{ background: 'none', border: 'none', cursor: qIndex === 0 ? 'not-allowed' : 'pointer', fontSize: 12, color: qIndex === 0 ? '#cbd5e1' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 2 }}
+                                  onClick={() => removeQuestionRow(qIndex)}
+                                  style={{
+                                    border: '1px solid #fee2e2',
+                                    background: '#fef2f2',
+                                    color: '#B91C1C',
+                                    cursor: 'pointer',
+                                    padding: '6px 8px',
+                                    borderRadius: 6,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    fontSize: 11.5,
+                                    fontWeight: 600,
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; }}
+                                  title="Delete Question"
                                 >
-                                  <ChevronUp size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => moveQuestion(qIndex, 'down')}
-                                  disabled={qIndex === sortedQuestions.length - 1}
-                                  style={{ background: 'none', border: 'none', cursor: qIndex === sortedQuestions.length - 1 ? 'not-allowed' : 'pointer', fontSize: 12, color: qIndex === sortedQuestions.length - 1 ? '#cbd5e1' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 2 }}
-                                >
-                                  <ChevronDown size={16} />
+                                  <Trash2 size={13} />
+                                  {t('common.delete', 'Elimina')}
                                 </button>
                               </div>
+                            </div>
 
+                            {/* Main row with input text and type selector */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                               {/* Question Text Input */}
-                              <div style={{ flex: 1 }}>
+                              <div style={{ flex: 1, minWidth: 200 }}>
                                 <input
                                   type="text"
                                   className="field-input"
@@ -3844,11 +3898,11 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                               </div>
 
                               {/* Question Type Selector (Pill tabs) */}
-                              <div style={{ display: 'flex', gap: 2, background: '#F1F5F9', padding: 3, borderRadius: 8 }}>
+                              <div style={{ display: 'flex', gap: 2, background: '#F1F5F9', padding: 3, borderRadius: 8, border: '1px solid var(--border-light)' }}>
                                 {([
-                                  { type: 'text', label: 'Text' },
-                                  { type: 'yesno', label: 'Sì/No' },
-                                  { type: 'multichoice', label: 'Scelta multipla' }
+                                  { type: 'text', label: t('ats.questionTypeText', 'Testo libero') },
+                                  { type: 'yesno', label: t('ats.questionTypeYesNo', 'Sì/No') },
+                                  { type: 'multichoice', label: t('ats.questionTypeMulti', 'Scelta multipla') }
                                 ] as const).map((tabItem) => {
                                   const isActive = uiType === tabItem.type;
                                   return (
@@ -3857,10 +3911,10 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                                       type="button"
                                       onClick={() => handleTypeChange(qIndex, tabItem.type)}
                                       style={{
-                                        padding: '4px 8px',
+                                        padding: '5px 10px',
                                         borderRadius: 6,
-                                        fontSize: 11.5,
-                                        fontWeight: 600,
+                                        fontSize: 11,
+                                        fontWeight: 700,
                                         border: 'none',
                                         cursor: 'pointer',
                                         background: isActive ? '#fff' : 'transparent',
@@ -3875,26 +3929,6 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                                   );
                                 })}
                               </div>
-
-                              {/* Delete Button */}
-                              <button
-                                type="button"
-                                onClick={() => removeQuestionRow(qIndex)}
-                                style={{
-                                  border: 'none',
-                                  background: 'transparent',
-                                  color: '#B91C1C',
-                                  cursor: 'pointer',
-                                  padding: 6,
-                                  borderRadius: 6,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                                title="Delete Question"
-                              >
-                                <Trash2 size={16} />
-                              </button>
                             </div>
 
                             {/* Options Builder for Scelta multipla */}
@@ -3954,9 +3988,21 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                               </div>
                             )}
 
-                            {/* Knockout settings */}
-                            <div style={{ paddingLeft: 24, display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                            {/* Question settings (Required toggle & Knockout toggle) */}
+                            <div style={{ paddingLeft: 24, display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+                                {/* Required Switch */}
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 550 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isRequired}
+                                    onChange={(e) => updateQuestionField(qIndex, 'is_required', e.target.checked)}
+                                    style={{ cursor: 'pointer', width: 14, height: 14 }}
+                                  />
+                                  {t('ats.questionRequiredToggle', 'Risposta obbligatoria')}
+                                </label>
+
+                                {/* Knockout Switch */}
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 550 }}>
                                   <input
                                     type="checkbox"
@@ -3966,6 +4012,7 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
                                   />
                                   {t('ats.knockoutLabel', 'Scarta se risponde:')}
                                 </label>
+
                                 {q.is_knockout && (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     {uiType === 'yesno' ? (
@@ -4121,8 +4168,23 @@ const JobModal: React.FC<JobModalProps> = ({ job, stores, companies, defaultComp
 
 // Reusable job-post summary (details + creator) — shared by the candidate modal
 // and the position view modal so both render the job the same way.
-const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription?: boolean; screenerQuestions?: ScreenerQuestion[] }> = ({ appliedJob, showFullDescription = false, screenerQuestions = [] }) => {
+const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription?: boolean; screenerQuestions?: ScreenerQuestion[] }> = ({ appliedJob, showFullDescription = false, screenerQuestions: propScreenerQuestions }) => {
   const { t, i18n } = useTranslation();
+  const [screenerQuestions, setScreenerQuestions] = useState<ScreenerQuestion[]>([]);
+
+  useEffect(() => {
+    if (propScreenerQuestions && propScreenerQuestions.length > 0) {
+      setScreenerQuestions(propScreenerQuestions);
+      return;
+    }
+    if (appliedJob.id) {
+      listScreenerQuestions(appliedJob.id, appliedJob.companyId)
+        .then(setScreenerQuestions)
+        .catch(() => setScreenerQuestions([]));
+    } else {
+      setScreenerQuestions([]);
+    }
+  }, [appliedJob.id, appliedJob.companyId, propScreenerQuestions]);
   const formatDate = (date: string | null | undefined, format: 'long' | 'short' = 'long'): string => {
     if (!date) return '';
     const locale = i18n.language === 'it' ? 'it-IT' : 'en-GB';
@@ -4352,8 +4414,8 @@ const JobPostSummaryCard: React.FC<{ appliedJob: JobPosting; showFullDescription
                             border: '1px solid var(--border)',
                           }}>
                             <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: optionsArr.length > 0 ? 4 : 0 }}>
-                              {q.question_text}
-                              {q.is_knockout && (
+                              {(q as any).questionText || q.question_text}
+                              {((q as any).isKnockout || q.is_knockout) && (
                                 <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#dc2626', background: 'rgba(220,38,38,0.08)', padding: '1px 5px', borderRadius: 4, verticalAlign: 'middle' }}>
                                   KO
                                 </span>
@@ -4655,11 +4717,12 @@ function getDisplayAnswers(
 
     return answers.map((ans: any) => {
       // Direct portal apply: { questionId: number, answer: string }
-      if (ans.questionId !== undefined) {
-        const q = screenerQuestions.find(sq => sq.id === ans.questionId);
+      if (ans.questionId !== undefined || ans.question_id !== undefined) {
+        const qId = ans.questionId !== undefined ? ans.questionId : ans.question_id;
+        const q = screenerQuestions.find(sq => String(sq.id) === String(qId));
         return {
-          questionText: q?.question_text || ans.label || ans.question || `Question #${ans.questionId}`,
-          answerText: String(ans.answer ?? ''),
+          questionText: (q as any)?.questionText || q?.question_text || ans.label || ans.question || ans.questionText || `Question #${qId}`,
+          answerText: String(ans.answer ?? ans.value ?? ''),
         };
       }
 
@@ -4671,9 +4734,9 @@ function getDisplayAnswers(
       if (qId) {
         const dbId = parseInt(String(qId).replace('q_', ''), 10);
         if (!Number.isNaN(dbId)) {
-          const q = screenerQuestions.find(sq => sq.id === dbId);
+          const q = screenerQuestions.find(sq => String(sq.id) === String(dbId));
           if (q) {
-            return { questionText: q.question_text, answerText: aText };
+            return { questionText: (q as any).questionText || q.question_text, answerText: aText };
           }
         }
       }
@@ -7297,6 +7360,7 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
             is_knockout: q.is_knockout,
             knockout_value: q.knockout_value || null,
             display_order: q.display_order,
+            is_required: q.is_required !== false,
           };
           if (q.isDeleted) {
             if (q.id) {
