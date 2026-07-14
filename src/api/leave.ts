@@ -46,6 +46,7 @@ export interface LeaveRequest {
   companyName?: string | null;
   medicalCertificateName?: string | null;
   skippedApprovers?: string[];
+  onLeaveSkippedApprovers?: string[];
   approvedByRoles?: string[] | null;
   escalated?: boolean;
   isEmergencyOverride?: boolean;

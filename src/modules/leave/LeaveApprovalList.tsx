@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Palmtree, Thermometer } from 'lucide-react';
-import { LeaveRequest, LeaveStatus, approveLeaveRequest, rejectLeaveRequest, downloadCertificate, cancelLeaveRequest } from '../../api/leave';
+import { Palmtree, Thermometer, Trash2 } from 'lucide-react';
+import { LeaveRequest, LeaveStatus, approveLeaveRequest, rejectLeaveRequest, downloadCertificate, cancelLeaveRequest, deleteLeaveRequest } from '../../api/leave';
 import { getAvatarUrl } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -76,7 +76,7 @@ function XIcon() {
 }
 
 export function ApprovalStepper({ req }: { req: LeaveRequest }) {
-  const { currentApproverRole, status, skippedApprovers, escalated, isEmergencyOverride } = req;
+  const { currentApproverRole, status, skippedApprovers, onLeaveSkippedApprovers, escalated, isEmergencyOverride } = req;
   const { t } = useTranslation();
   const isRejected = status === 'rejected';
 
@@ -98,7 +98,14 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
     return 'pending';
   }
 
-  const activeChainSteps = CHAIN_STEPS.filter(step => !(skippedApprovers || []).includes(step));
+  const activeChainSteps = CHAIN_STEPS.filter(step => {
+    const isSkipped = (skippedApprovers || []).includes(step);
+    const isOnLeaveSkipped = (onLeaveSkippedApprovers || []).includes(step);
+    if (isSkipped && !isOnLeaveSkipped) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <div>
@@ -109,10 +116,19 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
           const isCurrent   = state === 'current';
           const isRejectedState = state === 'rejected';
 
-          const circleBackground = isRejectedState ? 'var(--danger-bg)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'transparent';
-          const circleBorder     = isRejectedState ? 'var(--danger)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--border)';
-          const circleTextColor  = isRejectedState ? 'var(--danger)' : (isCompleted || isCurrent) ? '#fff' : 'var(--text-muted)';
-          const labelColor       = isRejectedState ? 'var(--danger)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--text-muted)';
+          let circleBackground = isRejectedState ? 'var(--danger-bg)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'transparent';
+          let circleBorder     = isRejectedState ? 'var(--danger)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--border)';
+          let circleTextColor  = isRejectedState ? 'var(--danger)' : (isCompleted || isCurrent) ? '#fff' : 'var(--text-muted)';
+          let labelColor       = isRejectedState ? 'var(--danger)' : isCompleted ? 'var(--accent)' : isCurrent ? 'var(--primary)' : 'var(--text-muted)';
+
+          const isOnLeaveSkipped = (onLeaveSkippedApprovers || []).includes(step);
+          if (isOnLeaveSkipped) {
+            circleBackground = 'rgba(239, 68, 68, 0.08)';
+            circleBorder     = 'var(--danger)';
+            circleTextColor  = 'var(--danger)';
+            labelColor       = 'var(--danger)';
+          }
+
           const nextState = idx < activeChainSteps.length - 1 ? stepState(activeChainSteps[idx + 1] as ChainStep) : 'pending';
           const lineBackground   = nextState === 'pending' || nextState === 'rejected' ? 'var(--border)' : 'var(--accent)';
 
@@ -128,7 +144,7 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
                   transition: 'all 0.2s',
                   boxShadow: isCompleted ? '0 2px 8px rgba(201,151,58,0.35)' : isCurrent ? '0 2px 8px rgba(13,33,55,0.25)' : 'none',
                 }}>
-                  {isCompleted ? <CheckIcon /> : isRejectedState ? <XIcon /> : (
+                  {isCompleted ? <CheckIcon /> : (isRejectedState || isOnLeaveSkipped) ? <XIcon /> : (
                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{idx + 1}</span>
                   )}
                 </div>
@@ -145,6 +161,11 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
                   letterSpacing: 0.3, textTransform: 'uppercase',
                 }}>
                   {t(`leave.approver_${step}`)}
+                  {isOnLeaveSkipped && (
+                    <div style={{ color: 'var(--danger)', marginTop: 2, fontSize: 8, fontWeight: 800 }}>
+                      {t('leave.stepper_leave', 'LEAVE')}
+                    </div>
+                  )}
                 </div>
               </div>
               {idx < activeChainSteps.length - 1 && (
@@ -315,6 +336,70 @@ function CancelModal({
 }
 
 // ---------------------------------------------------------------------------
+// Delete confirmation modal
+// ---------------------------------------------------------------------------
+
+function DeleteModal({
+  open, onClose, onConfirm, loading,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(13,33,55,0.48)', backdropFilter: 'blur(3px)' }} />
+      <div style={{
+        position: 'relative', background: 'var(--surface)', borderRadius: 12,
+        width: 380, maxWidth: '90vw', overflow: 'hidden',
+        boxShadow: 'var(--shadow-lg)',
+      }}>
+        {/* Accent stripe */}
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--danger) 0%, #f97316 100%)' }} />
+        <div style={{ padding: 24 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
+            {t('leave.delete_confirm_title', 'Elimina richiesta')}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.55 }}>
+            {t('leave.delete_confirm_msg', 'Sei sicuro di voler eliminare definitivamente questa richiesta di permesso? Questa azione non può essere annullata.')}
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                padding: '8px 16px', borderRadius: 8,
+                border: '1.5px solid var(--border)', background: 'transparent',
+                cursor: 'pointer', fontSize: 13, color: 'var(--text)',
+                fontWeight: 600,
+              }}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              style={{
+                padding: '8px 18px', borderRadius: 8, border: 'none',
+                background: 'var(--danger)', color: '#fff', fontWeight: 700,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: 13, opacity: loading ? 0.7 : 1,
+                transition: 'opacity 0.15s',
+              }}
+            >
+              {loading ? t('common.saving') : t('common.delete', 'Elimina')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main list component
 // ---------------------------------------------------------------------------
 
@@ -333,7 +418,9 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
 
   const [rejectTarget, setRejectTarget] = useState<number | null>(null);
   const [cancelTarget, setCancelTarget] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(10);
   const effectiveApproverRole = user?.role === 'admin' ? 'admin' : user?.role;
 
   async function handleDownloadCertificate(req: LeaveRequest) {
@@ -384,6 +471,21 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
       await cancelLeaveRequest(cancelTarget);
       showToast(t('leave.cancelled_success'), 'success');
       setCancelTarget(null);
+      onRefresh();
+    } catch (err: unknown) {
+      showToast(translateApiError(err, t, t('common.error_generic')) ?? t('common.error_generic'), 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (deleteTarget === null) return;
+    setActionLoading(true);
+    try {
+      await deleteLeaveRequest(deleteTarget);
+      showToast(t('leave.deleted_success', 'Richiesta di permesso eliminata'), 'success');
+      setDeleteTarget(null);
       onRefresh();
     } catch (err: unknown) {
       showToast(translateApiError(err, t, t('common.error_generic')) ?? t('common.error_generic'), 'error');
@@ -470,9 +572,15 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
         onConfirm={handleCancel}
         loading={actionLoading}
       />
+      <DeleteModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        loading={actionLoading}
+      />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {requests.map((req) => {
+        {requests.slice(0, visibleCount).map((req) => {
           const isVacation = req.leaveType === 'vacation';
           const isShortLeave = req.leaveDurationType === 'short_leave';
           const shortHours = getShortLeaveHours(req.shortStartTime, req.shortEndTime);
@@ -558,8 +666,32 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
                   </div>
 
                   {/* Status badge */}
-                  <div style={{ flexShrink: 0 }}>
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <StatusBadge req={req} />
+                    {req.status === 'cancelled' && (!req.approvedByRoles || req.approvedByRoles.length === 0) && (req.userId === user?.id || user?.role === 'admin') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(req.id);
+                        }}
+                        disabled={actionLoading}
+                        title={t('leave.delete_tooltip', 'Elimina richiesta')}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '4px',
+                          borderRadius: '6px',
+                          background: 'rgba(239, 68, 68, 0.08)',
+                          border: '1px solid rgba(239, 68, 68, 0.25)',
+                          color: 'var(--danger)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <Trash2 size={13} strokeWidth={2.4} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -676,6 +808,36 @@ export function LeaveApprovalList({ requests, loading, onRefresh, showActions = 
           );
         })}
       </div>
+
+      {requests.length > visibleCount && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+          <button
+            onClick={() => setVisibleCount(prev => prev + 10)}
+            style={{
+              padding: '8px 24px',
+              borderRadius: '8px',
+              border: '1.5px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text-primary)',
+              fontSize: '13px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              boxShadow: 'var(--shadow-xs)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent)';
+              e.currentTarget.style.color = 'var(--accent)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+          >
+            {t('common.load_more', 'Load More')}
+          </button>
+        </div>
+      )}
     </>
   );
 }
