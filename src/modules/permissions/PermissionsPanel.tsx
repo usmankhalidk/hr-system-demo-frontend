@@ -72,6 +72,7 @@ const PermissionsPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [grid, setGrid] = useState<LocalGrid>({});
   const [saving, setSaving] = useState<SavingMap>({});
+  const savingRef = React.useRef<SavingMap>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
@@ -122,26 +123,66 @@ const PermissionsPanel: React.FC = () => {
       });
   }, [allowedCompanyIds.join(',')]);
 
-  useEffect(() => {
+  const fetchGrid = React.useCallback((isSilent = false) => {
     if (selectedCompanyId == null && allowedCompanyIds.length > 0) {
       return;
     }
-    setLoading(true);
+    // Skip background fetch if currently saving to avoid race conditions or cursor resets
+    if (Object.keys(savingRef.current).length > 0) return;
+
+    if (!isSilent) {
+      setLoading(true);
+    }
     getPermissions(selectedCompanyId ?? undefined)
       .then((data) => setGrid(buildLocalGrid(data)))
       .catch((err: unknown) => {
-        const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
-        if (code === 'COMPANY_MISMATCH') {
-          const fallback = targetCompanyId ?? allowedCompanyIds[0] ?? null;
-          if (fallback != null && fallback !== selectedCompanyId) {
-            setSelectedCompanyId(fallback);
-            return;
+        if (!isSilent) {
+          const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+          if (code === 'COMPANY_MISMATCH') {
+            const fallback = targetCompanyId ?? allowedCompanyIds[0] ?? null;
+            if (fallback != null && fallback !== selectedCompanyId) {
+              setSelectedCompanyId(fallback);
+              return;
+            }
           }
+          setErrorMsg(translateApiError(err, t, t('permissions.errorLoad')));
         }
-        setErrorMsg(translateApiError(err, t, t('permissions.errorLoad')));
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!isSilent) {
+          setLoading(false);
+        }
+      });
   }, [t, selectedCompanyId, targetCompanyId, allowedCompanyIds.join(',')]);
+
+  useEffect(() => {
+    fetchGrid();
+  }, [fetchGrid]);
+
+  useEffect(() => {
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'hr_permissions_updated') {
+        fetchGrid();
+      }
+    };
+    const handleFocus = () => {
+      fetchGrid();
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('focus', handleFocus);
+
+    // Poll every 10 seconds silently to sync changes across different devices/browsers
+    const interval = setInterval(() => {
+      fetchGrid(true);
+    }, 10 * 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [fetchGrid]);
 
   // Execute actual toggle API call
   const executeToggle = async (moduleKey: string, roleKey: ManagedRoleKey, newValue: boolean) => {
@@ -150,7 +191,11 @@ const PermissionsPanel: React.FC = () => {
       ...prev,
       [moduleKey]: { ...prev[moduleKey], [roleKey]: newValue },
     }));
-    setSaving((prev) => ({ ...prev, [cellKey]: true }));
+    setSaving((prev) => {
+      const next = { ...prev, [cellKey]: true };
+      savingRef.current = next;
+      return next;
+    });
     setLastSaved(null);
 
     try {
@@ -169,6 +214,7 @@ const PermissionsPanel: React.FC = () => {
       setSaving((prev) => {
         const next = { ...prev };
         delete next[cellKey];
+        savingRef.current = next;
         return next;
       });
     }

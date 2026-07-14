@@ -250,7 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('focus', refresh);
     window.addEventListener('storage', handleStorageEvent);
-    const timer = setInterval(refresh, 5 * 60 * 1000);
+    const timer = setInterval(refresh, 10 * 1000);
     return () => {
       window.removeEventListener('focus', refresh);
       window.removeEventListener('storage', handleStorageEvent);

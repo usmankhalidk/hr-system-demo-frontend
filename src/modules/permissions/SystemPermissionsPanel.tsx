@@ -94,6 +94,7 @@ const SystemPermissionsPanel: React.FC = () => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [grids, setGrids]             = useState<Record<number, LocalGrid>>({});
   const [saving, setSaving]           = useState<Record<number, SavingMap>>({});
+  const savingRef                     = React.useRef<Record<number, SavingMap>>({});
   const [lastSaved, setLastSaved]     = useState<Record<number, string>>({});
   const [errorMsg, setErrorMsg]       = useState<string | null>(null);
 
@@ -106,8 +107,13 @@ const SystemPermissionsPanel: React.FC = () => {
   // Admin-required modal state: shown when trying to enable a non-admin role while admin is disabled
   const [adminRequired, setAdminRequired] = useState<{ moduleKey: string; moduleLabel: string } | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
+  const fetchPermissions = React.useCallback((isSilent = false) => {
+    // Skip background fetch if currently saving to prevent state race conditions
+    if (selectedCompanyId != null && Object.keys(savingRef.current[selectedCompanyId] || {}).length > 0) return;
+
+    if (!isSilent) {
+      setLoading(true);
+    }
     getCompaniesPermissions()
       .then(({ companies: data }) => {
         setCompanies(data);
@@ -118,9 +124,46 @@ const SystemPermissionsPanel: React.FC = () => {
         for (const c of data) built[c.id] = buildLocalGrid(c.grid);
         setGrids(built);
       })
-      .catch((err) => setErrorMsg(translateApiError(err, t, t('permissions.errorLoad'))))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!isSilent) {
+          setErrorMsg(translateApiError(err, t, t('permissions.errorLoad')));
+        }
+      })
+      .finally(() => {
+        if (!isSilent) {
+          setLoading(false);
+        }
+      });
   }, [t, selectedCompanyId]);
+
+  useEffect(() => {
+    fetchPermissions();
+  }, [fetchPermissions]);
+
+  useEffect(() => {
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'hr_permissions_updated') {
+        fetchPermissions();
+      }
+    };
+    const handleFocus = () => {
+      fetchPermissions();
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('focus', handleFocus);
+
+    // Poll every 10 seconds silently to sync changes across different devices/browsers
+    const interval = setInterval(() => {
+      fetchPermissions(true);
+    }, 10 * 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [fetchPermissions]);
 
   const activeCompany = companies.find(c => c.id === selectedCompanyId);
 
@@ -149,10 +192,14 @@ const SystemPermissionsPanel: React.FC = () => {
         [sysMod]: { ...prev[cid][sysMod], [role]: newValue },
       },
     }));
-    setSaving((prev) => ({
-      ...prev,
-      [cid]: { ...(prev[cid] ?? {}), [cellKey]: true },
-    }));
+    setSaving((prev) => {
+      const next = {
+        ...prev,
+        [cid]: { ...(prev[cid] ?? {}), [cellKey]: true },
+      };
+      savingRef.current = next;
+      return next;
+    });
     setLastSaved((prev) => ({ ...prev, [cid]: '' }));
 
     const updates: SystemPermissionUpdate[] = [{ module: sysMod, role, enabled: newValue }];
@@ -175,7 +222,9 @@ const SystemPermissionsPanel: React.FC = () => {
       setSaving((prev) => {
         const next = { ...prev[cid] };
         delete next[cellKey];
-        return { ...prev, [cid]: next };
+        const nextSaving = { ...prev, [cid]: next };
+        savingRef.current = nextSaving;
+        return nextSaving;
       });
     }
   };
@@ -246,10 +295,14 @@ const SystemPermissionsPanel: React.FC = () => {
       return nextGrids;
     });
 
-    setSaving((prev) => ({
-      ...prev,
-      [cid]: { ...(prev[cid] ?? {}), [cellKey]: true },
-    }));
+    setSaving((prev) => {
+      const next = {
+        ...prev,
+        [cid]: { ...(prev[cid] ?? {}), [cellKey]: true },
+      };
+      savingRef.current = next;
+      return next;
+    });
     setLastSaved((prev) => ({ ...prev, [cid]: '' }));
 
     try {
@@ -272,7 +325,9 @@ const SystemPermissionsPanel: React.FC = () => {
       setSaving((prev) => {
         const next = { ...prev[cid] };
         delete next[cellKey];
-        return { ...prev, [cid]: next };
+        const nextSaving = { ...prev, [cid]: next };
+        savingRef.current = nextSaving;
+        return nextSaving;
       });
     }
   };
