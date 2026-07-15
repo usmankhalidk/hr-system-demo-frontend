@@ -847,6 +847,28 @@ function runIndeedComplianceSuite(data: any): CheckResult[] {
         return missing.length > 0 ? `Populate the missing fields: ${missing.join(', ')}. See the indeed-apply-data documentation for required parameters.` : "Configure indeed-apply block fields.";
       })(),
       valueChecked: `Token: ${indeedApplyTokenConfigured ? 'OK' : 'Missing'}, URL: ${indeedApplyPostUrl ? 'OK' : 'Missing'}`
+    },
+    {
+      id: 'S1',
+      field: 'salary',
+      name: 'Salary Range Specified',
+      rule: 'Salary range (min or max) is specified.',
+      ok: typeof data.salaryMin === 'number' && data.salaryMin > 0 || typeof data.salaryMax === 'number' && data.salaryMax > 0,
+      problem: !(data.salaryMin || data.salaryMax) ? "Salary is missing. Indeed strongly recommends specifying salary/compensation to improve organic visibility and match search queries." : undefined,
+      warn: true,
+      fix: "Provide a salary range (min and/or max) under the job compensation fields.",
+      valueChecked: (data.salaryMin || data.salaryMax) ? `${data.salaryMin ?? ''} - ${data.salaryMax ?? ''} ${data.salaryPeriod ?? ''}` : 'Missing'
+    },
+    {
+      id: 'R1_DUP',
+      field: 'referenceId',
+      name: 'Reference Number Uniqueness',
+      rule: 'Reference number is unique across all jobs.',
+      ok: !data.isReferenceIdDuplicate,
+      problem: data.isReferenceIdDuplicate ? `Reference number '${data.referenceId}' is already used by another job posting. Indeed will deduplicate and hide this job.` : undefined,
+      warn: false,
+      fix: "Assign a unique reference ID or regenerate the sequence ID.",
+      valueChecked: data.referenceId ? `"${data.referenceId}"` : 'Missing'
     }
   ];
 
@@ -7901,6 +7923,40 @@ const JobsPanel: React.FC<{ canEdit: boolean; companyId?: number }> = ({ canEdit
                                   {t('ats.publishPosition', 'Publish position')}
                                 </Button>
                               )}
+                              {canEdit && (() => {
+                                const isSalaryMissing = !(job.salaryMin || job.salaryMax);
+                                const isDuplicateRefId = job.referenceId ? jobs.some(otherJob => otherJob.id !== job.id && otherJob.referenceId === job.referenceId) : false;
+                                const isDescMissing = !(job.description && job.description.trim().length > 0);
+                                const isCityMissing = !(job.city && job.city.trim().length > 0) && job.remoteType !== 'remote';
+                                
+                                const warnings = [];
+                                if (isSalaryMissing) warnings.push(t('ats.warningSalaryMissing', 'Missing Salary'));
+                                if (isDuplicateRefId) warnings.push(t('ats.warningDuplicateId', 'Duplicate ID'));
+                                if (isDescMissing) warnings.push(t('ats.warningDescMissing', 'Missing Description'));
+                                if (isCityMissing) warnings.push(t('ats.warningCityMissing', 'Missing City'));
+
+                                if (warnings.length > 0) {
+                                  return (
+                                    <span style={{
+                                      background: 'rgba(220, 38, 38, 0.08)',
+                                      color: '#DC2626',
+                                      border: '1px solid rgba(220, 38, 38, 0.2)',
+                                      borderRadius: 6,
+                                      padding: '2px 8px',
+                                      fontSize: 10.5,
+                                      fontWeight: 600,
+                                      marginRight: 6,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4
+                                    }} title={warnings.join(', ')}>
+                                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#DC2626' }}></span>
+                                      {warnings[0]} {warnings.length > 1 ? `(+${warnings.length - 1})` : ''}
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                               {canEdit && (
                                 <button
                                   onClick={() => {
