@@ -4,7 +4,7 @@ import { createEmployee } from '../../api/employees';
 import { Employee, Company, Store, UserRole } from '../../types';
 
 /* ── Column header → API field mapping ─────────────────────────────────── */
-const COLUMN_MAP: Record<string, string> = {
+export const COLUMN_MAP: Record<string, string> = {
   // English
   'name': 'name',
   'surname': 'surname',
