@@ -7,7 +7,8 @@ import { getCompanies } from '../../api/companies';
 import { getStores } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
 import { Company, Store, Employee, UserRole } from '../../types';
-import { parseExcelFile, processRow, ParsedRow, ImportResult } from './bulkImportUtils';
+import { parseExcelFile, processRow, ParsedRow, ImportResult, COLUMN_MAP } from './bulkImportUtils';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 interface Props {
   open: boolean;
@@ -31,6 +32,9 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
+  const [showMappingModal, setShowMappingModal] = useState(false);
+  const [pendingRows, setPendingRows] = useState<ParsedRow[]>([]);
+  const [pendingHeaders, setPendingHeaders] = useState<string[]>([]);
 
   // Reference data for name→id lookups
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -40,6 +44,7 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
   useEffect(() => {
     if (!open) return;
     setPhase('upload'); setFile(null); setRows([]); setResults([]); setProgress(0); setError(null); setGuideOpen(false);
+    setShowMappingModal(false); setPendingRows([]); setPendingHeaders([]);
     // Load reference data
     getCompanies().then(setCompanies).catch(() => {});
     getStores().then(setStores).catch(() => {});
@@ -59,8 +64,25 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
     try {
       const parsed = await parseExcelFile(f);
       if (parsed.length === 0) { setError(t('employees.bulkImportNoData', 'No valid data rows found.')); return; }
-      setRows(parsed);
-      setPhase('preview');
+      
+      const fileHeaders = Object.keys(parsed[0].data);
+      const mappedFields = new Set<string>();
+      for (const h of fileHeaders) {
+        const key = COLUMN_MAP[h.trim().toLowerCase()];
+        if (key) mappedFields.add(key);
+      }
+      
+      const requiredKeys = ['name', 'surname', 'email', 'role', 'personalEmail', 'companyName', 'storeName'];
+      const missingRequired = requiredKeys.filter(k => !mappedFields.has(k));
+      
+      if (missingRequired.length > 0) {
+        setPendingRows(parsed);
+        setPendingHeaders(fileHeaders);
+        setShowMappingModal(true);
+      } else {
+        setRows(parsed);
+        setPhase('preview');
+      }
     } catch {
       setError(t('employees.bulkImportNoData', 'Failed to parse file.'));
     }
@@ -400,6 +422,22 @@ export function BulkImportModal({ open, onClose, onComplete }: Props) {
             setResults([]);
           }}
         />
+
+        <ColumnMappingModal
+          open={showMappingModal}
+          headers={pendingHeaders}
+          rows={pendingRows}
+          onClose={() => {
+            setShowMappingModal(false);
+            setFile(null);
+            setPhase('upload');
+          }}
+          onSave={(mappedRows) => {
+            setRows(mappedRows);
+            setShowMappingModal(false);
+            setPhase('preview');
+          }}
+        />
       </div>
     </div>,
     document.body
@@ -498,6 +536,260 @@ function EditDataModal({
             style={{ ...S.btn, background: 'var(--primary)', color: '#fff' }}
           >
             {t('employees.bulkImportEditAction', 'Edit')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+
+/* ── Column Mapping Modal ───────────────────────────────────────────────── */
+
+const SCHEMA_FIELDS = [
+  { key: 'name', label: 'Name', format: 'text', required: true },
+  { key: 'surname', label: 'Surname', format: 'text', required: true },
+  { key: 'email', label: 'Email', format: 'email', required: true },
+  { key: 'role', label: 'Role', format: 'text', required: true },
+  { key: 'companyName', label: 'Company', format: 'text', required: true },
+  { key: 'storeName', label: 'Store', format: 'text', required: true },
+  { key: 'personalEmail', label: 'Personal Email', format: 'email', required: true },
+  { key: 'password', label: 'Temporary Password', format: 'password', required: false },
+  { key: 'weeklyHours', label: 'Weekly Hours', format: 'number', required: false },
+  { key: 'cap', label: 'Postal Code', format: 'number', required: false },
+  { key: 'supervisorName', label: 'Supervisor', format: 'text', required: false },
+  { key: 'department', label: 'Department', format: 'text', required: false },
+  { key: 'hireDate', label: 'Hire Date', format: 'text', required: false },
+  { key: 'workingType', label: 'Work Schedule', format: 'text', required: false },
+  { key: 'dateOfBirth', label: 'Date of Birth', format: 'text', required: false },
+  { key: 'gender', label: 'Gender', format: 'text', required: false },
+  { key: 'nationality', label: 'Nationality', format: 'text', required: false },
+  { key: 'iban', label: 'IBAN', format: 'text', required: false },
+  { key: 'address', label: 'Address', format: 'text', required: false },
+  { key: 'city', label: 'City', format: 'text', required: false },
+  { key: 'state', label: 'State', format: 'text', required: false },
+  { key: 'country', label: 'Country', format: 'text', required: false },
+  { key: 'phone', label: 'Company Phone', format: 'text', required: false },
+  { key: 'maritalStatus', label: 'Marital Status', format: 'text', required: false },
+  { key: 'firstAidFlag', label: 'First Aid', format: 'text', required: false },
+  { key: 'contractType', label: 'Contract Type', format: 'text', required: false },
+  { key: 'probationMonths', label: 'Probation Period', format: 'text', required: false },
+  { key: 'terminationDate', label: 'Termination Date', format: 'text', required: false },
+  { key: 'terminationType', label: 'Termination Type', format: 'text', required: false },
+];
+
+const FIELD_TO_HEADER: Record<string, string> = {
+  name: 'name',
+  surname: 'surname',
+  email: 'email',
+  role: 'role',
+  companyName: 'company',
+  storeName: 'store',
+  personalEmail: 'personal email',
+  password: 'temporary password',
+  weeklyHours: 'weekly hours',
+  cap: 'postal code',
+  supervisorName: 'supervisor',
+  department: 'department',
+  hireDate: 'hire date',
+  workingType: 'work schedule',
+  dateOfBirth: 'date of birth',
+  gender: 'gender',
+  nationality: 'nationality',
+  iban: 'iban',
+  address: 'address',
+  city: 'city',
+  state: 'state',
+  country: 'country',
+  phone: 'company phone numbers',
+  maritalStatus: 'marital status',
+  firstAidFlag: 'first aid',
+  contractType: 'contract type',
+  probationMonths: 'probation period',
+  terminationDate: 'termination date',
+  terminationType: 'termination type',
+};
+
+function getHeaderFormat(header: string, rows: ParsedRow[]): 'text' | 'email' | 'number' | 'password' {
+  const lowerHeader = header.toLowerCase();
+  if (lowerHeader.includes('pass') || lowerHeader.includes('pwd')) {
+    return 'password';
+  }
+  const values = rows.map(r => r.data[header]);
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isEmail = values.some(val => val && emailRegex.test(String(val).trim()));
+  if (isEmail) return 'email';
+
+  const hasNumbers = values.some(val => val !== '' && val !== null && val !== undefined && !isNaN(Number(val)));
+  const allNumbersOrEmpty = values.every(val => val === '' || val === null || val === undefined || !isNaN(Number(val)));
+  if (hasNumbers && allNumbersOrEmpty) return 'number';
+
+  return 'text';
+}
+
+function ColumnMappingModal({
+  open,
+  headers,
+  rows,
+  onClose,
+  onSave
+}: {
+  open: boolean;
+  headers: string[];
+  rows: ParsedRow[];
+  onClose: () => void;
+  onSave: (mappedRows: ParsedRow[]) => void;
+}) {
+  const { t } = useTranslation();
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  const initialMappedKeys = React.useMemo(() => {
+    const matched = new Set<string>();
+    if (!headers) return matched;
+    for (const h of headers) {
+      const key = COLUMN_MAP[h.trim().toLowerCase()];
+      if (key) matched.add(key);
+    }
+    return matched;
+  }, [headers]);
+
+  const unmappedHeaders = React.useMemo(() => {
+    if (!headers) return [];
+    return headers.filter(h => !COLUMN_MAP[h.trim().toLowerCase()]);
+  }, [headers]);
+
+  const headerFormats = React.useMemo(() => {
+    const formats: Record<string, 'text' | 'email' | 'number' | 'password'> = {};
+    for (const h of unmappedHeaders) {
+      formats[h] = getHeaderFormat(h, rows);
+    }
+    return formats;
+  }, [unmappedHeaders, rows]);
+
+  const getAvailableSchemaFields = (currentHeader: string, format: string) => {
+    const selectedKeys = Object.entries(mapping)
+      .filter(([h, k]) => h !== currentHeader && k !== '')
+      .map(([h, k]) => k);
+
+    return SCHEMA_FIELDS.filter(field => 
+      field.format === format && 
+      !initialMappedKeys.has(field.key) && 
+      !selectedKeys.includes(field.key)
+    );
+  };
+
+  const handleSelectField = (header: string, fieldKey: string) => {
+    setMapping(prev => ({
+      ...prev,
+      [header]: fieldKey
+    }));
+  };
+
+  const handleSave = () => {
+    const newRows = rows.map(row => {
+      const newData = { ...row.data };
+      for (const [header, fieldKey] of Object.entries(mapping)) {
+        if (fieldKey) {
+          const targetHeader = FIELD_TO_HEADER[fieldKey] || fieldKey;
+          newData[targetHeader] = newData[header];
+          delete newData[header];
+        }
+      }
+      return {
+        ...row,
+        data: newData
+      };
+    });
+    onSave(newRows);
+  };
+
+  if (!open) return null;
+
+  const S = {
+    backdrop: { position: 'fixed' as const, inset: 0, zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,33,55,0.48)', backdropFilter: 'blur(3px)' },
+    card: { background: 'var(--surface)', borderRadius: '16px', width: 'min(600px, 95vw)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' as const, boxShadow: '0 24px 60px rgba(0,0,0,0.22)', overflow: 'hidden' },
+    header: { padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    body: { flex: 1, overflowY: 'auto' as const, padding: '20px' },
+    footer: { padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-warm)', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexShrink: 0 },
+    btn: { padding: '8px 18px', borderRadius: 'var(--radius-sm)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none' },
+    row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border-light)' },
+    select: { padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface)', fontSize: '12px', width: '220px' }
+  };
+
+  return createPortal(
+    <div style={S.backdrop} onClick={onClose}>
+      <div style={S.card} onClick={e => e.stopPropagation()}>
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%)', flexShrink: 0 }} />
+
+        <div style={S.header}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertTriangle size={18} color="var(--accent)" />
+            <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Map Columns</h3>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px' }}>×</button>
+        </div>
+
+        <div style={S.body}>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+            Some required columns in your file do not match our database structure. Please map the different columns to proceed.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {unmappedHeaders.map(h => {
+              const fmt = headerFormats[h] || 'text';
+              const available = getAvailableSchemaFields(h, fmt);
+              const selectedValue = mapping[h] || '';
+
+              const selectOptions = available.map(f => ({
+                value: f.key,
+                label: `${f.label}${f.required ? ' *' : ''}`
+              }));
+
+              if (selectedValue && !available.some(f => f.key === selectedValue)) {
+                const matchedField = SCHEMA_FIELDS.find(f => f.key === selectedValue);
+                selectOptions.push({
+                  value: selectedValue,
+                  label: matchedField ? `${matchedField.label}${matchedField.required ? ' *' : ''}` : selectedValue
+                });
+              }
+
+              return (
+                <div key={h} style={S.row}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{h}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--surface-warm)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', fontWeight: 700 }}>
+                      {fmt}
+                    </span>
+                  </div>
+
+                  <div style={{ width: '220px' }}>
+                    <CustomSelect
+                      value={selectedValue || null}
+                      onChange={val => handleSelectField(h, val || '')}
+                      options={selectOptions}
+                      placeholder="Select target field..."
+                      isClearable={true}
+                      searchable={true}
+                      controlMinHeight={36}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={S.footer}>
+          <button onClick={onClose} style={{ ...S.btn, background: 'none', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            style={{ ...S.btn, background: 'var(--primary)', color: '#fff' }}
+          >
+            Save Mapping
           </button>
         </div>
       </div>

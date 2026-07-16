@@ -959,6 +959,7 @@ export default function CompanyDetail() {
         const pricePerDev = company.pricePerDevice || 0;
         const pricePerGb = company.extraStoragePricePerGb || 0;
         const activeDevCount = company.activeDevicesCount || 0;
+        const employeeDevCount = company.employeeDevicesCount || 0;
         const activeEmpCount = activeEmployees.length;
 
         const empSubtotal = activeEmpCount * pricePerEmp;
@@ -1029,9 +1030,12 @@ export default function CompanyDetail() {
               <div style={rowStyle}>
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>COUNT (LIVE)</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 24, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{activeEmpCount}</span>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>employees</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 12, borderLeft: '1px solid var(--border-light)', paddingLeft: 12 }}>
+                      <strong>{employeeDevCount}</strong> {employeeDevCount === 1 ? 'registered device' : 'registered devices'}
+                    </span>
                   </div>
                 </div>
                 <div style={{ textAlign: isMobile ? 'left' : 'center' }}>
@@ -1055,7 +1059,7 @@ export default function CompanyDetail() {
                 </span>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Active Devices / Terminals</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Live count from devices table where status = active</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Live count of registered terminals where status = active</div>
                 </div>
               </div>
               <div style={rowStyle}>
@@ -1063,7 +1067,7 @@ export default function CompanyDetail() {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>COUNT (LIVE)</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ fontSize: 24, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{activeDevCount}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>devices</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{activeDevCount === 1 ? 'registered terminal device' : 'registered terminal devices'}</span>
                   </div>
                 </div>
                 <div style={{ textAlign: isMobile ? 'left' : 'center' }}>

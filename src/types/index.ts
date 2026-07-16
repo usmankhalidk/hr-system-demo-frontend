@@ -58,6 +58,7 @@ export interface Company {
   storeCount: number;
   employeeCount: number;
   activeDevicesCount: number;
+  employeeDevicesCount?: number;
   storageUsedBytes: number;
   createdAt: string;
 }

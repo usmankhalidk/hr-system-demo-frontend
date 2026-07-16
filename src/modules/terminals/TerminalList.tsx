@@ -1,19 +1,28 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getTerminals, Terminal } from '../../api/terminals';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { UserRole } from '../../types';
+import { UserRole, Store } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Pagination } from '../../components/ui/Pagination';
 import { TerminalForm } from './TerminalForm';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus, ChevronRight, Filter, Search, X } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import apiClient from '../../api/client';
+import { getStores } from '../../api/stores';
+import { TerminalFilterModal, FilterValues } from './TerminalFilterModal';
+import { SelectOption } from '../../components/ui/CustomSelect';
+
+interface CompanyOption {
+  id: number;
+  name: string;
+}
 
 const truncateChars = (str: string, max: number) => {
   if (!str) return '';
@@ -25,13 +34,6 @@ const truncateWords = (str: string, max: number) => {
   const words = str.split(' ').filter(Boolean);
   if (words.length > max) return `${words.slice(0, max).join(' ')}...`;
   return str;
-};
-
-const getInitials = (name: string) => {
-  if (!name) return '?';
-  const parts = name.split(' ').filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
 };
 
 const ROLE_BADGE_VARIANT: Record<UserRole | string, 'accent' | 'primary' | 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -59,10 +61,23 @@ export default function TerminalList() {
   const [selectedTerminal, setSelectedTerminal] = useState<Terminal | null>(null);
   const [listReloadTick, setListReloadTick] = useState(0);
 
+  // Filters state
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+
   const search = searchParams.get('search') ?? '';
-  const storeId = searchParams.get('store_id') ?? '';
-  const status = searchParams.get('status') ?? '';
-  const companyFilter = searchParams.get('company_id') ?? '';
+  
+  const storeIds = useMemo(() => 
+    searchParams.get('store_ids')?.split(',').filter(Boolean) ?? [],
+    [searchParams]
+  );
+  
+  const companyIds = useMemo(() => 
+    searchParams.get('company_ids')?.split(',').filter(Boolean) ?? [],
+    [searchParams]
+  );
+  
   const page = parseInt(searchParams.get('page') ?? '1', 10);
   const limit = 20;
 
@@ -70,15 +85,60 @@ export default function TerminalList() {
   const isSuperAdmin = user?.isSuperAdmin === true;
   const tRole = (roleKey: string) => (t as (k: string) => string)(`roles.${roleKey}`);
 
+  const hasActiveFilters = !!(
+    search ||
+    storeIds.length > 0 ||
+    companyIds.length > 0
+  );
+
+  const activeFilterTagsCount = (storeIds.length + companyIds.length);
+
+  // Load companies
+  useEffect(() => {
+    if (!isAdminOrHr && !isSuperAdmin) return;
+    apiClient
+      .get<{ data: CompanyOption[] }>('/companies')
+      .then((res) => {
+        const data = res.data?.data;
+        if (Array.isArray(data)) {
+          setCompanies(data.map((c) => ({ id: c.id, name: c.name })));
+        }
+      })
+      .catch(() => {});
+  }, [isAdminOrHr, isSuperAdmin]);
+
+  // Load stores based on selected companies
+  useEffect(() => {
+    // If single company selected, scope stores by it
+    const targetId = companyIds.length === 1 ? parseInt(companyIds[0], 10) : undefined;
+    getStores(targetId ? { targetCompanyId: targetId } : undefined)
+      .then(setStores)
+      .catch(() => {});
+  }, [companyIds.join(',')]);
+
+  const companyOptions = useMemo<SelectOption[]>(() => {
+    return companies.map((c) => ({
+      value: String(c.id),
+      label: c.name,
+    }));
+  }, [companies]);
+
+  const storeOptions = useMemo<SelectOption[]>(() => {
+    return stores.map((s) => ({
+      value: String(s.id),
+      label: s.companyName ? `${s.name} (${s.companyName})` : s.name,
+    }));
+  }, [stores]);
+
   const fetchTerminals = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await getTerminals({
         search,
-        status,
-        store_id: storeId,
-        company_id: companyFilter,
+        status: '',
+        store_id: storeIds.join(','),
+        company_id: companyIds.join(','),
         page,
         limit,
       });
@@ -91,20 +151,42 @@ export default function TerminalList() {
     } finally {
       setLoading(false);
     }
-  }, [search, status, page, limit, t]);
+  }, [search, storeIds.join(','), companyIds.join(','), page, limit, t]);
 
   useEffect(() => {
     fetchTerminals();
   }, [fetchTerminals, listReloadTick]);
 
-  const handleSearchChange = (val: string) => {
+  const updateParam = (key: string, val: string) => {
     setSearchParams(prev => {
-      if (val) prev.set('search', val);
-      else prev.delete('search');
+      if (val) prev.set(key, val);
+      else prev.delete(key);
       prev.set('page', '1');
       return prev;
     });
   };
+
+  const handleApplyFilters = useCallback(
+    (filters: FilterValues) => {
+      setSearchParams(prev => {
+        if (filters.company_ids.length > 0) {
+          prev.set('company_ids', filters.company_ids.join(','));
+        } else {
+          prev.delete('company_ids');
+        }
+
+        if (filters.store_ids.length > 0) {
+          prev.set('store_ids', filters.store_ids.join(','));
+        } else {
+          prev.delete('store_ids');
+        }
+
+        prev.set('page', '1');
+        return prev;
+      });
+    },
+    [setSearchParams]
+  );
 
   const handleOpenForm = (terminal: Terminal | null = null) => {
     setSelectedTerminal(terminal);
@@ -193,21 +275,12 @@ export default function TerminalList() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Top action row */}
       <div style={{
         display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
-        justifyContent: 'space-between',
-        alignItems: isMobile ? 'stretch' : 'flex-end',
-        gap: '16px'
+        justifyContent: 'flex-end',
+        alignItems: 'center',
       }}>
-        <div style={{ flex: 1, maxWidth: isMobile ? '100%' : '400px' }}>
-          <Input
-            placeholder={t('terminals.searchPlaceholder')}
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            autoComplete="off"
-          />
-        </div>
         {(isAdminOrHr || isSuperAdmin) && (
           <Button
             onClick={() => handleOpenForm(null)}
@@ -216,6 +289,116 @@ export default function TerminalList() {
             <Plus size={15} />
             {t('terminals.newTerminal')}
           </Button>
+        )}
+      </div>
+
+      {/* Filter bar - Search on left, Filter button on right */}
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          alignItems: "center",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "10px 12px",
+          boxShadow: "var(--shadow-xs)",
+        }}
+      >
+        {/* Universal Search Input */}
+        <div style={{ flex: 1, position: "relative" }}>
+          <Search
+            size={18}
+            style={{
+              position: "absolute",
+              left: "12px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+              pointerEvents: "none",
+            }}
+          />
+          <Input
+            placeholder={t("terminals.searchPlaceholder", "Search terminal or email...")}
+            value={search}
+            onChange={(e) => updateParam("search", e.target.value)}
+            style={{
+              paddingLeft: "40px",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              fontSize: "14px",
+            }}
+          />
+        </div>
+
+        {/* Filter Button */}
+        <button
+          onClick={() => setShowFilterModal(true)}
+          style={{
+            background: hasActiveFilters && activeFilterTagsCount > 0
+              ? "linear-gradient(135deg, var(--accent) 0%, #B48719 100%)"
+              : "var(--surface)",
+            color: hasActiveFilters && activeFilterTagsCount > 0 ? "#fff" : "var(--text-secondary)",
+            border: hasActiveFilters && activeFilterTagsCount > 0 ? "none" : "1px solid var(--border)",
+            borderRadius: "var(--radius)",
+            padding: "10px 18px",
+            fontSize: "13px",
+            fontWeight: 600,
+            fontFamily: "var(--font-body)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexShrink: 0,
+            transition: "all 0.2s",
+            boxShadow: hasActiveFilters && activeFilterTagsCount > 0 ? "0 2px 8px rgba(139,105,20,0.24)" : "none",
+            position: "relative",
+          }}
+        >
+          <Filter size={16} strokeWidth={2.5} />
+          {t("employees.filters", "Filters")}
+          {activeFilterTagsCount > 0 && (
+            <span
+              style={{
+                background: "#fff",
+                color: "var(--accent)",
+                fontSize: "10px",
+                fontWeight: 700,
+                padding: "2px 6px",
+                borderRadius: "999px",
+                minWidth: "18px",
+                textAlign: "center",
+              }}
+            >
+              {activeFilterTagsCount}
+            </span>
+          )}
+        </button>
+
+        {/* Reset Filters Button */}
+        {hasActiveFilters && (
+          <button
+            onClick={() => setSearchParams(new URLSearchParams())}
+            style={{
+              background: "none",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              padding: "10px 14px",
+              fontSize: "13px",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              fontFamily: "var(--font-body)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              flexShrink: 0,
+              transition: "border-color 0.15s, color 0.15s",
+            }}
+            title={t("employees.resetFilters", "Reset all filters")}
+          >
+            <X size={16} />
+            {!isMobile && t("employees.reset", "Reset")}
+          </button>
         )}
       </div>
 
@@ -255,6 +438,19 @@ export default function TerminalList() {
         }}
         onCancel={() => setShowForm(false)}
         onRefreshList={() => setListReloadTick(prev => prev + 1)}
+      />
+
+      <TerminalFilterModal
+        open={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApply={handleApplyFilters}
+        initialFilters={{
+          company_ids: companyIds,
+          store_ids: storeIds,
+        }}
+        companyOptions={companyOptions}
+        storeOptions={storeOptions}
+        showCompanyFilter={(isAdminOrHr || isSuperAdmin) && companies.length > 0}
       />
     </div>
   );
