@@ -10,6 +10,18 @@ import {
   updateExternalAffluenceConfiguration,
 } from '../../api/externalAffluence';
 import { useAuth } from '../../context/AuthContext';
+import { getStoreOperatingHours } from '../../api/stores';
+import { StoreOperatingHour } from '../../types';
+
+const WEEK_DAYS = [
+  { key: 'monday', isoDay: 1, shortKey: 'dayMon', shortFallback: 'MON', fullKey: 'dayMonday', fullFallback: 'Monday' },
+  { key: 'tuesday', isoDay: 2, shortKey: 'dayTue', shortFallback: 'TUE', fullKey: 'dayTuesday', fullFallback: 'Tuesday' },
+  { key: 'wednesday', isoDay: 3, shortKey: 'dayWed', shortFallback: 'WED', fullKey: 'dayWednesday', fullFallback: 'Wednesday' },
+  { key: 'thursday', isoDay: 4, shortKey: 'dayThu', shortFallback: 'THU', fullKey: 'dayThursday', fullFallback: 'Thursday' },
+  { key: 'friday', isoDay: 5, shortKey: 'dayFri', shortFallback: 'FRI', fullKey: 'dayFriday', fullFallback: 'Friday' },
+  { key: 'saturday', isoDay: 6, shortKey: 'daySat', shortFallback: 'SAT', fullKey: 'daySaturday', fullFallback: 'Saturday' },
+  { key: 'sunday', isoDay: 7, shortKey: 'daySun', shortFallback: 'SUN', fullKey: 'daySunday', fullFallback: 'Sunday' },
+] as const;
 
 type SlotWeightState = Record<string, string>;
 type ParamHelpKey = 'visitorsPerStaff' | 'lowMaxStaff' | 'mediumMaxStaff' | 'coverageTolerance' | 'slotWeights';
@@ -42,6 +54,7 @@ export default function ExternalAffluenceLiveConfigModal({
   const [notice, setNotice] = useState<string | null>(null);
 
   const [config, setConfig] = useState<ExternalAffluenceConfigurationResponse | null>(null);
+  const [operatingHours, setOperatingHours] = useState<StoreOperatingHour[]>([]);
   const [visitorsPerStaff, setVisitorsPerStaff] = useState<string>('10');
   const [lowMaxStaff, setLowMaxStaff] = useState<string>('2');
   const [mediumMaxStaff, setMediumMaxStaff] = useState<string>('4');
@@ -100,6 +113,13 @@ export default function ExternalAffluenceLiveConfigModal({
       setMediumMaxStaff(String(data.settings.mediumMaxStaff));
       setCoverageTolerance(String(data.settings.coverageTolerance));
       setSlotWeights(buildWeightState(data.settings));
+
+      try {
+        const hours = await getStoreOperatingHours(storeId);
+        setOperatingHours(hours);
+      } catch {
+        setOperatingHours([]);
+      }
     } catch {
       setError(t('errors.DEFAULT'));
     } finally {
@@ -496,7 +516,7 @@ export default function ExternalAffluenceLiveConfigModal({
                     })}
                   </div>
 
-                  {/* Inputs Row */}
+{/* Inputs Row */}
                   <div style={{ overflowX: 'auto', paddingTop: 4 }}>
                     <div style={{ minWidth: 620, display: 'grid', gap: 12, gridTemplateColumns: 'repeat(4, minmax(140px, 1fr))' }}>
                       {sortedSlotWeights.map((slot, index) => {
@@ -523,15 +543,15 @@ export default function ExternalAffluenceLiveConfigModal({
                                 max={100}
                                 step={1}
                                 value={displayVal}
-                                onChange={(event) => handleWeightChange(slot.timeSlot, event.target.value)}
+                                disabled={true}
                                 style={{
                                   padding: '8px 30px 8px 10px',
                                   borderRadius: 8,
-                                  border: `1.5px solid var(--border)`,
-                                  background: 'var(--surface)',
+                                  border: '1.5px solid var(--border)',
+                                  background: '#f1f5f9',
                                   width: '100%',
                                   fontWeight: 700,
-                                  color: 'var(--text-main)',
+                                  color: 'var(--text-muted)',
                                 }}
                               />
                               <span style={{
@@ -549,23 +569,21 @@ export default function ExternalAffluenceLiveConfigModal({
                     </div>
                   </div>
 
-                  {totalWeightSum !== 100 ? (
-                    <div style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: '#b91c1c',
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
-                      borderRadius: 8,
-                      padding: '8px 12px',
-                      marginTop: 4,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}>
-                      ⚠️ {t('shifts.affluence_weights_sum_warning', `The total weight sum must equal exactly 100%. Please adjust the slots to allocate the remaining ${100 - totalWeightSum}% space.`)}
-                    </div>
-                  ) : null}
+                  <div style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#475569',
+                    background: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    marginTop: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}>
+                    ℹ️ {t('shifts.affluence_slot_weights_dummy_info', 'Slot weights are currently unused. Scheduling logic is automatically aligned with store operating hours.')}
+                  </div>
                 </div>
 
                 <div style={{ marginTop: 12, border: '1px solid #dbe4ee', borderRadius: 10, padding: 10, background: '#f8fbff', display: 'grid', gap: 10 }}>
@@ -613,12 +631,39 @@ export default function ExternalAffluenceLiveConfigModal({
                 </div>
               </div>
 
+              <div style={{ marginTop: 12, border: '1px solid #dbe4ee', borderRadius: 10, padding: 12, background: '#f8fbff', display: 'grid', gap: 10 }}>
+                <strong style={{ color: '#2e567a', fontSize: 12.5 }}>
+                  {t('shifts.affluence_configured_peak_hours_title', 'Configured Peak Hours (from Store Operating Hours)')}
+                </strong>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                  {t('shifts.affluence_configured_peak_hours_desc', 'These peak hours are used to automatically align traffic slots. You can modify them in the Store Settings page.')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginTop: 4 }}>
+                  {WEEK_DAYS.map((day) => {
+                    const oh = operatingHours.find((h) => h.dayOfWeek === day.isoDay - 1);
+                    const peakLabel = oh && oh.peakStartTime && oh.peakEndTime
+                      ? `${oh.peakStartTime} - ${oh.peakEndTime}`
+                      : t('shifts.peakHoursUnset', 'Not set');
+                    return (
+                      <div key={day.key} style={{ padding: '8px 10px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', display: 'grid', gap: 2 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#5f3e2f' }}>
+                          {t(`shifts.${day.fullKey}`, { defaultValue: day.fullFallback })}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: oh && oh.peakStartTime ? '#2e567a' : 'var(--text-muted)' }}>
+                          {peakLabel}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'rgba(46,86,122,0.06)', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 4 }}>
                 <strong style={{ color: '#2e567a' }}>{t('shifts.affluence_formula_title', 'How calculation works')}</strong>
-                <div>{t('shifts.affluence_formula_line1', 'Estimated visitors per slot = weekday average visitors * slot weight.')}</div>
-                <div>{t('shifts.affluence_formula_line2', 'Recommended staff = ceil(estimated visitors / visitors for 1 staff).')}</div>
-                <div>{t('shifts.affluence_formula_line3', 'Gap = recommended staff - confirmed scheduled staff (average in selected date range).')}</div>
-                <div>{t('shifts.affluence_formula_line4', 'Level tag per slot uses estimated visitors: Low <= low visitors, Medium <= medium visitors, High > medium visitors.')}</div>
+                <div>{t('shifts.affluence_formula_line1_new', '1. Operating Hours Alignment: Traffic and recommended staff are calculated only for slots that fall within store opening hours.')}</div>
+                <div>{t('shifts.affluence_formula_line2_new', '2. Estimated Visitors: Expected traffic is calculated from historical data (past 28 days) or manual overrides.')}</div>
+                <div>{t('shifts.affluence_formula_line3_new', '3. Recommended Staff: Needed staff = ceil(estimated visitors / visitors for 1 staff).')}</div>
+                <div>{t('shifts.affluence_formula_line4_new', '4. Level Tag: Low (visitors <= low tier), Medium (visitors <= medium tier), High (visitors > medium tier).')}</div>
               </div>
 
               <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 8 }}>
@@ -647,8 +692,8 @@ export default function ExternalAffluenceLiveConfigModal({
           <button
             className="btn btn-primary"
             onClick={() => { void handleSave(); }}
-            disabled={loading || saving || !config || totalWeightSum !== 100}
-            title={totalWeightSum !== 100 ? 'Allocated slot weights must sum to exactly 100%' : 'Save Configuration'}
+            disabled={loading || saving || !config}
+            title={'Save Configuration'}
           >
             {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
           </button>
