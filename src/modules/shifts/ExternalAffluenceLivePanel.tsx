@@ -222,7 +222,7 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
     setSelectedDay(filterDay ?? null);
   }, [filterDay]);
 
-  const [activeTab, setActiveTab] = useState<'live' | 'forecast'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'forecast'>('forecast');
 
   // Helper date function
   const formatDateOnly = (date: Date): string => {
@@ -1095,47 +1095,7 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, background: '#fff' }}
-                      onClick={() => {
-                        const f = formatDateOnly(new Date());
-                        const tDate = new Date();
-                        tDate.setDate(tDate.getDate() + 6);
-                        setForecastFromDate(f);
-                        setForecastToDate(formatDateOnly(tDate));
-                      }}
-                    >
-                      {t('shifts.forecast_range_7d', '7 Days')}
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, background: '#fff' }}
-                      onClick={() => {
-                        const f = formatDateOnly(new Date());
-                        const tDate = new Date();
-                        tDate.setDate(tDate.getDate() + 13);
-                        setForecastFromDate(f);
-                        setForecastToDate(formatDateOnly(tDate));
-                      }}
-                    >
-                      {t('shifts.forecast_range_14d', '14 Days')}
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, background: '#fff' }}
-                      onClick={() => {
-                        const f = formatDateOnly(new Date());
-                        const tDate = new Date();
-                        tDate.setDate(tDate.getDate() + 29);
-                        setForecastFromDate(f);
-                        setForecastToDate(formatDateOnly(tDate));
-                      }}
-                    >
-                      {t('shifts.forecast_range_30d', '30 Days')}
-                    </button>
-                  </div>
+
                 </div>
               )}
 
@@ -1152,7 +1112,7 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
                 }}>
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: '1.2fr 0.95fr 1.2fr 1.2fr 1.05fr 0.95fr 0.7fr 0.95fr',
+                      gridTemplateColumns: '1.2fr 0.95fr 1.2fr 1.05fr 0.95fr',
                       padding: '10px 12px',
                       background: 'linear-gradient(90deg, rgba(95,62,47,0.08), rgba(46,86,122,0.08))',
                       borderBottom: '1px solid #d4e2ef',
@@ -1164,12 +1124,9 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
                     }}>
                       <div>{t('common.date', 'Date')}</div>
                       <div>{t('shifts.affluence_time_slot_label', 'Time slot')}</div>
-                      <div>{t('shifts.affluence_scheduled_staff_col', 'Scheduled staff')}</div>
                       <div>{t('shifts.affluence_estimated_visitors_col', 'Expected visitors')}</div>
                       <div>{t('shifts.affluence_staff_suggestion_col', 'Staff suggestion')}</div>
                       <div style={{ borderLeft: '1px dashed #cbd5e1', paddingLeft: 10, whiteSpace: 'nowrap' }}>{t('shifts.affluence_level_col', 'Level')}</div>
-                      <div>{t('shifts.affluence_gap_col', 'Gap')}</div>
-                      <div>{t('common.status', 'Status')}</div>
                     </div>
 
                     <div style={{ maxHeight: 430, overflowY: 'auto' }}>
@@ -1206,7 +1163,7 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
                               key={`${day.date}-${slot.timeSlot}`}
                               style={{
                                 display: 'grid',
-                                gridTemplateColumns: '1.2fr 0.95fr 1.2fr 1.2fr 1.05fr 0.95fr 0.7fr 0.95fr',
+                                gridTemplateColumns: '1.2fr 0.95fr 1.2fr 1.05fr 0.95fr',
                                 alignItems: 'center',
                                 borderBottom: '1px solid #e2e8f0',
                                 background: index % 2 === 0 ? '#fff' : '#f8fbff',
@@ -1368,41 +1325,9 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
                               </div>
 
                               <div style={{ padding: '10px 12px' }}>
-                                <span style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  padding: '4px 9px',
-                                  borderRadius: 999,
-                                  border: '1px solid #bfdbfe',
-                                  background: '#eff6ff',
-                                  color: '#1e3a8a',
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                }}>
-                                  <Users size={12} />
-                                  {slot.currentScheduledStaff} &nbsp;{t('shifts.affluence_scheduled_staff_col', 'scheduled')}
-                                </span>
-                              </div>
-
-                              <div style={{ padding: '10px 12px' }}>
                                 <div style={{ fontWeight: 700, color: '#2e567a', fontSize: 15 }}>
                                   {numberOrDash(slot.estimatedVisitors, 0)}
                                 </div>
-                                <span style={{
-                                  marginTop: 3,
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  padding: '2px 7px',
-                                  borderRadius: 999,
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  textTransform: 'uppercase',
-                                  letterSpacing: 0.3,
-                                  ...levelStyle,
-                                }}>
-                                  {t(`shifts.level_${slot.level}`, slot.level)}
-                                </span>
                               </div>
 
                               <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'flex-start', textAlign: 'left' }}>
@@ -1437,29 +1362,6 @@ export default function ExternalAffluenceLivePanel({ storeId, week, filterDay, s
                                   ...levelStyle,
                                 }}>
                                   {t(`shifts.level_${slot.level}`, slot.level)}
-                                </span>
-                              </div>
-
-                              <div style={{ padding: '10px 12px', fontWeight: 800, color: gapColor }}>
-                                {gapValue > 0 ? `+${gapValue}` : String(gapValue)}
-                              </div>
-
-                              <div style={{ padding: '12px' }}>
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    minWidth: 88,
-                                    padding: '4px 8px',
-                                    borderRadius: 999,
-                                    fontWeight: 700,
-                                    fontSize: 11,
-                                    textTransform: 'uppercase',
-                                    ...statusStyle,
-                                  }}
-                                >
-                                  {t(`shifts.affluence_status_${statusLabel}`, statusLabel)}
                                 </span>
                               </div>
                             </div>
