@@ -156,7 +156,7 @@ function PersonalLeavePage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div style={{ padding: isMobile ? '16px 0' : '24px 20px', maxWidth: 860, margin: '0 auto' }}>
+    <div style={{ padding: isMobile ? '16px 0' : '24px 20px', width: '100%' }}>
       {/* Page header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

@@ -26,6 +26,7 @@ import {
 import { getEmployees } from '../../api/employees';
 import { getStores } from '../../api/stores';
 import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
+import { listShifts, Shift } from '../../api/shifts';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatLocalDate } from '../../utils/date';
 import { LeaveRequestDrawer } from './LeaveRequestDrawer';
@@ -1033,6 +1034,44 @@ export default function AdminLeavePanel() {
 
   // ── Reject modal ───────────────────────────────────────────────────────────
   const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
+  const [shiftsForTarget, setShiftsForTarget] = useState<Shift[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [cancelShiftsChecked, setCancelShiftsChecked] = useState(true);
+
+  useEffect(() => {
+    if (!approveTarget) {
+      setShiftsForTarget([]);
+      setShiftsLoading(false);
+      setCancelShiftsChecked(true);
+      return;
+    }
+
+    let active = true;
+    setShiftsLoading(true);
+    setShiftsForTarget([]);
+
+    listShifts({
+      user_id: approveTarget.userId,
+      start_date: approveTarget.startDate,
+      end_date: approveTarget.endDate,
+    })
+      .then((res) => {
+        if (!active) return;
+        const activeShifts = res.shifts.filter((s) => s.status !== 'cancelled');
+        setShiftsForTarget(activeShifts);
+      })
+      .catch((err) => {
+        console.error('Error fetching shifts for leave approval:', err);
+      })
+      .finally(() => {
+        if (active) setShiftsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [approveTarget]);
+
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [rejectNotes,  setRejectNotes]  = useState('');
   const [rejectSaving, setRejectSaving] = useState(false);
@@ -1261,9 +1300,9 @@ export default function AdminLeavePanel() {
   }
 
   // ── Approve ────────────────────────────────────────────────────────────────
-  async function handleApprove(req: LeaveRequest) {
+  async function handleApprove(req: LeaveRequest, cancelShifts?: boolean) {
     try {
-      await approveLeaveRequest(req.id);
+      await approveLeaveRequest(req.id, undefined, cancelShifts);
       showFlash(t('leave.approved_success'));
       fetchRequests();
     } catch (err: unknown) {
@@ -2383,39 +2422,176 @@ export default function AdminLeavePanel() {
       )}
 
       {/* ── Approve Confirm Modal ───────────────────────────────────────── */}
-      {approveTarget && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setApproveTarget(null); }}
-        >
-          <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 390, border: '1px solid var(--border)', padding: 24 }}>
-            <h3 style={{ margin: '0 0 8px', fontSize: '1rem', fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
-              {t('leave.action_approve')}
-            </h3>
-            <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-secondary)' }}>
-              {approveTarget.userSurname} {approveTarget.userName} · {fmtDate(approveTarget.startDate, locale)} → {fmtDate(approveTarget.endDate, locale)}
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={() => setApproveTarget(null)}
-                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: '#fff', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={async () => {
-                  const target = approveTarget;
-                  setApproveTarget(null);
-                  if (target) await handleApprove(target);
-                }}
-                style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-              >
-                {t('common.confirm', 'Confirm')}
-              </button>
+      {approveTarget && (() => {
+        const avatarUrl = getAvatarUrl(approveTarget.userAvatarFilename);
+        const initials = initialsForPerson(approveTarget.userName, approveTarget.userSurname);
+        const avatarFallbackColor = avatarColorFromName(`${approveTarget.userName ?? ''} ${approveTarget.userSurname ?? ''}`.trim() || String(approveTarget.userId));
+        const dateRangeStr = approveTarget.leaveDurationType === 'short_leave'
+          ? `${fmtDate(approveTarget.startDate, locale)} · ${approveTarget.shortStartTime ?? '--:--'}-${approveTarget.shortEndTime ?? '--:--'}`
+          : `${fmtDate(approveTarget.startDate, locale)} → ${fmtDate(approveTarget.endDate, locale)}`;
+
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setApproveTarget(null); }}
+          >
+            <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 460, border: '1px solid var(--border)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  border: '1px solid rgba(148,163,184,0.4)',
+                  background: avatarUrl ? 'transparent' : avatarFallbackColor,
+                  color: '#fff',
+                  fontSize: 16,
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={`${approveTarget.userSurname ?? ''} ${approveTarget.userName ?? ''}`.trim()} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : initials}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
+                    {t('leave.action_approve_title', 'Approva Permesso')}
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {approveTarget.userSurname} {approveTarget.userName}
+                  </p>
+                </div>
+              </div>
+
+              {/* Date & Period details */}
+              <div style={{
+                background: 'var(--background)',
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                padding: '10px 14px',
+                fontSize: 13,
+                color: 'var(--text)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>{t('leave.col_period', 'Periodo')}:</span>
+                  <span style={{ fontWeight: 700 }}>{dateRangeStr}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>{t('leave.type_label', 'Tipo')}:</span>
+                  <span style={{ fontWeight: 700, color: approveTarget.leaveType === 'vacation' ? '#3b82f6' : '#f59e0b' }}>
+                    {t(`leave.type_${approveTarget.leaveType}`)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Shifts query list */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
+                  {t('leave.existing_shifts_label', 'Turni nel periodo di permesso')}
+                </div>
+                {shiftsLoading ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0', textAlign: 'center' }}>
+                    {t('leave.loading_shifts', 'Caricamento turni...')}
+                  </div>
+                ) : shiftsForTarget.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px', background: 'var(--surface-warm)', border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center' }}>
+                    {t('leave.no_shifts_for_period', 'Nessun turno in questo periodo')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 120, overflowY: 'auto', paddingRight: 4 }}>
+                    {shiftsForTarget.map((shift) => {
+                      const isConfirmed = shift.status === 'confirmed';
+                      return (
+                        <div key={shift.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 10px',
+                          background: 'var(--surface-warm)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 700 }}>{fmtDate(shift.date, locale)}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              ({shift.startTime.substring(0, 5)} - {shift.endTime.substring(0, 5)})
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{shift.storeName}</span>
+                          </div>
+                          <span style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: isConfirmed ? 'rgba(22,163,74,0.1)' : 'rgba(245,158,11,0.1)',
+                            color: isConfirmed ? '#16a34a' : '#d97706',
+                          }}>
+                            {isConfirmed ? t('shifts.status_confirmed', 'Confermato') : t('shifts.status_scheduled', 'Programmato')}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Checkbox and Logic Guide Text */}
+              {shiftsForTarget.length > 0 && (
+                <div style={{
+                  background: 'rgba(245,158,11,0.06)',
+                  border: '1px solid rgba(245,158,11,0.2)',
+                  borderRadius: 10,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                    <input
+                      type="checkbox"
+                      checked={cancelShiftsChecked}
+                      onChange={(e) => setCancelShiftsChecked(e.target.checked)}
+                      style={{ marginTop: 2, accentColor: 'var(--accent)' }}
+                    />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                      {t('leave.cancel_shifts_checkbox', 'Annulla i turni programmati e confermati')}
+                    </span>
+                  </label>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    {t('leave.cancel_shifts_guide', 'Se abilitato, l\'approvazione del permesso annullerà automaticamente i turni mostrati sopra e ne sottrarrà le ore dal riepilogo.')}
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button
+                  onClick={() => setApproveTarget(null)}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--border)', background: '#fff', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={async () => {
+                    const target = approveTarget;
+                    setApproveTarget(null);
+                    if (target) await handleApprove(target, cancelShiftsChecked && shiftsForTarget.length > 0);
+                  }}
+                  style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {t('common.confirm', 'Confirm')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Reject Modal ──────────────────────────────────────────────────── */}
       {rejectTarget && (

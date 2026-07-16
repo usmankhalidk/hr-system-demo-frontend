@@ -1,18 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { Shift, CreateShiftPayload, createShift, updateShift, deleteShift, listTemplates, ShiftTemplate } from '../../api/shifts';
 import { getEmployees, getEmployee, type EmployeeListParams } from '../../api/employees';
-import { getStores } from '../../api/stores';
+import { getStores, getStoreOperatingHours } from '../../api/stores';
 import { getEmployeeTransferSchedule, type TransferAssignment } from '../../api/transfers';
 import { getAvatarUrl, getStoreLogoUrl } from '../../api/client';
-import { Employee, Store, UserRole } from '../../types';
+import { Employee, Store, UserRole, StoreOperatingHour } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { TimePicker } from '../../components/ui/TimePicker';
 import { Badge } from '../../components/ui/Badge';
-import { Store as StoreIcon } from 'lucide-react';
+import { Store as StoreIcon, Clock, AlertTriangle, AlertCircle } from 'lucide-react';
 
 interface ShiftPattern {
   dayOfWeek: number;
@@ -153,6 +153,74 @@ export default function ShiftDrawer({
 
   const [availablePatterns, setAvailablePatterns] = useState<ShiftPattern[]>([]);
   const [selectedPatternIndex, setSelectedPatternIndex] = useState<string>('');
+
+  const [operatingHours, setOperatingHours] = useState<StoreOperatingHour[]>([]);
+  const [loadingHours, setLoadingHours] = useState(false);
+  const [confirmHoursOpen, setConfirmHoursOpen] = useState(false);
+
+  const dayLabels = useMemo(
+    () => [
+      t('stores.dayMonday', 'Monday'),
+      t('stores.dayTuesday', 'Tuesday'),
+      t('stores.dayWednesday', 'Wednesday'),
+      t('stores.dayThursday', 'Thursday'),
+      t('stores.dayFriday', 'Friday'),
+      t('stores.daySaturday', 'Saturday'),
+      t('stores.daySunday', 'Sunday'),
+    ],
+    [t],
+  );
+
+  const storeHoursForSelectedDate = useMemo(() => {
+    if (!form.date || !operatingHours || operatingHours.length === 0) {
+      return null;
+    }
+    const parts = form.date.split('-');
+    if (parts.length !== 3) return null;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const dateObj = new Date(y, m, d);
+    const dayOfWeek = (dateObj.getDay() + 6) % 7;
+    return operatingHours.find((h) => h.dayOfWeek === dayOfWeek) ?? null;
+  }, [form.date, operatingHours]);
+
+  const hasConflict = useMemo(() => {
+    if (form.is_off_day) return false;
+    if (!storeHoursForSelectedDate) return false;
+    if (storeHoursForSelectedDate.isClosed) return true;
+
+    const openMins = toMins(storeHoursForSelectedDate.openTime || '');
+    const closeMins = toMins(storeHoursForSelectedDate.closeTime || '');
+    if (isNaN(openMins) || isNaN(closeMins)) return false;
+
+    const checkIntervalOutside = (startStr: string, endStr: string) => {
+      if (!startStr || !endStr) return false;
+      const startMins = toMins(startStr);
+      const endMins = toMins(endStr);
+      if (isNaN(startMins) || isNaN(endMins)) return false;
+
+      if (openMins <= closeMins) {
+        if (startMins > endMins) return true;
+        return startMins < openMins || endMins > closeMins;
+      } else {
+        if (startMins > endMins) {
+          return startMins < openMins || endMins > closeMins;
+        }
+        return !((startMins >= openMins && endMins <= 1440) || (startMins >= 0 && endMins <= closeMins));
+      }
+    };
+
+    const mainOutside = checkIntervalOutside(form.start_time, form.end_time);
+    if (mainOutside) return true;
+
+    if (form.is_split) {
+      const splitOutside = checkIntervalOutside(form.split_start2, form.split_end2);
+      if (splitOutside) return true;
+    }
+
+    return false;
+  }, [form.is_off_day, form.start_time, form.end_time, form.is_split, form.split_start2, form.split_end2, storeHoursForSelectedDate]);
 
   const getPatternKey = (p: {
     startTime: string;
@@ -520,6 +588,30 @@ export default function ShiftDrawer({
   }, [open, shift, prefillDate, prefillUserId, user?.role, user?.storeId]);
 
   useEffect(() => {
+    if (!open || !form.store_id) {
+      setOperatingHours([]);
+      return;
+    }
+    let mounted = true;
+    setLoadingHours(true);
+    getStoreOperatingHours(Number(form.store_id))
+      .then((hours) => {
+        if (!mounted) return;
+        setOperatingHours(hours || []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setOperatingHours([]);
+      })
+      .finally(() => {
+        if (mounted) setLoadingHours(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [open, form.store_id]);
+
+  useEffect(() => {
     if (!open || shift || !form.user_id || !form.date) {
       setActiveTransferForDate(null);
       return;
@@ -636,7 +728,28 @@ export default function ShiftDrawer({
       return;
     }
 
+    const isOffDay = form.is_off_day;
 
+    // Final safety check to avoid 500 error on backend (casting '' to TIME)
+    if (!isOffDay && (!form.start_time || !form.end_time)) {
+      setFormErrors({
+        start_time: form.start_time ? undefined : t('shifts.validation.startRequired'),
+        end_time: form.end_time ? undefined : t('shifts.validation.endRequired'),
+      });
+      return;
+    }
+
+    // Check if shift is outside operating hours
+    if (operatingHours.length > 0 && hasConflict) {
+      setConfirmHoursOpen(true);
+      return;
+    }
+
+    await doSave();
+  }
+
+  async function doSave() {
+    setConfirmHoursOpen(false);
     setFormErrors({});
     setOverlapConflict(false);
     setSaving(true);
@@ -651,15 +764,6 @@ export default function ShiftDrawer({
       }
       const isNoBreakOut = isNoBreak;
       const isFlexibleOut = breakTypeOut === 'flexible';
-
-      // Final safety check to avoid 500 error on backend (casting '' to TIME)
-      if (!isOffDay && (!form.start_time || !form.end_time)) {
-        setFormErrors({
-          start_time: form.start_time ? undefined : t('shifts.validation.startRequired'),
-          end_time: form.end_time ? undefined : t('shifts.validation.endRequired'),
-        });
-        return;
-      }
 
       const startTimeOut = isOffDay ? (form.start_time || '00:00') : form.start_time;
       const endTimeOut = isOffDay ? (form.end_time || '00:01') : form.end_time;
@@ -1428,6 +1532,59 @@ export default function ShiftDrawer({
                     <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                   </div>
 
+                  {/* Store operating hours info */}
+                  {form.store_id && (
+                    <div style={{ marginBottom: 12 }}>
+                      {!form.date ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                          <Clock size={14} />
+                          <span>{t('shifts.modal.selectDateToViewHours', 'Select a date to view store operating hours')}</span>
+                        </div>
+                      ) : loadingHours ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                          <span>{t('common.loading', 'Loading...')}</span>
+                        </div>
+                      ) : operatingHours.length === 0 ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--warning)', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', padding: '8px 12px', borderRadius: 8 }}>
+                          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                          <span>{t('shifts.template.hoursNotConfigured', 'Store operating hours not configured')}</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {storeHoursForSelectedDate ? (
+                            storeHoursForSelectedDate.isClosed ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--warning)', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', padding: '8px 12px', borderRadius: 8 }}>
+                                <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                                <span>
+                                  {t('shifts.template.storeClosedOnDay', 'Store is closed on this day ({{day}})', { day: dayLabels[storeHoursForSelectedDate.dayOfWeek] })}
+                                </span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-warm)', border: '1px solid var(--border)', padding: '8px 12px', borderRadius: 8 }}>
+                                <Clock size={14} style={{ flexShrink: 0, color: 'var(--accent)' }} />
+                                <span>
+                                  {t('shifts.template.storeHoursOnDay', 'Store hours on {{day}}: {{open}} - {{close}}', {
+                                    day: dayLabels[storeHoursForSelectedDate.dayOfWeek],
+                                    open: storeHoursForSelectedDate.openTime,
+                                    close: storeHoursForSelectedDate.closeTime
+                                  })}
+                                </span>
+                              </div>
+                            )
+                          ) : null}
+                          
+                          {/* Additional warning text if conflict is detected */}
+                          {hasConflict && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--danger)', fontWeight: 600, paddingLeft: 4, marginTop: 2 }}>
+                              <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                              <span>{t('shifts.template.outsideOperatingHours', 'Warning: Shift is outside store operating hours')}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
                     <TimePicker
                       label={t('shifts.form.startTime')}
@@ -1770,6 +1927,51 @@ export default function ShiftDrawer({
         onConfirm={doDelete}
         onCancel={() => setConfirmOpen(false)}
       />
+      <ConfirmModal
+        open={confirmHoursOpen}
+        title={t('shifts.modal.confirmOutsideTitle', 'Shift Outside Operating Hours')}
+        message={t('shifts.modal.confirmOutsideMsg', 'You are saving a shift that is outside the store operating hours. Do you want to proceed?')}
+        confirmLabel={t('common.confirm', 'Confirm')}
+        cancelLabel={t('common.close', 'Close')}
+        variant="warning"
+        onConfirm={doSave}
+        onCancel={() => setConfirmHoursOpen(false)}
+      >
+        {storeHoursForSelectedDate && (
+          <div style={{
+            background: 'var(--surface-warm)',
+            border: '1.5px solid var(--border)',
+            borderRadius: 10,
+            padding: '12px 14px',
+            marginTop: 8,
+            display: 'grid',
+            gap: 8,
+            fontSize: 12,
+            textAlign: 'left'
+          }}>
+            <div>
+              <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                {t('shifts.modal.selectedShift', 'Selected Shift')}:
+              </span>{' '}
+              <span style={{ fontWeight: 700, color: 'var(--danger)' }}>
+                {form.is_split
+                  ? `${form.start_time} - ${form.end_time} · ${form.split_start2} - ${form.split_end2}`
+                  : `${form.start_time} - ${form.end_time}`}
+              </span>
+            </div>
+            <div>
+              <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                {t('shifts.modal.storeOperatingHoursLabel', 'Store Operating Hours')}:
+              </span>{' '}
+              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                {storeHoursForSelectedDate.isClosed
+                  ? t('stores.dayClosed', 'Closed')
+                  : `${storeHoursForSelectedDate.openTime} - ${storeHoursForSelectedDate.closeTime}`}
+              </span>
+            </div>
+          </div>
+        )}
+      </ConfirmModal>
     </>
   );
 }

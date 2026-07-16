@@ -180,6 +180,8 @@ export async function listShifts(params: {
   month?: string;
   store_id?: number;
   user_id?: number;
+  start_date?: string;
+  end_date?: string;
 }): Promise<{ shifts: Shift[] }> {
   const res = await client.get('/shifts', {
     params: {
