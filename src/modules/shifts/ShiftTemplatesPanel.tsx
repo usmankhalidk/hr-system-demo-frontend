@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight, Moon, Palmtree, Pencil, PlayCircle, Store as StoreIcon, Thermometer, Trash2, Filter } from 'lucide-react';
+import { ArrowLeftRight, Moon, Palmtree, Pencil, PlayCircle, Store as StoreIcon, Thermometer, Trash2, Filter, Clock, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import CustomSelect from '../../components/ui/CustomSelect';
 import {
@@ -15,11 +15,11 @@ import {
   createShift,
 } from '../../api/shifts';
 import { getLeaveBlocks, LeaveBlock } from '../../api/leave';
-import { getStores } from '../../api/stores';
+import { getStores, getStoreOperatingHours } from '../../api/stores';
 import { getEmployees } from '../../api/employees';
 import { getTransferBlocks, TransferAssignment } from '../../api/transfers';
 import { getAvatarUrl } from '../../api/client';
-import { Store as StoreType, Employee } from '../../types';
+import { Store as StoreType, Employee, StoreOperatingHour } from '../../types';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { DatePicker } from '../../components/ui/DatePicker';
 
@@ -385,6 +385,90 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY_CONFIG }))
   );
 
+  const [templateOperatingHours, setTemplateOperatingHours] = useState<StoreOperatingHour[]>([]);
+  const [confirmHoursOpen, setConfirmHoursOpen] = useState(false);
+
+  function toMins(t: string): number {
+    const parts = t.split(':');
+    if (parts.length < 2) return NaN;
+    const [h, m] = parts.map(Number);
+    if (isNaN(h) || isNaN(m)) return NaN;
+    return h * 60 + m;
+  }
+
+  const isTemplateDayOutside = (idx: number, startStr: string, endStr: string) => {
+    if (!newStoreId || templateOperatingHours.length === 0) return false;
+    const dayHours = templateOperatingHours.find(h => h.dayOfWeek === idx);
+    if (!dayHours) return false;
+    if (dayHours.isClosed) return true;
+    
+    const openMins = toMins(dayHours.openTime || '');
+    const closeMins = toMins(dayHours.closeTime || '');
+    if (isNaN(openMins) || isNaN(closeMins)) return false;
+
+    if (!startStr || !endStr) return false;
+    const startMins = toMins(startStr);
+    const endMins = toMins(endStr);
+    if (isNaN(startMins) || isNaN(endMins)) return false;
+
+    if (openMins <= closeMins) {
+      if (startMins > endMins) return true;
+      return startMins < openMins || endMins > closeMins;
+    } else {
+      if (startMins > endMins) {
+        return startMins < openMins || endMins > closeMins;
+      }
+      return !((startMins >= openMins && endMins <= 1440) || (startMins >= 0 && endMins <= closeMins));
+    }
+  };
+
+  const templateConflictingDays = useMemo(() => {
+    if (!newStoreId || templateOperatingHours.length === 0) return [];
+    const conflicts: { dayIdx: number; dayName: string; shiftTime: string; storeHours: string }[] = [];
+    
+    dayConfigs.forEach((d, idx) => {
+      if (!d.enabled) return;
+      const dayHours = templateOperatingHours.find(h => h.dayOfWeek === idx);
+      if (!dayHours) return;
+
+      let isOutside = false;
+      if (dayHours.isClosed) {
+        isOutside = true;
+      } else {
+        const openMins = toMins(dayHours.openTime || '');
+        const closeMins = toMins(dayHours.closeTime || '');
+        const startMins = toMins(d.startTime);
+        const endMins = toMins(d.endTime);
+
+        if (!isNaN(openMins) && !isNaN(closeMins) && !isNaN(startMins) && !isNaN(endMins)) {
+          if (openMins <= closeMins) {
+            if (startMins > endMins) isOutside = true;
+            else isOutside = startMins < openMins || endMins > closeMins;
+          } else {
+            if (startMins > endMins) {
+              isOutside = startMins < openMins || endMins > closeMins;
+            } else {
+              isOutside = !((startMins >= openMins && endMins <= 1440) || (startMins >= 0 && endMins <= closeMins));
+            }
+          }
+        }
+      }
+
+      if (isOutside) {
+        conflicts.push({
+          dayIdx: idx,
+          dayName: DAY_LABELS_FULL[idx],
+          shiftTime: `${d.startTime} - ${d.endTime}`,
+          storeHours: dayHours.isClosed
+            ? t('stores.dayClosed', 'Closed')
+            : `${dayHours.openTime} - ${dayHours.closeTime}`,
+        });
+      }
+    });
+
+    return conflicts;
+  }, [newStoreId, templateOperatingHours, dayConfigs, t]);
+
   function openWizard() {
     setEditingTemplate(null);
     setNewName('');
@@ -460,6 +544,26 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
     getStores().then(setStores).catch(() => { });
   }, [open]);
 
+  useEffect(() => {
+    if (!newStoreId) {
+      setTemplateOperatingHours([]);
+      return;
+    }
+    let mounted = true;
+    getStoreOperatingHours(Number(newStoreId))
+      .then((hours) => {
+        if (!mounted) return;
+        setTemplateOperatingHours(hours || []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setTemplateOperatingHours([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [newStoreId]);
+
   async function fetchTemplates() {
     setLoading(true);
     setError(null);
@@ -508,9 +612,24 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
       }
     }
 
+    // Check if any template shifts are outside operating hours
+    if (templateOperatingHours.length > 0 && templateConflictingDays.length > 0) {
+      setConfirmHoursOpen(true);
+      return;
+    }
+
+    await doSaveTemplate();
+  }
+
+  async function doSaveTemplate() {
+    setConfirmHoursOpen(false);
     setSaving(true);
     setError(null);
     try {
+      const enabledDays = dayConfigs
+        .map((d, i) => ({ ...d, dayOfWeek: i }))
+        .filter((d) => d.enabled);
+
       const payload = {
         store_id: parseInt(newStoreId, 10),
         name: newName.trim(),
@@ -1212,9 +1331,49 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
                                 }}
                               >
                                 <Trash2 size={14} />
-                              </button>
+                                </button>
                             </div>
                           </div>
+
+                          {/* Day operating hours info */}
+                          {newStoreId && (
+                            <div style={{ marginBottom: 10 }}>
+                              {templateOperatingHours.length === 0 ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--warning)', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', padding: '6px 10px', borderRadius: 8 }}>
+                                  <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                                  <span>{t('shifts.template.hoursNotConfigured', 'Store operating hours not configured')}</span>
+                                </div>
+                              ) : (
+                                (function() {
+                                  const dayHours = templateOperatingHours.find(h => h.dayOfWeek === idx);
+                                  if (!dayHours) return null;
+                                  const isOutside = isTemplateDayOutside(idx, d.startTime, d.endTime);
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                      {dayHours.isClosed ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--warning)', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', padding: '6px 10px', borderRadius: 8 }}>
+                                          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                                          <span>{t('shifts.template.storeClosedOnDay', 'Store is closed on this day')}</span>
+                                        </div>
+                                      ) : (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '6px 10px', borderRadius: 8 }}>
+                                          <Clock size={14} style={{ flexShrink: 0, color: 'var(--accent)' }} />
+                                          <span>
+                                            {t('shifts.template.storeHoursOnDay', 'Store hours: {{open}} - {{close}}', { open: dayHours.openTime, close: dayHours.closeTime })}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {isOutside && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--danger)', fontWeight: 600, paddingLeft: 4 }}>
+                                          <span>{t('shifts.template.outsideOperatingHours', 'Warning: Shift is outside store operating hours')}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()
+                              )}
+                            </div>
+                          )}
 
                           <div style={{ display: 'grid', gridTemplateColumns: d.breakType === 'none' ? (isMobile ? '1fr' : '1fr 1fr') : d.breakType === 'flexible' ? (isMobile ? '1fr' : '1fr 1fr 1fr') : (isMobile ? '1fr' : '1fr 1fr 1fr 1fr'), gap: 8 }}>
                             <div>
@@ -2082,6 +2241,46 @@ export default function ShiftTemplatesPanel({ open, onClose }: ShiftTemplatesPan
         onConfirm={() => confirmDeleteId !== null && doDelete(confirmDeleteId)}
         onCancel={() => setConfirmDeleteId(null)}
       />
+      <ConfirmModal
+        open={confirmHoursOpen}
+        title={t('shifts.modal.confirmOutsideTemplateTitle', 'Template Shifts Outside Operating Hours')}
+        message={t('shifts.modal.confirmOutsideTemplateMsg', 'Some shifts in this template are outside the store operating hours. Do you want to proceed?')}
+        confirmLabel={t('common.confirm', 'Confirm')}
+        cancelLabel={t('common.close', 'Close')}
+        variant="warning"
+        onConfirm={doSaveTemplate}
+        onCancel={() => setConfirmHoursOpen(false)}
+      >
+        <div style={{
+          background: 'var(--surface-warm)',
+          border: '1.5px solid var(--border)',
+          borderRadius: 10,
+          padding: '12px 14px',
+          marginTop: 8,
+          display: 'grid',
+          gap: 10,
+          fontSize: 12,
+          maxHeight: 180,
+          overflowY: 'auto',
+          textAlign: 'left'
+        }}>
+          {templateConflictingDays.map((c) => (
+            <div key={c.dayIdx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: 6, borderBottom: '1px solid var(--border-light)', paddingBottom: 6 }}>
+              <div>
+                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{c.dayName}</span>
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  {t('shifts.modal.selectedShift', 'Selected Shift')}: <span style={{ color: 'var(--danger)', fontWeight: 700 }}>{c.shiftTime}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('shifts.modal.storeOperatingHoursLabel', 'Store Operating Hours')}: <span style={{ fontWeight: 600 }}>{c.storeHours}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ConfirmModal>
     </>
   );
 }

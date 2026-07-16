@@ -642,6 +642,15 @@ export default function PublicJobDetailPage() {
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [isLong, setIsLong] = useState(false);
+  const descriptionRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (descriptionRef.current) {
+      setIsLong(descriptionRef.current.scrollHeight > 220);
+    }
+  }, [job?.description]);
+
   const [dragActive, setDragActive] = useState(false);
 
   const [screenerQuestions, setScreenerQuestions] = useState<PublicScreenerQuestion[]>([]);
@@ -1119,33 +1128,34 @@ export default function PublicJobDetailPage() {
               <div className="careers-detail-body">
                 {job.description ? (
                   (() => {
-                    const isLong = job.description.length > 500;
                     return (
-                      <div style={{ position: 'relative' }}>
+                      <div>
                         <div
+                          ref={descriptionRef}
                           className="careers-description-container"
                           style={{
                             maxHeight: (!isLong || descExpanded) ? 'none' : '220px',
                             overflow: 'hidden',
+                            position: 'relative',
                             transition: 'max-height 0.3s ease',
                           }}
                         >
                           <div dangerouslySetInnerHTML={{ __html: parseRichTextToHtml(job.description) }} />
+                          {isLong && !descExpanded && (
+                            <div
+                              className="careers-description-fade"
+                              style={{
+                                position: 'absolute',
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: '80px',
+                                background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.88))',
+                                pointerEvents: 'none',
+                              }}
+                            />
+                          )}
                         </div>
-                        {isLong && !descExpanded && (
-                          <div
-                            className="careers-description-fade"
-                            style={{
-                              position: 'absolute',
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              height: '80px',
-                              background: 'linear-gradient(to bottom, transparent, #ffffff)',
-                              pointerEvents: 'none',
-                            }}
-                          />
-                        )}
                         {isLong && (
                           <button
                             type="button"

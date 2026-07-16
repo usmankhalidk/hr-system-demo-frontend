@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
@@ -220,7 +221,23 @@ export default function AttendanceLogsPage() {
   const [compact, setCompact]     = useState(false);
 
   // ── View Mode & Summary States ──────────────────────────────────────────────
-  const [viewMode, setViewMode]           = useState<'logs' | 'summary' | 'analytics'>('logs');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewParam = searchParams.get('view');
+  const initialViewMode = (viewParam === 'logs' || viewParam === 'summary' || viewParam === 'analytics') ? viewParam : 'logs';
+
+  const [viewMode, setViewMode]           = useState<'logs' | 'summary' | 'analytics'>(initialViewMode);
+
+  useEffect(() => {
+    const currentParam = searchParams.get('view');
+    if (currentParam !== viewMode) {
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.set('view', viewMode);
+        return next;
+      }, { replace: true });
+    }
+  }, [viewMode, searchParams, setSearchParams]);
+
   const [summaryPeriod, setSummaryPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   // Shift-status filter pills for the summary view (null = all statuses shown)
   const [summaryStatusFilter, setSummaryStatusFilter] = useState<'scheduled' | 'confirmed' | 'cancelled' | null>(null);
@@ -1010,7 +1027,7 @@ export default function AttendanceLogsPage() {
         if (hasCheckin && !hasCheckout) { row.status = 'in_progress'; continue; }
         if (!hasCheckin && row.scheduledMinutes > 0) { row.status = 'pending'; continue; }
       }
-      if (row.workedMinutes === 0 && row.effectiveScheduledMinutes === 0 && row.neutralizedMinutes > 0) row.status = 'leave';
+      if (row.workedMinutes === 0 && row.effectiveScheduledMinutes === 0 && (row.neutralizedMinutes > 0 || row.vacationMinutes > 0 || row.sickMinutes > 0 || row.leaveMinutes > 0)) row.status = 'leave';
       // Nothing due, nothing worked, no leave — but the period's shift(s) were cancelled.
       // Without this the row would fall through to 'worked' with a 0 variance → "On time".
       else if (row.workedMinutes === 0 && row.effectiveScheduledMinutes === 0 && row.neutralizedMinutes === 0

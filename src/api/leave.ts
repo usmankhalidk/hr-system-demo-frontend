@@ -153,8 +153,8 @@ export async function getPendingLeaveApprovals(): Promise<LeaveListResponse> {
 }
 
 /** Approve a leave request. */
-export async function approveLeaveRequest(id: number, notes?: string): Promise<LeaveRequest> {
-  const { data } = await apiClient.put(`/leave/${id}/approve`, { notes });
+export async function approveLeaveRequest(id: number, notes?: string, cancel_shifts?: boolean): Promise<LeaveRequest> {
+  const { data } = await apiClient.put(`/leave/${id}/approve`, { notes, cancel_shifts });
   return data.data as LeaveRequest;
 }
 
