@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { X, Filter, Check } from 'lucide-react';
+import { X, Filter, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { Input } from '../../components/ui/Input';
 
@@ -38,6 +38,8 @@ export function FilterModal({
 }: Props) {
   const { t } = useTranslation();
   const [filters, setFilters] = useState<FilterValues>(initialFilters);
+  const [companiesExpanded, setCompaniesExpanded] = useState(false);
+  const [storesExpanded, setStoresExpanded] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -212,162 +214,198 @@ export function FilterModal({
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
           <div style={{ display: 'grid', gap: '20px' }}>
-            {/* Company Filter - Multi-select with checkboxes */}
+            {/* Company Filter - Collapsible checklist */}
             {showCompanyFilter && companyOptions.length > 0 && (
               <div>
-                <label
+                <button
+                  type="button"
+                  onClick={() => setCompaniesExpanded(!companiesExpanded)}
                   style={{
-                    display: 'block',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--surface)',
+                    border: '1.5px solid var(--border)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
                     fontSize: '13px',
                     fontWeight: 600,
                     color: 'var(--text-primary)',
-                    marginBottom: '10px',
-                    fontFamily: 'var(--font-body)',
+                    outline: 'none',
+                    marginBottom: '6px',
                   }}
                 >
-                  {t('employees.filterCompany', 'Company')}
-                  {filters.company_ids.length > 0 && (
-                    <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--accent)', fontWeight: 700 }}>
-                      ({filters.company_ids.length} {t('common.selected', 'selected')})
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>{t('employees.filterCompany', 'Company')}</span>
+                    {filters.company_ids.length > 0 && (
+                      <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 700 }}>
+                        ({filters.company_ids.length})
+                      </span>
+                    )}
+                  </div>
+                  {companiesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {companiesExpanded && (
+                  <div
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      background: 'var(--surface)',
+                      boxShadow: 'var(--shadow-sm)',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    {companyOptions.map((company, index) => (
+                      <label
+                        key={company.value}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          borderBottom: index < companyOptions.length - 1 ? '1px solid var(--border)' : 'none',
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={filters.company_ids.includes(company.value)}
+                          onChange={() => toggleCompany(company.value)}
+                          style={{ display: 'none' }}
+                        />
+                        <div
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: '4px',
+                            border: `2px solid ${filters.company_ids.includes(company.value) ? 'var(--primary)' : 'var(--border)'}`,
+                            background: filters.company_ids.includes(company.value) ? 'var(--primary)' : 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: '10px',
+                            flexShrink: 0,
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {filters.company_ids.includes(company.value) && (
+                            <Check size={12} color="#fff" strokeWidth={3} />
+                          )}
+                        </div>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                          {company.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Store Filter - Collapsible checklist */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setStoresExpanded(!storesExpanded)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'var(--surface)',
+                  border: '1.5px solid var(--border)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  marginBottom: '6px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{t('employees.filterStore', 'Store')}</span>
+                  {filters.store_ids.length > 0 && (
+                    <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 700 }}>
+                      ({filters.store_ids.length})
                     </span>
                   )}
-                </label>
+                </div>
+                {storesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {storesExpanded && (
                 <div
                   style={{
                     border: '1px solid var(--border)',
                     borderRadius: '8px',
                     maxHeight: '200px',
                     overflowY: 'auto',
+                    background: 'var(--surface)',
+                    boxShadow: 'var(--shadow-sm)',
+                    marginBottom: '12px',
                   }}
                 >
-                  {companyOptions.map((company, index) => (
-                    <label
-                      key={company.value}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '10px 12px',
-                        cursor: 'pointer',
-                        borderBottom: index < companyOptions.length - 1 ? '1px solid var(--border)' : 'none',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={filters.company_ids.includes(company.value)}
-                        onChange={() => toggleCompany(company.value)}
-                        style={{ display: 'none' }}
-                      />
-                      <div
+                  {filteredStoreOptions.length === 0 ? (
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                      {filters.company_ids.length > 0
+                        ? t('employees.noStoresForCompany', 'No stores found for selected companies')
+                        : t('employees.noStores', 'No stores available')}
+                    </div>
+                  ) : (
+                    filteredStoreOptions.map((store, index) => (
+                      <label
+                        key={store.value}
                         style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: '4px',
-                          border: `2px solid ${filters.company_ids.includes(company.value) ? 'var(--primary)' : 'var(--border)'}`,
-                          background: filters.company_ids.includes(company.value) ? 'var(--primary)' : 'transparent',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: '10px',
-                          flexShrink: 0,
-                          transition: 'all 0.15s',
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          borderBottom: index < filteredStoreOptions.length - 1 ? '1px solid var(--border)' : 'none',
+                          transition: 'background 0.15s',
                         }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
-                        {filters.company_ids.includes(company.value) && (
-                          <Check size={12} color="#fff" strokeWidth={3} />
-                        )}
-                      </div>
-                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
-                        {company.label}
-                      </span>
-                    </label>
-                  ))}
+                        <input
+                          type="checkbox"
+                          checked={filters.store_ids.includes(store.value)}
+                          onChange={() => toggleStore(store.value)}
+                          style={{ display: 'none' }}
+                        />
+                        <div
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: '4px',
+                            border: `2px solid ${filters.store_ids.includes(store.value) ? 'var(--primary)' : 'var(--border)'}`,
+                            background: filters.store_ids.includes(store.value) ? 'var(--primary)' : 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: '10px',
+                            flexShrink: 0,
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {filters.store_ids.includes(store.value) && (
+                            <Check size={12} color="#fff" strokeWidth={3} />
+                          )}
+                        </div>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                          {store.label}
+                        </span>
+                      </label>
+                    ))
+                  )}
                 </div>
-              </div>
-            )}
-
-            {/* Store Filter - Multi-select with checkboxes */}
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  marginBottom: '10px',
-                  fontFamily: 'var(--font-body)',
-                }}
-              >
-                {t('employees.filterStore', 'Store')}
-                {filters.store_ids.length > 0 && (
-                  <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--accent)', fontWeight: 700 }}>
-                    ({filters.store_ids.length} {t('common.selected', 'selected')})
-                  </span>
-                )}
-              </label>
-              <div
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                }}
-              >
-                {filteredStoreOptions.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-                    {filters.company_ids.length > 0
-                      ? t('employees.noStoresForCompany', 'No stores found for selected companies')
-                      : t('employees.noStores', 'No stores available')}
-                  </div>
-                ) : (
-                  filteredStoreOptions.map((store, index) => (
-                    <label
-                      key={store.value}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '10px 12px',
-                        cursor: 'pointer',
-                        borderBottom: index < filteredStoreOptions.length - 1 ? '1px solid var(--border)' : 'none',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={filters.store_ids.includes(store.value)}
-                        onChange={() => toggleStore(store.value)}
-                        style={{ display: 'none' }}
-                      />
-                      <div
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: '4px',
-                          border: `2px solid ${filters.store_ids.includes(store.value) ? 'var(--primary)' : 'var(--border)'}`,
-                          background: filters.store_ids.includes(store.value) ? 'var(--primary)' : 'transparent',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: '10px',
-                          flexShrink: 0,
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        {filters.store_ids.includes(store.value) && (
-                          <Check size={12} color="#fff" strokeWidth={3} />
-                        )}
-                      </div>
-                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
-                        {store.label}
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
+              )}
             </div>
 
             {/* Status Filter */}

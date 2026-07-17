@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, CheckCheck, Clock3, FileText, Palmtree, Thermometer, Trash2, XCircle, User, Store, Shield, Calendar, Clock, Settings } from 'lucide-react';
+import { CalendarDays, CheckCheck, Clock3, FileText, Palmtree, Thermometer, Trash2, XCircle, User, Store, Shield, Calendar, Clock, Settings, Archive, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
   getLeaveRequests,
@@ -10,6 +10,7 @@ import {
   rejectLeaveRequest,
   createLeaveOnBehalf,
   deleteLeaveRequest,
+  archiveLeaveRequest,
   downloadCertificate,
   getLeaveBalance,
   setLeaveBalance,
@@ -35,34 +36,110 @@ import LeaveCalendar from './LeaveCalendar';
 import { translateApiError } from '../../utils/apiErrors';
 import { Store as StoreModel } from '../../types';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { useToast } from '../../context/ToastContext';
 
 // ── Status badge ───────────────────────────────────────────────────────────
 
-const STATUS_META: Record<LeaveStatus, { bg: string; color: string }> = {
-  pending:                         { bg: 'rgba(107,114,128,0.12)', color: '#6b7280' },
-  'store manager approved':        { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6' },
-  'store manager rejected':        { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
-  'area manager approved':         { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
-  'area manager rejected':         { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
-  'HR approved':                   { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6' },
-  'HR rejected':                   { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
-  approved:                        { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
-  rejected:                        { bg: 'rgba(220,38,38,0.12)',   color: '#dc2626' },
-  cancelled:                       { bg: 'rgba(0,0,0,0.05)',       color: '#6b7280' },
-  admin_approved:                  { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
-  'admin approved':                { bg: 'rgba(22,163,74,0.12)',   color: '#16a34a' },
+const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  pending:                         { bg: 'rgba(107,114,128,0.06)', color: '#6b7280' },
+  'store manager approved':        { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  store_manager_approved:          { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  'store manager rejected':        { bg: 'rgba(220,38,38,0.06)',   color: '#dc2626' },
+  store_manager_rejected:          { bg: 'rgba(220,38,38,0.06)',   color: '#dc2626' },
+  'area manager approved':         { bg: 'rgba(139,92,246,0.06)',  color: '#8b5cf6' },
+  area_manager_approved:           { bg: 'rgba(139,92,246,0.06)',  color: '#8b5cf6' },
+  'area manager rejected':         { bg: 'rgba(220,38,38,0.06)',   color: '#dc2626' },
+  area_manager_rejected:           { bg: 'rgba(220,38,38,0.06)',   color: '#dc2626' },
+  'HR approved':                   { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  hr_approved:                     { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  'HR rejected':                   { bg: 'rgba(220,38,38,0.06)',   color: '#dc2626' },
+  hr_rejected:                     { bg: 'rgba(220,38,38,0.06)',   color: '#dc2626' },
+  approved:                        { bg: 'rgba(22,163,74,0.06)',   color: '#16a34a' },
+  rejected:                        { bg: 'rgba(220,38,38,0.06)',   color: '#dc2626' },
+  cancelled:                       { bg: 'rgba(0,0,0,0.04)',       color: '#6b7280' },
+  admin_approved:                  { bg: 'rgba(22,163,74,0.06)',   color: '#16a34a' },
+  'admin approved':                { bg: 'rgba(22,163,74,0.06)',   color: '#16a34a' },
 };
 
-function StatusBadge({ status }: { status: LeaveStatus }) {
+function StatusBadge({ req }: { req: LeaveRequest }) {
   const { t } = useTranslation();
-  const { bg, color } = STATUS_META[status] ?? STATUS_META.pending;
+  const status = req.status;
+  const normalized = (status ?? '').toLowerCase().replace(/ /g, '_');
+  const latestActionRole = req.latestActionByRole;
+  const isAuto = req.escalated === true || latestActionRole === 'system';
+
+  let label = 'PENDING';
+  let bg = 'rgba(107,114,128,0.06)'; // default gray
+  let color = '#6b7280';
+
+  if (normalized === 'cancelled') {
+    label = 'CANCELLED';
+    bg = 'rgba(107,114,128,0.06)';
+    color = '#6b7280';
+  } else if (normalized.includes('rejected') || normalized === 'rejected') {
+    label = 'REJECTED';
+    bg = 'rgba(220,38,38,0.06)';
+    color = '#dc2626'; // red
+  } else if (normalized === 'hr_approved' || normalized === 'approved' || normalized === 'admin_approved') {
+    label = 'APPROVED';
+    bg = 'rgba(22,163,74,0.06)';
+    color = '#16a34a'; // green
+  } else {
+    // It is pending!
+    label = 'PENDING';
+    if (normalized === 'pending') {
+      bg = 'rgba(107,114,128,0.06)';
+      color = '#6b7280'; // gray
+    } else if (isAuto) {
+      bg = 'rgba(245,158,11,0.06)';
+      color = '#d97706'; // yellow/amber
+    } else {
+      bg = 'rgba(59,130,246,0.06)';
+      color = '#3b82f6'; // blue
+    }
+  }
+
   return (
     <span style={{
-      display: 'inline-block', padding: '3px 10px', borderRadius: 20,
-      fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
-      background: bg, color, textTransform: 'uppercase', whiteSpace: 'nowrap',
+      display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20,
+      fontSize: 11, fontWeight: 700, letterSpacing: '0.5px',
+      background: bg, color: color,
+      border: `1px solid ${color}30`,
+      textTransform: 'uppercase', whiteSpace: 'nowrap',
     }}>
-      {t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`)}
+      {label}
+    </span>
+  );
+}
+
+export function isPendingWorkflowStatus(status: string): boolean {
+  const norm = (status ?? '').toLowerCase().replace(/ /g, '_');
+  return norm === 'pending' || norm === 'store_manager_approved' || norm === 'area_manager_approved' || norm === 'hr_approved';
+}
+
+const ROLE_META: Record<string, { bg: string; color: string; label: string }> = {
+  admin:         { bg: 'rgba(239,68,68,0.06)',  color: '#ef4444', label: 'Admin' },
+  hr:            { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6', label: 'HR' },
+  area_manager:  { bg: 'rgba(139,92,246,0.06)', color: '#8b5cf6', label: 'Area Manager' },
+  store_manager: { bg: 'rgba(16,185,129,0.06)', color: '#10b981', label: 'Store Manager' },
+  employee:      { bg: 'rgba(107,114,128,0.06)', color: '#6b7280', label: 'Employee' },
+};
+
+export function RoleTag({ role }: { role?: string | null }) {
+  const { t } = useTranslation();
+  if (!role || role === 'admin') return <span>—</span>;
+  const meta = ROLE_META[role] ?? { bg: 'rgba(107,114,128,0.06)', color: '#6b7280', label: role };
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      padding: '3px 10px', borderRadius: 20,
+      fontSize: 11, fontWeight: 700,
+      background: meta.bg, color: meta.color,
+      border: `1px solid ${meta.color}30`,
+      textTransform: 'uppercase', letterSpacing: '0.5px',
+      whiteSpace: 'nowrap'
+    }}>
+      {t(`roles.${role}`, { defaultValue: meta.label })}
     </span>
   );
 }
@@ -172,7 +249,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   const yearOptions: number[] = [];
   for (let y = 2024; y <= currentYear + 2; y++) yearOptions.push(y);
 
-  const [employees, setEmployees] = useState<Array<{ id: number; name: string; surname: string; avatarFilename?: string | null }>>([]);
+  const [employees, setEmployees] = useState<Array<{ id: number; name: string; surname: string; role: string; avatarFilename?: string | null }>>([]);
   const [balances, setBalances] = useState<Record<number, LeaveBalance[]>>({});
   const [year, setYear] = useState(currentYear);
   const [loading, setLoading] = useState(false);
@@ -217,7 +294,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
   useEffect(() => {
     setEmpError(null);
     getEmployees({ limit: 200, status: 'active' })
-      .then((r) => setEmployees(r.employees.map((e) => ({ id: e.id, name: e.name, surname: e.surname, avatarFilename: e.avatarFilename ?? null }))))
+      .then((r) => setEmployees(r.employees.map((e) => ({ id: e.id, name: e.name, surname: e.surname, role: e.role, avatarFilename: e.avatarFilename ?? null }))))
       .catch(() => {
         setEmpError(t('common.error'));
         setEmployees([]);
@@ -547,7 +624,8 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
               <thead>
                 <tr style={{ background: 'var(--primary)' }}>
                   {[
-                    t('leave.col_employee'),
+                    t('leave.col_name', 'Nome'),
+                    t('leave.col_role', 'Ruolo'),
                     t('leave.balance_vacation'),
                     t('leave.balance_sick'),
                     t('common.actions'),
@@ -601,6 +679,9 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
                           {emp.surname} {emp.name}
                         </span>
                       </div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <RoleTag role={emp.role} />
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       {renderBalanceCell(emp.id, 'vacation')}
@@ -932,7 +1013,7 @@ export function BalancesTab({ showFlash }: BalancesTabProps) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type PanelTab = 'requests' | 'balances' | 'calendar' | 'approval_config';
+type PanelTab = 'requests' | 'balances' | 'calendar' | 'approval_config' | 'archived';
 
 type CreateEmployeeOption = {
   id: number;
@@ -947,6 +1028,7 @@ export default function AdminLeavePanel() {
   const { t, i18n } = useTranslation();
   const { user, permissions } = useAuth();
   const { isMobile } = useBreakpoint();
+  const { showToast } = useToast();
 
   const isAdmin = user?.role === 'admin';
   const effectiveApproverRole = user?.role === 'admin' ? 'admin' : user?.role;
@@ -958,6 +1040,21 @@ export default function AdminLeavePanel() {
   const [stores, setStores]           = useState<StoreModel[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
+
+  const [archivingId, setArchivingId] = useState<number | null>(null);
+
+  const handleArchive = async (id: number) => {
+    setArchivingId(id);
+    try {
+      await archiveLeaveRequest(id);
+      showFlash(t('leave.archive_success', 'Richiesta archiviata con successo'));
+      fetchRequests();
+    } catch (err: any) {
+      showToast(translateApiError(err, t, t('common.error_generic')) ?? t('common.error_generic'), 'error');
+    } finally {
+      setArchivingId(null);
+    }
+  };
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const today       = formatLocalDate(new Date());
@@ -1032,6 +1129,54 @@ export default function AdminLeavePanel() {
   const [cOverlappingLeaves, setCOverlappingLeaves] = useState<LeaveRequest[]>([]);
   const cEmployeePickerRef = useRef<HTMLDivElement | null>(null);
 
+  const [cUserBalances, setCUserBalances] = useState<LeaveBalance[]>([]);
+  const [cUserBalancesLoading, setCUserBalancesLoading] = useState(false);
+
+  useEffect(() => {
+    if (createOpen && cUserId && cStart) {
+      setCUserBalancesLoading(true);
+      getLeaveBalance({ userId: parseInt(cUserId, 10), year: new Date(cStart).getFullYear() })
+        .then((res) => {
+          setCUserBalances(res.balances || []);
+        })
+        .catch(() => {
+          setCUserBalances([]);
+        })
+        .finally(() => {
+          setCUserBalancesLoading(false);
+        });
+    } else {
+      setCUserBalances([]);
+    }
+  }, [createOpen, cUserId, cStart]);
+
+  const selectedEmpMatchingBalance = useMemo(() => {
+    return cUserBalances.find((b) => b.leaveType === cType);
+  }, [cUserBalances, cType]);
+
+  const selectedEmpRemainingDays = useMemo(() => {
+    return selectedEmpMatchingBalance ? selectedEmpMatchingBalance.remainingDays : 0;
+  }, [selectedEmpMatchingBalance]);
+
+  const selectedEmpRequestedDays = useMemo(() => {
+    if (cDurationType === 'short_leave') {
+      const hours = shortLeaveHours(cShortStartTime, cShortEndTime);
+      if (hours != null) {
+        return parseFloat((hours / 8).toFixed(2));
+      }
+      return 0;
+    }
+    return countWorkingDays(cStart, cEnd);
+  }, [cDurationType, cShortStartTime, cShortEndTime, cStart, cEnd]);
+
+  const selectedEmpExceedsBalance = useMemo(() => {
+    return selectedEmpMatchingBalance && selectedEmpRequestedDays > selectedEmpRemainingDays;
+  }, [selectedEmpMatchingBalance, selectedEmpRequestedDays, selectedEmpRemainingDays]);
+
+  const selectedEmpHasNoBalance = useMemo(() => {
+    return createOpen && !!cUserId && !cUserBalancesLoading && cUserBalances.length === 0;
+  }, [createOpen, cUserId, cUserBalancesLoading, cUserBalances]);
+
   // ── Reject modal ───────────────────────────────────────────────────────────
   const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
   const [shiftsForTarget, setShiftsForTarget] = useState<Shift[]>([]);
@@ -1102,15 +1247,21 @@ export default function AdminLeavePanel() {
         dateTo?: string;
         status?: LeaveStatus;
         leaveType?: 'vacation' | 'sick';
+        archived?: boolean;
       } = {};
       if (dateFrom)     params.dateFrom    = dateFrom;
       if (dateTo)       params.dateTo      = dateTo;
-      if (filterStatus) params.status      = filterStatus as LeaveStatus;
+      if (filterStatus && filterStatus !== 'pending' && filterStatus !== 'approved' && filterStatus !== 'rejected') {
+        params.status = filterStatus as LeaveStatus;
+      }
       if (filterType)   params.leaveType   = filterType as 'vacation' | 'sick';
+      params.archived = panelTab === 'archived';
       const pageSize = 100;
       const [firstPage, pendingRes] = await Promise.all([
         getLeaveRequests({ ...params, page: 1, limit: pageSize }),
-        getPendingLeaveApprovals().catch(() => ({ requests: [] as LeaveRequest[], total: 0 })),
+        panelTab !== 'archived'
+          ? getPendingLeaveApprovals().catch(() => ({ requests: [] as LeaveRequest[], total: 0 }))
+          : Promise.resolve({ requests: [] as LeaveRequest[], total: 0 }),
       ]);
       const totalPages = firstPage.pages ?? Math.ceil((firstPage.total ?? firstPage.requests.length) / pageSize);
       const remainingPages = totalPages > 1
@@ -1129,7 +1280,20 @@ export default function AdminLeavePanel() {
       for (const req of allFetchedRequests) merged.set(req.id, req);
       for (const req of pendingRes.requests) merged.set(req.id, req);
       const matchesAppliedFilters = (req: LeaveRequest) => {
-        if (filterStatus && req.status !== filterStatus) return false;
+        if (filterStatus) {
+          const reqNorm = req.status.toLowerCase().replace(/ /g, '_');
+          if (filterStatus === 'pending') {
+            if (!isPendingWorkflowStatus(req.status)) return false;
+          } else if (filterStatus === 'approved') {
+            const isApproved = reqNorm === 'approved' || reqNorm === 'admin_approved' || reqNorm === 'hr_approved';
+            if (!isApproved) return false;
+          } else if (filterStatus === 'rejected') {
+            if (!reqNorm.includes('rejected')) return false;
+          } else {
+            const filterNorm = filterStatus.toLowerCase().replace(/ /g, '_');
+            if (reqNorm !== filterNorm) return false;
+          }
+        }
         if (filterType && req.leaveType !== filterType) return false;
         if (dateFrom && req.startDate < dateFrom) return false;
         if (dateTo && req.endDate > dateTo) return false;
@@ -1148,7 +1312,7 @@ export default function AdminLeavePanel() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, filterStatus, filterType, t]);
+  }, [dateFrom, dateTo, filterStatus, filterType, panelTab, t]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
@@ -1227,9 +1391,6 @@ export default function AdminLeavePanel() {
   }, [createOpen, cUserId, cStart, cEnd]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
-  const isPendingWorkflowStatus = (status: LeaveStatus): boolean => (
-    status === 'pending' || (status.includes('approved') && status !== 'approved')
-  );
 
   const pendingCount  = requests.filter((r) => isPendingWorkflowStatus(r.status)).length;
   const approvedCount = requests.filter((r) => r.status === 'approved').length;
@@ -1723,11 +1884,12 @@ export default function AdminLeavePanel() {
           boxShadow: '0 4px 12px rgba(15,23,42,0.06)',
         }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {((['requests', 'balances', 'calendar', 'approval_config'] as PanelTab[]).filter((tab) => {
+            {((['requests', 'balances', 'calendar', 'approval_config', 'archived'] as PanelTab[]).filter((tab) => {
               if (tab === 'requests') return true;
               if (tab === 'balances') return permissions?.saldi || user?.isSuperAdmin;
               if (tab === 'calendar') return true;
-              if (tab === 'approval_config') return (user?.role === 'admin' || user?.isSuperAdmin) && !user?.isSuperAdmin;
+              if (tab === 'approval_config') return user?.role === 'admin' || user?.isSuperAdmin;
+              if (tab === 'archived') return user?.role === 'admin' || user?.role === 'hr' || user?.isSuperAdmin;
               return false;
             })).map((tab) => {
               const selected = panelTab === tab;
@@ -1746,7 +1908,7 @@ export default function AdminLeavePanel() {
                     cursor: 'pointer',
                   }}
                 >
-                  {tab === 'requests' ? t('leave.admin_title') : tab === 'balances' ? t('leave.balance_tab') : tab === 'calendar' ? t('leave.calendar_tab') : t('leave.approval_config_tab')}
+                  {tab === 'requests' ? t('leave.admin_title') : tab === 'balances' ? t('leave.balance_tab') : tab === 'calendar' ? t('leave.calendar_tab') : tab === 'approval_config' ? t('leave.approval_config_tab') : t('leave.archived_tab', 'Archiviate')}
                 </button>
               );
             })}
@@ -1830,7 +1992,7 @@ export default function AdminLeavePanel() {
       </div>
 
       {/* ── Requests tab ──────────────────────────────────────────────────── */}
-      {panelTab === 'requests' && (
+      {(panelTab === 'requests' || panelTab === 'archived') && (
         <>
           {/* ── Table ─────────────────────────────────────────────────────── */}
           <div style={{ padding: isMobile ? '16px 0 20px' : '20px 24px 24px' }}>
@@ -1868,9 +2030,7 @@ export default function AdminLeavePanel() {
                           { text: t('leave.col_employee'), icon: <User size={12} style={{ marginRight: 6 }} /> },
                           { text: t('leave.col_role', 'Role'), icon: <Shield size={12} style={{ marginRight: 6 }} /> },
                           { text: t('leave.col_store', 'Store'), icon: <Store size={12} style={{ marginRight: 6 }} /> },
-                          { text: t('leave.type_label'), icon: <Palmtree size={12} style={{ marginRight: 6 }} /> },
                           { text: t('leave.col_period'), icon: <Calendar size={12} style={{ marginRight: 6 }} /> },
-                          { text: t('leave.col_days'), icon: <Clock size={12} style={{ marginRight: 6 }} /> },
                           { text: t('leave.col_status'), icon: <CheckCheck size={12} style={{ marginRight: 6 }} /> },
                           { text: t('leave.col_action_time', 'Last action'), icon: <Clock3 size={12} style={{ marginRight: 6 }} /> },
                           { text: t('common.actions'), icon: <Settings size={12} style={{ marginRight: 6 }} /> },
@@ -1904,11 +2064,18 @@ export default function AdminLeavePanel() {
                         const initials = initialsForPerson(req.userName, req.userSurname);
                         const avatarFallbackColor = avatarColorFromName(`${req.userName ?? ''} ${req.userSurname ?? ''}`.trim() || String(req.userId));
                         const isHR = user?.role === 'hr';
-                        const latestActionLabel = req.latestAction === 'approved'
-                          ? t('leave.action_approve')
-                          : req.latestAction === 'rejected'
-                            ? t('leave.action_reject')
-                            : null;
+                        let latestActionLabel = null;
+                        const isSystemAuto = req.latestActionByRole === 'system' || req.escalated === true;
+                        if (isSystemAuto) {
+                          let roleText = 'System';
+                          const norm = (req.status ?? '').toLowerCase().replace(/ /g, '_');
+                          if (norm === 'store_manager_approved') roleText = t('roles.store_manager');
+                          else if (norm === 'area_manager_approved') roleText = t('roles.area_manager');
+                          else if (norm === 'hr_approved') roleText = t('roles.hr');
+                          latestActionLabel = `Auto: ${roleText}`;
+                        } else if (req.latestActionByRole) {
+                          latestActionLabel = t(`roles.${req.latestActionByRole}`, { defaultValue: req.latestActionByRole });
+                        }
                         const latestActionTime = req.latestActionAt
                           ? fmtDateTime(req.latestActionAt, locale)
                           : '—';
@@ -1929,15 +2096,15 @@ export default function AdminLeavePanel() {
                             <td style={{ padding: '12px 16px 12px 20px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                                 <span style={{
-                                  width: 30,
-                                  height: 30,
+                                  width: 36,
+                                  height: 36,
                                   borderRadius: '50%',
                                   overflow: 'hidden',
                                   flexShrink: 0,
                                   border: '1px solid rgba(148,163,184,0.4)',
                                   background: avatarUrl ? 'transparent' : avatarFallbackColor,
                                   color: '#fff',
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   fontWeight: 700,
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -1959,16 +2126,14 @@ export default function AdminLeavePanel() {
                             </td>
                             {/* Role */}
                             <td style={{ padding: '12px 16px' }}>
-                              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                                {req.userRole ? t(`roles.${req.userRole}`, { defaultValue: req.userRole }) : '—'}
-                              </span>
+                              <RoleTag role={req.userRole} />
                             </td>
                             {/* Store */}
                             <td style={{ padding: '12px 16px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                                 <span style={{
-                                  width: 24,
-                                  height: 24,
+                                  width: 36,
+                                  height: 36,
                                   borderRadius: '50%',
                                   overflow: 'hidden',
                                   border: '1px solid rgba(148,163,184,0.35)',
@@ -1977,7 +2142,7 @@ export default function AdminLeavePanel() {
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   fontWeight: 700,
                                   flexShrink: 0,
                                 }}>
@@ -1997,33 +2162,69 @@ export default function AdminLeavePanel() {
                                 </span>
                               </div>
                             </td>
-                            {/* Type */}
-                            <td style={{ padding: '12px 16px' }}>
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 5,
-                                padding: '3px 10px', borderRadius: 20,
-                                fontSize: 11, fontWeight: 700,
-                                background: `${typeColor}18`, color: typeColor, border: `1px solid ${typeColor}30`,
-                              }}>
-                                {isVacation ? <Palmtree size={11} strokeWidth={2.4} /> : <Thermometer size={11} strokeWidth={2.4} />}
-                                {t(`leave.type_${req.leaveType}`)}
-                              </span>
-                            </td>
                             {/* Period */}
                             <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                              {isShortLeave
-                                ? `${fmtDate(req.startDate, locale)} · ${req.shortStartTime ?? '--:--'}-${req.shortEndTime ?? '--:--'}`
-                                : `${fmtDate(req.startDate, locale)} → ${fmtDate(req.endDate, locale)}`}
-                            </td>
-                            {/* Days */}
-                            <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                              {isShortLeave && shortHours != null
-                                ? `${shortHours}h`
-                                : days}
+                              <div style={{ fontWeight: 600 }}>
+                                {isShortLeave
+                                  ? `${fmtDate(req.startDate, locale)} · ${req.shortStartTime ?? '--:--'}-${req.shortEndTime ?? '--:--'}`
+                                  : `${fmtDate(req.startDate, locale)} → ${fmtDate(req.endDate, locale)}`}
+                              </div>
+                              <div style={{ marginTop: 6 }}>
+                                {(() => {
+                                  const isHalf = isShortLeave;
+                                  let daysText = '';
+                                  if (isHalf) {
+                                    daysText = locale === 'en' ? 'Half Day' : 'Mezza giornata';
+                                  } else if (days === 1) {
+                                    daysText = locale === 'en' ? '1 Day' : '1 Giorno';
+                                  } else {
+                                    daysText = locale === 'en' ? `${days} Days` : `${days} Giorni`;
+                                  }
+
+                                  return (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: 6,
+                                      padding: '3px 8px 3px 6px',
+                                      borderRadius: 4,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      background: isVacation ? 'rgba(219,234,254,0.45)' : 'rgba(255,237,213,0.45)',
+                                      color: isVacation ? '#1e40af' : '#92400e',
+                                      borderLeft: `3px solid ${isVacation ? '#2563eb' : '#ea580c'}`,
+                                      borderTop: `1px solid ${isVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
+                                      borderRight: `1px solid ${isVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
+                                      borderBottom: `1px solid ${isVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)'}`,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.5px',
+                                    }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                        {isVacation ? <Palmtree size={10} strokeWidth={2.4} /> : <Thermometer size={10} strokeWidth={2.4} />}
+                                        {t(`leave.type_${req.leaveType}`)}
+                                      </span>
+                                      <span style={{
+                                        fontSize: 9,
+                                        fontWeight: 800,
+                                        background: isVacation ? 'rgba(59,130,246,0.12)' : 'rgba(245,158,11,0.12)',
+                                        padding: '2px 6px',
+                                        borderRadius: 3,
+                                        marginLeft: 6,
+                                        color: isVacation ? '#1d4ed8' : '#b45309',
+                                        textTransform: 'none',
+                                        fontVariantNumeric: 'tabular-nums',
+                                      }}>
+                                        {daysText}
+                                      </span>
+                                    </span>
+                                  );
+                                })()}
+                              </div>
                             </td>
                             {/* Status */}
                             <td style={{ padding: '12px 16px' }}>
-                              <StatusBadge status={req.status} />
+                              <StatusBadge req={req} />
                             </td>
                             {/* Last Action */}
                             <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
@@ -2055,7 +2256,24 @@ export default function AdminLeavePanel() {
                                     <FileText size={13} strokeWidth={2.5} />
                                   </button>
                                 )}
-                                {canAct && (
+                                {panelTab === 'requests' && (user?.role === 'admin' || user?.role === 'hr') && !isPendingWorkflowStatus(req.status) && (
+                                  <button
+                                    onClick={() => handleArchive(req.id)}
+                                    disabled={archivingId === req.id}
+                                    title={t('leave.action_archive', 'Archivia')}
+                                    aria-label={t('leave.action_archive', 'Archivia')}
+                                    style={{
+                                      width: 28, height: 28, borderRadius: 7,
+                                      border: '1px solid rgba(139,92,246,0.3)',
+                                      background: 'rgba(139,92,246,0.08)',
+                                      color: '#8b5cf6', cursor: 'pointer',
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    }}
+                                  >
+                                    <Archive size={13} strokeWidth={2.4} />
+                                  </button>
+                                )}
+                                {panelTab === 'requests' && canAct && (
                                   <>
                                     <button
                                       onClick={() => setApproveTarget(req)}
@@ -2087,16 +2305,16 @@ export default function AdminLeavePanel() {
                                     </button>
                                   </>
                                 )}
-                                {isAdmin && (
+                                {panelTab === 'archived' && user?.role === 'admin' && (
                                   <button
                                     onClick={() => setDeleteTarget(req)}
                                     title={t('common.delete')}
                                     aria-label={t('common.delete')}
                                     style={{
                                       width: 28, height: 28, borderRadius: 7,
-                                      border: '1px solid rgba(107,114,128,0.25)',
-                                      background: 'rgba(107,114,128,0.06)',
-                                      color: 'var(--text-muted)', cursor: 'pointer',
+                                      border: '1px solid rgba(220,38,38,0.3)',
+                                      background: 'rgba(220,38,38,0.08)',
+                                      color: '#dc2626', cursor: 'pointer',
                                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                     }}
                                   >
@@ -2147,7 +2365,7 @@ export default function AdminLeavePanel() {
       )}
 
       {/* ── Approval Config tab ─────────────────────────────────────────── */}
-      {panelTab === 'approval_config' && !user?.isSuperAdmin && (
+      {panelTab === 'approval_config' && (user?.role === 'admin' || user?.isSuperAdmin) && (
         <div style={{ padding: isMobile ? '16px 0 20px' : '20px 24px 24px' }}>
           <ApprovalConfigPanel />
         </div>
@@ -2164,22 +2382,40 @@ export default function AdminLeavePanel() {
             }
           }}
         >
-          <div style={{ background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 520, maxHeight: '88vh', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                  {t('leave.page_title')}
+          <div style={{ background: 'var(--surface)', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', width: '100%', maxWidth: 520, maxHeight: '88vh', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'linear-gradient(135deg, rgba(201,151,58,0.1) 0%, rgba(13,33,55,0.05) 100%)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10, background: 'rgba(201,151,58,0.18)',
+                  color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Palmtree size={18} />
                 </div>
-                <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
-                  {t('leave.admin_create_title')}
-                </h2>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
+                    {t('leave.admin_create_title')}
+                  </h3>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {t('leave.admin_subtitle')}
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => { setCreateOpen(false); setCEmployeeOpen(false); }}
                 disabled={cSaving}
-                style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: 'var(--text-secondary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{
+                  width: 30, height: 30, borderRadius: 8,
+                  border: '1px solid var(--border)', background: 'var(--surface)',
+                  color: 'var(--text-secondary)', fontSize: 16, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.2s',
+                }}
               >
-                ×
+                <X size={15} />
               </button>
             </div>
 
@@ -2265,6 +2501,45 @@ export default function AdminLeavePanel() {
                 </div>
               </div>
 
+              {selectedEmpHasNoBalance && (
+                <div style={{
+                  marginBottom: 14, padding: '10px 14px',
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.3)',
+                  borderLeft: '4px solid #f59e0b',
+                  borderRadius: 8, color: '#b45309', fontSize: 12,
+                  display: 'flex', alignItems: 'flex-start', gap: 8
+                }}>
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+                  <div>
+                    <strong style={{ display: 'block', marginBottom: 2 }}>{t('leave.balance_not_configured_title', 'Saldo Non Configurato')}</strong>
+                    <span>{t('leave.admin_balance_not_configured_desc', "L'utente selezionato non ha un piano ferie/permessi configurato per quest'anno.")}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedEmpExceedsBalance && (
+                <div style={{
+                  marginBottom: 14, padding: '10px 14px',
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.3)',
+                  borderLeft: '4px solid #f59e0b',
+                  borderRadius: 8, color: '#b45309', fontSize: 12,
+                  display: 'flex', alignItems: 'flex-start', gap: 8
+                }}>
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+                  <div>
+                    <strong style={{ display: 'block', marginBottom: 2 }}>{t('leave.insufficient_balance_title', 'Saldo Insufficiente')}</strong>
+                    <span>
+                      {t('leave.admin_insufficient_balance_desc', "La richiesta di {{requested}} giorni supera il saldo rimanente di {{remaining}} giorni dell'utente.", {
+                        requested: selectedEmpRequestedDays,
+                        remaining: selectedEmpRemainingDays
+                      })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: 14 }}>
                 <label style={labelStyle}>{t('leave.type_label')} *</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -2280,9 +2555,17 @@ export default function AdminLeavePanel() {
                         onClick={() => setCType(opt.key)}
                         style={{
                           borderRadius: 8,
-                          border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`,
-                          background: '#ffffff',
-                          color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          border: `1px solid ${
+                            selected
+                              ? (opt.key === 'vacation' ? 'var(--accent)' : 'rgba(245,158,11,0.3)')
+                              : '#d1d5db'
+                          }`,
+                          background: selected
+                            ? (opt.key === 'vacation' ? 'var(--accent-light)' : 'rgba(245,158,11,0.08)')
+                            : '#ffffff',
+                          color: selected
+                            ? (opt.key === 'vacation' ? 'var(--accent)' : '#f59e0b')
+                            : 'var(--text-secondary)',
                           fontSize: 12,
                           fontWeight: 700,
                           padding: '10px 12px',
@@ -2315,7 +2598,28 @@ export default function AdminLeavePanel() {
                           key={opt.key}
                           type="button"
                           onClick={() => setCDurationType(opt.key)}
-                          style={{ borderRadius: 8, border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`, background: '#ffffff', color: selected ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: 12, fontWeight: 700, padding: '10px 12px', cursor: 'pointer', textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          style={{
+                            borderRadius: 8,
+                            border: `1px solid ${
+                              selected
+                                ? (opt.key === 'full_day' ? 'var(--accent)' : '#8b5cf6')
+                                : '#d1d5db'
+                            }`,
+                            background: selected
+                              ? (opt.key === 'full_day' ? 'var(--accent-light)' : 'rgba(139,92,246,0.08)')
+                              : '#ffffff',
+                            color: selected
+                              ? (opt.key === 'full_day' ? 'var(--accent)' : '#8b5cf6')
+                              : 'var(--text-secondary)',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            padding: '10px 12px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
                         >
                           {opt.icon}
                           {opt.label}
@@ -2830,14 +3134,7 @@ export default function AdminLeavePanel() {
                 >
                   <option value="">{t('common.all')}</option>
                   <option value="pending">{t('leave.status_pending')}</option>
-                  <option value="store manager approved">{t('leave.status_store_manager_approved')}</option>
-                  <option value="store manager rejected">{t('leave.status_store_manager_rejected')}</option>
-                  <option value="area manager approved">{t('leave.status_area_manager_approved')}</option>
-                  <option value="area manager rejected">{t('leave.status_area_manager_rejected')}</option>
-                  <option value="HR approved">{t('leave.status_hr_approved')}</option>
-                  <option value="HR rejected">{t('leave.status_hr_rejected')}</option>
                   <option value="approved">{t('leave.status_approved')}</option>
-                  <option value="rejected">{t('leave.status_rejected')}</option>
                   <option value="cancelled">{t('leave.status_cancelled')}</option>
                 </select>
               </div>

@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays, Clock3, Palmtree, Thermometer } from 'lucide-react';
-import { submitLeaveRequest, LeaveDurationType, LeaveType } from '../../api/leave';
+import { submitLeaveRequest, LeaveDurationType, LeaveType, getLeaveBalance } from '../../api/leave';
 import { useToast } from '../../context/ToastContext';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatLocalDate } from '../../utils/date';
@@ -14,6 +14,23 @@ interface Props {
   onSubmitted: () => void;
   initialStartDate?: string;
   initialEndDate?: string;
+}
+
+function getWorkingDays(startStr: string, endStr: string): number {
+  if (!startStr || !endStr) return 0;
+  const s = new Date(startStr);
+  const e = new Date(endStr);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+  let count = 0;
+  const current = new Date(s);
+  while (current <= e) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
 }
 
 export function LeaveRequestDrawer({ open, onClose, onSubmitted, initialStartDate, initialEndDate }: Props) {
@@ -33,12 +50,32 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted, initialStartDat
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [balances, setBalances] = useState<any[]>([]);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
   useEffect(() => {
     if (open) {
       reset();
+      setLoadingBalance(true);
+      getLeaveBalance({ year: new Date(startDate).getFullYear() })
+        .then((res) => {
+          setBalances(res.balances || []);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingBalance(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialStartDate, initialEndDate]);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && startDate) {
+      getLeaveBalance({ year: new Date(startDate).getFullYear() })
+        .then((res) => {
+          setBalances(res.balances || []);
+        })
+        .catch(() => {});
+    }
+  }, [startDate, open]);
 
   function reset() {
     setLeaveType('vacation');
@@ -78,6 +115,29 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted, initialStartDat
     if (endMinutes <= startMinutes) return null;
     return Number(((endMinutes - startMinutes) / 60).toFixed(2));
   }, [shortEndTime, shortStartTime]);
+
+  const matchingBalance = useMemo(() => {
+    return balances.find((b) => b.leaveType === leaveType);
+  }, [balances, leaveType]);
+
+  const remainingDays = useMemo(() => {
+    return matchingBalance ? matchingBalance.remainingDays : 0;
+  }, [matchingBalance]);
+
+  const requestedDays = useMemo(() => {
+    if (leaveDurationType === 'short_leave' && shortLeaveHours != null) {
+      return parseFloat((shortLeaveHours / 8).toFixed(2));
+    }
+    return getWorkingDays(startDate, endDate);
+  }, [leaveDurationType, shortLeaveHours, startDate, endDate]);
+
+  const exceedsBalance = useMemo(() => {
+    return matchingBalance && requestedDays > remainingDays;
+  }, [matchingBalance, requestedDays, remainingDays]);
+
+  const hasNoBalance = useMemo(() => {
+    return !loadingBalance && balances.length === 0;
+  }, [loadingBalance, balances]);
 
   function handleClose() {
     reset();
@@ -196,6 +256,45 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted, initialStartDat
 
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+          {hasNoBalance && (
+            <div style={{
+              marginBottom: 16, padding: '12px 16px',
+              background: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.3)',
+              borderLeft: '4px solid #f59e0b',
+              borderRadius: 8, color: '#b45309', fontSize: 13,
+              display: 'flex', alignItems: 'flex-start', gap: 10
+            }}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>⚠️</span>
+              <div>
+                <strong style={{ display: 'block', marginBottom: 2 }}>{t('leave.balance_not_configured_title', 'Saldo Non Configurato')}</strong>
+                <span>{t('leave.balance_not_configured_desc', "Non è stato ancora configurato un piano ferie/permessi per te per quest'anno. Si prega di contattare le Risorse Umane (HR) della propria azienda per l'allocazione dei giorni spettanti.")}</span>
+              </div>
+            </div>
+          )}
+
+          {exceedsBalance && (
+            <div style={{
+              marginBottom: 16, padding: '12px 16px',
+              background: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.3)',
+              borderLeft: '4px solid #f59e0b',
+              borderRadius: 8, color: '#b45309', fontSize: 13,
+              display: 'flex', alignItems: 'flex-start', gap: 10
+            }}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>⚠️</span>
+              <div>
+                <strong style={{ display: 'block', marginBottom: 2 }}>{t('leave.insufficient_balance_title', 'Saldo Insufficiente')}</strong>
+                <span>
+                  {t('leave.insufficient_balance_desc', 'La richiesta di {{requested}} giorni supera il saldo rimanente di {{remaining}} giorni. Puoi comunque inviare la richiesta per approvazione.', {
+                    requested: requestedDays,
+                    remaining: remainingDays
+                  })}
+                </span>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div style={{
               marginBottom: 16, padding: '10px 14px',
@@ -222,11 +321,19 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted, initialStartDat
                   type="button"
                   onClick={() => setLeaveType(typeOption.key as LeaveType)}
                   style={{
-                    flex: 1, padding: '9px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    flex: 1, padding: '9px 10px', borderRadius: 8, fontSize: 13, fontWeight: 700,
                     cursor: 'pointer', transition: 'all 0.15s',
-                    background: '#ffffff',
-                    color: leaveType === typeOption.key ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: `1px solid ${leaveType === typeOption.key ? 'var(--primary)' : '#d1d5db'}`,
+                    background: leaveType === typeOption.key
+                      ? (typeOption.key === 'vacation' ? 'var(--accent-light)' : 'rgba(245,158,11,0.08)')
+                      : '#ffffff',
+                    color: leaveType === typeOption.key
+                      ? (typeOption.key === 'vacation' ? 'var(--accent)' : '#f59e0b')
+                      : 'var(--text-secondary)',
+                    border: `1px solid ${
+                      leaveType === typeOption.key
+                        ? (typeOption.key === 'vacation' ? 'var(--accent)' : 'rgba(245,158,11,0.3)')
+                        : '#d1d5db'
+                    }`,
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -258,9 +365,17 @@ export function LeaveRequestDrawer({ open, onClose, onSubmitted, initialStartDat
                       onClick={() => setLeaveDurationType(option.key)}
                       style={{
                         borderRadius: 8,
-                        border: `1px solid ${selected ? 'var(--primary)' : '#d1d5db'}`,
-                        background: '#ffffff',
-                        color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        border: `1px solid ${
+                          selected
+                            ? (option.key === 'full_day' ? 'var(--accent)' : '#8b5cf6')
+                            : '#d1d5db'
+                        }`,
+                        background: selected
+                          ? (option.key === 'full_day' ? 'var(--accent-light)' : 'rgba(139,92,246,0.08)')
+                          : '#ffffff',
+                        color: selected
+                          ? (option.key === 'full_day' ? 'var(--accent)' : '#8b5cf6')
+                          : 'var(--text-secondary)',
                         fontSize: 12,
                         fontWeight: 700,
                         padding: '10px 12px',

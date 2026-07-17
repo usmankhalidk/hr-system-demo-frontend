@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import { StatusBadge, ApprovalStepper } from './LeaveApprovalList';
 import { translateApiError } from '../../utils/apiErrors';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { listShifts, Shift } from '../../api/shifts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,6 +68,7 @@ const MAX_VISIBLE = 4;
 
 export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: (date: string) => void; onRefresh?: () => void }) {
   const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'it' ? 'it' : 'en';
   const { user } = useAuth();
   const { showToast } = useToast();
   const { isMobile, isTablet } = useBreakpoint();
@@ -82,6 +84,44 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
   const [rejectError, setRejectError] = useState<string | null>(null);
+  const [hoveredBlockKey, setHoveredBlockKey] = useState<string | null>(null);
+
+  const [shiftsForTarget, setShiftsForTarget] = useState<Shift[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [cancelShiftsChecked, setCancelShiftsChecked] = useState(true);
+
+  useEffect(() => {
+    if (!selectedRequest) {
+      setShiftsForTarget([]);
+      setCancelShiftsChecked(true);
+      return;
+    }
+
+    let active = true;
+    setShiftsLoading(true);
+    setShiftsForTarget([]);
+
+    listShifts({
+      user_id: selectedRequest.userId,
+      start_date: selectedRequest.startDate,
+      end_date: selectedRequest.endDate,
+    })
+      .then((res) => {
+        if (!active) return;
+        const activeShifts = res.shifts.filter((s) => s.status !== 'cancelled');
+        setShiftsForTarget(activeShifts);
+      })
+      .catch((err) => {
+        console.error('Error fetching shifts for leave calendar details:', err);
+      })
+      .finally(() => {
+        if (active) setShiftsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedRequest]);
 
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<number | 'all'>('all');
@@ -128,7 +168,7 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
   const handleApprove = async (req: LeaveRequest) => {
     setActionLoading(true);
     try {
-      await approveLeaveRequest(req.id);
+      await approveLeaveRequest(req.id, undefined, cancelShiftsChecked && shiftsForTarget.length > 0);
       showToast(t('leave.approved_success'), 'success');
       setSelectedRequest(null);
       fetchData();
@@ -295,13 +335,49 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
         display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
         flexWrap: 'wrap',
       }}>
-        <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft size={18} /></button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', textTransform: 'capitalize', minWidth: 160, textAlign: 'center' }}>
-          {monthLabel}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <button
+            onClick={prevMonth}
+            style={{
+              padding: '6px 8px', color: 'var(--text-primary)', borderRadius: 6,
+              background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center'
+            }}
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            minWidth: 130, textAlign: 'center', userSelect: 'none', padding: '0 4px',
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-display)', fontWeight: 700,
+              fontSize: 14, color: 'var(--primary)', lineHeight: 1.1,
+              textTransform: 'capitalize', whiteSpace: 'nowrap',
+            }}>
+              {monthLabel.split(' ')[0]}
+            </span>
+            <span style={{
+              fontSize: 10, color: 'var(--text-muted)', marginTop: 2,
+              fontWeight: 500, whiteSpace: 'nowrap',
+            }}>
+              {monthLabel.split(' ')[1] || new Date().getFullYear()}
+            </span>
+          </div>
+          <button
+            onClick={nextMonth}
+            style={{
+              padding: '6px 8px', color: 'var(--text-primary)', borderRadius: 6,
+              background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center'
+            }}
+          >
+            <ChevronRight size={18} />
+          </button>
         </div>
-        <button onClick={nextMonth} style={navBtnStyle}><ChevronRight size={18} /></button>
+
+        {!isMobile && <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0, margin: '0 12px' }} />}
+
         <button onClick={goToday} style={{
-          ...navBtnStyle, fontSize: 12, padding: '4px 12px', borderRadius: 8,
+          ...navBtnStyle, fontSize: 12, padding: '6px 14px', borderRadius: 8,
         }}>
           {t('common.today', 'Today')}
         </button>
@@ -362,7 +438,7 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
 
       {!loading && (
         <div style={{ padding: 0, overflowX: (isMobile || isTablet) ? 'visible' : 'auto' }}>
-          <div style={{ minWidth: (isMobile || isTablet) ? 'auto' : 1200 }}>
+          <div style={{ minWidth: '100%', width: '100%' }}>
             {/* Day headers */}
             {!isMobile && !isTablet && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 8 }}>
@@ -466,10 +542,18 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {dayReqs.slice(0, MAX_VISIBLE).map((req) => {
                         const isVacation = req.leaveType === 'vacation';
-                        const color = isVacation ? '#1e40af' : '#92400e';
-                        const bg = isVacation ? 'rgba(219,234,254,0.76)' : 'rgba(254,243,199,0.78)';
-                        const borderLeft = isVacation ? '#2563eb' : '#d97706';
-                        const border = isVacation ? 'rgba(37,99,235,0.22)' : 'rgba(217,119,6,0.22)';
+                        const normStatus = (req.status ?? '').toLowerCase().replace(/ /g, '_');
+                        const isApproved = normStatus === 'approved' || normStatus === 'admin_approved' || normStatus === 'hr_approved';
+                        const isPending = !isApproved && normStatus !== 'cancelled' && !normStatus.includes('rejected');
+
+                        const color = isVacation ? '#1e40af' : '#9a3412';
+                        const bg = isVacation
+                          ? (isPending ? 'rgba(219,234,254,0.5)' : 'rgba(219,234,254,0.8)')
+                          : (isPending ? 'rgba(255,237,213,0.5)' : 'rgba(255,237,213,0.8)');
+                        const borderLeft = isVacation
+                          ? (isPending ? 'rgba(37,99,235,0.45)' : '#2563eb')
+                          : (isPending ? 'rgba(234,88,12,0.45)' : '#ea580c');
+                        const border = isVacation ? 'rgba(37,99,235,0.18)' : 'rgba(234,88,12,0.18)';
                         const Icon = isVacation ? Palmtree : Thermometer;
 
                         return (
@@ -483,42 +567,94 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
                               display: 'flex',
                               alignItems: 'center',
                               gap: 6,
-                              borderRadius: 6,
-                              border: `1px solid ${border}`,
-                              borderLeftWidth: 5,
-                              borderLeftStyle: 'solid',
-                              borderLeftColor: borderLeft,
+                              borderRadius: 4,
+                              borderLeft: `3px solid ${borderLeft}`,
+                              borderTop: `1px solid ${border}`,
+                              borderRight: `1px solid ${border}`,
+                              borderBottom: `1px solid ${border}`,
                               background: bg,
                               color: color,
-                              padding: '3px 8px',
+                              padding: '4px 7px 4px 8px',
                               fontSize: '0.65rem',
                               fontWeight: 800,
-                              lineHeight: 1,
+                              lineHeight: 1.2,
                               position: 'relative',
-                              overflow: 'hidden',
                               cursor: 'pointer',
                               transition: 'transform 0.1s',
                             }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.02)';
+                              setHoveredBlockKey(`${req.id}-${dateStr}`);
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              setHoveredBlockKey(null);
+                            }}
                           >
                             <Icon size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                            <span style={{ whiteSpace: 'nowrap' }}>
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
                               {isVacation ? t('leave.type_vacation', 'Vacation') : t('leave.type_sick', 'Sick leave')}
                             </span>
 
                             <div style={{
                               marginLeft: 'auto',
-                              background: '#fff',
-                              padding: '1px 5px',
-                              borderRadius: 4,
+                              background: 'rgba(255,255,255,0.7)',
+                              padding: '1px 4px',
+                              borderRadius: 3,
                               fontSize: '0.55rem',
-                              fontWeight: 900,
+                              fontWeight: 700,
                               color: color,
-                              border: `1px solid ${border}`,
+                              lineHeight: 1.4,
                             }}>
-                              {formatCompactLeaveStatus(req.status, t)}
+                              {isApproved ? t('leave.approved_short', 'Appr.') : t('leave.pending_short', 'pend.')}
                             </div>
+
+                            {hoveredBlockKey === `${req.id}-${dateStr}` && (
+                              <div style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 4px)',
+                                left: 0,
+                                zIndex: 110,
+                                minWidth: 200,
+                                padding: 10,
+                                background: 'var(--surface)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 8,
+                                boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                                color: 'var(--text)',
+                                textAlign: 'left',
+                                textTransform: 'none',
+                                letterSpacing: 'normal',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 4,
+                                pointerEvents: 'none',
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 11 }}>
+                                  {req.userName} {req.userSurname}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                  {req.storeName ?? t('employees.noStore', 'No store')}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                  {req.leaveDurationType === 'short_leave'
+                                    ? `${new Date(req.startDate).toLocaleDateString(locale === 'it' ? 'it-IT' : 'en-GB')} · ${req.shortStartTime ?? '--:--'} - ${req.shortEndTime ?? '--:--'}`
+                                    : `${new Date(req.startDate).toLocaleDateString(locale === 'it' ? 'it-IT' : 'en-GB')} → ${new Date(req.endDate).toLocaleDateString(locale === 'it' ? 'it-IT' : 'en-GB')}`}
+                                </div>
+                                <div style={{ 
+                                  marginTop: 4,
+                                  fontSize: 9, 
+                                  fontWeight: 800, 
+                                  alignSelf: 'flex-start',
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  background: isApproved ? 'rgba(22,163,74,0.1)' : 'rgba(245,158,11,0.1)',
+                                  color: isApproved ? '#16a34a' : '#d97706'
+                                }}>
+                                  {req.status}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -764,6 +900,87 @@ export default function LeaveCalendar({ onDayClick, onRefresh }: { onDayClick?: 
                 </div>
                 <ApprovalStepper req={selectedRequest} />
               </div>
+
+              {/* Existing Shifts Checklist */}
+              {canAct(selectedRequest) && (
+                <div style={{ marginTop: 20, marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.5px' }}>
+                    {t('leave.shifts_to_cancel_title', 'Turni in questo periodo')}
+                  </div>
+                  {shiftsLoading ? (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0', textAlign: 'center' }}>
+                      {t('leave.loading_shifts', 'Caricamento turni...')}
+                    </div>
+                  ) : shiftsForTarget.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px', background: 'var(--surface-warm)', border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center' }}>
+                      {t('leave.no_shifts_for_period', 'Nessun turno in questo periodo')}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 120, overflowY: 'auto', paddingRight: 4, marginBottom: 12 }}>
+                      {shiftsForTarget.map((shift) => {
+                        const isConfirmed = shift.status === 'confirmed';
+                        return (
+                          <div key={shift.id} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '6px 10px',
+                            background: 'var(--surface-warm)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontWeight: 700 }}>{new Date(shift.date).toLocaleDateString(locale === 'it' ? 'it-IT' : 'en-GB')}</span>
+                              <span style={{ color: 'var(--text-muted)' }}>
+                                ({shift.startTime.substring(0, 5)} - {shift.endTime.substring(0, 5)})
+                              </span>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{shift.storeName}</span>
+                            </div>
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: isConfirmed ? 'rgba(22,163,74,0.1)' : 'rgba(245,158,11,0.1)',
+                              color: isConfirmed ? '#16a34a' : '#d97706',
+                            }}>
+                              {isConfirmed ? t('shifts.status_confirmed', 'Confermato') : t('shifts.status_scheduled', 'Programmato')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {shiftsForTarget.length > 0 && (
+                    <div style={{
+                      background: 'rgba(245,158,11,0.06)',
+                      border: '1px solid rgba(245,158,11,0.2)',
+                      borderRadius: 10,
+                      padding: 12,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={cancelShiftsChecked}
+                          onChange={(e) => setCancelShiftsChecked(e.target.checked)}
+                          style={{ marginTop: 2, accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                          {t('leave.cancel_shifts_checkbox', 'Annulla i turni programmati e confermati')}
+                        </span>
+                      </label>
+                      <p style={{ margin: 0, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                        {t('leave.cancel_shifts_guide', 'Se abilitato, l\'approvazione del permesso annullerà automaticamente i turni mostrati sopra e ne sottrarrà le ore dal riepilogo.')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {canAct(selectedRequest) && (
                 <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>

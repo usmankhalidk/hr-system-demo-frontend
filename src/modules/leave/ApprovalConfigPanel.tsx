@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getApprovalConfig, updateApprovalConfig, ApprovalLevel } from '../../api/leave';
 import { useAuth } from '../../context/AuthContext';
+import { Company } from '../../types';
+import { getCompanies } from '../../api/companies';
 
 const ROLE_LABELS: Record<string, { en: string; it: string }> = {
   store_manager: { en: 'Store Manager', it: 'Store Manager' },
@@ -28,21 +30,31 @@ export default function ApprovalConfigPanel() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const companyId = user?.companyId;
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | undefined>(user?.companyId ?? undefined);
+
   const isAdmin = user?.role === 'admin' || user?.isSuperAdmin;
+
+  useEffect(() => {
+    if (user?.isSuperAdmin) {
+      getCompanies()
+        .then((data) => setCompanies(data))
+        .catch(() => {});
+    }
+  }, [user]);
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getApprovalConfig(companyId ?? undefined);
+      const data = await getApprovalConfig(selectedCompanyId);
       setLevels(data.map(l => l.role === 'admin' ? { ...l, enabled: true } : l));
     } catch {
       setError(t('common.error'));
     } finally {
       setLoading(false);
     }
-  }, [companyId, t]);
+  }, [selectedCompanyId, t]);
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
@@ -54,7 +66,7 @@ export default function ApprovalConfigPanel() {
   };
 
   const handleSave = async () => {
-    if (!companyId) return;
+    if (!selectedCompanyId) return;
     const enabledCount = levels.filter((l) => l.enabled).length;
     if (enabledCount === 0) {
       setError(t('leave.approval_config_min_one'));
@@ -69,7 +81,7 @@ export default function ApprovalConfigPanel() {
         enabled: l.role === 'admin' ? true : l.enabled,
         sort_order: l.sortOrder,
       }));
-      const updated = await updateApprovalConfig(companyId, payload);
+      const updated = await updateApprovalConfig(selectedCompanyId, payload);
       setLevels(updated.map(l => l.role === 'admin' ? { ...l, enabled: true } : l));
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -109,13 +121,45 @@ export default function ApprovalConfigPanel() {
           padding: '16px 20px',
           borderBottom: '1px solid var(--border)',
           background: 'var(--surface-warm)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
         }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-            {t('leave.approval_config_title')}
-          </h3>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-            {t('leave.approval_config_desc')}
-          </p>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+              {t('leave.approval_config_title')}
+            </h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('leave.approval_config_desc')}
+            </p>
+          </div>
+          {user?.isSuperAdmin && companies.length > 0 && (
+            <div>
+              <select
+                value={selectedCompanyId ?? ''}
+                onChange={(e) => setSelectedCompanyId(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: '1.5px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  fontSize: 13,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Levels */}
@@ -180,42 +224,121 @@ export default function ApprovalConfigPanel() {
         {/* Flow preview */}
         {enabledLevels.length > 0 && (
           <div style={{
-            padding: '12px 20px',
+            padding: '24px 20px',
             borderTop: '1px solid var(--border)',
             background: 'var(--surface-warm)',
+            width: '100%',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
-              {t('leave.approval_flow_preview')}
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 20 }}>
+              {t('leave.approval_flow_preview', 'Anteprima del Flusso di Approvazione')}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{
-                padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                background: 'rgba(107,114,128,0.1)', color: '#6b7280',
-              }}>
-                {t('leave.employee_request')}
-              </span>
-              {enabledLevels.map((l) => {
-                const color = ROLE_COLORS[l.role] ?? '#64748b';
-                const label = ROLE_LABELS[l.role]?.[lang] ?? l.role;
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', paddingLeft: 12 }}>
+              {/* Vertical line connector */}
+              <div style={{
+                position: 'absolute',
+                left: 25,
+                top: 15,
+                bottom: 15,
+                width: 2,
+                background: 'linear-gradient(to bottom, #d1d5db, var(--accent))',
+              }} />
+
+              {/* Step 1: Submission */}
+              <div style={{ display: 'flex', gap: 16, zIndex: 1, position: 'relative' }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: '#fff', border: '2px solid #b68c56',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 800, color: '#b68c56', flexShrink: 0,
+                  boxShadow: 'var(--shadow-sm)',
+                }}>
+                  1
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {t('leave.flow_step1_title', '1. Richiesta Iniziale del Dipendente')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+                    {t('leave.flow_step1_desc', "L'utente richiede il permesso. La richiesta viene registrata con data/ora e la disponibilità del saldo viene verificata. L'applicazione è consentita solo in caso di saldo residuo sufficiente.")}
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic steps from config */}
+              {enabledLevels.map((level, idx) => {
+                const color = ROLE_COLORS[level.role] ?? '#64748b';
+                const label = ROLE_LABELS[level.role]?.[lang] ?? level.role;
+                
+                let stepTitle = '';
+                let stepDesc = '';
+                
+                if (level.role === 'store_manager') {
+                  stepTitle = t('leave.flow_sm_title', 'Approvazione Store Manager');
+                  stepDesc = t('leave.flow_sm_desc', 'Se questa fase è abilitata, la richiesta passa al Store Manager del punto vendita. Se il responsabile è in ferie o assente, lo step viene saltato automaticamente ed escalato. In caso di mancata approvazione entro i limiti di tempo, la richiesta passa alla fase successiva.');
+                } else if (level.role === 'area_manager') {
+                  stepTitle = t('leave.flow_am_title', 'Approvazione Area Manager');
+                  stepDesc = t('leave.flow_am_desc', "Se abilitata, la richiesta passa all'Area Manager. Se non viene approvata entro i limiti di tempo, la richiesta scala automaticamente al livello superiore.");
+                } else if (level.role === 'hr') {
+                  stepTitle = t('leave.flow_hr_title', 'Approvazione HR (Risorse Umane)');
+                  stepDesc = t('leave.flow_hr_desc', "Se abilitata, la richiesta passa al reparto Risorse Umane. L'approvazione decrementa il saldo ferie/permessi del dipendente e cancella automaticamente i turni schedulati.");
+                } else if (level.role === 'admin') {
+                  stepTitle = t('leave.flow_admin_title', 'Approvazione Finale Amministratore');
+                  stepDesc = t('leave.flow_admin_desc', "Se abilitata (sempre attiva come ultimo livello), l'Amministratore concede l'approvazione finale. La richiesta è ufficialmente completata.");
+                }
+
                 return (
-                  <span key={l.role} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ color: 'var(--text-disabled)', fontSize: 13 }}>&rarr;</span>
-                    <span style={{
-                      padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                      background: `${color}14`, color,
+                  <div key={level.role} style={{ display: 'flex', gap: 16, zIndex: 1, position: 'relative' }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%',
+                      background: '#fff', border: `2px solid ${color}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 800, color: color, flexShrink: 0,
+                      boxShadow: 'var(--shadow-sm)',
                     }}>
-                      {label}
-                    </span>
-                  </span>
+                      {idx + 2}
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {idx + 2}. {stepTitle}
+                        </span>
+                        <span style={{
+                          padding: '1px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700,
+                          background: `${color}14`, color: color, border: `1px solid ${color}24`,
+                          textTransform: 'uppercase', letterSpacing: '0.5px'
+                        }}>
+                          {label}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+                        {stepDesc}
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
-              <span style={{ color: 'var(--text-disabled)', fontSize: 13 }}>&rarr;</span>
-              <span style={{
-                padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                background: 'rgba(22,163,74,0.1)', color: '#16a34a',
-              }}>
-                {t('leave.approved_label')}
-              </span>
+
+              {/* Step Final: Completion */}
+              <div style={{ display: 'flex', gap: 16, zIndex: 1, position: 'relative' }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: '#fff', border: '2px solid #16a34a',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 800, color: '#16a34a', flexShrink: 0,
+                  boxShadow: 'var(--shadow-sm)',
+                }}>
+                  {enabledLevels.length + 2}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {enabledLevels.length + 2}. {t('leave.flow_final_title', 'Approvazione Completata')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+                    {t('leave.flow_final_desc', "La richiesta è ufficialmente approvata. Il saldo viene decrementato definitivamente e lo stato dell'utente viene aggiornato in 'In Ferie' o 'In Permesso'.")}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
