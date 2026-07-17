@@ -50,12 +50,23 @@ export interface LeaveRequest {
   approvedByRoles?: string[] | null;
   escalated?: boolean;
   isEmergencyOverride?: boolean;
+  isArchived?: boolean;
   lastActionAt?: string | null;
   latestAction?: 'approved' | 'rejected' | null;
   latestActionAt?: string | null;
   latestActionByName?: string | null;
   latestActionBySurname?: string | null;
   latestActionByRole?: string | null;
+  approvals_history?: ApprovalHistoryEntry[] | null;
+}
+
+export interface ApprovalHistoryEntry {
+  role: string;
+  action: 'approved' | 'rejected' | 'escalated';
+  createdAt: string;
+  notes: string | null;
+  approverName: string | null;
+  approverSurname: string | null;
 }
 
 export interface LeaveBalance {
@@ -88,6 +99,7 @@ export interface LeaveListParams {
   dateFrom?: string;
   dateTo?: string;
   storeId?: number;
+  archived?: boolean;
   page?: number;
   limit?: number;
 }
@@ -331,4 +343,10 @@ export async function updateApprovalConfig(
     levels,
   });
   return data.data as ApprovalLevel[];
+}
+
+/** Archive a leave request (Admin/HR only). */
+export async function archiveLeaveRequest(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.put(`/leave/${id}/archive`);
+  return data.data;
 }

@@ -278,9 +278,19 @@ export default function TerminalList() {
       {/* Top action row */}
       <div style={{
         display: 'flex',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '12px',
       }}>
+        <div>
+          <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: 'var(--primary)', margin: 0 }}>
+            {t('terminals.title', 'Store Terminals')}
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+            {t('terminals.subtitle', 'Management and monitoring of fixed QR terminals')}
+          </p>
+        </div>
         {(isAdminOrHr || isSuperAdmin) && (
           <Button
             onClick={() => handleOpenForm(null)}

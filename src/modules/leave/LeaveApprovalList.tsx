@@ -11,43 +11,74 @@ import { translateApiError } from '../../utils/apiErrors';
 // Status badge
 // ---------------------------------------------------------------------------
 
-const STATUS_COLORS: Record<LeaveStatus, { bg: string; color: string }> = {
-  pending:                         { bg: 'rgba(107,114,128,0.12)', color: 'var(--text-muted)' },
-  'store manager approved':        { bg: 'var(--info-bg)',          color: 'var(--info)' },
-  'store manager rejected':        { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
-  'area manager approved':         { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6' },
-  'area manager rejected':         { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
-  'HR approved':                   { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6' },
-  'HR rejected':                   { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
-  approved:                        { bg: 'var(--accent-light)',     color: 'var(--accent)' },
-  rejected:                        { bg: 'var(--danger-bg)',        color: 'var(--danger)' },
-  cancelled:                       { bg: 'rgba(0,0,0,0.05)',        color: 'var(--text-muted)' },
-  admin_approved:                  { bg: 'var(--accent-light)',     color: 'var(--accent)' },
-  'admin approved':                { bg: 'var(--accent-light)',     color: 'var(--accent)' },
+const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  pending:                         { bg: 'rgba(107,114,128,0.06)', color: 'var(--text-muted)' },
+  'store manager approved':        { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  store_manager_approved:          { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  'store manager rejected':        { bg: 'rgba(220,38,38,0.06)',   color: 'var(--danger)' },
+  store_manager_rejected:          { bg: 'rgba(220,38,38,0.06)',   color: 'var(--danger)' },
+  'area manager approved':         { bg: 'rgba(139,92,246,0.06)',  color: '#8b5cf6' },
+  area_manager_approved:           { bg: 'rgba(139,92,246,0.06)',  color: '#8b5cf6' },
+  'area manager rejected':         { bg: 'rgba(220,38,38,0.06)',   color: 'var(--danger)' },
+  area_manager_rejected:           { bg: 'rgba(220,38,38,0.06)',   color: 'var(--danger)' },
+  'HR approved':                   { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  hr_approved:                     { bg: 'rgba(59,130,246,0.06)',  color: '#3b82f6' },
+  'HR rejected':                   { bg: 'rgba(220,38,38,0.06)',   color: 'var(--danger)' },
+  hr_rejected:                     { bg: 'rgba(220,38,38,0.06)',   color: 'var(--danger)' },
+  approved:                        { bg: 'rgba(22,163,74,0.06)',   color: 'var(--accent)' },
+  rejected:                        { bg: 'rgba(220,38,38,0.06)',   color: 'var(--danger)' },
+  cancelled:                       { bg: 'rgba(0,0,0,0.04)',       color: 'var(--text-muted)' },
+  admin_approved:                  { bg: 'rgba(22,163,74,0.06)',   color: 'var(--accent)' },
+  'admin approved':                { bg: 'rgba(22,163,74,0.06)',   color: 'var(--accent)' },
 };
 
 export function StatusBadge({ req }: { req: LeaveRequest }) {
   const { t } = useTranslation();
-  const { status } = req;
-  const { bg, color } = STATUS_COLORS[status] ?? STATUS_COLORS.pending;
-  
-  let content = t(`leave.status_${status.toLowerCase().replace(/ /g, '_')}`);
-  if (status.includes('rejected') || status === 'rejected') {
-    const roleText = req.latestActionByRole ? t(`leave.approver_${req.latestActionByRole}`) : '';
-    const nameText = req.latestActionByName ? `${req.latestActionByName}` : '';
-    const rejector = roleText && nameText ? `${roleText} - ${nameText}` : (roleText || nameText || '');
-    if (rejector) {
-      content = `${t('leave.status_rejected')} - ${rejector}`;
+  const status = req.status;
+  const normalized = (status ?? '').toLowerCase().replace(/ /g, '_');
+  const latestActionRole = req.latestActionByRole;
+  const isAuto = req.escalated === true || latestActionRole === 'system';
+
+  let label = 'PENDING';
+  let bg = 'rgba(107,114,128,0.06)'; // default gray
+  let color = '#6b7280';
+
+  if (normalized === 'cancelled') {
+    label = 'CANCELLED';
+    bg = 'rgba(107,114,128,0.06)';
+    color = '#6b7280';
+  } else if (normalized.includes('rejected') || normalized === 'rejected') {
+    label = 'REJECTED';
+    bg = 'rgba(220,38,38,0.06)';
+    color = '#dc2626'; // red
+  } else if (normalized === 'hr_approved' || normalized === 'approved' || normalized === 'admin_approved') {
+    label = 'APPROVED';
+    bg = 'rgba(22,163,74,0.06)';
+    color = '#16a34a'; // green
+  } else {
+    // It is pending!
+    label = 'PENDING';
+    if (normalized === 'pending') {
+      bg = 'rgba(107,114,128,0.06)';
+      color = '#6b7280'; // gray
+    } else if (isAuto) {
+      bg = 'rgba(245,158,11,0.06)';
+      color = '#d97706'; // yellow/amber
+    } else {
+      bg = 'rgba(59,130,246,0.06)';
+      color = '#3b82f6'; // blue
     }
   }
 
   return (
     <span style={{
-      display: 'inline-block', padding: '2px 10px', borderRadius: 20,
-      fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
-      background: bg, color, textTransform: 'uppercase',
+      display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20,
+      fontSize: 11, fontWeight: 700, letterSpacing: '0.5px',
+      background: bg, color: color,
+      border: `1px solid ${color}30`,
+      textTransform: 'uppercase', whiteSpace: 'nowrap',
     }}>
-      {content}
+      {label}
     </span>
   );
 }
@@ -77,21 +108,32 @@ function XIcon() {
 
 export function ApprovalStepper({ req }: { req: LeaveRequest }) {
   const { currentApproverRole, status, skippedApprovers, onLeaveSkippedApprovers, escalated, isEmergencyOverride } = req;
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'it' ? 'it' : 'en';
+
+  const fmtDateTime = (isoString: string) => {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleString(locale === 'it' ? 'it-IT' : 'en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const isRejected = status === 'rejected';
 
-  function stepState(stepRole: ChainStep): 'completed' | 'current' | 'pending' | 'rejected' {
-    // 1. Check if this specific role rejected the request
-    const isRejectedByThisRole = (status === 'rejected' || status.includes('rejected')) && req.latestActionByRole === stepRole;
+  function stepState(step: ChainStep): 'completed' | 'current' | 'pending' | 'rejected' {
+    const isRejectedByThisRole = (status === 'rejected' || status.includes('rejected')) && req.latestActionByRole === step;
     if (isRejectedByThisRole) return 'rejected';
 
-    // 2. Check if this specific role approved the request
-    const isApprovedByThisRole = req.approvedByRoles?.includes(stepRole);
+    const isApprovedByThisRole = req.approvedByRoles?.includes(step);
     if (isApprovedByThisRole) return 'completed';
 
-    // 3. If the request is still in progress, mark the current active step
     const isTerminalState = status === 'approved' || status === 'rejected' || status === 'cancelled' || status.includes('rejected');
-    if (!isTerminalState && currentApproverRole === stepRole) {
+    if (!isTerminalState && currentApproverRole === step) {
       return 'current';
     }
 
@@ -111,7 +153,7 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
         {activeChainSteps.map((step, idx) => {
-          const state = stepState(step);
+          const state = stepState(step as ChainStep);
           const isCompleted = state === 'completed';
           const isCurrent   = state === 'current';
           const isRejectedState = state === 'rejected';
@@ -132,6 +174,15 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
           const nextState = idx < activeChainSteps.length - 1 ? stepState(activeChainSteps[idx + 1] as ChainStep) : 'pending';
           const lineBackground   = nextState === 'pending' || nextState === 'rejected' ? 'var(--border)' : 'var(--accent)';
 
+          const approvalEntry = (req.approvals_history || []).find(h =>
+            h.role === step ||
+            (h.role === 'system' && h.notes?.toLowerCase().includes(step.toLowerCase()))
+          );
+          const isAuto = approvalEntry?.action === 'escalated' || (escalated && step === currentApproverRole);
+          const approvalTime = approvalEntry?.createdAt
+            ? fmtDateTime(approvalEntry.createdAt)
+            : (isCompleted && req.lastActionAt && req.latestActionByRole === step ? fmtDateTime(req.lastActionAt) : null);
+
           return (
             <React.Fragment key={step}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64, position: 'relative' }}>
@@ -148,9 +199,24 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{idx + 1}</span>
                   )}
                 </div>
-                {/* Escalated marker */}
-                {isCurrent && escalated && (
-                  <div style={{ position: 'absolute', top: -4, right: 12, background: 'var(--danger)', color: '#fff', fontSize: 9, padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>
+                
+                {/* Escalated / Auto marker */}
+                {isAuto && (
+                  <div style={{
+                    position: 'absolute',
+                    top: -12,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 7.5,
+                    padding: '2px 5px',
+                    borderRadius: 4,
+                    fontWeight: 900,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 4px rgba(239,68,68,0.3)',
+                    zIndex: 10,
+                  }}>
                     AUTO
                   </div>
                 )}
@@ -164,6 +230,11 @@ export function ApprovalStepper({ req }: { req: LeaveRequest }) {
                   {isOnLeaveSkipped && (
                     <div style={{ color: 'var(--danger)', marginTop: 2, fontSize: 8, fontWeight: 800 }}>
                       {t('leave.stepper_leave', 'LEAVE')}
+                    </div>
+                  )}
+                  {approvalTime && (
+                    <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 2, textTransform: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                      {approvalTime}
                     </div>
                   )}
                 </div>

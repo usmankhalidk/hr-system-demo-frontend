@@ -75,7 +75,33 @@ export function LeaveBalanceCard({ balances, loading }: Props) {
       {loading ? (
         <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{t('common.loading')}</div>
       ) : balances.length === 0 ? (
-        <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{t('leave.no_balance')}</div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          padding: '16px 20px',
+          background: 'var(--surface-warm)',
+          borderRadius: 8,
+          border: '1.5px dashed var(--border)',
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'rgba(245,158,11,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, flexShrink: 0,
+            border: '1px solid rgba(245,158,11,0.25)',
+          }}>
+            ⚠️
+          </div>
+          <div>
+            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {t('leave.no_balance_configured_title', 'Saldo Non Configurato')}
+            </h4>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              {t('leave.no_balance_configured_desc', "Non è stato ancora configurato un saldo ferie/permessi per quest'anno. Si prega di contattare le Risorse Umane (HR) della propria azienda per l'allocazione dei giorni spettanti.")}
+            </p>
+          </div>
+        </div>
       ) : (
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {balances.map((b) => (
