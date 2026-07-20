@@ -757,6 +757,36 @@ export default function AnomaliesPage() {
                   </div>
                 </div>
 
+                {/* Timezone Sync */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', paddingTop: 8, borderTop: '1px dashed var(--border)' }}>
+                  <span style={{ background: 'rgba(14, 165, 233, 0.1)', color: '#0EA5E9', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Clock size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {t('attendance.info_timezone_title', 'Sincronizzazione Fuso Orario del Negozio')}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_timezone_desc', 'Tutti i turni pianificati e le timbrature vengono normalizzati al fuso orario locale del negozio (es. Europe/Rome), garantendo una coerenza al 100% con il Registro Presenze.')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Severity */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <AlertTriangle size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {t('attendance.info_severity_title', 'Calcolo Livello di Gravità')}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_severity_desc', 'Gravità Alta per assenze critiche (No Show, Mancata Uscita) o scostamenti > 30 minuti. Gravità Media per ritardi o uscite anticipate lievi (10–30 min).')}
+                    </p>
+                  </div>
+                </div>
+
               </div>
             </div>
 
