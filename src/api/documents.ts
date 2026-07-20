@@ -198,15 +198,18 @@ export async function uploadDocumentUnified(
     expiresAt?: string | null;
     visibleToRoles?: string[];
     employeeId?: number | null;
+    companyId?: number | null;
   }
 ): Promise<any> {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('extract_zip', 'false');
   if (options?.categoryId != null) formData.append('category_id', String(options.categoryId));
   if (options?.requiresSignature) formData.append('requires_signature', 'true');
   if (options?.expiresAt) formData.append('expires_at', options.expiresAt);
   if (options?.visibleToRoles) formData.append('visible_to_roles', JSON.stringify(options.visibleToRoles));
   if (options?.employeeId != null) formData.append('employee_id', String(options.employeeId));
+  if (options?.companyId != null) formData.append('company_id', String(options.companyId));
 
   const { data } = await apiClient.post('/documents/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

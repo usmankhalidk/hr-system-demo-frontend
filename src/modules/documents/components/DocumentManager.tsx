@@ -62,17 +62,22 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const isEmployee = user?.role === 'employee';
   const isStoreManager = user?.role === 'store_manager';
 
-  const showTeamTab = !isEmployee && !employeeId && permissions?.team_documents === true;
+  const showTeamTab = !isEmployee && !isStoreManager && !employeeId && permissions?.team_documents === true;
 
   const docs = showTeamTab
     ? (activeTab === 'my' ? myDocs : teamDocs)
     : myDocs;
 
   useEffect(() => {
-    if (permissions && permissions.team_documents === false && activeTab === 'team') {
+    if ((isStoreManager || (permissions && permissions.team_documents === false)) && activeTab === 'team') {
       setActiveTab('my');
     }
-  }, [permissions, activeTab]);
+  }, [permissions, activeTab, isStoreManager]);
+
+  const tRef = React.useRef(t);
+  tRef.current = t;
+  const showToastRef = React.useRef(showToast);
+  showToastRef.current = showToast;
 
   const load = useCallback(async () => {
     if (authLoading) return;
@@ -102,7 +107,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       let fetchedMy: EmployeeDocument[] = [];
       let fetchedTeam: EmployeeDocument[] = [];
 
-      const hasTeamPerm = permissions?.team_documents === true;
+      const hasTeamPerm = permissions?.team_documents === true && !isStoreManager;
 
       if (view === 'trash') {
         if (!isEmployee && !employeeId) {
@@ -141,11 +146,19 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       setTeamDocs(fetchedTeam);
     } catch (err) {
       console.error('Error loading documents:', err);
-      showToast(t('documents.errorLoad'), 'error');
+      showToastRef.current(tRef.current('documents.errorLoad'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [employeeId, isEmployee, view, t, showToast, authLoading, user, permissions]);
+  }, [
+    employeeId,
+    isEmployee,
+    isStoreManager,
+    user?.companyId,
+    view,
+    permissions?.team_documents,
+    authLoading
+  ]);
 
   useEffect(() => {
     load();
@@ -398,14 +411,14 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                 {search.trim() && !selectedCompanyId && !employeeId ? t('documents.searchResults', 'Search Results') :
                   employeeId ? `${t('documents.title', 'Documents')} - ${employeeName}` :
                     isEmployee ? t('documents.myDocuments', 'My Documents') :
-                      isStoreManager ? t('documents.storeDocuments', 'Store Documents') :
+                      isStoreManager ? t('documents.myDocuments', 'My Documents') :
                         `${getCompanyName(selectedCompanyId)}`}
               </h3>
               <p style={{ margin: '8px 0 0 0', fontSize: isMobile ? 12 : 14, color: 'var(--text-muted)', fontWeight: 600 }}>
                 {search.trim() && !selectedCompanyId && !employeeId ? t('documents.searchResultsDesc', 'Showing matches from all accessible companies') :
                   employeeId ? t('documents.personalDocsDesc', 'Viewing personal and payroll documents') :
                     isEmployee ? t('documents.myDocsDesc', 'Your personal documents and salary records') :
-                      isStoreManager ? t('documents.storeDocsDesc', 'Documents for your store and employees') :
+                      isStoreManager ? t('documents.myDocsDescSM', 'Your personal documents') :
                         t('documents.companyViewDesc', 'Viewing all documents associated with this company')}
               </p>
             </div>
@@ -499,14 +512,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           <div style={{ padding: '0 12px 12px 12px' }}>
             {loading ? (
               <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>{t('common.loading')}</div>
-            ) : isStoreManager && !user?.storeId ? (
-              <div style={{ padding: 60, textAlign: 'center', color: '#DC2626', fontWeight: 600 }}>
-                {t('documents.noStoreAssigned', 'No store assigned to your profile')}
-              </div>
             ) : filteredDocs.length === 0 ? (
               <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>
                 {isEmployee ? t('documents.noDocsEmployee', 'No documents available') :
-                  isStoreManager ? t('documents.noDocsStore', 'No documents available for this store') :
+                  isStoreManager ? t('documents.noDocsStoreSM', 'No documents available for you') :
                     t('documents.noDocs', 'No documents found')}
               </div>
             ) : (

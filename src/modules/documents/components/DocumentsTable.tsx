@@ -444,7 +444,34 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
       <ModalBackdrop onClose={closePreview} width={800}>
         <ModalHeader title={previewDocName} onClose={closePreview} />
         <div style={{ width: '100%', height: '75vh', background: 'var(--background)', borderRadius: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {previewDocMimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].some(ext => previewDocName.toLowerCase().endsWith(`.${ext}`)) ? (
+          {['zip', 'rar', '7z'].some(ext => previewDocName.toLowerCase().endsWith(`.${ext}`)) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32, textAlign: 'center' }}>
+              <div style={{ fontSize: 48 }}>📦</div>
+              <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                {t('documents.previewArchiveTitle', 'Archive preview is not supported')}
+              </h4>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 400 }}>
+                {t('documents.previewArchiveText', 'To view the contents of this archive, please download and extract the file.')}
+              </p>
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = previewDocUrl;
+                  link.setAttribute('download', previewDocName);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                }}
+                style={{
+                  padding: '10px 20px', borderRadius: 8, border: 'none', background: 'var(--primary)',
+                  color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
+                  boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
+                }}
+              >
+                {t('documents.download', 'Download')}
+              </button>
+            </div>
+          ) : previewDocMimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].some(ext => previewDocName.toLowerCase().endsWith(`.${ext}`)) ? (
             <img 
               src={previewDocUrl} 
               style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
