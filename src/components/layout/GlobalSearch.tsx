@@ -248,9 +248,12 @@ export const GlobalSearch: React.FC = () => {
         navigate(`/hr-chat?recipientId=${peerId}&recipientName=${encodeURIComponent(peerName)}&subject=${encodeURIComponent(item.data.subject)}`);
         break;
       }
-      case 'document':
-        navigate(`/documenti?search=${encodeURIComponent(item.label)}`);
+      case 'document': {
+        const lastDot = item.label.lastIndexOf('.');
+        const query = lastDot !== -1 ? item.label.substring(0, lastDot) : item.label;
+        navigate(`/documenti?search=${encodeURIComponent(query)}`);
         break;
+      }
       default:
         break;
     }

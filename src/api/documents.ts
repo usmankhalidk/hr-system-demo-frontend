@@ -30,6 +30,8 @@ export interface EmployeeDocument {
   categoryName?: string | null;
   sourceTable?: 'documents' | 'employee_documents';
   employeeName?: string;
+  employeeSurname?: string;
+  title?: string;
 }
 
 export interface BulkUploadResult {

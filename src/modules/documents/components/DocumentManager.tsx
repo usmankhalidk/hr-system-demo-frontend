@@ -181,8 +181,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       if (Number(d.companyId) !== selectedCompanyId) return false;
     }
     const term = search.toLowerCase();
-    const name = (d.fileName || '').toLowerCase();
-    const emp = (d.employeeName || '').toLowerCase();
+    const name = (d.fileName || d.title || '').toLowerCase();
+    const emp = `${d.employeeName || ''} ${d.employeeSurname || ''}`.toLowerCase();
     return name.includes(term) || emp.includes(term);
   });
 
@@ -193,13 +193,23 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       }
       if (search.trim()) {
         const term = search.toLowerCase();
-        const name = (d.fileName || '').toLowerCase();
-        const emp = (d.employeeName || '').toLowerCase();
+        const name = (d.fileName || d.title || '').toLowerCase();
+        const emp = `${d.employeeName || ''} ${d.employeeSurname || ''}`.toLowerCase();
         return name.includes(term) || emp.includes(term);
       }
       return true;
     }).length;
   };
+
+  useEffect(() => {
+    if (search.trim() && showTeamTab && activeTab === 'my') {
+      const myCount = getFilteredCount(myDocs);
+      const teamCount = getFilteredCount(teamDocs);
+      if (myCount === 0 && teamCount > 0) {
+        setActiveTab('team');
+      }
+    }
+  }, [search, myDocs, teamDocs, showTeamTab, activeTab, selectedCompanyId]);
 
   const getCompanyName = (compId: number | null) => {
     if (!compId) return '';
