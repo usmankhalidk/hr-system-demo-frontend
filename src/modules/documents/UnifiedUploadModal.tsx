@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { uploadDocumentUnified, updateDocumentGeneric } from '../../api/documents';
+import { uploadDocumentUnified, updateDocumentGeneric, deleteDocument } from '../../api/documents';
 import { getEmployees } from '../../api/employees';
-import { Employee } from '../../types';
+import { Employee, Company } from '../../types';
 import { createPortal } from 'react-dom';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import CustomSelect from '../../components/ui/CustomSelect';
+import { getCompanies } from '../../api/companies';
+import { ModalBackdrop, ModalHeader } from './components/DocUtils';
 
 // ── Components & Icons ──
 
@@ -46,10 +49,11 @@ const modalOverlayStyle: React.CSSProperties = {
 
 const modalContentStyle: React.CSSProperties = {
   background: 'var(--surface)', borderRadius: 16, padding: 0,
-  width: '100%', maxWidth: 650, maxHeight: '90vh', overflow: 'hidden',
+  width: '100%', maxHeight: '90vh', overflow: 'hidden',
   boxShadow: '0 24px 60px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column',
   animation: 'popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-  margin: '0 16px'
+  margin: '0 16px',
+  transition: 'max-width 0.25s ease-in-out'
 };
 
 const inputStyle: React.CSSProperties = {
@@ -71,8 +75,13 @@ interface UploadFileItem {
   requiresSignature: boolean;
   expiresAt: string;
   visibility: 'everyone' | 'hr';
+  companyId: number | null;
   useGlobal: boolean;
   expanded?: boolean;
+  uploaded?: boolean;
+  documentId?: number;
+  matched?: boolean;
+  matchedEmployee?: any;
 }
 
 interface UnmatchedItem {
@@ -81,6 +90,20 @@ interface UnmatchedItem {
   editableTitle: string;
   fileExtension: string;
   manualEmployeeId: number | null;
+  companyId: number | null;
+}
+
+interface UploadedDocDetail {
+  documentId: number;
+  fileName: string;
+  requiresSignature: boolean;
+  expiresAt: string;
+  visibility: 'everyone' | 'hr';
+  companyId: number | null;
+  companyName: string;
+  assignedEmployeeId: number | null;
+  assignedEmployeeName: string;
+  fileObject: File;
 }
 
 interface Props {
@@ -93,10 +116,10 @@ interface Props {
 export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targetEmployeeId, targetEmployeeName }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { user, allowedCompanyIds = [] } = useAuth();
   const { isMobile } = useBreakpoint();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [files, setFiles] = useState<UploadFileItem[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -104,22 +127,76 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   const [globalRequiresSignature, setGlobalRequiresSignature] = useState(false);
   const [globalExpiresAt, setGlobalExpiresAt] = useState('');
   const [globalVisibility, setGlobalVisibility] = useState<'everyone' | 'hr'>('everyone');
+  const [globalCompanyId, setGlobalCompanyId] = useState<number | null>(null);
 
   // Manual Assignment (Step 3)
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmps, setLoadingEmps] = useState(false);
   const [unmatchedDocs, setUnmatchedDocs] = useState<UnmatchedItem[]>([]);
 
+  // Companies List
+  const [companies, setCompanies] = useState<Company[]>([]);
+
+  // Uploaded Docs List (Step 4)
+  const [uploadedDocs, setUploadedDocs] = useState<UploadedDocDetail[]>([]);
+  const [hoveredDocId, setHoveredDocId] = useState<number | null>(null);
+
+  // Preview Modal States (Stable URLs, no blinking)
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [previewDocName, setPreviewDocName] = useState<string>('');
+  const [previewDocMimeType, setPreviewDocMimeType] = useState<string>('');
+
+  const isConfirmedRef = useRef(false);
+  const uploadedDocsRef = useRef(uploadedDocs);
+
   const isHrOrAdmin = user && ['admin', 'hr'].includes(user.role);
 
-  // Pre-load employees
+  // Keep ref in sync
+  useEffect(() => {
+    uploadedDocsRef.current = uploadedDocs;
+  }, [uploadedDocs]);
+
+  // Clean up any uploaded but unconfirmed documents on unmount
+  useEffect(() => {
+    return () => {
+      if (!isConfirmedRef.current && uploadedDocsRef.current.length > 0) {
+        uploadedDocsRef.current.forEach(doc => {
+          deleteDocument(doc.documentId).catch(() => {});
+        });
+      }
+    };
+  }, []);
+
+  // Return to step 1 if all documents are removed in step 4
+  useEffect(() => {
+    if (step === 4 && uploadedDocs.length === 0) {
+      setStep(1);
+    }
+  }, [uploadedDocs, step]);
+
+  // Fetch initial data
   useEffect(() => {
     setLoadingEmps(true);
-    getEmployees({ status: 'active', excludeAdmins: false, limit: 1000 })
-      .then(res => setEmployees(res.employees))
+    Promise.all([
+      getEmployees({ status: 'active', excludeAdmins: false, limit: 1000 }).then(res => setEmployees(res.employees)),
+      getCompanies().then(res => setCompanies(res))
+    ])
       .catch(() => {})
       .finally(() => setLoadingEmps(false));
   }, []);
+
+  const associatedCompanies = React.useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'admin' || user.isSuperAdmin) return companies;
+    return companies.filter(c => c.id === user.companyId || allowedCompanyIds.includes(c.id));
+  }, [companies, user, allowedCompanyIds]);
+
+  // Auto-select company if only one is available
+  useEffect(() => {
+    if (associatedCompanies.length === 1 && !globalCompanyId) {
+      handleGlobalCompany(associatedCompanies[0].id);
+    }
+  }, [associatedCompanies, globalCompanyId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
@@ -127,13 +204,22 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
     // Validation
     for (const f of selectedFiles) {
-      const isZip = f.name.toLowerCase().endsWith('.zip');
-      const maxSize = isZip ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      const ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
+      const isArchive = ['.zip', '.rar', '.7z'].includes(ext);
+      const maxSize = isArchive ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
 
       if (f.size > maxSize) {
-        showToast(isZip ? t('documents.errorBulk') : t('documents.errorUpload'), 'error');
+        showToast(isArchive ? t('documents.errorBulk') : t('documents.errorUpload'), 'error');
         return;
       }
+    }
+
+    // Clean up previously uploaded files if user changes files
+    if (uploadedDocs.length > 0) {
+      uploadedDocs.forEach(d => {
+        deleteDocument(d.documentId).catch(() => {});
+      });
+      setUploadedDocs([]);
     }
 
     const items: UploadFileItem[] = selectedFiles.map((f, i) => ({
@@ -142,6 +228,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
       requiresSignature: globalRequiresSignature,
       expiresAt: globalExpiresAt,
       visibility: globalVisibility,
+      companyId: globalCompanyId,
       useGlobal: true,
       expanded: false
     }));
@@ -166,6 +253,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     setFiles(prev => prev.map(item => item.useGlobal ? { ...item, visibility: val } : item));
   };
 
+  const handleGlobalCompany = (val: number | null) => {
+    setGlobalCompanyId(val);
+    setFiles(prev => prev.map(item => item.useGlobal ? { ...item, companyId: val } : item));
+  };
+
   // Individual Settings Handlers
   const updateIndividualItem = (id: string, updates: Partial<UploadFileItem>) => {
     setFiles(prev => prev.map(item => item.id === id ? { ...item, ...updates, useGlobal: false } : item));
@@ -180,7 +272,8 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             useGlobal: true,
             requiresSignature: globalRequiresSignature,
             expiresAt: globalExpiresAt,
-            visibility: globalVisibility
+            visibility: globalVisibility,
+            companyId: globalCompanyId
           };
         } else {
           return { ...item, useGlobal: false };
@@ -194,11 +287,29 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     setFiles(prev => prev.map(item => item.id === id ? { ...item, expanded: !item.expanded } : item));
   };
 
+  const handleBack = () => {
+    if (step === 2) {
+      setStep(1);
+    } else if (step === 3) {
+      setStep(2);
+    } else if (step === 4) {
+      if (unmatchedDocs.length > 0) {
+        setStep(3);
+      } else {
+        setStep(2);
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (files.length === 0) return;
 
     if (isHrOrAdmin) {
       for (const item of files) {
+        if (!item.companyId) {
+          showToast(t('companies.selectCompany', 'Select Company') + ` (${item.file.name})`, 'error');
+          return;
+        }
         if (!item.expiresAt) {
           showToast(t('employees.fieldRequired') + ` (${item.file.name})`, 'error');
           return;
@@ -208,33 +319,74 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
     setUploading(true);
     const unmatchedList: UnmatchedItem[] = [];
+    const updatedFiles = [...files];
 
-    for (const item of files) {
+    for (let i = 0; i < updatedFiles.length; i++) {
+      const item = updatedFiles[i];
       try {
         const visibleToRoles = item.visibility === 'hr'
           ? ['admin', 'hr']
           : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
 
-        const response = await uploadDocumentUnified(item.file, {
-          requiresSignature: item.requiresSignature,
-          expiresAt: item.expiresAt || null,
-          visibleToRoles,
-          employeeId: targetEmployeeId
-        });
-
-        if (response && !response.matched && response.documentId) {
-          const fileName = response.fileName || item.file.name;
-          const lastDot = fileName.lastIndexOf('.');
-          const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
-          const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
-
-          unmatchedList.push({
-            documentId: response.documentId,
-            fileName,
-            editableTitle: initialTitle,
-            fileExtension: extension,
-            manualEmployeeId: null
+        if (item.uploaded && item.documentId) {
+          // Sync changes in Step 2 if any, without actual employee assignment
+          await updateDocumentGeneric(item.documentId, {
+            title: item.file.name,
+            employee_id: null, // Always unassigned before Step 4 Confirmation
+            requires_signature: item.requiresSignature,
+            expires_at: item.expiresAt || null,
+            visible_to_roles: visibleToRoles
           });
+
+          if (!item.matched) {
+            const fileName = item.file.name;
+            const lastDot = fileName.lastIndexOf('.');
+            const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
+            const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
+            unmatchedList.push({
+              documentId: item.documentId,
+              fileName,
+              editableTitle: initialTitle,
+              fileExtension: extension,
+              manualEmployeeId: null,
+              companyId: item.companyId
+            });
+          }
+        } else {
+          // Upload in simulation mode (does not save DB assignment, only checks matches in memory)
+          const response = await uploadDocumentUnified(item.file, {
+            requiresSignature: item.requiresSignature,
+            expiresAt: item.expiresAt || null,
+            visibleToRoles,
+            employeeId: targetEmployeeId,
+            companyId: item.companyId
+          });
+
+          if (response && response.documentId) {
+            updatedFiles[i] = {
+              ...item,
+              uploaded: true,
+              documentId: response.documentId,
+              matched: response.matched,
+              matchedEmployee: response.employee
+            };
+
+            if (!response.matched) {
+              const fileName = response.fileName || item.file.name;
+              const lastDot = fileName.lastIndexOf('.');
+              const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
+              const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
+
+              unmatchedList.push({
+                documentId: response.documentId,
+                fileName,
+                editableTitle: initialTitle,
+                fileExtension: extension,
+                manualEmployeeId: null,
+                companyId: item.companyId
+              });
+            }
+          }
         }
       } catch (err: any) {
         if (err.response?.data?.code === 'EXPIRY_DATE_REQUIRED') {
@@ -242,36 +394,83 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
         } else {
           showToast(t('documents.errorUpload') + ` (${item.file.name})`, 'error');
         }
+        setUploading(false);
+        return;
       }
     }
 
+    setFiles(updatedFiles);
     setUploading(false);
 
+    const initialUploadedDocs: UploadedDocDetail[] = updatedFiles.map(item => {
+      const compName = companies.find(c => c.id === item.companyId)?.name || 'No Company';
+      return {
+        documentId: item.documentId!,
+        fileName: item.file.name,
+        requiresSignature: item.requiresSignature,
+        expiresAt: item.expiresAt,
+        visibility: item.visibility,
+        companyId: item.companyId,
+        companyName: compName,
+        assignedEmployeeId: item.matchedEmployee?.id || null,
+        assignedEmployeeName: item.matchedEmployee ? `${item.matchedEmployee.name} ${item.matchedEmployee.surname}` : 'Unassigned',
+        fileObject: item.file
+      };
+    });
+
+    setUploadedDocs(initialUploadedDocs);
+
     if (unmatchedList.length > 0) {
-      setUnmatchedDocs(unmatchedList);
+      const updatedUnmatchedList = unmatchedList.map(newUn => {
+        const existingUn = unmatchedDocs.find(un => un.documentId === newUn.documentId);
+        return existingUn ? { ...newUn, manualEmployeeId: existingUn.manualEmployeeId } : newUn;
+      });
+      setUnmatchedDocs(updatedUnmatchedList);
       setStep(3);
     } else {
-      showToast(t('documents.uploaded'), 'success');
-      onSuccess();
-      onClose();
+      setStep(4);
     }
   };
 
-  const handleManualSave = async () => {
+  const handleStep3Save = () => {
+    for (const doc of unmatchedDocs) {
+      if (!doc.manualEmployeeId) {
+        showToast(t('documents.selectEmployee', 'Please assign all documents to an employee'), 'error');
+        return;
+      }
+    }
+
+    setUploadedDocs(prev => prev.map(doc => {
+      const unmatched = unmatchedDocs.find(u => u.documentId === doc.documentId);
+      if (unmatched) {
+        const selectedEmp = employees.find(e => e.id === unmatched.manualEmployeeId);
+        return {
+          ...doc,
+          assignedEmployeeId: unmatched.manualEmployeeId,
+          assignedEmployeeName: selectedEmp ? `${selectedEmp.name} ${selectedEmp.surname}` : 'Unassigned'
+        };
+      }
+      return doc;
+    }));
+    setStep(4);
+  };
+
+  const handleConfirmSave = async () => {
+    isConfirmedRef.current = true;
     setUploading(true);
     try {
+      // Activating final assignments ONLY when Confirm is clicked
       await Promise.all(
-        unmatchedDocs.map(async (doc) => {
-          const matchedFile = files.find(f => f.file.name === doc.fileName) || files[0];
-          const visibleToRoles = matchedFile?.visibility === 'hr'
+        uploadedDocs.map(async (doc) => {
+          const visibleToRoles = doc.visibility === 'hr'
             ? ['admin', 'hr']
             : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
 
           await updateDocumentGeneric(doc.documentId, {
-            title: `${doc.editableTitle}${doc.fileExtension}`,
-            employee_id: doc.manualEmployeeId,
-            requires_signature: matchedFile?.requiresSignature || false,
-            expires_at: matchedFile?.expiresAt || null,
+            title: doc.fileName,
+            employee_id: doc.assignedEmployeeId, // Actual assignment happens here!
+            requires_signature: doc.requiresSignature,
+            expires_at: doc.expiresAt || null,
             visible_to_roles: visibleToRoles
           });
         })
@@ -286,6 +485,17 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     }
   };
 
+  const handleRemoveDocument = async (docId: number) => {
+    try {
+      await deleteDocument(docId);
+      setUploadedDocs(prev => prev.filter(d => d.documentId !== docId));
+      setFiles(prev => prev.filter(d => d.documentId !== docId));
+      showToast(t('documents.deleted', 'Document removed successfully'), 'success');
+    } catch {
+      showToast(t('common.error'), 'error');
+    }
+  };
+
   const handleUnmatchedTitleChange = (idx: number, title: string) => {
     setUnmatchedDocs(prev => prev.map((item, i) => i === idx ? { ...item, editableTitle: title } : item));
   };
@@ -294,9 +504,29 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     setUnmatchedDocs(prev => prev.map((item, i) => i === idx ? { ...item, manualEmployeeId: empId } : item));
   };
 
+  // Preview management
+  const openPreview = (doc: UploadedDocDetail) => {
+    if (previewDocUrl) {
+      URL.revokeObjectURL(previewDocUrl);
+    }
+    const url = URL.createObjectURL(doc.fileObject);
+    setPreviewDocUrl(url);
+    setPreviewDocName(doc.fileName);
+    setPreviewDocMimeType(doc.fileObject.type);
+  };
+
+  const closePreview = () => {
+    if (previewDocUrl) {
+      URL.revokeObjectURL(previewDocUrl);
+      setPreviewDocUrl(null);
+    }
+  };
+
+  const modalWidth = 650; // Cozy, readable width for stacked layout
+
   return createPortal(
     <div style={modalOverlayStyle} onClick={onClose}>
-      <div style={modalContentStyle} onClick={e => e.stopPropagation()}>
+      <div style={{ ...modalContentStyle, maxWidth: modalWidth }} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t('documents.uploadWizardTitle')}</h3>
@@ -304,6 +534,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 1 ? 'var(--primary)' : 'var(--border)' }} />
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 2 ? 'var(--primary)' : 'var(--border)' }} />
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 3 ? 'var(--primary)' : 'var(--border)' }} />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 4 ? 'var(--primary)' : 'var(--border)' }} />
           </div>
         </div>
 
@@ -333,7 +564,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                   ZIP (max 50MB) · PDF, JPG, PNG (max 10MB)
                 </div>
-                <input type="file" multiple hidden onChange={handleFileChange} accept=".pdf,.jpg,.jpeg,.png,.webp,.zip,application/zip,application/x-zip-compressed" />
+                <input type="file" multiple hidden onChange={handleFileChange} accept=".zip,.rar,.7z,.pdf,.jpg,.jpeg,.png,.webp,application/zip,application/x-zip-compressed,application/rar,application/x-rar-compressed,application/x-7z-compressed,application/octet-stream" />
               </label>
             </div>
           ) : step === 2 ? (
@@ -381,33 +612,45 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                   </div>
                 </div>
 
-                <div>
-                  <label style={labelStyle}>{t('documents.visibility')}</label>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <button
-                      onClick={() => handleGlobalVisibility('everyone')}
-                      style={{
-                        flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (globalVisibility === 'everyone' ? 'var(--primary)' : 'var(--border)'),
-                        background: globalVisibility === 'everyone' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                        color: globalVisibility === 'everyone' ? 'var(--primary)' : 'var(--text-secondary)',
-                        fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                      }}
-                    >
-                      {globalVisibility === 'everyone' && <IconCheck />} {t('documents.visibilityEveryone')}
-                    </button>
-                    <button
-                      onClick={() => handleGlobalVisibility('hr')}
-                      style={{
-                        flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (globalVisibility === 'hr' ? 'var(--primary)' : 'var(--border)'),
-                        background: globalVisibility === 'hr' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                        color: globalVisibility === 'hr' ? 'var(--primary)' : 'var(--text-secondary)',
-                        fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                      }}
-                    >
-                      {globalVisibility === 'hr' && <IconCheck />} {t('documents.visibilityHR')}
-                    </button>
+                <div style={{ display: 'flex', gap: isMobile ? 16 : 20, flexDirection: isMobile ? 'column' : 'row' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>{t('documents.visibility')}</label>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button
+                        onClick={() => handleGlobalVisibility('everyone')}
+                        style={{
+                          flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (globalVisibility === 'everyone' ? 'var(--primary)' : 'var(--border)'),
+                          background: globalVisibility === 'everyone' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
+                          color: globalVisibility === 'everyone' ? 'var(--primary)' : 'var(--text-secondary)',
+                          fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                        }}
+                      >
+                        {globalVisibility === 'everyone' && <IconCheck />} {t('documents.visibilityEveryone')}
+                      </button>
+                      <button
+                        onClick={() => handleGlobalVisibility('hr')}
+                        style={{
+                          flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (globalVisibility === 'hr' ? 'var(--primary)' : 'var(--border)'),
+                          background: globalVisibility === 'hr' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
+                          color: globalVisibility === 'hr' ? 'var(--primary)' : 'var(--text-secondary)',
+                          fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                        }}
+                      >
+                        {globalVisibility === 'hr' && <IconCheck />} {t('documents.visibilityHR')}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>{t('companies.company', 'Company')} <span style={{ color: '#DC2626' }}>*</span></label>
+                    <CustomSelect
+                      value={globalCompanyId ? String(globalCompanyId) : null}
+                      onChange={(val) => handleGlobalCompany(val ? Number(val) : null)}
+                      options={associatedCompanies.map(c => ({ value: String(c.id), label: c.name }))}
+                      placeholder={t('companies.selectCompany', 'Select Company')}
+                    />
                   </div>
                 </div>
               </div>
@@ -496,31 +739,43 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                           </div>
                         </div>
 
-                        <div>
-                          <label style={labelStyle}>{t('documents.visibility')}</label>
-                          <div style={{ display: 'flex', gap: 12 }}>
-                            <button
-                              onClick={() => updateIndividualItem(item.id, { visibility: 'everyone' })}
-                              style={{
-                                flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (item.visibility === 'everyone' ? 'var(--primary)' : 'var(--border)'),
-                                background: item.visibility === 'everyone' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                                color: item.visibility === 'everyone' ? 'var(--primary)' : 'var(--text-secondary)',
-                                fontSize: 12, fontWeight: 600, cursor: 'pointer'
-                              }}
-                            >
-                              {t('documents.visibilityEveryone')}
-                            </button>
-                            <button
-                              onClick={() => updateIndividualItem(item.id, { visibility: 'hr' })}
-                              style={{
-                                flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (item.visibility === 'hr' ? 'var(--primary)' : 'var(--border)'),
-                                background: item.visibility === 'hr' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                                color: item.visibility === 'hr' ? 'var(--primary)' : 'var(--text-secondary)',
-                                fontSize: 12, fontWeight: 600, cursor: 'pointer'
-                              }}
-                            >
-                              {t('documents.visibilityHR')}
-                            </button>
+                        <div style={{ display: 'flex', gap: isMobile ? 16 : 20, flexDirection: isMobile ? 'column' : 'row' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>{t('documents.visibility')}</label>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                              <button
+                                onClick={() => updateIndividualItem(item.id, { visibility: 'everyone' })}
+                                style={{
+                                  flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (item.visibility === 'everyone' ? 'var(--primary)' : 'var(--border)'),
+                                  background: item.visibility === 'everyone' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
+                                  color: item.visibility === 'everyone' ? 'var(--primary)' : 'var(--text-secondary)',
+                                  fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                }}
+                              >
+                                {t('documents.visibilityEveryone')}
+                              </button>
+                              <button
+                                onClick={() => updateIndividualItem(item.id, { visibility: 'hr' })}
+                                style={{
+                                  flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (item.visibility === 'hr' ? 'var(--primary)' : 'var(--border)'),
+                                  background: item.visibility === 'hr' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
+                                  color: item.visibility === 'hr' ? 'var(--primary)' : 'var(--text-secondary)',
+                                  fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                }}
+                              >
+                                {t('documents.visibilityHR')}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>{t('companies.company', 'Company')} <span style={{ color: '#DC2626' }}>*</span></label>
+                            <CustomSelect
+                              value={item.companyId ? String(item.companyId) : null}
+                              onChange={(val) => updateIndividualItem(item.id, { companyId: val ? Number(val) : null })}
+                              options={associatedCompanies.map(c => ({ value: String(c.id), label: c.name }))}
+                              placeholder={t('companies.selectCompany', 'Select Company')}
+                            />
                           </div>
                         </div>
                       </div>
@@ -529,7 +784,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 ))}
               </div>
             </div>
-          ) : (
+          ) : step === 3 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, fontSize: 13, color: '#B45309', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 18 }}>⚠️</span>
@@ -567,11 +822,13 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                           disabled={loadingEmps}
                         >
                           <option value="">{t('documents.selectEmployee')}</option>
-                          {employees.map(emp => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.name} {emp.surname} ({emp.uniqueId || emp.role}){emp.companyName ? ` - ${emp.companyName}` : ''}
-                            </option>
-                          ))}
+                          {employees
+                            .filter(emp => !doc.companyId || emp.companyId === doc.companyId)
+                            .map(emp => (
+                              <option key={emp.id} value={emp.id}>
+                                {emp.name} {emp.surname} ({emp.uniqueId || emp.role}){emp.companyName ? ` - ${emp.companyName}` : ''}
+                              </option>
+                            ))}
                         </select>
                       </div>
                     </div>
@@ -579,13 +836,159 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 ))}
               </div>
             </div>
-          )}
+          ) : step === 4 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Alert Message Bar */}
+              <div style={{ padding: '12px 16px', background: 'rgba(21,128,61,0.1)', border: '1px solid rgba(21,128,61,0.3)', borderRadius: 10, fontSize: 13, color: '#15803D', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>✓</span>
+                {t('documents.confirmTitle', 'Review and confirm document upload details')}
+              </div>
+
+              {/* Uploaded Documents List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {uploadedDocs.map(doc => {
+                  const isHovered = hoveredDocId === doc.documentId;
+                  return (
+                    <div
+                      key={doc.documentId}
+                      onMouseEnter={() => setHoveredDocId(doc.documentId)}
+                      onMouseLeave={() => setHoveredDocId(null)}
+                      style={{
+                        borderRadius: 12, border: '1.5px solid var(--border)',
+                        background: 'var(--surface)', overflow: 'hidden', display: 'flex', flexDirection: 'column'
+                      }}
+                    >
+                      {/* Document Row Header (Full Width Bar) */}
+                      <div
+                        style={{
+                          padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14,
+                          background: 'var(--background)', borderBottom: '1.5px solid var(--border-light)',
+                          position: 'relative'
+                        }}
+                      >
+                        <div style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center' }}><IconFile /></div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {doc.fileName}
+                          </div>
+                        </div>
+
+                        {/* Hover View and Remove Action buttons */}
+                        <div style={{ display: 'flex', gap: 8, opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s', pointerEvents: isHovered ? 'auto' : 'none' }}>
+                          <button
+                            onClick={() => openPreview(doc)}
+                            style={{
+                              padding: '6px 12px', borderRadius: 6, border: '1px solid var(--primary)',
+                              background: 'transparent', color: 'var(--primary)', cursor: 'pointer',
+                              fontSize: 12, fontWeight: 600, transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = 'var(--primary)';
+                              e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.color = 'var(--primary)';
+                            }}
+                          >
+                            {t('common.view', 'View')}
+                          </button>
+                          <button
+                            onClick={() => handleRemoveDocument(doc.documentId)}
+                            style={{
+                              padding: '6px 12px', borderRadius: 6, border: '1px solid #DC2626',
+                              background: 'transparent', color: '#DC2626', cursor: 'pointer',
+                              fontSize: 12, fontWeight: 600, transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = '#DC2626';
+                              e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.color = '#DC2626';
+                            }}
+                          >
+                            {t('common.remove', 'Remove')}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Document Details Block (styled nicely matching screenshot) */}
+                      <div
+                        style={{
+                          padding: '16px 20px', background: '#F4F2EE', // warm beige background
+                          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                          gap: '14px 20px', borderTop: 'none'
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            COMPANY
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
+                            {doc.companyName}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            ASSIGNING TO
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
+                            {doc.assignedEmployeeName}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            REQUIRES SIGNATURE
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
+                            {doc.requiresSignature ? 'Yes' : 'No'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            EXPIRY DATE
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
+                            {doc.expiresAt || '—'}
+                          </div>
+                        </div>
+
+                        <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            VISIBILITY
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
+                            {doc.visibility === 'hr' ? 'Only HR' : 'Everyone'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Footer */}
         <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 12, justifyContent: 'flex-end', background: 'var(--background)' }}>
+          {step > 1 && (
+            <button
+              onClick={handleBack}
+              data-testid="wizard-back-button"
+              style={{ marginRight: 'auto', padding: '10px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            >
+              {t('common.back', 'Back')}
+            </button>
+          )}
           <button
             onClick={onClose}
+            data-testid="wizard-cancel-button"
             style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
           >
             {t('common.cancel')}
@@ -594,6 +997,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             <button
               onClick={handleSubmit}
               disabled={uploading}
+              data-testid="wizard-submit-button"
               style={{
                 padding: '10px 24px', borderRadius: 8, border: 'none', background: 'var(--primary)',
                 color: '#fff', cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
@@ -605,7 +1009,19 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             </button>
           ) : step === 3 ? (
             <button
-              onClick={handleManualSave}
+              onClick={handleStep3Save}
+              style={{
+                padding: '10px 32px', borderRadius: 8, border: 'none', background: 'var(--primary)',
+                color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                transition: 'all 0.2s',
+                boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
+              }}
+            >
+              {t('common.save')}
+            </button>
+          ) : step === 4 ? (
+            <button
+              onClick={handleConfirmSave}
               disabled={uploading}
               style={{
                 padding: '10px 32px', borderRadius: 8, border: 'none', background: 'var(--primary)',
@@ -614,13 +1030,63 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
               }}
             >
-              {uploading ? t('common.loading') : t('common.save')}
+              {uploading ? t('common.loading') : t('common.confirm', 'Confirm')}
             </button>
           ) : null}
         </div>
       </div>
+
+      {/* Preview Modal Overlay (Stops bubbling to keep wizard open) */}
+      {previewDocUrl && (
+        <div onClick={e => e.stopPropagation()}>
+          <ModalBackdrop onClose={closePreview} width={800}>
+            <ModalHeader title={previewDocName} onClose={closePreview} />
+            <div style={{ width: '100%', height: '75vh', background: 'var(--background)', borderRadius: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {['zip', 'rar', '7z'].some(ext => previewDocName.toLowerCase().endsWith(`.${ext}`)) ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32, textAlign: 'center' }}>
+                  <div style={{ fontSize: 48 }}>📦</div>
+                  <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {t('documents.previewArchiveTitle', 'Archive preview is not supported')}
+                  </h4>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 400 }}>
+                    {t('documents.previewArchiveText', 'To view the contents of this archive, please download and extract the file.')}
+                  </p>
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = previewDocUrl;
+                      link.setAttribute('download', previewDocName);
+                      document.body.appendChild(link);
+                      link.click();
+                      link.remove();
+                    }}
+                    style={{
+                      padding: '10px 20px', borderRadius: 8, border: 'none', background: 'var(--primary)',
+                      color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
+                      boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
+                    }}
+                  >
+                    {t('documents.download', 'Download')}
+                  </button>
+                </div>
+              ) : previewDocMimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].some(ext => previewDocName.toLowerCase().endsWith(`.${ext}`)) ? (
+                <img
+                  src={previewDocUrl}
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  alt={previewDocName}
+                />
+              ) : (
+                <iframe
+                  src={previewDocUrl}
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  title={previewDocName}
+                />
+              )}
+            </div>
+          </ModalBackdrop>
+        </div>
+      )}
     </div>,
     document.body
   );
 };
-

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import client, { getAvatarUrl } from '../../api/client';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -84,6 +85,16 @@ const IconCalendar = () => (
     <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
   </svg>
 );
+const IconEye = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+const IconX = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
 
 const ANOMALY_META: Record<string, { Icon: () => JSX.Element; color: string; bg: string; border: string }> = {
   late_arrival: { Icon: IconClock,   color: '#b45309', bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.20)' },
@@ -121,6 +132,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
+  const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
 
   useEffect(() => {
     if (propCompact !== undefined) {
@@ -381,11 +393,32 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
                   })()}
                 </div>
                 {/* Row 3: details */}
-                {(a.detailsKey || a.details) && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    {a.detailsKey ? t(a.detailsKey, a.detailsParams) : a.details}
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                  {(a.detailsKey || a.details) && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, flex: 1, paddingRight: 8 }}>
+                      {a.detailsKey ? t(a.detailsKey, a.detailsParams) : a.details}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setSelectedAnomaly(a)}
+                    title={t('attendance.view_details', 'Vedi dettagli e formula')}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 28,
+                      height: 28,
+                      borderRadius: 6,
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface-warm)',
+                      color: 'var(--accent)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <IconEye />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -456,6 +489,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
                     { label: t('attendance.col_severity'), icon: null },
                     { label: t('attendance.col_origin', 'Origin'),   icon: null },
                     { label: t('attendance.col_details'),  icon: null },
+                    { label: t('common.actions', 'Azione'),  icon: null },
                   ].map(({ label, icon }, i) => (
                     <th key={label} style={{
                       padding: compact ? '8px 16px' : '12px 16px', textAlign: 'left',
@@ -565,6 +599,28 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
                       <td style={{ padding: compact ? '6px 16px' : '11px 16px', fontSize: compact ? 11 : 12, color: 'var(--text-muted)', maxWidth: 260, lineHeight: 1.5 }}>
                         {a.detailsKey ? t(a.detailsKey, a.detailsParams) : a.details}
                       </td>
+                      <td style={{ padding: compact ? '6px 16px' : '11px 16px', textAlign: 'center' }}>
+                        <button
+                          onClick={() => setSelectedAnomaly(a)}
+                          title={t('attendance.view_details', 'Vedi dettagli e formula')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 30,
+                            height: 30,
+                            borderRadius: 8,
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            color: 'var(--accent)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                          }}
+                        >
+                          <IconEye />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -585,6 +641,259 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
             </span>
           </div>
         </div>
+      )}
+
+      {/* ── Inspection Detail Modal ────────────────────────────────────────── */}
+      {selectedAnomaly && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(13,33,55,0.52)',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setSelectedAnomaly(null)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: 16,
+              width: 'min(560px, 94vw)',
+              maxHeight: '88vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.28)',
+              overflow: 'hidden',
+              border: '1px solid var(--border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header stripe */}
+            <div style={{
+              height: 4,
+              background: ANOMALY_META[selectedAnomaly.anomalyType]?.color || 'var(--accent)',
+            }} />
+
+            {/* Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'var(--surface-warm)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: ANOMALY_META[selectedAnomaly.anomalyType]?.bg || 'rgba(0,0,0,0.05)',
+                  color: ANOMALY_META[selectedAnomaly.anomalyType]?.color || 'var(--text)',
+                }}>
+                  {(() => {
+                    const meta = ANOMALY_META[selectedAnomaly.anomalyType];
+                    const Icon = meta ? meta.Icon : IconClock;
+                    return <Icon />;
+                  })()}
+                </span>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: 'var(--text)' }}>
+                    {t('attendance.anomaly_details_modal_title', 'Dettaglio e Formula di Calcolo')}
+                  </h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {selectedAnomaly.userName} {selectedAnomaly.userSurname} · {selectedAnomaly.storeName}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedAnomaly(null)}
+                style={{
+                  border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4,
+                }}
+              >
+                <IconX />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              
+              {/* Employee Summary Card */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                borderRadius: 12,
+                background: 'var(--background)',
+                border: '1px solid var(--border)',
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    {t('common.date', 'Data')} & {t('common.store', 'Negozio')}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginTop: 2 }}>
+                    {new Date(selectedAnomaly.date + 'T12:00:00').toLocaleDateString(locale, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <span style={{
+                    padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                    ...ANOMALY_META[selectedAnomaly.anomalyType],
+                  }}>
+                    {t(`attendance.anomaly_${selectedAnomaly.anomalyType}`)}
+                  </span>
+                  <span style={{
+                    padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                    ...SEVERITY_META[selectedAnomaly.severity],
+                  }}>
+                    {t(`attendance.severity_${selectedAnomaly.severity}`)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Main Description */}
+              <div style={{
+                padding: '14px 16px',
+                borderRadius: 12,
+                background: ANOMALY_META[selectedAnomaly.anomalyType]?.bg || 'rgba(0,0,0,0.04)',
+                border: `1px solid ${ANOMALY_META[selectedAnomaly.anomalyType]?.border || 'var(--border)'}`,
+                fontSize: 13,
+                fontWeight: 600,
+                color: ANOMALY_META[selectedAnomaly.anomalyType]?.color || 'var(--text)',
+                lineHeight: 1.5,
+              }}>
+                ℹ️ {selectedAnomaly.detailsKey ? t(selectedAnomaly.detailsKey, selectedAnomaly.detailsParams) : selectedAnomaly.details}
+              </div>
+
+              {/* Calculation Formula Breakdown Box */}
+              <div style={{
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  padding: '10px 16px',
+                  background: 'var(--surface-warm)',
+                  borderBottom: '1px solid var(--border)',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: 'var(--text)',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                }}>
+                  🧮 {t('attendance.calculation_formula', 'Formula di Calcolo')}
+                </div>
+                <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {selectedAnomaly.anomalyType === 'early_exit' && (
+                    <>
+                      <div>• <strong>{t('attendance.scheduled_shift', 'Turno Pianificato')} (Fine):</strong> {selectedAnomaly.detailsParams?.shift || '—'}</div>
+                      <div>• <strong>{t('attendance.actual_attendance', 'Presenza Effettiva')} (Uscita):</strong> {selectedAnomaly.detailsParams?.exit || '—'}</div>
+                      <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', color: '#1e293b', fontWeight: 700 }}>
+                        Scostamento = Fine Turno - Orario Uscita = {selectedAnomaly.detailsParams?.minutes || 0} minuti
+                      </div>
+                    </>
+                  )}
+                  {selectedAnomaly.anomalyType === 'late_arrival' && (
+                    <>
+                      <div>• <strong>{t('attendance.scheduled_shift', 'Turno Pianificato')} (Inizio):</strong> {selectedAnomaly.detailsParams?.shift || '—'}</div>
+                      <div>• <strong>{t('attendance.actual_attendance', 'Presenza Effettiva')} (Entrata):</strong> {selectedAnomaly.detailsParams?.entry || '—'}</div>
+                      <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', color: '#1e293b', fontWeight: 700 }}>
+                        Scostamento = Orario Entrata - Inizio Turno = {selectedAnomaly.detailsParams?.minutes || 0} minuti
+                      </div>
+                    </>
+                  )}
+                  {selectedAnomaly.anomalyType === 'no_show' && (
+                    <>
+                      <div>• <strong>{t('attendance.scheduled_shift', 'Turno Pianificato')}:</strong> {selectedAnomaly.detailsParams?.start} – {selectedAnomaly.detailsParams?.end}</div>
+                      <div style={{ background: '#fef2f2', padding: '8px 12px', borderRadius: 8, border: '1px solid #fecaca', color: '#dc2626', fontWeight: 700 }}>
+                        Nessun Check-in registrato dopo 10 minuti dall'inizio del turno.
+                      </div>
+                    </>
+                  )}
+                  {selectedAnomaly.anomalyType === 'missing_checkout' && (
+                    <>
+                      <div>• <strong>{t('attendance.scheduled_shift', 'Turno Pianificato')} (Fine):</strong> {selectedAnomaly.detailsParams?.shift_end || '—'}</div>
+                      <div>• <strong>{t('attendance.actual_attendance', 'Presenza Effettiva')} (Entrata):</strong> {selectedAnomaly.detailsParams?.checkin || '—'}</div>
+                      <div style={{ background: '#fef2f2', padding: '8px 12px', borderRadius: 8, border: '1px solid #fecaca', color: '#dc2626', fontWeight: 700 }}>
+                        Mancato Check-out registrato oltre 30 minuti dal termine previsto del turno.
+                      </div>
+                    </>
+                  )}
+                  {selectedAnomaly.anomalyType === 'overtime' && (
+                    <>
+                      <div>• <strong>{t('attendance.scheduled_shift', 'Turno Pianificato')} (Fine):</strong> {selectedAnomaly.detailsParams?.scheduled || '—'}</div>
+                      <div>• <strong>{t('attendance.actual_attendance', 'Presenza Effettiva')} (Uscita):</strong> {selectedAnomaly.detailsParams?.actual || '—'}</div>
+                      <div style={{ background: '#f0fdf4', padding: '8px 12px', borderRadius: 8, border: '1px solid #bbf7d0', color: '#15803d', fontWeight: 700 }}>
+                        Straordinario = Orario Uscita - Fine Turno = {selectedAnomaly.detailsParams?.minutes || 0} minuti
+                      </div>
+                    </>
+                  )}
+                  {selectedAnomaly.anomalyType === 'long_break' && (
+                    <>
+                      <div>• <strong>Pausa Effettiva:</strong> {selectedAnomaly.detailsParams?.minutes || 0} minuti</div>
+                      <div style={{ background: '#faf5ff', padding: '8px 12px', borderRadius: 8, border: '1px solid #e9d5ff', color: '#7c3aed', fontWeight: 700 }}>
+                        Pausa prolungata di oltre 5 minuti rispetto al limite concordato.
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Timezone & Rules Note */}
+              <div style={{
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                fontSize: 11.5,
+                color: '#475569',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                🌐 {t('attendance.info_timezone_desc', 'Tutti gli orari sono normalizzati al fuso orario del negozio (es. Europe/Rome).')}
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '14px 24px',
+              borderTop: '1px solid var(--border)',
+              background: 'var(--surface-warm)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+            }}>
+              <button
+                onClick={() => setSelectedAnomaly(null)}
+                style={{
+                  padding: '8px 22px',
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  border: 'none',
+                  background: 'var(--primary)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('common.close', 'Chiudi')}
+              </button>
+            </div>
+
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
