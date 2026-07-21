@@ -109,14 +109,41 @@ export function mimeIcon(mime: string | null): string {
   return '📁';
 }
 
-export const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; children: React.ReactNode }> = ({ onClose, width = 440, children }) => {
+export function getCompanyAvatarColor(name: string = ''): string {
+  const colors = [
+    '#002D5B', '#007AFF', '#5856D6', '#AF52DE',
+    '#FF2D55', '#FF9500', '#10B981', '#059669',
+    '#0891B2', '#4F46E5', '#D97706'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+
+export const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; children: React.ReactNode }> = ({ onClose, width = 460, children }) => {
   return createPortal(
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(13,33,55,0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9000,
+        background: 'rgba(13,33,55,0.55)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '16px'
+      }}
       onClick={onClose}
     >
       <div
-        style={{ background: 'var(--surface)', borderRadius: 16, padding: 32, width: '100%', maxWidth: width, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(13,33,55,0.24)', animation: 'popIn 0.22s cubic-bezier(0.16,1,0.3,1)', margin: '0 16px' }}
+        style={{
+          background: 'var(--surface)', borderRadius: 16,
+          width: '100%', maxWidth: width, maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          border: '1px solid var(--border)',
+          overflow: 'hidden',
+          animation: 'popIn 0.2s cubic-bezier(0.16,1,0.3,1)'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -127,15 +154,43 @@ export const ModalBackdrop: React.FC<{ onClose: () => void; width?: number; chil
 };
 
 export const ModalHeader: React.FC<{ title: string; onClose: () => void }> = ({ title, onClose }) => (
-  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--border-light)' }}>
-    <div style={{ fontWeight: 700, fontSize: 17, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{title}</div>
-    <button onClick={onClose} style={{ background: 'var(--background)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1, padding: '5px 8px', borderRadius: 6, transition: 'background 0.12s' }}>✕</button>
+  <div style={{
+    padding: '16px 20px',
+    borderBottom: '1px solid var(--border)',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    background: 'var(--surface)',
+    flexShrink: 0
+  }}>
+    <h3 style={{
+      margin: 0,
+      fontWeight: 700,
+      fontSize: 16,
+      fontFamily: 'var(--font-display)',
+      color: 'var(--text-primary)',
+      letterSpacing: '-0.01em'
+    }}>
+      {title}
+    </h3>
+    <button
+      onClick={onClose}
+      style={{
+        width: 30, height: 30, borderRadius: 8,
+        border: '1px solid var(--border)', background: 'var(--background)',
+        color: 'var(--text-muted)', fontSize: 13,
+        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'all 0.15s'
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--background)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+    >
+      <IconClose />
+    </button>
   </div>
 );
 
 export const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 13px', borderRadius: 8,
-  border: '1.5px solid var(--border)', background: 'var(--surface)',
+  width: '100%', padding: '9px 12px', borderRadius: 8,
+  border: '1px solid var(--border)', background: 'var(--background)',
   color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box',
   transition: 'border-color 0.15s, box-shadow 0.15s',
   outline: 'none',
