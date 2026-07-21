@@ -46,6 +46,10 @@ interface FormState {
   is_split: boolean;
   split_start2: string;
   split_end2: string;
+  split_break_type?: 'none' | 'fixed' | 'flexible';
+  split_break_start?: string;
+  split_break_end?: string;
+  split_break_minutes?: string;
   is_off_day: boolean;
   notes: string;
   status: 'scheduled' | 'confirmed' | 'cancelled';
@@ -1806,27 +1810,88 @@ export default function ShiftDrawer({
                   </div>
 
                   {form.is_split && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-                      <TimePicker
-                        label={t('shifts.form.splitStart2')}
-                        value={form.split_start2}
-                        onChange={(v) => {
-                          setForm((p) => ({ ...p, split_start2: v }));
-                          setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
-                        }}
-                        error={formErrors.split_start2}
-                        disabled={false}
-                      />
-                      <TimePicker
-                        label={t('shifts.form.splitEnd2')}
-                        value={form.split_end2}
-                        onChange={(v) => {
-                          setForm((p) => ({ ...p, split_end2: v }));
-                          setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
-                        }}
-                        error={formErrors.split_end2}
-                        disabled={false}
-                      />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <TimePicker
+                          label={t('shifts.form.splitStart2')}
+                          value={form.split_start2}
+                          onChange={(v) => {
+                            setForm((p) => ({ ...p, split_start2: v }));
+                            setFormErrors((fe) => { const n = { ...fe }; delete n.split_start2; return n; });
+                          }}
+                          error={formErrors.split_start2}
+                          disabled={false}
+                        />
+                        <TimePicker
+                          label={t('shifts.form.splitEnd2')}
+                          value={form.split_end2}
+                          onChange={(v) => {
+                            setForm((p) => ({ ...p, split_end2: v }));
+                            setFormErrors((fe) => { const n = { ...fe }; delete n.split_end2; return n; });
+                          }}
+                          error={formErrors.split_end2}
+                          disabled={false}
+                        />
+                      </div>
+
+                      {/* Second Segment Break */}
+                      <div style={{ background: 'var(--background)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          ☕ {t('shifts.form.splitBreakTitle', 'Pausa (Secondo Segmento)')}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                          {(['none', 'fixed', 'flexible'] as const).map((bt) => (
+                            <button
+                              key={bt}
+                              type="button"
+                              onClick={() => setForm((p) => ({ ...p, split_break_type: bt }))}
+                              style={{
+                                flex: 1, padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                border: (form.split_break_type || 'none') === bt ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                background: (form.split_break_type || 'none') === bt ? 'rgba(201,151,58,0.12)' : 'var(--surface)',
+                                color: (form.split_break_type || 'none') === bt ? 'var(--accent)' : 'var(--text-muted)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {bt === 'none' ? t('shifts.form.breakType_none', 'No break') : bt === 'fixed' ? t('shifts.form.breakType_fixed', 'Fixed break') : t('shifts.form.breakType_flexible', 'Flexible break')}
+                            </button>
+                          ))}
+                        </div>
+
+                        {form.split_break_type === 'fixed' && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <TimePicker
+                              label={t('shifts.form.breakStart')}
+                              value={form.split_break_start || ''}
+                              onChange={(v) => setForm((p) => ({ ...p, split_break_start: v }))}
+                            />
+                            <TimePicker
+                              label={t('shifts.form.breakEnd')}
+                              value={form.split_break_end || ''}
+                              onChange={(v) => setForm((p) => ({ ...p, split_break_end: v }))}
+                            />
+                          </div>
+                        )}
+
+                        {form.split_break_type === 'flexible' && (
+                          <div>
+                            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                              {t('shifts.form.breakMinutes')}
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="240"
+                              value={form.split_break_minutes || ''}
+                              onChange={(e) => setForm((p) => ({ ...p, split_break_minutes: e.target.value }))}
+                              style={{
+                                width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)',
+                                fontSize: 12, background: 'var(--surface)', color: 'var(--text)',
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 

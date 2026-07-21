@@ -757,6 +757,21 @@ export default function AnomaliesPage() {
                   </div>
                 </div>
 
+                {/* Missing Break */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{ background: 'rgba(180, 83, 9, 0.1)', color: '#b45309', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Coffee size={16} />
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {t('attendance.info_missing_break_title', 'Pausa Obbligatoria Non Registrata')}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                      {t('attendance.info_missing_break_desc', 'Generato quando il turno prevede una pausa obbligatoria ma il dipendente non ha registrato inizio/fine pausa. Il tempo di pausa programmato viene automaticamente dedotto dalle ore lavorate.')}
+                    </p>
+                  </div>
+                </div>
+
                 {/* Timezone Sync */}
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', paddingTop: 8, borderTop: '1px dashed var(--border)' }}>
                   <span style={{ background: 'rgba(14, 165, 233, 0.1)', color: '#0EA5E9', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

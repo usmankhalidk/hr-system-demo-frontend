@@ -180,66 +180,66 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   return (
     <>
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 13 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
         <thead>
-          <tr style={{ background: 'var(--primary)', color: '#fff' }}>
-            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', borderTopLeftRadius: 12 }}>
+          <tr style={{ background: '#0d2137' }}>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'rgba(255,255,255,0.92)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.2px' }}>
               {t('documents.fileName')}
             </th>
             {(!isEmployee) && (
-              <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'rgba(255,255,255,0.92)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.2px' }}>
                 {t('documents.assigned')}
               </th>
             )}
-            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'rgba(255,255,255,0.92)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.2px' }}>
               {t('documents.category')}
             </th>
-            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'rgba(255,255,255,0.92)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.2px' }}>
               {t('documents.uploadedOn')}
             </th>
-            <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'rgba(255,255,255,0.92)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.2px' }}>
               {isTrash ? t('documents.deletedOn') : t('documents.expiresOn')}
             </th>
             {!isTrash && (
-              <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'rgba(255,255,255,0.92)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.2px' }}>
                 {t('documents.signature')}
               </th>
             )}
-            <th style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#fff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', borderTopRightRadius: 12 }}>
+            <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: 'rgba(255,255,255,0.92)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.2px' }}>
               {t('common.actions')}
             </th>
           </tr>
         </thead>
         <tbody>
           {currentDocs.map((doc: any) => (
-            <tr key={doc.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.12s' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background)')}
+            <tr key={doc.id} style={{ borderBottom: '1px solid var(--border-light)', transition: 'background 0.12s' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-warm)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
-              <td style={{ padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>{mimeIcon(doc.mimeType || doc.mime_type)}</span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <td style={{ padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>{mimeIcon(doc.mimeType || doc.mime_type)}</span>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 13, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {doc.fileName || doc.title}
                   </span>
                 </div>
               </td>
               {(!isEmployee) && (
-                <td style={{ padding: '12px 14px' }}>
+                <td style={{ padding: '12px 16px' }}>
                   {doc.employeeName || doc.employee_name ? (
-                    <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>
                       {doc.employeeName || doc.employee_name}
                     </span>
                   ) : (
-                    <span style={{ fontSize: 12, color: '#C9973A', fontStyle: 'italic', fontWeight: 600 }}>
+                    <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(201,151,58,0.12)', color: '#C9973A', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       ⚠ {t('documents.unassigned')}
                     </span>
                   )}
                 </td>
               )}
-              <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>
+              <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>
                 {(doc.categoryName || doc.category) ? (
-                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--background)', border: '1px solid var(--border)', fontWeight: 500 }}>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(0,45,91,0.06)', color: 'var(--primary)', fontWeight: 700, border: '1px solid rgba(0,45,91,0.1)' }}>
                     {doc.categoryName || doc.category}
                   </span>
                 ) : (
@@ -248,13 +248,13 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                   </span>
                 )}
               </td>
-              <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatDate(doc.createdAt)}</td>
-              <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+              <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: 500 }}>{formatDate(doc.createdAt)}</td>
+              <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                 {isTrash ? (
-                  <span style={{ color: 'var(--text-secondary)' }}>{formatDate(doc.deletedAt)}</span>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{formatDate(doc.deletedAt)}</span>
                 ) : doc.expiresAt ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ color: new Date(doc.expiresAt) < new Date() ? '#DC2626' : 'var(--text-secondary)', fontWeight: new Date(doc.expiresAt) < new Date() ? 600 : 400 }}>
+                    <span style={{ color: new Date(doc.expiresAt) < new Date() ? '#DC2626' : 'var(--text-secondary)', fontWeight: new Date(doc.expiresAt) < new Date() ? 700 : 500 }}>
                       {formatDate(doc.expiresAt)}
                     </span>
                     {new Date(doc.expiresAt) < new Date() && (
@@ -273,13 +273,13 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 )}
               </td>
               {!isTrash && (
-                <td style={{ padding: '12px 14px' }}>
+                <td style={{ padding: '12px 16px' }}>
                   {!doc.requiresSignature ? (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('documents.notRequired')}</span>
                   ) : doc.signedAt ? (
-                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(21,128,61,0.1)', color: '#15803D', fontWeight: 600 }}>✓ {t('documents.signed')}</span>
+                    <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(21,128,61,0.1)', color: '#15803D', fontWeight: 700 }}>✓ {t('documents.signed')}</span>
                   ) : (
-                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(201,151,58,0.1)', color: '#C9973A', fontWeight: 600 }}>{t('documents.required')}</span>
+                    <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(201,151,58,0.12)', color: '#C9973A', fontWeight: 700 }}>{t('documents.required')}</span>
                   )}
                 </td>
               )}
@@ -409,14 +409,23 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
     </div>
 
     {totalPages > 1 && (
-      <div style={{ padding: '0 24px' }}>
-        <Pagination 
-          page={currentPage}
-          pages={totalPages}
-          total={totalDocs}
-          limit={pageSize}
-          onPageChange={setCurrentPage}
-        />
+      <div style={{
+        padding: '4px 20px 8px 20px',
+        borderTop: '1px solid var(--border)',
+        background: 'var(--surface)',
+        display: 'flex',
+        alignItems: 'center',
+        minHeight: '52px'
+      }}>
+        <div style={{ width: '100%' }}>
+          <Pagination 
+            page={currentPage}
+            pages={totalPages}
+            total={totalDocs}
+            limit={pageSize}
+            onPageChange={setCurrentPage}
+          />
+        </div>
       </div>
     )}
 

@@ -8,9 +8,10 @@ import { Employee, Company } from '../../types';
 import { createPortal } from 'react-dom';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import CustomSelect from '../../components/ui/CustomSelect';
+import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { getCompanies } from '../../api/companies';
 import { ModalBackdrop, ModalHeader } from './components/DocUtils';
+import { getAvatarUrl } from '../../api/client';
 
 // ── Components & Icons ──
 
@@ -38,11 +39,31 @@ const IconChevronDown = () => (
   </svg>
 );
 
+const getFileExtensionIcon = (filename: string) => {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) {
+    return <span style={{ fontSize: 20, flexShrink: 0 }}>🖼️</span>;
+  }
+  if (['pdf'].includes(ext)) {
+    return <span style={{ fontSize: 20, flexShrink: 0 }}>📄</span>;
+  }
+  if (['doc', 'docx'].includes(ext)) {
+    return <span style={{ fontSize: 20, flexShrink: 0 }}>📝</span>;
+  }
+  if (['xls', 'xlsx', 'csv'].includes(ext)) {
+    return <span style={{ fontSize: 20, flexShrink: 0 }}>📊</span>;
+  }
+  if (['zip', 'rar', '7z', 'gz'].includes(ext)) {
+    return <span style={{ fontSize: 20, flexShrink: 0 }}>📦</span>;
+  }
+  return <span style={{ fontSize: 20, flexShrink: 0 }}>📁</span>;
+};
+
 // ── Styles ──
 
 const modalOverlayStyle: React.CSSProperties = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-  background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+  background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
   display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
   animation: 'fadeIn 0.2s ease-out'
 };
@@ -50,15 +71,15 @@ const modalOverlayStyle: React.CSSProperties = {
 const modalContentStyle: React.CSSProperties = {
   background: 'var(--surface)', borderRadius: 16, padding: 0,
   width: '100%', maxHeight: '90vh', overflow: 'hidden',
-  boxShadow: '0 24px 60px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column',
+  boxShadow: '0 24px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column',
   animation: 'popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
   margin: '0 16px',
   transition: 'max-width 0.25s ease-in-out'
 };
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 14px', borderRadius: 8,
-  border: '1.5px solid var(--border)', background: 'var(--background)',
+  width: '100%', padding: '9px 12px', borderRadius: 8,
+  border: '1px solid var(--border)', background: 'var(--background)',
   color: 'var(--text-primary)', fontSize: 13, outline: 'none', transition: 'border-color 0.2s'
 };
 
@@ -209,7 +230,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
       const maxSize = isArchive ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
 
       if (f.size > maxSize) {
-        showToast(isArchive ? t('documents.errorBulk') : t('documents.errorUpload'), 'error');
+        showToast(isArchive ? `${f.name}: Archive size exceeds maximum limit (50MB).` : `${f.name}: File size exceeds maximum limit (10MB).`, 'error');
         return;
       }
     }
@@ -260,24 +281,20 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
   // Individual Settings Handlers
   const updateIndividualItem = (id: string, updates: Partial<UploadFileItem>) => {
-    setFiles(prev => prev.map(item => item.id === id ? { ...item, ...updates, useGlobal: false } : item));
+    setFiles(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
   };
 
   const toggleItemGlobal = (id: string, useGlobal: boolean) => {
     setFiles(prev => prev.map(item => {
       if (item.id === id) {
-        if (useGlobal) {
-          return {
-            ...item,
-            useGlobal: true,
-            requiresSignature: globalRequiresSignature,
-            expiresAt: globalExpiresAt,
-            visibility: globalVisibility,
-            companyId: globalCompanyId
-          };
-        } else {
-          return { ...item, useGlobal: false };
-        }
+        return {
+          ...item,
+          useGlobal,
+          requiresSignature: useGlobal ? globalRequiresSignature : item.requiresSignature,
+          expiresAt: useGlobal ? globalExpiresAt : item.expiresAt,
+          visibility: useGlobal ? globalVisibility : item.visibility,
+          companyId: useGlobal ? globalCompanyId : item.companyId
+        };
       }
       return item;
     }));
@@ -287,31 +304,13 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     setFiles(prev => prev.map(item => item.id === id ? { ...item, expanded: !item.expanded } : item));
   };
 
-  const handleBack = () => {
-    if (step === 2) {
-      setStep(1);
-    } else if (step === 3) {
-      setStep(2);
-    } else if (step === 4) {
-      if (unmatchedDocs.length > 0) {
-        setStep(3);
-      } else {
-        setStep(2);
-      }
-    }
-  };
-
   const handleSubmit = async () => {
     if (files.length === 0) return;
 
     if (isHrOrAdmin) {
       for (const item of files) {
         if (!item.companyId) {
-          showToast(t('companies.selectCompany', 'Select Company') + ` (${item.file.name})`, 'error');
-          return;
-        }
-        if (!item.expiresAt) {
-          showToast(t('employees.fieldRequired') + ` (${item.file.name})`, 'error');
+          showToast(t('companies.selectCompany', 'Please select a company for document') + `: ${item.file.name}`, 'error');
           return;
         }
       }
@@ -329,10 +328,9 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
           : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
 
         if (item.uploaded && item.documentId) {
-          // Sync changes in Step 2 if any, without actual employee assignment
           await updateDocumentGeneric(item.documentId, {
             title: item.file.name,
-            employee_id: null, // Always unassigned before Step 4 Confirmation
+            employee_id: null,
             requires_signature: item.requiresSignature,
             expires_at: item.expiresAt || null,
             visible_to_roles: visibleToRoles
@@ -353,7 +351,6 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             });
           }
         } else {
-          // Upload in simulation mode (does not save DB assignment, only checks matches in memory)
           const response = await uploadDocumentUnified(item.file, {
             requiresSignature: item.requiresSignature,
             expiresAt: item.expiresAt || null,
@@ -389,11 +386,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
           }
         }
       } catch (err: any) {
-        if (err.response?.data?.code === 'EXPIRY_DATE_REQUIRED') {
-          showToast(t('employees.fieldRequired') + ` (${item.file.name})`, 'error');
-        } else {
-          showToast(t('documents.errorUpload') + ` (${item.file.name})`, 'error');
-        }
+        showToast(err?.message || `${t('documents.errorUpload')} (${item.file.name})`, 'error');
         setUploading(false);
         return;
       }
@@ -402,82 +395,68 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     setFiles(updatedFiles);
     setUploading(false);
 
-    const initialUploadedDocs: UploadedDocDetail[] = updatedFiles.map(item => {
-      const compName = companies.find(c => c.id === item.companyId)?.name || 'No Company';
-      return {
-        documentId: item.documentId!,
-        fileName: item.file.name,
-        requiresSignature: item.requiresSignature,
-        expiresAt: item.expiresAt,
-        visibility: item.visibility,
-        companyId: item.companyId,
-        companyName: compName,
-        assignedEmployeeId: item.matchedEmployee?.id || null,
-        assignedEmployeeName: item.matchedEmployee ? `${item.matchedEmployee.name} ${item.matchedEmployee.surname}` : 'Unassigned',
-        fileObject: item.file
-      };
-    });
-
-    setUploadedDocs(initialUploadedDocs);
-
     if (unmatchedList.length > 0) {
-      const updatedUnmatchedList = unmatchedList.map(newUn => {
-        const existingUn = unmatchedDocs.find(un => un.documentId === newUn.documentId);
-        return existingUn ? { ...newUn, manualEmployeeId: existingUn.manualEmployeeId } : newUn;
-      });
-      setUnmatchedDocs(updatedUnmatchedList);
+      setUnmatchedDocs(unmatchedList);
       setStep(3);
     } else {
+      buildFinalUploadedDocs(updatedFiles, []);
       setStep(4);
     }
   };
 
-  const handleStep3Save = () => {
-    for (const doc of unmatchedDocs) {
-      if (!doc.manualEmployeeId) {
-        showToast(t('documents.selectEmployee', 'Please assign all documents to an employee'), 'error');
-        return;
-      }
-    }
+  const buildFinalUploadedDocs = (currentFiles: UploadFileItem[], manualAssignments: UnmatchedItem[]) => {
+    const finalDocs: UploadedDocDetail[] = [];
 
-    setUploadedDocs(prev => prev.map(doc => {
-      const unmatched = unmatchedDocs.find(u => u.documentId === doc.documentId);
-      if (unmatched) {
-        const selectedEmp = employees.find(e => e.id === unmatched.manualEmployeeId);
-        return {
-          ...doc,
-          assignedEmployeeId: unmatched.manualEmployeeId,
-          assignedEmployeeName: selectedEmp ? `${selectedEmp.name} ${selectedEmp.surname}` : 'Unassigned'
-        };
+    currentFiles.forEach(item => {
+      if (!item.documentId) return;
+
+      const manualMatch = manualAssignments.find(m => m.documentId === item.documentId);
+      let assignedEmpId: number | null = null;
+      let assignedEmpName = 'Unassigned';
+
+      if (manualMatch && manualMatch.manualEmployeeId) {
+        assignedEmpId = manualMatch.manualEmployeeId;
+        const emp = employees.find(e => e.id === assignedEmpId);
+        if (emp) assignedEmpName = `${emp.name} ${emp.surname}`;
+      } else if (item.matched && item.matchedEmployee) {
+        assignedEmpId = item.matchedEmployee.id;
+        assignedEmpName = `${item.matchedEmployee.name} ${item.matchedEmployee.surname}`;
+      } else if (targetEmployeeId && targetEmployeeName) {
+        assignedEmpId = targetEmployeeId;
+        assignedEmpName = targetEmployeeName;
       }
-      return doc;
-    }));
-    setStep(4);
+
+      const comp = companies.find(c => c.id === item.companyId);
+
+      finalDocs.push({
+        documentId: item.documentId,
+        fileName: manualMatch ? `${manualMatch.editableTitle}${manualMatch.fileExtension}` : item.file.name,
+        requiresSignature: item.requiresSignature,
+        expiresAt: item.expiresAt,
+        visibility: item.visibility,
+        companyId: item.companyId,
+        companyName: comp ? comp.name : 'Unknown Company',
+        assignedEmployeeId: assignedEmpId,
+        assignedEmployeeName: assignedEmpName,
+        fileObject: item.file
+      });
+    });
+
+    setUploadedDocs(finalDocs);
   };
 
-  const handleConfirmSave = async () => {
-    isConfirmedRef.current = true;
+  const handleStep3Save = async () => {
     setUploading(true);
     try {
-      // Activating final assignments ONLY when Confirm is clicked
-      await Promise.all(
-        uploadedDocs.map(async (doc) => {
-          const visibleToRoles = doc.visibility === 'hr'
-            ? ['admin', 'hr']
-            : ['admin', 'hr', 'area_manager', 'store_manager', 'employee'];
-
-          await updateDocumentGeneric(doc.documentId, {
-            title: doc.fileName,
-            employee_id: doc.assignedEmployeeId, // Actual assignment happens here!
-            requires_signature: doc.requiresSignature,
-            expires_at: doc.expiresAt || null,
-            visible_to_roles: visibleToRoles
-          });
-        })
-      );
-      showToast(t('documents.uploaded'), 'success');
-      onSuccess();
-      onClose();
+      for (const item of unmatchedDocs) {
+        const fullTitle = `${item.editableTitle}${item.fileExtension}`;
+        await updateDocumentGeneric(item.documentId, {
+          title: fullTitle,
+          employee_id: item.manualEmployeeId || null
+        });
+      }
+      buildFinalUploadedDocs(files, unmatchedDocs);
+      setStep(4);
     } catch {
       showToast(t('common.error'), 'error');
     } finally {
@@ -489,11 +468,18 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     try {
       await deleteDocument(docId);
       setUploadedDocs(prev => prev.filter(d => d.documentId !== docId));
-      setFiles(prev => prev.filter(d => d.documentId !== docId));
-      showToast(t('documents.deleted', 'Document removed successfully'), 'success');
+      setFiles(prev => prev.filter(f => f.documentId !== docId));
+      showToast(t('documents.deleted'), 'success');
     } catch {
       showToast(t('common.error'), 'error');
     }
+  };
+
+  const handleConfirmSave = () => {
+    isConfirmedRef.current = true;
+    showToast(t('documents.uploaded'), 'success');
+    onSuccess();
+    onClose();
   };
 
   const handleUnmatchedTitleChange = (idx: number, title: string) => {
@@ -522,24 +508,139 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     }
   };
 
-  const modalWidth = 650; // Cozy, readable width for stacked layout
+  const getUnmatchedEmpOptions = (docCompanyId: number | null): SelectOption[] => {
+    const unassigned: SelectOption = {
+      value: '',
+      label: t('documents.unassigned', 'Unassigned'),
+      render: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 0' }}>
+          <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(201,151,58,0.15)', color: '#C9973A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, flexShrink: 0 }}>⚠</div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#C9973A' }}>{t('documents.unassigned', 'Unassigned')}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('documents.unassignedDesc', 'No employee assigned')}</div>
+          </div>
+        </div>
+      )
+    };
+
+    const list = employees
+      .filter(emp => !docCompanyId || emp.companyId === docCompanyId)
+      .map(emp => {
+        const fullName = `${emp.name || ''} ${emp.surname || ''}`.trim();
+        const avatarUrl = emp.avatarFilename ? getAvatarUrl(emp.avatarFilename) : null;
+        const initials = `${(emp.name || '')[0] || ''}${(emp.surname || '')[0] || ''}`.toUpperCase() || 'U';
+
+        return {
+          value: String(emp.id),
+          label: fullName,
+          render: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 0' }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={fullName} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10, flexShrink: 0 }}>
+                  {initials}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName}</span>
+                  {emp.uniqueId && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'var(--background)', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      {emp.uniqueId}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {emp.role ? emp.role : ''}{emp.companyName ? ` · ${emp.companyName}` : ''}
+                </div>
+              </div>
+            </div>
+          )
+        };
+      });
+
+    return [unassigned, ...list];
+  };
+
+  const modalWidth = 660;
+
+  const matchedCount = files.filter(f => f.matched).length;
+  const unmatchedCount = unmatchedDocs.length;
 
   return createPortal(
     <div style={modalOverlayStyle} onClick={onClose}>
       <div style={{ ...modalContentStyle, maxWidth: modalWidth }} onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t('documents.uploadWizardTitle')}</h3>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 1 ? 'var(--primary)' : 'var(--border)' }} />
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 2 ? 'var(--primary)' : 'var(--border)' }} />
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 3 ? 'var(--primary)' : 'var(--border)' }} />
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: step === 4 ? 'var(--primary)' : 'var(--border)' }} />
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                STEP {step} OF 4
+              </div>
+              <h3 style={{ margin: '3px 0 0', fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+                {step === 1 ? 'Select & Upload Files' : step === 2 ? 'Configure Global & File Settings' : step === 3 ? 'Employee Matching' : 'Final Confirmation'}
+              </h3>
+            </div>
+            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>✕</button>
+          </div>
+          {/* Enhanced Step Indicator */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 14px',
+            background: 'rgba(0,0,0,0.02)',
+            borderRadius: '10px',
+            border: '1px solid var(--border)',
+          }}>
+            {[1, 2, 3, 4].map((s, idx) => {
+              const isActive = step === s;
+              const isCompleted = step > s;
+              const labels = [
+                t('documents.stepSelect', 'Upload'),
+                t('documents.stepConfigure', 'Configure'),
+                t('documents.stepMatch', 'Match'),
+                t('documents.stepConfirm', 'Confirm')
+              ];
+              return (
+                <React.Fragment key={s}>
+                  {idx > 0 && (
+                    <div style={{
+                      flex: 1,
+                      height: '2px',
+                      background: isCompleted ? '#10B981' : 'var(--border)',
+                      margin: '0 6px',
+                      transition: 'background 0.3s ease',
+                    }} />
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{
+                      width: '18px', height: '18px', borderRadius: '50%',
+                      background: isCompleted ? '#10B981' : isActive ? 'var(--primary)' : 'var(--border)',
+                      color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '10px', fontWeight: 700, transition: 'all 0.3s ease'
+                    }}>
+                      {isCompleted ? '✓' : s}
+                    </span>
+                    {!isMobile && (
+                      <span style={{
+                        fontSize: '11px', fontWeight: isActive ? 700 : 500,
+                        color: isActive ? 'var(--primary)' : isCompleted ? '#10B981' : 'var(--text-muted)',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {labels[s - 1]}
+                      </span>
+                    )}
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
 
         {/* Content */}
-        <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
+        <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
           {step === 1 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {targetEmployeeName && (
@@ -551,7 +652,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               <label
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  height: 200, border: '2px dashed var(--border)', borderRadius: 12, cursor: 'pointer',
+                  height: 190, border: '2px dashed var(--border)', borderRadius: 12, cursor: 'pointer',
                   transition: 'all 0.2s', background: 'var(--background)'
                 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
@@ -568,10 +669,10 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               </label>
             </div>
           ) : step === 2 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* Global Settings Section */}
-              <div style={{ padding: '16px', background: 'var(--background)', borderRadius: 12, border: '1.5px solid var(--primary)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--primary)' }}>GLOBAL SETTINGS (Applies to all documents)</div>
+              <div style={{ padding: '16px', background: 'var(--background)', borderRadius: 12, border: '1.5px solid var(--primary)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>GLOBAL SETTINGS (Applies to all documents)</div>
 
                 <div style={{ display: 'flex', gap: isMobile ? 16 : 20, flexDirection: isMobile ? 'column' : 'row' }}>
                   <div style={{ flex: 1 }}>
@@ -580,10 +681,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                       <button
                         onClick={() => handleGlobalSignature(true)}
                         style={{
-                          flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (globalRequiresSignature ? 'var(--primary)' : 'var(--border)'),
-                          background: globalRequiresSignature ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                          color: globalRequiresSignature ? 'var(--primary)' : 'var(--text-secondary)',
-                          fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                          flex: 1, padding: '9px', borderRadius: 8,
+                          border: globalRequiresSignature ? '1.5px solid #10B981' : '1px solid var(--border)',
+                          background: globalRequiresSignature ? 'rgba(16,185,129,0.1)' : 'var(--surface)',
+                          color: globalRequiresSignature ? '#059669' : 'var(--text-muted)',
+                          fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
                         }}
                       >
@@ -592,10 +694,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                       <button
                         onClick={() => handleGlobalSignature(false)}
                         style={{
-                          flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (!globalRequiresSignature ? 'var(--primary)' : 'var(--border)'),
-                          background: !globalRequiresSignature ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                          color: !globalRequiresSignature ? 'var(--primary)' : 'var(--text-secondary)',
-                          fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                          flex: 1, padding: '9px', borderRadius: 8,
+                          border: !globalRequiresSignature ? '1.5px solid #64748B' : '1px solid var(--border)',
+                          background: !globalRequiresSignature ? 'rgba(100,116,139,0.1)' : 'var(--surface)',
+                          color: !globalRequiresSignature ? '#475569' : 'var(--text-muted)',
+                          fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
                         }}
                       >
@@ -606,7 +709,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
                   <div style={{ flex: 1 }}>
                     <label style={labelStyle}>
-                      {t('documents.expiryDate')} {isHrOrAdmin && <span style={{ color: '#DC2626' }}>*</span>}
+                      {t('documents.expiryDate')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none' }}>(Optional)</span>
                     </label>
                     <DatePicker value={globalExpiresAt} onChange={handleGlobalExpiry} />
                   </div>
@@ -619,10 +722,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                       <button
                         onClick={() => handleGlobalVisibility('everyone')}
                         style={{
-                          flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (globalVisibility === 'everyone' ? 'var(--primary)' : 'var(--border)'),
-                          background: globalVisibility === 'everyone' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                          color: globalVisibility === 'everyone' ? 'var(--primary)' : 'var(--text-secondary)',
-                          fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                          flex: 1, padding: '9px', borderRadius: 8,
+                          border: globalVisibility === 'everyone' ? '1.5px solid #0284C7' : '1px solid var(--border)',
+                          background: globalVisibility === 'everyone' ? 'rgba(2,132,199,0.1)' : 'var(--surface)',
+                          color: globalVisibility === 'everyone' ? '#0284C7' : 'var(--text-muted)',
+                          fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
                         }}
                       >
@@ -631,10 +735,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                       <button
                         onClick={() => handleGlobalVisibility('hr')}
                         style={{
-                          flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid ' + (globalVisibility === 'hr' ? 'var(--primary)' : 'var(--border)'),
-                          background: globalVisibility === 'hr' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                          color: globalVisibility === 'hr' ? 'var(--primary)' : 'var(--text-secondary)',
-                          fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                          flex: 1, padding: '9px', borderRadius: 8,
+                          border: globalVisibility === 'hr' ? '1.5px solid #8B5CF6' : '1px solid var(--border)',
+                          background: globalVisibility === 'hr' ? 'rgba(139,92,246,0.1)' : 'var(--surface)',
+                          color: globalVisibility === 'hr' ? '#7C3AED' : 'var(--text-muted)',
+                          fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
                         }}
                       >
@@ -643,7 +748,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                     </div>
                   </div>
 
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, position: 'relative', zIndex: 15 }}>
                     <label style={labelStyle}>{t('companies.company', 'Company')} <span style={{ color: '#DC2626' }}>*</span></label>
                     <CustomSelect
                       value={globalCompanyId ? String(globalCompanyId) : null}
@@ -658,7 +763,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               {/* Individual Document Settings Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     INDIVIDUAL DOCUMENTS ({files.length})
                   </div>
                   <button
@@ -670,12 +775,12 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 </div>
 
                 {files.map(item => (
-                  <div key={item.id} style={{ background: 'var(--background)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
+                  <div key={item.id} style={{ background: 'var(--background)', borderRadius: 12, border: '1px solid var(--border)', overflow: item.expanded ? 'visible' : 'hidden', position: 'relative', zIndex: item.expanded ? 20 : 1 }}>
                     <div
                       onClick={() => toggleExpandItem(item.id)}
-                      style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: item.expanded ? 'var(--surface)' : 'transparent' }}
+                      style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: item.expanded ? 'var(--surface)' : 'transparent', borderRadius: item.expanded ? '12px 12px 0 0' : 12 }}
                     >
-                      <div style={{ color: 'var(--primary)' }}><IconFile /></div>
+                      {getFileExtensionIcon(item.file.name)}
                       <div style={{ flex: 1, overflow: 'hidden' }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {item.file.name}
@@ -685,7 +790,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                        <label onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)' }}>
                           <input
                             type="checkbox"
                             checked={item.useGlobal}
@@ -700,7 +805,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                     </div>
 
                     {item.expanded && (
-                      <div style={{ padding: '16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div style={{ padding: '16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16, overflow: 'visible' }}>
                         <div style={{ display: 'flex', gap: isMobile ? 16 : 20, flexDirection: isMobile ? 'column' : 'row' }}>
                           <div style={{ flex: 1 }}>
                             <label style={labelStyle}>{t('documents.requiresSignature')}</label>
@@ -708,10 +813,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                               <button
                                 onClick={() => updateIndividualItem(item.id, { requiresSignature: true })}
                                 style={{
-                                  flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (item.requiresSignature ? 'var(--primary)' : 'var(--border)'),
-                                  background: item.requiresSignature ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                                  color: item.requiresSignature ? 'var(--primary)' : 'var(--text-secondary)',
-                                  fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                  flex: 1, padding: '8px', borderRadius: 8,
+                                  border: item.requiresSignature ? '1.5px solid #10B981' : '1px solid var(--border)',
+                                  background: item.requiresSignature ? 'rgba(16,185,129,0.1)' : 'var(--surface)',
+                                  color: item.requiresSignature ? '#059669' : 'var(--text-muted)',
+                                  fontSize: 12, fontWeight: 700, cursor: 'pointer'
                                 }}
                               >
                                 {t('common.yes')}
@@ -719,10 +825,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                               <button
                                 onClick={() => updateIndividualItem(item.id, { requiresSignature: false })}
                                 style={{
-                                  flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (!item.requiresSignature ? 'var(--primary)' : 'var(--border)'),
-                                  background: !item.requiresSignature ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                                  color: !item.requiresSignature ? 'var(--primary)' : 'var(--text-secondary)',
-                                  fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                  flex: 1, padding: '8px', borderRadius: 8,
+                                  border: !item.requiresSignature ? '1.5px solid #64748B' : '1px solid var(--border)',
+                                  background: !item.requiresSignature ? 'rgba(100,116,139,0.1)' : 'var(--surface)',
+                                  color: !item.requiresSignature ? '#475569' : 'var(--text-muted)',
+                                  fontSize: 12, fontWeight: 700, cursor: 'pointer'
                                 }}
                               >
                                 {t('common.no')}
@@ -731,7 +838,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                           </div>
 
                           <div style={{ flex: 1 }}>
-                            <label style={labelStyle}>{t('documents.expiryDate')}</label>
+                            <label style={labelStyle}>{t('documents.expiryDate')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none' }}>(Optional)</span></label>
                             <DatePicker
                               value={item.expiresAt}
                               onChange={val => updateIndividualItem(item.id, { expiresAt: val })}
@@ -739,17 +846,18 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: isMobile ? 16 : 20, flexDirection: isMobile ? 'column' : 'row' }}>
+                        <div style={{ display: 'flex', gap: isMobile ? 16 : 20, flexDirection: isMobile ? 'column' : 'row', overflow: 'visible' }}>
                           <div style={{ flex: 1 }}>
                             <label style={labelStyle}>{t('documents.visibility')}</label>
                             <div style={{ display: 'flex', gap: 12 }}>
                               <button
                                 onClick={() => updateIndividualItem(item.id, { visibility: 'everyone' })}
                                 style={{
-                                  flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (item.visibility === 'everyone' ? 'var(--primary)' : 'var(--border)'),
-                                  background: item.visibility === 'everyone' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                                  color: item.visibility === 'everyone' ? 'var(--primary)' : 'var(--text-secondary)',
-                                  fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                  flex: 1, padding: '8px', borderRadius: 8,
+                                  border: item.visibility === 'everyone' ? '1.5px solid #0284C7' : '1px solid var(--border)',
+                                  background: item.visibility === 'everyone' ? 'rgba(2,132,199,0.1)' : 'var(--surface)',
+                                  color: item.visibility === 'everyone' ? '#0284C7' : 'var(--text-muted)',
+                                  fontSize: 12, fontWeight: 700, cursor: 'pointer'
                                 }}
                               >
                                 {t('documents.visibilityEveryone')}
@@ -757,10 +865,11 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                               <button
                                 onClick={() => updateIndividualItem(item.id, { visibility: 'hr' })}
                                 style={{
-                                  flex: 1, padding: '8px', borderRadius: 8, border: '1.5px solid ' + (item.visibility === 'hr' ? 'var(--primary)' : 'var(--border)'),
-                                  background: item.visibility === 'hr' ? 'rgba(2,132,199,0.05)' : 'var(--surface)',
-                                  color: item.visibility === 'hr' ? 'var(--primary)' : 'var(--text-secondary)',
-                                  fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                  flex: 1, padding: '8px', borderRadius: 8,
+                                  border: item.visibility === 'hr' ? '1.5px solid #8B5CF6' : '1px solid var(--border)',
+                                  background: item.visibility === 'hr' ? 'rgba(139,92,246,0.1)' : 'var(--surface)',
+                                  color: item.visibility === 'hr' ? '#7C3AED' : 'var(--text-muted)',
+                                  fontSize: 12, fontWeight: 700, cursor: 'pointer'
                                 }}
                               >
                                 {t('documents.visibilityHR')}
@@ -768,7 +877,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                             </div>
                           </div>
 
-                          <div style={{ flex: 1 }}>
+                          <div style={{ flex: 1, position: 'relative', zIndex: 30 }}>
                             <label style={labelStyle}>{t('companies.company', 'Company')} <span style={{ color: '#DC2626' }}>*</span></label>
                             <CustomSelect
                               value={item.companyId ? String(item.companyId) : null}
@@ -786,19 +895,35 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             </div>
           ) : step === 3 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, fontSize: 13, color: '#B45309', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 18 }}>⚠️</span>
-                {t('documents.noAutoMatchFound', 'No auto-match found. Please assign manually.')}
-              </div>
+              {/* Guidance Message Banner */}
+              {unmatchedCount === 0 ? (
+                <div style={{ padding: '12px 16px', background: 'rgba(21,128,61,0.1)', border: '1px solid rgba(21,128,61,0.3)', borderRadius: 10, fontSize: 13, color: '#15803D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>✓</span>
+                  All {files.length} document(s) were automatically matched to company employees based on file names.
+                </div>
+              ) : matchedCount > 0 ? (
+                <div style={{ padding: '12px 16px', background: 'rgba(2,132,199,0.1)', border: '1px solid rgba(2,132,199,0.3)', borderRadius: 10, fontSize: 13, color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>⚡</span>
+                  Auto-matching completed: {matchedCount} document(s) auto-matched to employees. {unmatchedCount} document(s) require manual assignment below.
+                </div>
+              ) : (
+                <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, fontSize: 13, color: '#B45309', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>⚠️</span>
+                  No auto-match found for the uploaded documents. Please select an employee manually for each document below or leave as unassigned.
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   UNASSIGNED DOCUMENTS ({unmatchedDocs.length})
                 </div>
 
                 {unmatchedDocs.map((doc, idx) => (
                   <div key={doc.documentId} style={{ padding: 16, background: 'var(--background)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{doc.fileName}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {getFileExtensionIcon(doc.fileName)}
+                      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{doc.fileName}</div>
+                    </div>
 
                     <div style={{ display: 'flex', gap: isMobile ? 16 : 12, flexDirection: isMobile ? 'column' : 'row' }}>
                       <div style={{ flex: 1 }}>
@@ -815,21 +940,16 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
 
                       <div style={{ flex: 1 }}>
                         <label style={labelStyle}>{t('documents.assigned')}</label>
-                        <select
-                          value={doc.manualEmployeeId || ''}
-                          onChange={e => handleUnmatchedEmpChange(idx, e.target.value ? Number(e.target.value) : null)}
-                          style={inputStyle}
+                        <CustomSelect
+                          value={doc.manualEmployeeId ? String(doc.manualEmployeeId) : ''}
+                          onChange={(val) => handleUnmatchedEmpChange(idx, val ? Number(val) : null)}
+                          options={getUnmatchedEmpOptions(doc.companyId)}
+                          placeholder={t('documents.selectEmployee', 'Select Employee...')}
                           disabled={loadingEmps}
-                        >
-                          <option value="">{t('documents.selectEmployee')}</option>
-                          {employees
-                            .filter(emp => !doc.companyId || emp.companyId === doc.companyId)
-                            .map(emp => (
-                              <option key={emp.id} value={emp.id}>
-                                {emp.name} {emp.surname} ({emp.uniqueId || emp.role}){emp.companyName ? ` - ${emp.companyName}` : ''}
-                              </option>
-                            ))}
-                        </select>
+                          isClearable={true}
+                          searchable={true}
+                          menuMaxHeight={220}
+                        />
                       </div>
                     </div>
                   </div>
@@ -839,13 +959,13 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
           ) : step === 4 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* Alert Message Bar */}
-              <div style={{ padding: '12px 16px', background: 'rgba(21,128,61,0.1)', border: '1px solid rgba(21,128,61,0.3)', borderRadius: 10, fontSize: 13, color: '#15803D', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ padding: '12px 16px', background: 'rgba(21,128,61,0.1)', border: '1px solid rgba(21,128,61,0.3)', borderRadius: 10, fontSize: 13, color: '#15803D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 18 }}>✓</span>
                 {t('documents.confirmTitle', 'Review and confirm document upload details')}
               </div>
 
               {/* Uploaded Documents List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {uploadedDocs.map(doc => {
                   const isHovered = hoveredDocId === doc.documentId;
                   return (
@@ -854,41 +974,33 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                       onMouseEnter={() => setHoveredDocId(doc.documentId)}
                       onMouseLeave={() => setHoveredDocId(null)}
                       style={{
-                        borderRadius: 12, border: '1.5px solid var(--border)',
+                        borderRadius: 12, border: '1px solid var(--border)',
                         background: 'var(--surface)', overflow: 'hidden', display: 'flex', flexDirection: 'column'
                       }}
                     >
-                      {/* Document Row Header (Full Width Bar) */}
+                      {/* Document Row Header */}
                       <div
                         style={{
-                          padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14,
-                          background: 'var(--background)', borderBottom: '1.5px solid var(--border-light)',
+                          padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
+                          background: 'var(--background)', borderBottom: '1px solid var(--border-light)',
                           position: 'relative'
                         }}
                       >
-                        <div style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center' }}><IconFile /></div>
+                        {getFileExtensionIcon(doc.fileName)}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {doc.fileName}
                           </div>
                         </div>
 
-                        {/* Hover View and Remove Action buttons */}
-                        <div style={{ display: 'flex', gap: 8, opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s', pointerEvents: isHovered ? 'auto' : 'none' }}>
+                        {/* Action buttons */}
+                        <div style={{ display: 'flex', gap: 8 }}>
                           <button
                             onClick={() => openPreview(doc)}
                             style={{
-                              padding: '6px 12px', borderRadius: 6, border: '1px solid var(--primary)',
-                              background: 'transparent', color: 'var(--primary)', cursor: 'pointer',
-                              fontSize: 12, fontWeight: 600, transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = 'var(--primary)';
-                              e.currentTarget.style.color = '#fff';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.color = 'var(--primary)';
+                              padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)',
+                              background: 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer',
+                              fontSize: 12, fontWeight: 600, transition: 'all 0.15s'
                             }}
                           >
                             {t('common.view', 'View')}
@@ -896,75 +1008,43 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                           <button
                             onClick={() => handleRemoveDocument(doc.documentId)}
                             style={{
-                              padding: '6px 12px', borderRadius: 6, border: '1px solid #DC2626',
-                              background: 'transparent', color: '#DC2626', cursor: 'pointer',
-                              fontSize: 12, fontWeight: 600, transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = '#DC2626';
-                              e.currentTarget.style.color = '#fff';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.color = '#DC2626';
+                              padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(220,38,38,0.3)',
+                              background: 'rgba(220,38,38,0.06)', color: '#DC2626', cursor: 'pointer',
+                              fontSize: 12, fontWeight: 600, transition: 'all 0.15s'
                             }}
                           >
-                            {t('common.remove', 'Remove')}
+                            {t('common.delete', 'Remove')}
                           </button>
                         </div>
                       </div>
 
-                      {/* Document Details Block (styled nicely matching screenshot) */}
-                      <div
-                        style={{
-                          padding: '16px 20px', background: '#F4F2EE', // warm beige background
-                          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-                          gap: '14px 20px', borderTop: 'none'
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            COMPANY
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
-                            {doc.companyName}
-                          </div>
+                      {/* Details Content */}
+                      <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Company:</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{doc.companyName}</span>
                         </div>
 
-                        <div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            ASSIGNING TO
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
-                            {doc.assignedEmployeeName}
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Assigned To:</span>
+                          {doc.assignedEmployeeId ? (
+                            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(0,45,91,0.06)', color: 'var(--primary)', fontWeight: 700, border: '1px solid rgba(0,45,91,0.1)' }}>
+                              👤 {doc.assignedEmployeeName}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(201,151,58,0.12)', color: '#C9973A', fontWeight: 700 }}>
+                              ⚠ Unassigned
+                            </span>
+                          )}
                         </div>
 
-                        <div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            REQUIRES SIGNATURE
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
-                            {doc.requiresSignature ? 'Yes' : 'No'}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            EXPIRY DATE
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
-                            {doc.expiresAt || '—'}
-                          </div>
-                        </div>
-
-                        <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#5C5B57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            VISIBILITY
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 4 }}>
-                            {doc.visibility === 'hr' ? 'Only HR' : 'Everyone'}
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Signature:</span>
+                          {doc.requiresSignature ? (
+                            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(201,151,58,0.12)', color: '#C9973A', fontWeight: 700 }}>Required</span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Not Required</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -976,33 +1056,43 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 12, justifyContent: 'flex-end', background: 'var(--background)' }}>
-          {step > 1 && (
+        <div style={{
+          padding: '12px 20px',
+          background: 'var(--background)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}>
+          {step > 1 ? (
             <button
-              onClick={handleBack}
-              data-testid="wizard-back-button"
-              style={{ marginRight: 'auto', padding: '10px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+              onClick={() => setStep((step - 1) as any)}
+              disabled={uploading}
+              style={{
+                padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)',
+                color: 'var(--text-secondary)', cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
+                opacity: uploading ? 0.6 : 1
+              }}
             >
               {t('common.back', 'Back')}
             </button>
-          )}
-          <button
-            onClick={onClose}
-            data-testid="wizard-cancel-button"
-            style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-          >
-            {t('common.cancel')}
-          </button>
-          {step === 2 ? (
+          ) : <div />}
+
+          {step === 1 ? (
+            <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              {t('common.cancel', 'Cancel')}
+            </button>
+          ) : step === 2 ? (
             <button
               onClick={handleSubmit}
               disabled={uploading}
               data-testid="wizard-submit-button"
               style={{
-                padding: '10px 24px', borderRadius: 8, border: 'none', background: 'var(--primary)',
+                padding: '8px 22px', borderRadius: 8, border: 'none', background: 'var(--primary)',
                 color: '#fff', cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
                 opacity: uploading ? 0.7 : 1, transition: 'all 0.2s',
-                boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
+                boxShadow: '0 2px 8px rgba(13,33,55,0.18)'
               }}
             >
               {uploading ? t('common.loading') : t('documents.uploadWizardTitle')}
@@ -1011,10 +1101,10 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             <button
               onClick={handleStep3Save}
               style={{
-                padding: '10px 32px', borderRadius: 8, border: 'none', background: 'var(--primary)',
+                padding: '8px 24px', borderRadius: 8, border: 'none', background: 'var(--primary)',
                 color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                 transition: 'all 0.2s',
-                boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
+                boxShadow: '0 2px 8px rgba(13,33,55,0.18)'
               }}
             >
               {t('common.save')}
@@ -1024,10 +1114,10 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               onClick={handleConfirmSave}
               disabled={uploading}
               style={{
-                padding: '10px 32px', borderRadius: 8, border: 'none', background: 'var(--primary)',
+                padding: '8px 24px', borderRadius: 8, border: 'none', background: 'var(--primary)',
                 color: '#fff', cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
                 opacity: uploading ? 0.7 : 1, transition: 'all 0.2s',
-                boxShadow: '0 4px 12px rgba(2,132,199,0.2)'
+                boxShadow: '0 2px 8px rgba(13,33,55,0.18)'
               }}
             >
               {uploading ? t('common.loading') : t('common.confirm', 'Confirm')}
