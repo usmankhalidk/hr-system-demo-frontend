@@ -2036,7 +2036,20 @@ export default function AttendanceLogsPage() {
                   </label>
                   <CustomSelect
                     value={analyticsUserId || null}
-                    onChange={(val) => setAnalyticsUserId(val ?? '')}
+                    onChange={(val) => {
+                      const selectedId = val ?? '';
+                      setAnalyticsUserId(selectedId);
+                      if (selectedId) {
+                        const emp = filterEmployees.find(e => String(e.id) === selectedId);
+                        if (emp && emp.storeId) {
+                          const store = filterStores.find(s => s.id === emp.storeId);
+                          if (store) {
+                            if (store.companyName) setAnalyticsCompany(store.companyName);
+                            setAnalyticsStoreId(String(store.id));
+                          }
+                        }
+                      }
+                    }}
                     placeholder={t('attendance.analyticsSelectEmployee', 'Seleziona Dipendente')}
                     options={analyticsEmployeeOptions}
                     searchable={true}
@@ -2100,11 +2113,19 @@ export default function AttendanceLogsPage() {
                   </div>
                 </div>
 
-                {/* Overall balance headline (client request: overtime − missing, clear final view) */}
+                {/* Overall balance headline */}
                 {(() => {
                   const net = analyticsData.netBalance;
                   const positive = net >= 0;
-                  const col = positive ? '#16a34a' : '#dc2626';
+                  const col = net === 0 ? 'var(--text-primary)' : (positive ? '#16a34a' : '#dc2626');
+                  const daysCount = (() => {
+                    if (!analyticsDateFrom || !analyticsDateTo) return 0;
+                    const d1 = new Date(analyticsDateFrom);
+                    const d2 = new Date(analyticsDateTo);
+                    const diffTime = Math.abs(d2.getTime() - d1.getTime());
+                    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                  })();
+                  const netDisplay = net === 0 ? '0h' : `${positive ? '+' : '−'}${formatHoursStr(net)}`;
                   return (
                     <div style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
@@ -2114,13 +2135,14 @@ export default function AttendanceLogsPage() {
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Scale size={15} style={{ color: col }} /> {t('attendance.overallBalance', 'Saldo Complessivo')}
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>({daysCount} {t('common.days', 'Giorni')})</span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                           {t('attendance.overallBalanceDesc', 'Straordinari netti − Ore mancanti nette')}
                         </div>
                       </div>
                       <div style={{ fontSize: 26, fontWeight: 800, color: col, fontFamily: 'var(--font-display)' }}>
-                        {positive ? '+' : '−'}{formatHoursStr(net)}
+                        {netDisplay}
                       </div>
                     </div>
                   );
@@ -2139,18 +2161,20 @@ export default function AttendanceLogsPage() {
                   const cardBlock = (label: React.ReactNode, value: React.ReactNode, chip: React.ReactNode) => (
                     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                        {value}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+                        <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+                          {value}
+                        </div>
                         {chip}
                       </div>
                     </div>
                   );
+                  const otStr = analyticsData.sumOvertime === 0 ? '0h' : `+${formatHoursStr(analyticsData.sumOvertime)}`;
+                  const utStr = analyticsData.sumUndertime === 0 ? '0h' : `−${formatHoursStr(analyticsData.sumUndertime)}`;
                   return (
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                        {cardBlock(<>📋 {t('attendance.totalScheduled', 'Programmate')}</>, formatHoursStr(analyticsData.sumScheduled), empChip(empCount))}
+                        {cardBlock(<>📋 {t('attendance.totalScheduled', 'Programmate')}</>, <span style={{ color: 'var(--primary)' }}>{formatHoursStr(analyticsData.sumScheduled)}</span>, empChip(empCount))}
                       </div>
 
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
@@ -2158,11 +2182,11 @@ export default function AttendanceLogsPage() {
                       </div>
 
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                        {cardBlock(<span style={{ color: '#16a34a' }}>▲ {t('attendance.totalOvertime', 'Straordinari Netti')}</span>, <span style={{ color: '#16a34a' }}>+{formatHoursStr(analyticsData.sumOvertime)}</span>, empChip(otUtCount, countByShift))}
+                        {cardBlock(<span style={{ color: '#16a34a' }}>▲ {t('attendance.totalOvertime', 'Straordinari Netti')}</span>, <span style={{ color: '#16a34a' }}>{otStr}</span>, empChip(otUtCount, countByShift))}
                       </div>
 
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                        {cardBlock(<span style={{ color: '#dc2626' }}>▼ {t('attendance.totalUndertime', 'Ore Mancanti Nette')}</span>, <span style={{ color: '#dc2626' }}>−{formatHoursStr(analyticsData.sumUndertime)}</span>, empChip(otUtCount, countByShift))}
+                        {cardBlock(<span style={{ color: '#dc2626' }}>▼ {t('attendance.totalUndertime', 'Ore Mancanti Nette')}</span>, <span style={{ color: '#dc2626' }}>{utStr}</span>, empChip(otUtCount, countByShift))}
                       </div>
                     </div>
                   );
@@ -2239,14 +2263,37 @@ export default function AttendanceLogsPage() {
                             </div>
 
                             {/* Compact progress */}
-                            <div style={{ flex: '1 1 150px', minWidth: 130 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5, marginBottom: 3 }}>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ flex: '1 1 240px', minWidth: 200 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5, marginBottom: 3, flexWrap: 'wrap', gap: 4 }}>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                   {formatHoursStr(r.workedMinutes)} <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>/ {formatHoursStr(denom)}</span>
+                                  
                                   {r.scheduledBreakMinutes > 0 && (
-                                    <span style={{ fontSize: 9.5, color: '#b45309', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2, background: 'rgba(180,83,9,0.08)', padding: '1px 5px', borderRadius: 4 }}>
-                                      ☕ {formatHoursStr(r.scheduledBreakMinutes)}
-                                      {!r.breakRecorded && <span style={{ color: '#dc2626' }}>· {t('attendance.notRecorded', 'non registrata')}</span>}
+                                    <span style={{ fontSize: 9, color: '#b45309', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2, background: 'rgba(180,83,9,0.08)', padding: '1px 6px', borderRadius: 4, border: '1px solid rgba(180,83,9,0.15)' }}>
+                                      ☕ {formatHoursStr(r.scheduledBreakMinutes)} pausa
+                                      {!r.breakRecorded && <span style={{ color: '#dc2626', fontWeight: 800 }}> · {t('attendance.notRecorded', 'non registrata')}</span>}
+                                    </span>
+                                  )}
+
+                                  {r.vacationMinutes > 0 && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(201,151,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(201,151,58,0.2)' }}>
+                                      🌴 {formatHoursStr(r.vacationMinutes)} Ferie
+                                    </span>
+                                  )}
+                                  {r.sickMinutes > 0 && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                      🤒 {formatHoursStr(r.sickMinutes)} Malattia
+                                    </span>
+                                  )}
+                                  {r.leaveMinutes > 0 && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                      📄 {formatHoursStr(r.leaveMinutes)} Permesso
+                                    </span>
+                                  )}
+
+                                  {r.status === 'absent' && (
+                                    <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 4, background: 'rgba(220,38,38,0.1)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.2)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                      ⚠️ {t('attendance.noAttendanceAction', 'Nessuna timbratura registrata')}
                                     </span>
                                   )}
                                 </span>
@@ -2259,17 +2306,8 @@ export default function AttendanceLogsPage() {
                               </div>
                             </div>
 
-                            {/* Variance (real) + leave chips */}
+                            {/* Variance Badge */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flex: '0 1 auto' }}>
-                              {r.vacationMinutes > 0 && (
-                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(201,151,58,0.1)', color: 'var(--accent)' }}>🌴 {formatHoursStr(r.vacationMinutes)}</span>
-                              )}
-                              {r.sickMinutes > 0 && (
-                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', color: '#ef4444' }}>🤒 {formatHoursStr(r.sickMinutes)}</span>
-                              )}
-                              {r.leaveMinutes > 0 && (
-                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>📄 {formatHoursStr(r.leaveMinutes)}</span>
-                              )}
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 800, color: vBadge.color, whiteSpace: 'nowrap', minWidth: 62, justifyContent: 'flex-end' }}>
                                 <span style={{ fontSize: 11 }}>{vBadge.icon}</span>{vBadge.text}
                               </span>
@@ -2827,7 +2865,17 @@ export default function AttendanceLogsPage() {
                                     </span>
                                     {row.leaveApprovedAfter && (
                                       <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626' }}>
-                                        {t('attendance.leaveApprovedAfter', 'Congedo approvato dopo — non conteggiato')}
+                                        {t('attendance.leaveApprovedAfter', 'Congedo non conteggiato')}
+                                      </span>
+                                    )}
+                                    {row.scheduledBreakMinutes > 0 && !row.breakRecorded && (
+                                      <span style={{ fontSize: 9, fontWeight: 700, color: '#b45309' }}>
+                                        ☕ {t('attendance.noBreakRecorded', 'Pausa non registrata')}
+                                      </span>
+                                    )}
+                                    {row.breakNotCompleted && (
+                                      <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626' }}>
+                                        ⚠ {t('attendance.breakNotCompleted', 'Pausa non completata')}
                                       </span>
                                     )}
                                   </div>
@@ -4198,7 +4246,7 @@ export default function AttendanceLogsPage() {
 
             {/* Footer (Item 5: Removed print button) */}
             <div style={{
-              padding: '16px 24px', borderTop: '1px solid var(--border)',
+              padding: '10px 24px', borderTop: '1px solid var(--border)',
               background: 'var(--surface-warm)', display: 'flex', justifyContent: 'flex-end', gap: 12,
             }}>
               <button

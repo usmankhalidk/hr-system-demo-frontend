@@ -1771,6 +1771,9 @@ const en = {
     breakToleranceLabel: 'Break Tolerance (minutes)',
     breakToleranceHint: 'Maximum allowed deviation from scheduled break. Example: With 60 min break and 10 min tolerance, breaks shorter than 50 min trigger full deduction.',
     enableStrictEnforcement: 'Enable strict break enforcement',
+    guideStrictActive: 'Strict Enforcement Active (Tolerance: {{tol}} min) — If recorded break is less than {{tol}} min from scheduled, full break is deducted to protect payroll costs.',
+    guideStandardActive: 'Standard Mode Active — Scheduled breaks are always deducted from worked hours even if not clocked.',
+    noAttendanceAction: 'No attendance action recorded',
     splitBreakTitle: 'Break (Second Segment)',
     // Edit / delete actions
     editEvent: 'Edit Event',
