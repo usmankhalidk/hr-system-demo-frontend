@@ -1767,6 +1767,9 @@ const it = {
     breakToleranceLabel: 'Tolleranza Pausa (minuti)',
     breakToleranceHint: 'Deviazione massima consentita dalla pausa programmata. Esempio: con pausa di 60 min e tolleranza di 10 min, pause inferiori a 50 min attivano la deduzione completa.',
     enableStrictEnforcement: 'Abilita applicazione rigorosa pause',
+    guideStrictActive: 'Applicazione Rigorosa Attiva (Tolleranza: {{tol}} min) — Se la pausa registrata è inferiore a {{tol}} min dal previsto, viene dedotta la pausa completa per proteggere il costo del personale.',
+    guideStandardActive: 'Modalità Standard Attiva — Le pause programmate vengono sempre dedotte dalle ore lavorate anche se non timbrate.',
+    noAttendanceAction: 'Nessuna timbratura registrata',
     splitBreakTitle: 'Pausa (Secondo Segmento)',
     // Edit / delete actions
     editEvent: 'Modifica Evento',
