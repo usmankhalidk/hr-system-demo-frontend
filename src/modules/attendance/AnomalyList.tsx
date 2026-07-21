@@ -12,7 +12,7 @@ interface Anomaly {
   userAvatarFilename?: string | null;
   storeName: string;
   date: string;
-  anomalyType: 'late_arrival' | 'no_show' | 'long_break' | 'early_exit' | 'overtime' | 'missing_checkout';
+  anomalyType: 'late_arrival' | 'no_show' | 'long_break' | 'early_exit' | 'overtime' | 'missing_checkout' | 'missing_break';
   severity: 'low' | 'medium' | 'high';
   details: string;
   detailsKey?: string;
@@ -54,8 +54,7 @@ const IconLogOut = () => (
 );
 const IconOvertime = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-    <line x1="19" y1="2" x2="22" y2="5"/>
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 10"/>
   </svg>
 );
 const IconCheckCircle = () => (
@@ -103,6 +102,7 @@ const ANOMALY_META: Record<string, { Icon: () => JSX.Element; color: string; bg:
   early_exit:   { Icon: IconLogOut,  color: '#0369a1', bg: 'rgba(3,105,161,0.08)',   border: 'rgba(3,105,161,0.20)' },
   overtime:     { Icon: IconOvertime, color: '#c2410c', bg: 'rgba(194,65,12,0.08)',  border: 'rgba(194,65,12,0.20)' },
   missing_checkout: { Icon: IconLogOut, color: '#be123c', bg: 'rgba(190,18,60,0.08)', border: 'rgba(190,18,60,0.20)' },
+  missing_break: { Icon: IconPause, color: '#b45309', bg: 'rgba(180,83,9,0.08)', border: 'rgba(180,83,9,0.20)' },
 };
 
 const SOURCE_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -843,6 +843,14 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
                       <div>• <strong>Pausa Effettiva:</strong> {selectedAnomaly.detailsParams?.minutes || 0} minuti</div>
                       <div style={{ background: '#faf5ff', padding: '8px 12px', borderRadius: 8, border: '1px solid #e9d5ff', color: '#7c3aed', fontWeight: 700 }}>
                         Pausa prolungata di oltre 5 minuti rispetto al limite concordato.
+                      </div>
+                    </>
+                  )}
+                  {selectedAnomaly.anomalyType === 'missing_break' && (
+                    <>
+                      <div>• <strong>Pausa Obbligatoria Programmata:</strong> {selectedAnomaly.detailsParams?.minutes || 60} minuti</div>
+                      <div style={{ background: '#fffbeb', padding: '8px 12px', borderRadius: 8, border: '1px solid #fde68a', color: '#b45309', fontWeight: 700 }}>
+                        Pausa non registrata. Il tempo di pausa programmato è stato dedotto automaticamente dalle ore lavorate.
                       </div>
                     </>
                   )}

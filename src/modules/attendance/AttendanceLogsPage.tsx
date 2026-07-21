@@ -42,6 +42,11 @@ export interface SummaryRow {
   effectiveScheduledMinutes: number; // scheduledMinutes − neutralizedMinutes (basis of the variance)
   absentMinutes: number;           // scheduled time on past days with no clock-in and no leave (stays in the deficit)
   leaveApprovedAfter: boolean;     // person worked, then leave was approved after the fact → leave ignored
+  breakDeductedMinutes: number;
+  scheduledBreakMinutes: number;
+  actualBreakMinutes: number;
+  breakRecorded: boolean;
+  breakNotCompleted: boolean;
   status: 'leave' | 'absent' | 'pending' | 'in_progress' | 'worked' | 'cancelled';
 }
 
@@ -496,6 +501,20 @@ export default function AttendanceLogsPage() {
   const [analyticsDateFrom, setAnalyticsDateFrom] = useState<string>(defaultFrom);
   const [analyticsDateTo, setAnalyticsDateTo]     = useState<string>(today);
 
+  const [breakSettings, setBreakSettings] = useState<{ enforcementEnabled: boolean; toleranceMinutes: number }>({ enforcementEnabled: false, toleranceMinutes: 10 });
+  const [showBreakSettingsModal, setShowBreakSettingsModal] = useState(false);
+
+  useEffect(() => {
+    client.get('/companies/break-settings').then(res => {
+      if (res.data?.data) {
+        setBreakSettings({
+          enforcementEnabled: res.data.data.breakEnforcementEnabled ?? false,
+          toleranceMinutes: res.data.data.breakToleranceMinutes ?? 10,
+        });
+      }
+    }).catch(() => {});
+  }, []);
+
   // ── Rich CustomSelect Option Memoizers for Analytics (Request 1 & 3) ───────
   const companyOptions = useMemo(() => {
     const companiesMap = new Map<string, { logoUrl?: string | null; groupName?: string | null }>();
@@ -898,7 +917,10 @@ export default function AttendanceLogsPage() {
           scheduledMinutes: 0, workedMinutes: 0, varianceMinutes: 0,
           vacationMinutes: 0, sickMinutes: 0, leaveMinutes: 0,
           neutralizedMinutes: 0, effectiveScheduledMinutes: 0, absentMinutes: 0,
-          leaveApprovedAfter: false, status: 'worked',
+          leaveApprovedAfter: false,
+          breakDeductedMinutes: 0, scheduledBreakMinutes: 0, actualBreakMinutes: 0,
+          breakRecorded: false, breakNotCompleted: false,
+          status: 'worked',
         };
         map.set(key, row);
       } else if (!row.userAvatarFilename && meta.userAvatarFilename) {
@@ -954,18 +976,63 @@ export default function AttendanceLogsPage() {
       }
     }
 
-    const computeDayWorked = (evs: AttendanceEvent[]): number => {
+    const computeDayWorked = (evs: AttendanceEvent[], dayShifts: Shift[]): {
+      worked: number;
+      breakDeducted: number;
+      scheduledBreak: number;
+      actualBreak: number;
+      breakRecorded: boolean;
+      breakNotCompleted: boolean;
+    } => {
       const checkins = evs.filter(e => e.eventType === 'checkin').sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
       const checkouts = evs.filter(e => e.eventType === 'checkout').sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
       const breakStarts = evs.filter(e => e.eventType === 'break_start').sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
       const breakEnds = evs.filter(e => e.eventType === 'break_end').sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
-      if (checkins.length === 0 || checkouts.length === 0) return 0;
-      const spanMins = Math.max(0, Math.round((new Date(checkouts[0].eventTime).getTime() - new Date(checkins[0].eventTime).getTime()) / 60000));
-      let breakMins = 0;
-      if (breakStarts.length > 0 && breakEnds.length > 0) {
-        breakMins = Math.max(0, Math.round((new Date(breakEnds[0].eventTime).getTime() - new Date(breakStarts[0].eventTime).getTime()) / 60000));
+      
+      if (checkins.length === 0 || checkouts.length === 0) {
+        return { worked: 0, breakDeducted: 0, scheduledBreak: 0, actualBreak: 0, breakRecorded: false, breakNotCompleted: false };
       }
-      return Math.max(0, spanMins - breakMins);
+
+      const spanMins = Math.max(0, Math.round((new Date(checkouts[0].eventTime).getTime() - new Date(checkins[0].eventTime).getTime()) / 60000));
+
+      let scheduledBreak = 0;
+      for (const s of dayShifts) {
+        if (s.breakMinutes) {
+          scheduledBreak += s.breakMinutes;
+        } else if (s.breakStart && s.breakEnd) {
+          const [bsh, bsm] = s.breakStart.split(':').map(Number);
+          const [beh, bem] = s.breakEnd.split(':').map(Number);
+          let bMins = (beh * 60 + bem) - (bsh * 60 + bsm);
+          if (bMins < 0) bMins += 24 * 60;
+          scheduledBreak += bMins;
+        }
+      }
+
+      const breakRecorded = breakStarts.length > 0 && breakEnds.length > 0;
+      let actualBreak = 0;
+      if (breakRecorded) {
+        actualBreak = Math.max(0, Math.round((new Date(breakEnds[0].eventTime).getTime() - new Date(breakStarts[0].eventTime).getTime()) / 60000));
+      }
+
+      let breakDeducted = 0;
+      let breakNotCompleted = false;
+
+      if (scheduledBreak === 0) {
+        breakDeducted = actualBreak;
+      } else if (breakRecorded) {
+        if (breakSettings.enforcementEnabled && actualBreak < (scheduledBreak - breakSettings.toleranceMinutes)) {
+          breakDeducted = Math.max(actualBreak, scheduledBreak);
+          breakNotCompleted = true;
+        } else {
+          breakDeducted = actualBreak;
+        }
+      } else {
+        // Break NOT recorded -> always deduct scheduled break time
+        breakDeducted = scheduledBreak;
+      }
+
+      const worked = Math.max(0, spanMins - breakDeducted);
+      return { worked, breakDeducted, scheduledBreak, actualBreak, breakRecorded, breakNotCompleted };
     };
 
     // ── Per user-day pass: apply leave/absent rules, then fold into period rows ──
@@ -981,7 +1048,13 @@ export default function AttendanceLogsPage() {
       const dayScheduled = dayShifts.reduce((sum, s) => sum + shiftDurationMinutes(s), 0);
       const dayEvents = eventsByDay.get(dkey) ?? [];
       const hasEvents = dayEvents.length > 0;
-      const worked = hasEvents ? computeDayWorked(dayEvents) : 0;
+      const workedRes = hasEvents ? computeDayWorked(dayEvents, dayShifts) : { worked: 0, breakDeducted: 0, scheduledBreak: 0, actualBreak: 0, breakRecorded: false, breakNotCompleted: false };
+      const worked = workedRes.worked;
+      row.breakDeductedMinutes += workedRes.breakDeducted;
+      row.scheduledBreakMinutes += workedRes.scheduledBreak;
+      row.actualBreakMinutes += workedRes.actualBreak;
+      if (workedRes.breakRecorded) row.breakRecorded = true;
+      if (workedRes.breakNotCompleted) row.breakNotCompleted = true;
       const leave = leaveByDay.get(dkey);
       const isPast = dayStr < todayStr;
 
@@ -1152,6 +1225,8 @@ export default function AttendanceLogsPage() {
           t('attendance.colScheduled', 'Ore Programmate'),
           t('attendance.colWorked', 'Ore Lavorate'),
           t('attendance.colVariance', 'Scostamento'),
+          t('attendance.scheduledBreak', 'Pausa Programmata'),
+          t('attendance.breakStatus', 'Stato Pausa'),
           t('leave.type_vacation', 'Ferie'),
           t('leave.type_sick', 'Malattia'),
           t('leave.duration_short_leave', 'Permessi')
@@ -1167,6 +1242,14 @@ export default function AttendanceLogsPage() {
           formatHoursStr(r.scheduledMinutes),
           formatHoursStr(r.workedMinutes),
           r.varianceMinutes > 0 ? `+${formatHoursStr(r.varianceMinutes)}` : (r.varianceMinutes < 0 ? `-${formatHoursStr(r.varianceMinutes)}` : '0h'),
+          r.scheduledBreakMinutes > 0 ? formatHoursStr(r.scheduledBreakMinutes) : '—',
+          r.scheduledBreakMinutes > 0
+            ? (r.breakRecorded
+              ? (r.breakNotCompleted
+                ? t('attendance.breakNotCompleted', 'Non completata')
+                : t('attendance.recorded', 'Registrata'))
+              : t('attendance.noBreakRecorded', 'Non registrata'))
+            : '—',
           formatHoursStr(r.vacationMinutes ?? 0),
           formatHoursStr(r.sickMinutes ?? 0),
           formatHoursStr(r.leaveMinutes ?? 0),
@@ -2053,40 +2136,33 @@ export default function AttendanceLogsPage() {
                       {byShift ? '📋' : '👥'} {n} {byShift ? t('attendance.shiftsCount', 'turni') : t('attendance.employeesCount', 'dipendenti')}
                     </span>
                   );
-                  const cardHeader = (label: React.ReactNode, chip: React.ReactNode) => (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  const cardBlock = (label: React.ReactNode, value: React.ReactNode, chip: React.ReactNode) => (
+                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                      {chip}
+                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
+                        {value}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                        {chip}
+                      </div>
                     </div>
                   );
                   return (
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                        {cardHeader(<>📋 {t('attendance.totalScheduled', 'Programmate')}</>, empChip(empCount))}
-                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                          {formatHoursStr(analyticsData.sumScheduled)}
-                        </div>
+                        {cardBlock(<>📋 {t('attendance.totalScheduled', 'Programmate')}</>, formatHoursStr(analyticsData.sumScheduled), empChip(empCount))}
                       </div>
 
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                        {cardHeader(<>⏱ {t('attendance.totalWorked', 'Lavorate')}</>, empChip(empCount))}
-                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                          {formatHoursStr(analyticsData.sumWorked)}
-                        </div>
+                        {cardBlock(<>⏱ {t('attendance.totalWorked', 'Lavorate')}</>, <span style={{ color: 'var(--accent)' }}>{formatHoursStr(analyticsData.sumWorked)}</span>, empChip(empCount))}
                       </div>
 
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                        {cardHeader(<span style={{ color: '#16a34a' }}>▲ {t('attendance.totalOvertime', 'Straordinari Netti')}</span>, empChip(otUtCount, countByShift))}
-                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                          <span style={{ color: '#16a34a' }}>+{formatHoursStr(analyticsData.sumOvertime)}</span>
-                        </div>
+                        {cardBlock(<span style={{ color: '#16a34a' }}>▲ {t('attendance.totalOvertime', 'Straordinari Netti')}</span>, <span style={{ color: '#16a34a' }}>+{formatHoursStr(analyticsData.sumOvertime)}</span>, empChip(otUtCount, countByShift))}
                       </div>
 
                       <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 14 }}>
-                        {cardHeader(<span style={{ color: '#dc2626' }}>▼ {t('attendance.totalUndertime', 'Ore Mancanti Nette')}</span>, empChip(otUtCount, countByShift))}
-                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4, fontFamily: 'var(--font-display)' }}>
-                          <span style={{ color: '#dc2626' }}>−{formatHoursStr(analyticsData.sumUndertime)}</span>
-                        </div>
+                        {cardBlock(<span style={{ color: '#dc2626' }}>▼ {t('attendance.totalUndertime', 'Ore Mancanti Nette')}</span>, <span style={{ color: '#dc2626' }}>−{formatHoursStr(analyticsData.sumUndertime)}</span>, empChip(otUtCount, countByShift))}
                       </div>
                     </div>
                   );
@@ -2097,7 +2173,20 @@ export default function AttendanceLogsPage() {
                   background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', padding: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
                 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>📊 {t('attendance.chartTitle', 'Confronto Grafico Presenze per Dipendente')}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>📊 {t('attendance.chartTitle', 'Confronto Grafico Presenze per Dipendente')}</span>
+                      <button
+                        onClick={() => setShowBreakSettingsModal(true)}
+                        title={t('attendance.breakPayrollTitle', 'Gestione Pause e Paghe')}
+                        style={{
+                          background: 'var(--surface-warm)', color: '#b45309', borderRadius: 6,
+                          padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(180,83,9,0.2)',
+                        }}
+                      >
+                        ⚙️ {t('attendance.breakPayrollTitle', 'Pause & Paghe')}
+                      </button>
+                    </div>
                   </div>
 
                   {analyticsData.rows.length === 0 ? (
@@ -2152,8 +2241,14 @@ export default function AttendanceLogsPage() {
                             {/* Compact progress */}
                             <div style={{ flex: '1 1 150px', minWidth: 130 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5, marginBottom: 3 }}>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                   {formatHoursStr(r.workedMinutes)} <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>/ {formatHoursStr(denom)}</span>
+                                  {r.scheduledBreakMinutes > 0 && (
+                                    <span style={{ fontSize: 9.5, color: '#b45309', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2, background: 'rgba(180,83,9,0.08)', padding: '1px 5px', borderRadius: 4 }}>
+                                      ☕ {formatHoursStr(r.scheduledBreakMinutes)}
+                                      {!r.breakRecorded && <span style={{ color: '#dc2626' }}>· {t('attendance.notRecorded', 'non registrata')}</span>}
+                                    </span>
+                                  )}
                                 </span>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 800, color: completed ? '#16a34a' : 'var(--accent)' }}>
                                   {completed && <Check size={11} />}{pct}%
@@ -3963,14 +4058,19 @@ export default function AttendanceLogsPage() {
                           padding: 14, background: 'var(--background)', borderRadius: 10, border: '1px solid var(--border)',
                           display: 'flex', flexDirection: 'column', gap: 6,
                         }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               {s.startTime.slice(0,5)} → {s.endTime.slice(0,5)}
                               {!s.isOffDay && s.startTime && s.endTime && (
                                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'rgba(201,151,58,0.12)', padding: '1px 7px', borderRadius: 6 }}>
                                   {formatShiftDuration(shiftDurationMinutes(s))}
                                 </span>
                               )}
+                              {s.breakMinutes ? (
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: 'rgba(180,83,9,0.1)', padding: '1px 7px', borderRadius: 6 }}>
+                                  ☕ {s.breakMinutes} min
+                                </span>
+                              ) : null}
                             </span>
                             <span style={{
                               fontSize: 11, fontWeight: 700, color: sMeta.color, background: sMeta.bg,
@@ -3980,11 +4080,6 @@ export default function AttendanceLogsPage() {
                               {t(sMeta.labelKey, sMeta.defaultLabel)}
                             </span>
                           </div>
-                          {s.breakMinutes ? (
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                              ☕ {t('shifts.break', 'Pausa')}: {s.breakMinutes} min
-                            </div>
-                          ) : null}
                           {s.notes ? (
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
                               📝 {s.notes}
@@ -4044,6 +4139,61 @@ export default function AttendanceLogsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Section 3: Anomalies Breakdown */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>⚠️</span> {t('attendance.tab_anomalies', 'Anomalie Rilevate')}
+                </div>
+                {(() => {
+                  const modalAnomalies: { type: string; title: string; desc: string; color: string; bg: string }[] = [];
+                  if (summaryDrawerItem.scheduledBreakMinutes > 0 && !summaryDrawerItem.breakRecorded) {
+                    modalAnomalies.push({
+                      type: 'missing_break',
+                      title: t('attendance.info_missing_break_title', 'Pausa Obbligatoria Non Registrata'),
+                      desc: t('attendance.detail_missing_break', { minutes: summaryDrawerItem.scheduledBreakMinutes }),
+                      color: '#b45309', bg: 'rgba(180,83,9,0.08)',
+                    });
+                  } else if (summaryDrawerItem.breakNotCompleted) {
+                    modalAnomalies.push({
+                      type: 'break_not_completed',
+                      title: t('attendance.breakNotCompleted', 'Pausa Non Completata'),
+                      desc: t('attendance.breakNotCompletedDetail', { actual: summaryDrawerItem.actualBreakMinutes, scheduled: summaryDrawerItem.scheduledBreakMinutes }),
+                      color: '#dc2626', bg: 'rgba(220,38,38,0.08)',
+                    });
+                  }
+                  if (summaryDrawerItem.events.some(e => e.eventType === 'checkin') && !summaryDrawerItem.events.some(e => e.eventType === 'checkout')) {
+                    modalAnomalies.push({
+                      type: 'missing_checkout',
+                      title: t('attendance.info_missing_checkout_title', 'Mancata Uscita'),
+                      desc: t('attendance.info_missing_checkout_desc'),
+                      color: '#be123c', bg: 'rgba(190,18,60,0.08)',
+                    });
+                  }
+
+                  if (modalAnomalies.length === 0) {
+                    return (
+                      <div style={{ padding: 14, background: 'var(--background)', borderRadius: 10, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                        ✓ {t('attendance.no_anomalies', 'Nessuna anomalia rilevata nel periodo.')}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {modalAnomalies.map((a, i) => (
+                        <div key={i} style={{
+                          padding: 12, borderRadius: 10, background: a.bg, border: `1px solid ${a.color}33`,
+                          borderLeft: `4px solid ${a.color}`,
+                        }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 800, color: a.color }}>{a.title}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>{a.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
 
             {/* Footer (Item 5: Removed print button) */}
@@ -4057,6 +4207,97 @@ export default function AttendanceLogsPage() {
                   padding: '9px 24px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer',
                   border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)',
                 }}
+              >
+                {t('common.close', 'Chiudi')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Quick Break Settings Modal */}
+      {showBreakSettingsModal && createPortal(
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(13,33,55,0.52)', backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setShowBreakSettingsModal(false)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)', borderRadius: 16, width: 'min(520px, 94vw)',
+              padding: 24, boxShadow: '0 24px 60px rgba(0,0,0,0.28)', border: '1px solid var(--border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>☕</span> {t('attendance.breakPayrollTitle', 'Gestione Pause e Paghe')}
+              </div>
+              <button
+                onClick={() => setShowBreakSettingsModal(false)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ padding: 14, borderRadius: 10, background: 'var(--background)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <strong>📋 {t('attendance.standardModeTitle', 'Modalità Standard')} (Default):</strong> {t('attendance.standardModeDesc')}
+              </div>
+
+              <div style={{ padding: 14, borderRadius: 10, background: 'var(--surface-warm)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    🛡️ {t('attendance.strictEnforcementTitle', 'Applicazione Rigorosa Paghe')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = !breakSettings.enforcementEnabled;
+                      setBreakSettings(p => ({ ...p, enforcementEnabled: next }));
+                      try {
+                        await client.patch('/companies/break-settings', { break_enforcement_enabled: next, break_tolerance_minutes: breakSettings.toleranceMinutes });
+                      } catch {}
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', width: 40, height: 22 }}
+                  >
+                    <span style={{ display: 'block', width: 40, height: 22, borderRadius: 11, background: breakSettings.enforcementEnabled ? '#15803D' : 'var(--border)', transition: 'background 0.2s' }}>
+                      <span style={{ display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: breakSettings.enforcementEnabled ? 21 : 3, transition: 'left 0.2s' }} />
+                    </span>
+                  </button>
+                </div>
+
+                {breakSettings.enforcementEnabled && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px dashed var(--border)' }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('attendance.breakToleranceLabel', 'Tolleranza (minuti)')}:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={breakSettings.toleranceMinutes}
+                      onChange={(e) => setBreakSettings(p => ({ ...p, toleranceMinutes: parseInt(e.target.value, 10) || 0 }))}
+                      onBlur={async () => {
+                        try {
+                          await client.patch('/companies/break-settings', { break_enforcement_enabled: breakSettings.enforcementEnabled, break_tolerance_minutes: breakSettings.toleranceMinutes });
+                        } catch {}
+                      }}
+                      style={{ width: 65, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12, fontWeight: 700, background: 'var(--surface)', color: 'var(--text)' }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowBreakSettingsModal(false)}
+                style={{ padding: '8px 20px', borderRadius: 8, background: 'var(--primary)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
                 {t('common.close', 'Chiudi')}
               </button>

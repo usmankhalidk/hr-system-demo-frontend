@@ -265,6 +265,170 @@ function jobSchedule(jobKey: string, t: (k: string, fallback: string) => string)
   return t(`documents.jobSchedules.${jobKey}`, '');
 }
 
+
+// ── Break & Payroll Settings Panel ─────────────────────────────────────────
+
+const BreakPayrollSettingsPanel: React.FC = () => {
+  const { t } = useTranslation();
+  const [isOpen, setIsOpen] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [tolerance, setTolerance] = useState(10);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/companies/break-settings');
+      setEnabled(res.data?.data?.breakEnforcementEnabled ?? false);
+      setTolerance(res.data?.data?.breakToleranceMinutes ?? 10);
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSave = async (newEnabled: boolean, newTol: number) => {
+    setSaving(true);
+    try {
+      await apiClient.patch('/companies/break-settings', {
+        break_enforcement_enabled: newEnabled,
+        break_tolerance_minutes: newTol,
+      });
+      setEnabled(newEnabled);
+      setTolerance(newTol);
+      setMsg(t('settings.savedSuccess', 'Impostazioni salvate con successo'));
+      setTimeout(() => setMsg(null), 3000);
+    } catch {
+      setMsg(t('settings.saveError', 'Errore durante il salvataggio'));
+      setTimeout(() => setMsg(null), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderLeft: '4px solid #b45309',
+      borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+      boxShadow: 'var(--shadow-sm)', marginBottom: 24,
+    }}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          padding: '16px 20px',
+          borderBottom: isOpen ? '1px solid var(--border-light)' : 'none',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <span style={{ color: '#b45309' }}>☕</span>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+              {t('attendance.breakPayrollTitle', 'Gestione Pause e Paghe')}
+            </h3>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+            {t('attendance.breakPayrollDesc', 'Configura come il tempo di pausa viene dedotto dalle ore lavorate per i calcoli delle paghe.')}
+          </p>
+        </div>
+        <ArrowIcon open={isOpen} />
+      </div>
+
+      {isOpen && (
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Standard Mode Card */}
+          <div style={{
+            padding: 16, borderRadius: 10, background: 'var(--background)', border: '1px solid var(--border)',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>📋</span> {t('attendance.standardModeTitle', 'Modalità Standard (Sempre Attiva)')}
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+              {t('attendance.standardModeDesc', 'Il tempo di pausa viene sempre dedotto dalle ore lavorate. Se il dipendente registra la pausa, viene dedotto il tempo effettivo. Se non viene registrata, il tempo programmato viene dedotto automaticamente.')}
+            </p>
+          </div>
+
+          {/* Strict Enforcement Card */}
+          <div style={{
+            padding: 16, borderRadius: 10, background: 'var(--surface-warm)', border: '1px solid var(--border)',
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>🛡️</span> {t('attendance.strictEnforcementTitle', 'Applicazione Rigorosa Paghe (Opzione A)')}
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+                  {t('attendance.strictEnforcementDesc', "Se abilitato, quando un dipendente prende una pausa più breve della soglia (programmata − tolleranza), viene dedotta la pausa completa programmata per proteggere l'accuratezza delle paghe.")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSave(!enabled, tolerance)}
+                disabled={saving}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  position: 'relative', width: 44, height: 24, flexShrink: 0,
+                }}
+              >
+                <span style={{
+                  display: 'block', width: 44, height: 24, borderRadius: 12,
+                  background: enabled ? '#15803D' : 'var(--border)',
+                  transition: 'background 0.2s',
+                }}>
+                  <span style={{
+                    display: 'block', width: 18, height: 18, borderRadius: '50%',
+                    background: '#fff', position: 'absolute', top: 3,
+                    left: enabled ? 23 : 3,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                    transition: 'left 0.2s',
+                  }} />
+                </span>
+              </button>
+            </div>
+
+            {enabled && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 10, borderTop: '1px dashed var(--border)' }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                  {t('attendance.breakToleranceLabel', 'Tolleranza Pausa (minuti)')}:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="120"
+                  value={tolerance}
+                  onChange={(e) => setTolerance(parseInt(e.target.value, 10) || 0)}
+                  onBlur={() => handleSave(enabled, tolerance)}
+                  style={{
+                    width: 70, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)',
+                    fontSize: 13, fontWeight: 700, color: 'var(--text)', background: 'var(--surface)',
+                  }}
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('attendance.breakToleranceHint', 'Esempio: con pausa di 60 min e tolleranza di 10 min, pause inferiori a 50 min attivano la deduzione completa.')}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {msg && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: msg.includes('Error') || msg.includes('Errore') ? '#dc2626' : '#15803D' }}>
+              {msg}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AutomationSettingsPanel: React.FC = () => {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<AutomationSetting[]>([]);
@@ -681,6 +845,9 @@ const SettingsPage: React.FC = () => {
 
       {/* Notification Settings (admin only) */}
       {isAdmin && <NotificationSettingsPanel />}
+
+      {/* Break & Payroll Settings (admin only) */}
+      {isAdmin && <BreakPayrollSettingsPanel />}
 
       {/* Automation Settings (admin only) */}
       {isAdmin && <AutomationSettingsPanel />}
