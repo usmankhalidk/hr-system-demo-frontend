@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
@@ -51,9 +51,14 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const { isMobile } = useBreakpoint();
   const pageSize = 10;
 
-  // Reset to page 1 when docs change (e.g. search or filter)
+  // Reset to page 1 when the set of document IDs changes (e.g. search or filter)
+  const prevDocIdsRef = useRef<string>('');
   useEffect(() => {
-    setCurrentPage(1);
+    const docIdsString = JSON.stringify(docs.map(d => `${d.id}_${d.title}`));
+    if (prevDocIdsRef.current !== docIdsString) {
+      prevDocIdsRef.current = docIdsString;
+      setCurrentPage(1);
+    }
   }, [docs]);
 
   function formatDate(iso: string | null | undefined): string {
@@ -286,12 +291,21 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
               <td style={{ padding: isMobile ? '8px 10px' : '12px 14px', position: 'relative' }}>
                 <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   {isTrash ? (
-                    <button 
-                      onClick={() => handleRestore(doc)} 
-                      title={t('documents.restore', 'Restore')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: isMobile ? '6px 12px' : '5px 12px', borderRadius: 6, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                      <IconRestore /> {t('documents.restore', 'Restore')}
-                    </button>
+                    <>
+                      <button 
+                        onClick={() => handlePreview(doc)} 
+                        title={t('common.preview', 'Preview')}
+                        disabled={previewLoadingId === doc.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-secondary)', cursor: previewLoadingId === doc.id ? 'wait' : 'pointer', fontSize: 12 }}>
+                        {previewLoadingId === doc.id ? '...' : <IconEye />}
+                      </button>
+                      <button 
+                        onClick={() => handleRestore(doc)} 
+                        title={t('documents.restore', 'Restore')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: isMobile ? '6px 12px' : '5px 12px', borderRadius: 6, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                        <IconRestore /> {t('documents.restore', 'Restore')}
+                      </button>
+                    </>
                   ) : isMobile ? (
                     <>
                       <button 

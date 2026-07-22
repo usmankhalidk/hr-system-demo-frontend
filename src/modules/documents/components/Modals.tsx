@@ -291,6 +291,17 @@ export const EditDocumentModal: React.FC<{ doc: any; onClose: () => void; onSucc
 
   const [title, setTitle] = useState(initialTitle);
   const [employeeId, setEmployeeId] = useState<number | null>(doc.employeeId || doc.employee_id || null);
+  const getInitialExpiry = (val: any) => {
+    if (!val) return '';
+    try {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) return '';
+      return date.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+  const [expiresAt, setExpiresAt] = useState<string>(() => getInitialExpiry(doc.expiresAt || doc.expires_at));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -375,7 +386,11 @@ export const EditDocumentModal: React.FC<{ doc: any; onClose: () => void; onSucc
     if (!title.trim()) return;
     setSaving(true);
     try {
-      await updateDocumentGeneric(doc.id, { title: `${title}${extension}`, employee_id: employeeId });
+      await updateDocumentGeneric(doc.id, {
+        title: `${title}${extension}`,
+        employee_id: employeeId,
+        expires_at: expiresAt || null
+      });
       showToast(t('documents.categoryUpdated'), 'success');
       onSuccess(); onClose();
     } catch { showToast(t('common.error'), 'error'); }
@@ -406,6 +421,10 @@ export const EditDocumentModal: React.FC<{ doc: any; onClose: () => void; onSucc
               searchable={true}
               menuMaxHeight={240}
             />
+          </div>
+          <div>
+            <label style={labelStyle}>{t('documents.expiresAtLabel')}</label>
+            <DatePicker value={expiresAt} onChange={setExpiresAt} placement="bottom" />
           </div>
         </div>
 
