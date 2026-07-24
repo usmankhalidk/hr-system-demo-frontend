@@ -112,6 +112,7 @@ interface UnmatchedItem {
   fileExtension: string;
   manualEmployeeId: number | null;
   companyId: number | null;
+  isAutoMatched?: boolean;
 }
 
 interface UploadedDocDetail {
@@ -148,7 +149,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   const [globalRequiresSignature, setGlobalRequiresSignature] = useState(false);
   const [globalExpiresAt, setGlobalExpiresAt] = useState('');
   const [globalVisibility, setGlobalVisibility] = useState<'everyone' | 'hr'>('everyone');
-  const [globalCompanyId, setGlobalCompanyId] = useState<number | null>(null);
+  const [globalCompanyId, setGlobalCompanyId] = useState<number | null>(user?.companyId || null);
 
   // Manual Assignment (Step 3)
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -317,7 +318,6 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     }
 
     setUploading(true);
-    const unmatchedList: UnmatchedItem[] = [];
     const updatedFiles = [...files];
 
     for (let i = 0; i < updatedFiles.length; i++) {
@@ -335,21 +335,6 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
             expires_at: item.expiresAt || null,
             visible_to_roles: visibleToRoles
           });
-
-          if (!item.matched) {
-            const fileName = item.file.name;
-            const lastDot = fileName.lastIndexOf('.');
-            const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
-            const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
-            unmatchedList.push({
-              documentId: item.documentId,
-              fileName,
-              editableTitle: initialTitle,
-              fileExtension: extension,
-              manualEmployeeId: null,
-              companyId: item.companyId
-            });
-          }
         } else {
           const response = await uploadDocumentUnified(item.file, {
             requiresSignature: item.requiresSignature,
@@ -367,22 +352,6 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
               matched: response.matched,
               matchedEmployee: response.employee
             };
-
-            if (!response.matched) {
-              const fileName = response.fileName || item.file.name;
-              const lastDot = fileName.lastIndexOf('.');
-              const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
-              const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
-
-              unmatchedList.push({
-                documentId: response.documentId,
-                fileName,
-                editableTitle: initialTitle,
-                fileExtension: extension,
-                manualEmployeeId: null,
-                companyId: item.companyId
-              });
-            }
           }
         }
       } catch (err: any) {
@@ -395,13 +364,44 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     setFiles(updatedFiles);
     setUploading(false);
 
-    if (unmatchedList.length > 0) {
-      setUnmatchedDocs(unmatchedList);
-      setStep(3);
-    } else {
-      buildFinalUploadedDocs(updatedFiles, []);
-      setStep(4);
+    // Build the matching docs list for Step 3 containing ALL uploaded files
+    const matchingList: UnmatchedItem[] = [];
+    for (const item of updatedFiles) {
+      if (!item.documentId) continue;
+      
+      const fileName = item.file.name;
+      const lastDot = fileName.lastIndexOf('.');
+      const initialTitle = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
+      const extension = lastDot > 0 ? fileName.substring(lastDot) : '';
+
+      const existingDoc = unmatchedDocs.find(d => d.documentId === item.documentId);
+      
+      let manualEmployeeId: number | null = null;
+      let isAutoMatched = !!item.matched;
+      
+      if (existingDoc) {
+        manualEmployeeId = existingDoc.manualEmployeeId;
+        isAutoMatched = !!existingDoc.isAutoMatched;
+      } else if (item.matched && item.matchedEmployee) {
+        manualEmployeeId = item.matchedEmployee.id;
+      } else if (targetEmployeeId) {
+        manualEmployeeId = targetEmployeeId;
+        isAutoMatched = true;
+      }
+
+      matchingList.push({
+        documentId: item.documentId,
+        fileName,
+        editableTitle: existingDoc ? existingDoc.editableTitle : initialTitle,
+        fileExtension: extension,
+        manualEmployeeId,
+        companyId: item.companyId,
+        isAutoMatched
+      });
     }
+
+    setUnmatchedDocs(matchingList);
+    setStep(3);
   };
 
   const buildFinalUploadedDocs = (currentFiles: UploadFileItem[], manualAssignments: UnmatchedItem[]) => {
@@ -414,10 +414,12 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
       let assignedEmpId: number | null = null;
       let assignedEmpName = 'Unassigned';
 
-      if (manualMatch && manualMatch.manualEmployeeId) {
+      if (manualMatch) {
         assignedEmpId = manualMatch.manualEmployeeId;
-        const emp = employees.find(e => e.id === assignedEmpId);
-        if (emp) assignedEmpName = `${emp.name} ${emp.surname}`;
+        if (assignedEmpId) {
+          const emp = employees.find(e => e.id === assignedEmpId);
+          if (emp) assignedEmpName = `${emp.name} ${emp.surname}`;
+        }
       } else if (item.matched && item.matchedEmployee) {
         assignedEmpId = item.matchedEmployee.id;
         assignedEmpName = `${item.matchedEmployee.name} ${item.matchedEmployee.surname}`;
@@ -446,22 +448,8 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   };
 
   const handleStep3Save = async () => {
-    setUploading(true);
-    try {
-      for (const item of unmatchedDocs) {
-        const fullTitle = `${item.editableTitle}${item.fileExtension}`;
-        await updateDocumentGeneric(item.documentId, {
-          title: fullTitle,
-          employee_id: item.manualEmployeeId || null
-        });
-      }
-      buildFinalUploadedDocs(files, unmatchedDocs);
-      setStep(4);
-    } catch {
-      showToast(t('common.error'), 'error');
-    } finally {
-      setUploading(false);
-    }
+    buildFinalUploadedDocs(files, unmatchedDocs);
+    setStep(4);
   };
 
   const handleRemoveDocument = async (docId: number) => {
@@ -475,19 +463,33 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
     }
   };
 
-  const handleConfirmSave = () => {
-    isConfirmedRef.current = true;
-    showToast(t('documents.uploaded'), 'success');
-    onSuccess();
-    onClose();
+  const handleConfirmSave = async () => {
+    setUploading(true);
+    try {
+      for (const item of unmatchedDocs) {
+        const fullTitle = `${item.editableTitle}${item.fileExtension}`;
+        await updateDocumentGeneric(item.documentId, {
+          title: fullTitle,
+          employee_id: item.manualEmployeeId || null
+        });
+      }
+      isConfirmedRef.current = true;
+      showToast(t('documents.uploaded'), 'success');
+      onSuccess();
+      onClose();
+    } catch {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleUnmatchedTitleChange = (idx: number, title: string) => {
-    setUnmatchedDocs(prev => prev.map((item, i) => i === idx ? { ...item, editableTitle: title } : item));
+  const handleUnmatchedTitleChange = (docId: number, title: string) => {
+    setUnmatchedDocs(prev => prev.map(item => item.documentId === docId ? { ...item, editableTitle: title } : item));
   };
 
-  const handleUnmatchedEmpChange = (idx: number, empId: number | null) => {
-    setUnmatchedDocs(prev => prev.map((item, i) => i === idx ? { ...item, manualEmployeeId: empId } : item));
+  const handleUnmatchedEmpChange = (docId: number, empId: number | null) => {
+    setUnmatchedDocs(prev => prev.map(item => item.documentId === docId ? { ...item, manualEmployeeId: empId } : item));
   };
 
   // Preview management
@@ -566,7 +568,10 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
   const modalWidth = 660;
 
   const matchedCount = files.filter(f => f.matched).length;
-  const unmatchedCount = unmatchedDocs.length;
+  const unmatchedCount = files.filter(f => !f.matched).length;
+
+  const assignedDocs = unmatchedDocs.filter(doc => doc.isAutoMatched);
+  const unassignedDocs = unmatchedDocs.filter(doc => !doc.isAutoMatched);
 
   return createPortal(
     <div style={modalOverlayStyle} onClick={onClose}>
@@ -913,47 +918,98 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 </div>
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  UNASSIGNED DOCUMENTS ({unmatchedDocs.length})
-                </div>
-
-                {unmatchedDocs.map((doc, idx) => (
-                  <div key={doc.documentId} style={{ padding: 16, background: 'var(--background)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      {getFileExtensionIcon(doc.fileName)}
-                      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{doc.fileName}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* ASSIGNED DOCUMENTS SECTION */}
+                {assignedDocs.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      ASSIGNED DOCUMENTS ({assignedDocs.length})
                     </div>
 
-                    <div style={{ display: 'flex', gap: isMobile ? 16 : 12, flexDirection: isMobile ? 'column' : 'row' }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={labelStyle}>{t('documents.fileName')}</label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input
-                            value={doc.editableTitle}
-                            onChange={e => handleUnmatchedTitleChange(idx, e.target.value)}
-                            style={inputStyle}
-                          />
-                          <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{doc.fileExtension}</span>
+                    {assignedDocs.map((doc) => (
+                      <div key={doc.documentId} style={{ padding: 16, background: 'var(--background)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {getFileExtensionIcon(doc.fileName)}
+                          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{doc.fileName}</div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: isMobile ? 16 : 12, flexDirection: isMobile ? 'column' : 'row' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>{t('documents.fileName')}</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <input
+                                value={doc.editableTitle}
+                                onChange={e => handleUnmatchedTitleChange(doc.documentId, e.target.value)}
+                                style={inputStyle}
+                              />
+                              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{doc.fileExtension}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>{t('documents.assigned')}</label>
+                            <CustomSelect
+                              value={doc.manualEmployeeId ? String(doc.manualEmployeeId) : ''}
+                              onChange={(val) => handleUnmatchedEmpChange(doc.documentId, val ? Number(val) : null)}
+                              options={getUnmatchedEmpOptions(doc.companyId)}
+                              placeholder={t('documents.selectEmployee', 'Select Employee...')}
+                              disabled={loadingEmps}
+                              isClearable={true}
+                              searchable={true}
+                              menuMaxHeight={220}
+                            />
+                          </div>
                         </div>
                       </div>
-
-                      <div style={{ flex: 1 }}>
-                        <label style={labelStyle}>{t('documents.assigned')}</label>
-                        <CustomSelect
-                          value={doc.manualEmployeeId ? String(doc.manualEmployeeId) : ''}
-                          onChange={(val) => handleUnmatchedEmpChange(idx, val ? Number(val) : null)}
-                          options={getUnmatchedEmpOptions(doc.companyId)}
-                          placeholder={t('documents.selectEmployee', 'Select Employee...')}
-                          disabled={loadingEmps}
-                          isClearable={true}
-                          searchable={true}
-                          menuMaxHeight={220}
-                        />
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                )}
+
+                {/* UNASSIGNED DOCUMENTS SECTION */}
+                {unassignedDocs.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      UNASSIGNED DOCUMENTS ({unassignedDocs.length})
+                    </div>
+
+                    {unassignedDocs.map((doc) => (
+                      <div key={doc.documentId} style={{ padding: 16, background: 'var(--background)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {getFileExtensionIcon(doc.fileName)}
+                          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{doc.fileName}</div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: isMobile ? 16 : 12, flexDirection: isMobile ? 'column' : 'row' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>{t('documents.fileName')}</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <input
+                                value={doc.editableTitle}
+                                onChange={e => handleUnmatchedTitleChange(doc.documentId, e.target.value)}
+                                style={inputStyle}
+                              />
+                              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{doc.fileExtension}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>{t('documents.assigned')}</label>
+                            <CustomSelect
+                              value={doc.manualEmployeeId ? String(doc.manualEmployeeId) : ''}
+                              onChange={(val) => handleUnmatchedEmpChange(doc.documentId, val ? Number(val) : null)}
+                              options={getUnmatchedEmpOptions(doc.companyId)}
+                              placeholder={t('documents.selectEmployee', 'Select Employee...')}
+                              disabled={loadingEmps}
+                              isClearable={true}
+                              searchable={true}
+                              menuMaxHeight={220}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ) : step === 4 ? (
@@ -1095,7 +1151,7 @@ export const UnifiedUploadWizard: React.FC<Props> = ({ onClose, onSuccess, targe
                 boxShadow: '0 2px 8px rgba(13,33,55,0.18)'
               }}
             >
-              {uploading ? t('common.loading') : t('documents.uploadWizardTitle')}
+              {uploading ? t('common.loading') : t('common.next', 'Next')}
             </button>
           ) : step === 3 ? (
             <button
