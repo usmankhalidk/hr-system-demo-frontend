@@ -25,8 +25,10 @@ const START_HOUR = 0;   // 00:00
 const END_HOUR   = 24;  // 24:00
 const TOTAL_MINS = (END_HOUR - START_HOUR) * 60;
 
-function timeToMins(t: string): number {
+function timeToMins(t: string, isEndTime: boolean = false): number {
+  if (!t) return 0;
   const [h, m] = t.split(':').map(Number);
+  if (isEndTime && h === 0 && m === 0) return 24 * 60;
   return h * 60 + m;
 }
 
@@ -39,6 +41,12 @@ function formatDate(d: Date): string {
   const mo = String(d.getMonth() + 1).padStart(2, '0');
   const da = String(d.getDate()).padStart(2, '0');
   return `${y}-${mo}-${da}`;
+}
+
+function getPrevDateStr(d: Date): string {
+  const prev = new Date(d);
+  prev.setDate(prev.getDate() - 1);
+  return formatDate(prev);
 }
 
 const HOUR_LABELS = Array.from(
@@ -142,6 +150,7 @@ export default function DayCalendar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [legendOpen]);
   const dateStr = formatDate(date);
+  const prevDateStr = getPrevDateStr(date);
   const today = formatDate(new Date());
   const isToday = dateStr === today;
   const dailyActivities = (windowDisplayActivities ?? []).filter((item) => item.date === dateStr);
@@ -149,8 +158,30 @@ export default function DayCalendar({
   // Group shifts by user
   const userMap = new Map<number, { name: string; surname: string; avatarFilename: string | null; shifts: Shift[] }>();
   for (const s of shifts) {
-    const key = s.date.split('T')[0];
-    if (key !== dateStr) continue;
+    const sDate = s.date.split('T')[0];
+
+    const sMins = timeToMins(s.startTime);
+    let eMins = timeToMins(s.endTime, true);
+    if (eMins <= sMins && (s.endTime.slice(0, 5) === '00:00' || s.endTime.slice(0, 5) === '24:00')) {
+      eMins = 24 * 60;
+    }
+    const isOvernight = eMins < sMins;
+
+    let isSplit2Overnight = false;
+    if (s.isSplit && s.splitStart2 && s.splitEnd2) {
+      const ss2Mins = timeToMins(s.splitStart2);
+      let se2Mins = timeToMins(s.splitEnd2, true);
+      if (se2Mins <= ss2Mins && (s.splitEnd2.slice(0, 5) === '00:00' || s.splitEnd2.slice(0, 5) === '24:00')) {
+        se2Mins = 24 * 60;
+      }
+      isSplit2Overnight = se2Mins < ss2Mins;
+    }
+
+    const matchesToday = sDate === dateStr;
+    const matchesPrevDay = sDate === prevDateStr && (isOvernight || isSplit2Overnight);
+
+    if (!matchesToday && !matchesPrevDay) continue;
+
     if (!userMap.has(s.userId)) {
       userMap.set(s.userId, {
         name: s.userName,
@@ -163,7 +194,9 @@ export default function DayCalendar({
     if (!userEntry.avatarFilename && s.userAvatarFilename) {
       userEntry.avatarFilename = s.userAvatarFilename;
     }
-    userEntry.shifts.push(s);
+    if (!userEntry.shifts.some((existing) => existing.id === s.id)) {
+      userEntry.shifts.push(s);
+    }
   }
 
   // Include transfer-only users for the selected day (no shifts required to render row).
@@ -316,7 +349,9 @@ export default function DayCalendar({
                 return b.id - a.id;
               })[0] ?? null;
             const isVacation = rowLeave?.leaveType === 'vacation';
-            const isPending = rowLeave ? rowLeave.status !== 'hr_approved' : false;
+            const rowLeaveStatus = String(rowLeave?.status || '').toLowerCase();
+            const isApproved = rowLeaveStatus === 'hr_approved' || rowLeaveStatus === 'approved' || rowLeaveStatus.includes('approved');
+            const isPending = rowLeave ? (!isApproved && !rowLeaveStatus.includes('rejected') && rowLeaveStatus !== 'cancelled') : false;
             const transferTargetStoreId = rowTransfer?.targetStoreId ?? null;
             const transferLaneShifts = transferTargetStoreId == null
               ? []
@@ -505,9 +540,18 @@ export default function DayCalendar({
                       blockEnd: string,
                       isSecondBlock: boolean,
                       withBreak: boolean,
+                      isContinuation: boolean = false,
+                      displayTimeText?: string,
                     ) => {
                       const sMins = timeToMins(blockStart);
-                      const eMins = timeToMins(blockEnd);
+                      let eMins = timeToMins(blockEnd, true);
+                      if (eMins <= sMins && (blockEnd.slice(0, 5) === '00:00' || blockEnd.slice(0, 5) === '24:00')) {
+                        eMins = 24 * 60;
+                      }
+
+                      // Safety: don't render zero/negative width blocks
+                      if (eMins <= sMins) return null;
+
                       const blockLeft = pct(sMins);
                       const blockDurMins = Math.max(1, eMins - sMins);
                       const blockWidth = `${Math.max(0.5, (blockDurMins / TOTAL_MINS) * 100).toFixed(3)}%`;
@@ -517,7 +561,10 @@ export default function DayCalendar({
                       let breakOverlayWidth = '0%';
                       if (withBreak && shift.breakStart && shift.breakEnd) {
                         const bsMins = timeToMins(shift.breakStart);
-                        const beMins = timeToMins(shift.breakEnd);
+                        let beMins = timeToMins(shift.breakEnd, true);
+                        if (beMins <= bsMins && (shift.breakEnd.slice(0, 5) === '00:00' || shift.breakEnd.slice(0, 5) === '24:00')) {
+                          beMins = 24 * 60;
+                        }
                         if (bsMins >= sMins && beMins <= eMins) {
                           hasBreakOverlay = true;
                           breakOverlayLeft = `${(((bsMins - sMins) / blockDurMins) * 100).toFixed(2)}%`;
@@ -525,12 +572,20 @@ export default function DayCalendar({
                         }
                       }
 
-                      const blockKey = `${shift.id}-${isSecondBlock ? 'b' : 'a'}-${laneKey}`;
+                      const blockKey = `${shift.id}-${isSecondBlock ? 'b' : 'a'}-${laneKey}-${blockStart}${isContinuation ? '-cont' : ''}`;
                       const transferStatus = laneKey === 'transfer' && rowTransfer && !isSecondBlock
                         ? rowTransfer.status
                         : null;
                       const transferStatusVisual = transferStatus ? transferVisualMeta(transferStatus) : null;
                       const transferStatusStore = rowTransfer?.targetStoreName ?? targetStoreName;
+
+                      const borderStyle = isContinuation
+                        ? `2px dashed ${colors.border}`
+                        : isSecondBlock
+                          ? `1.5px dashed ${colors.border}`
+                          : `1px solid ${colors.border}`;
+
+                      const labelText = displayTimeText ?? `${blockStart.slice(0, 5)}–${blockEnd.slice(0, 5)}`;
 
                       return (
                         <div
@@ -547,7 +602,7 @@ export default function DayCalendar({
                             background: colors.bg,
                             color: colors.text,
                             borderRadius: 6,
-                            border: isSecondBlock ? `1.5px dashed ${colors.border}` : `1px solid ${colors.border}`,
+                            border: borderStyle,
                             display: 'flex',
                             alignItems: 'center',
                             gap: 4,
@@ -632,7 +687,7 @@ export default function DayCalendar({
                           </span>
 
                           <span style={{ position: 'relative', zIndex: 2, lineHeight: 1.15, overflow: 'hidden' }}>
-                            {blockStart.slice(0, 5)}–{blockEnd.slice(0, 5)}
+                            {labelText}
                             {!isSecondBlock && shift.shiftHours && (
                               <span style={{ marginLeft: 3, opacity: 0.75, fontSize: '0.65rem' }}>({shift.shiftHours}h)</span>
                             )}
@@ -669,16 +724,61 @@ export default function DayCalendar({
                       );
                     };
 
-                    if (shift.isSplit && shift.splitStart2 && shift.splitEnd2) {
-                      return (
-                        <React.Fragment key={`${shift.id}-${laneKey}`}>
-                          {renderBlock(shift.startTime, shift.endTime, false, true)}
-                          {renderBlock(shift.splitStart2, shift.splitEnd2, true, false)}
-                        </React.Fragment>
-                      );
+                    // --- Overnight-aware block rendering ---
+                    const shiftDate = shift.date.split('T')[0];
+
+                    const isBlockOvernight = (start: string, end: string): boolean => {
+                      const s = timeToMins(start);
+                      let e = timeToMins(end, true);
+                      if (e <= s && (end.slice(0, 5) === '00:00' || end.slice(0, 5) === '24:00')) {
+                        e = 24 * 60;
+                      }
+                      return e < s;
+                    };
+
+                    const isMainOvernight = isBlockOvernight(shift.startTime, shift.endTime);
+                    const mainRangeStr = `${shift.startTime.slice(0, 5)}–${shift.endTime.slice(0, 5)}`;
+                    const splitRangeStr = shift.isSplit && shift.splitStart2 && shift.splitEnd2
+                      ? `${shift.splitStart2.slice(0, 5)}–${shift.splitEnd2.slice(0, 5)}`
+                      : '';
+
+                    const allBlocks: (React.ReactElement | null)[] = [];
+
+                    if (shiftDate === dateStr) {
+                      // Shift starts today — only render the today portion
+                      if (isMainOvernight) {
+                        // Before midnight only: startTime → 24:00 (displays full shift range text)
+                        allBlocks.push(renderBlock(shift.startTime, '24:00', false, true, false, mainRangeStr));
+                      } else {
+                        allBlocks.push(renderBlock(shift.startTime, shift.endTime, false, true, false, mainRangeStr));
+                      }
+
+                      if (shift.isSplit && shift.splitStart2 && shift.splitEnd2) {
+                        if (isBlockOvernight(shift.splitStart2, shift.splitEnd2)) {
+                          // Before midnight only for split block 2
+                          allBlocks.push(renderBlock(shift.splitStart2, '24:00', true, false, false, splitRangeStr));
+                        } else {
+                          allBlocks.push(renderBlock(shift.splitStart2, shift.splitEnd2, true, false, false, splitRangeStr));
+                        }
+                      }
+                    } else if (shiftDate === prevDateStr) {
+                      // Shift started yesterday — show after-midnight continuations with dashed outline and normal background color
+                      if (isMainOvernight) {
+                        allBlocks.push(renderBlock('00:00', shift.endTime, false, false, true, mainRangeStr));
+                      }
+                      if (shift.isSplit && shift.splitStart2 && shift.splitEnd2 && isBlockOvernight(shift.splitStart2, shift.splitEnd2)) {
+                        allBlocks.push(renderBlock('00:00', shift.splitEnd2, true, false, true, splitRangeStr));
+                      }
                     }
 
-                    return renderBlock(shift.startTime, shift.endTime, false, true);
+                    const validBlocks = allBlocks.filter(Boolean);
+                    if (validBlocks.length === 0) return null;
+
+                    return (
+                      <React.Fragment key={`${shift.id}-${laneKey}`}>
+                        {validBlocks}
+                      </React.Fragment>
+                    );
                   })}
                 </>
               );
@@ -779,14 +879,14 @@ export default function DayCalendar({
                     }}>
                       {isVacation ? <Palmtree size={11} strokeWidth={2.5} /> : <Thermometer size={11} strokeWidth={2.5} />}
                       <span>{isVacation ? t('leave.type_vacation') : t('leave.type_sick')}</span>
-                      {isPending && (
-                        <span style={{
-                          fontSize: 8.5, fontWeight: 700,
-                          background: 'rgba(255,255,255,0.7)',
-                          padding: '1px 3px', borderRadius: 3, lineHeight: 1.4,
-                          color: isVacation ? '#3b82f6' : '#f97316',
-                        }}>{t('leave.pending_short')}</span>
-                      )}
+                      <span style={{
+                        fontSize: 8.5, fontWeight: 700,
+                        background: 'rgba(255,255,255,0.7)',
+                        padding: '1px 3px', borderRadius: 3, lineHeight: 1.4,
+                        color: isApproved ? (isVacation ? '#1e40af' : '#9a3412') : (isVacation ? '#3b82f6' : '#f97316'),
+                      }}>
+                        {isApproved ? t('leave.approved_short', 'Appr.') : t('leave.pending_short', 'pend.')}
+                      </span>
                     </div>
                   )}
                 </div>
