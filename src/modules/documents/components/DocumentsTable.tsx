@@ -7,6 +7,7 @@ import {
   deleteDocument,
   signDocument,
   restoreDocument,
+  permanentlyDeleteDocument,
   EmployeeDocument,
   DocumentCategory,
   getDocumentPreviewUrlGeneric
@@ -40,8 +41,10 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const { showToast } = useToast();
   const [signingDoc, setSigningDoc] = useState<any | null>(null);
   const [deletingDoc, setDeletingDoc] = useState<any | null>(null);
+  const [deletingPermanentDoc, setDeletingPermanentDoc] = useState<any | null>(null);
   const [signing, setSigning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletingPermanent, setDeletingPermanent] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>('');
@@ -136,6 +139,23 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
       showToast(t('documents.errorRestore', 'Error restoring document'), 'error');
     }
   };
+
+  const handleConfirmPermanentDelete = async () => {
+    if (!deletingPermanentDoc) return;
+    setDeletingPermanent(true);
+    try {
+      await permanentlyDeleteDocument(deletingPermanentDoc.id, deletingPermanentDoc.sourceTable);
+      showToast(t('documents.permanentlyDeleted', 'Document permanently deleted'), 'success');
+      onRefresh();
+      setDeletingPermanentDoc(null);
+    } catch {
+      showToast(t('documents.errorDelete', 'Error deleting document'), 'error');
+    } finally {
+      setDeletingPermanent(false);
+    }
+  };
+
+  const isAdmin = user?.role === 'admin' || user?.isSuperAdmin === true;
 
   const handleSignClick = (doc: any) => {
     setSigningDoc(doc);
@@ -305,6 +325,14 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                         style={{ display: 'flex', alignItems: 'center', gap: 4, padding: isMobile ? '6px 12px' : '5px 12px', borderRadius: 6, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                         <IconRestore /> {t('documents.restore', 'Restore')}
                       </button>
+                      {isAdmin && (
+                        <button 
+                          onClick={() => setDeletingPermanentDoc(doc)} 
+                          title={t('common.deletePermanently', 'Delete Permanently')}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid #DC262630', background: 'rgba(220,38,38,0.05)', color: '#DC2626', cursor: 'pointer', fontSize: 12 }}>
+                          <IconTrash />
+                        </button>
+                      )}
                     </>
                   ) : isMobile ? (
                     <>
@@ -450,6 +478,16 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
       onConfirm={handleConfirmDelete}
       onCancel={() => setDeletingDoc(null)}
       confirmLabel={deleting ? '...' : t('common.delete')}
+      variant="danger"
+    />
+
+    <ConfirmModal
+      open={!!deletingPermanentDoc}
+      title={t('common.confirm', 'Confirm')}
+      message={t('documents.confirmPermanentDelete', { name: deletingPermanentDoc?.fileName || deletingPermanentDoc?.title, defaultValue: `Sei sicuro di voler eliminare definitivamente "${deletingPermanentDoc?.fileName || deletingPermanentDoc?.title}"? Questa azione è irreversibile.` })}
+      onConfirm={handleConfirmPermanentDelete}
+      onCancel={() => setDeletingPermanentDoc(null)}
+      confirmLabel={deletingPermanent ? '...' : t('common.deletePermanently', 'Elimina definitivamente')}
       variant="danger"
     />
 

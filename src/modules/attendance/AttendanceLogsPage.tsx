@@ -659,6 +659,9 @@ export default function AttendanceLogsPage() {
   const [tempDateFrom, setTempDateFrom] = useState('');
   const [tempDateTo, setTempDateTo] = useState('');
 
+  // Summary display limit (100 per page)
+  const [summaryDisplayLimit, setSummaryDisplayLimit] = useState(100);
+
   const openFilterModal = () => {
     setTempStoreId(filterStoreId);
     setTempUserId(filterUserId);
@@ -855,6 +858,7 @@ export default function AttendanceLogsPage() {
   }, [buildActiveParams, events.length, t]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => { setSummaryDisplayLimit(100); }, [viewMode, dateFrom, dateTo, filterStoreId, filterUserId]);
 
   const summaryRows = useMemo<SummaryRow[]>(() => {
     const getGroupInfo = (dateStr: string): { dateKey: string; periodLabel: string } => {
@@ -2196,20 +2200,31 @@ export default function AttendanceLogsPage() {
                 <div style={{
                   background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', padding: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
                 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>📊 {t('attendance.chartTitle', 'Confronto Grafico Presenze per Dipendente')}</span>
+                  <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>📊 {t('attendance.chartTitle', 'Confronto Grafico Presenze per Dipendente')}</span>
+                      </div>
                       <button
                         onClick={() => setShowBreakSettingsModal(true)}
                         title={t('attendance.breakPayrollTitle', 'Gestione Pause e Paghe')}
                         style={{
-                          background: 'var(--surface-warm)', color: '#b45309', borderRadius: 6,
-                          padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                          display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(180,83,9,0.2)',
+                          background: 'var(--surface-warm)', color: '#b45309', borderRadius: 8,
+                          padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid rgba(180,83,9,0.25)',
+                          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                         }}
                       >
-                        ⚙️ {t('attendance.breakPayrollTitle', 'Pause & Paghe')}
+                        ⚙️ {t('attendance.breakPayrollTitle', 'Gestione Pause & Paghe')}
                       </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--background)', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)' }}>
+                      <span>ℹ️</span>
+                      <span>
+                        {breakSettings.enforcementEnabled
+                          ? t('attendance.guideStrictActive', 'Strict Enforcement Active (Tolerance: {{tol}} min) — If recorded break is less than {{tol}} min from scheduled, full break is deducted to protect payroll costs.', { tol: breakSettings.toleranceMinutes })
+                          : t('attendance.guideStandardActive', 'Standard Mode Active — Scheduled breaks are always deducted from worked hours even if not clocked.')}
+                      </span>
                     </div>
                   </div>
 
@@ -2724,7 +2739,7 @@ export default function AttendanceLogsPage() {
                             </td>
                           </tr>
                         ) : (
-                          summaryRows.slice(0, 500).map((row, idx) => {
+                          summaryRows.slice(0, summaryDisplayLimit).map((row, idx) => {
                             const vBadge = varianceDisplay(row, t, { applyTolerance: true, overtimeLimit, undertimeLimit });
                             const avatarUrl = getAvatarUrl(row.userAvatarFilename);
                             const initials = `${row.userName?.[0] ?? ''}${row.userSurname?.[0] ?? ''}`.toUpperCase();
@@ -2909,7 +2924,7 @@ export default function AttendanceLogsPage() {
               )}
 
               {/* Table footer */}
-              {!loading && events.length > 0 && (
+              {!loading && (events.length > 0 || (viewMode === 'summary' && summaryRows.length > 0)) && (
                 <div style={{
                   padding: '10px 20px',
                   borderTop: '1px solid var(--border)',
@@ -2917,10 +2932,15 @@ export default function AttendanceLogsPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {events.length < total
-                      ? <>{t('attendance.showing')} <strong>{events.length}</strong> / <strong>{total}</strong></>
-                      : <><strong>{total}</strong> {t('attendance.found')}</>
-                    }
+                    {viewMode === 'summary' ? (
+                      summaryDisplayLimit < summaryRows.length
+                        ? <>{t('attendance.showing')} <strong>{Math.min(summaryDisplayLimit, summaryRows.length)}</strong> / <strong>{summaryRows.length}</strong></>
+                        : <><strong>{summaryRows.length}</strong> {t('attendance.found')}</>
+                    ) : (
+                      events.length < total
+                        ? <>{t('attendance.showing')} <strong>{events.length}</strong> / <strong>{total}</strong></>
+                        : <><strong>{total}</strong> {t('attendance.found')}</>
+                    )}
                   </div>
                   {viewMode === 'logs' && events.length < total && (
                     <button
@@ -2941,7 +2961,23 @@ export default function AttendanceLogsPage() {
                       ) : (
                         <ChevronDown size={14} />
                       )}
-                      {t('attendance.loadMore', 'Carica altre')} (+{Math.min(LOGS_PAGE_SIZE, total - events.length)})
+                      {t('attendance.loadMore', 'Load more')} (+{Math.min(LOGS_PAGE_SIZE, total - events.length)})
+                    </button>
+                  )}
+                  {viewMode === 'summary' && summaryDisplayLimit < summaryRows.length && (
+                    <button
+                      onClick={() => setSummaryDisplayLimit(prev => prev + 100)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '7px 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                        border: '1px solid var(--border)', background: 'var(--surface)',
+                        color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    >
+                      <ChevronDown size={14} />
+                      {t('attendance.loadMore', 'Load more')} (+{Math.min(100, summaryRows.length - summaryDisplayLimit)})
                     </button>
                   )}
                 </div>

@@ -133,6 +133,12 @@ export async function restoreDocument(id: number, source: 'documents' | 'employe
   await apiClient.post(`/documents/${source}/${id}/restore`);
 }
 
+export async function permanentlyDeleteDocument(id: number, source?: string): Promise<void> {
+  await apiClient.delete(`/documents/${id}/permanent`, {
+    params: { source }
+  });
+}
+
 export async function updateDocumentVisibility(id: number, roles: string[]): Promise<void> {
   await apiClient.patch(`/documents/${id}/visibility`, { roles });
 }

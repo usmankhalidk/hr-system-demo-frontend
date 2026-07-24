@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search } from 'lucide-react';
+import { Search, Paperclip, Plus, X, Image as ImageIcon } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Alert } from '../../components/ui/Alert';
@@ -9,9 +9,10 @@ import { sendMessage } from '../../api/messages';
 import { getEmployees } from '../../api/employees';
 import { translateApiError } from '../../utils/apiErrors';
 import { useAuth } from '../../context/AuthContext';
-import { getAvatarUrl } from '../../api/client';
+import apiClient, { getAvatarUrl, getMessageAttachmentUrl } from '../../api/client';
 import { Badge } from '../../components/ui/Badge';
 import { UserRole } from '../../types';
+import { PlatformReferencePicker, PlatformReference } from './PlatformReferencePicker';
 
 interface Props {
   /** Pre-set recipient (reply mode or employee→HR). If omitted, show picker. */
@@ -85,6 +86,13 @@ export function ComposeMessage({ recipientId, recipientName, companyId, defaultS
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Attachments & Platform Reference
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
+  const [showRefPicker, setShowRefPicker] = useState(false);
+  const [selectedRef, setSelectedRef] = useState<PlatformReference | null>(null);
+
   // Picker state
   const [employees, setEmployees] = useState<PickableEmployee[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
@@ -125,24 +133,48 @@ export function ComposeMessage({ recipientId, recipientName, companyId, defaultS
   const effectiveRecipientId = showPicker ? pickedId : recipientId;
   const effectiveRecipientName = showPicker ? pickedName : (recipientName ?? '');
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await apiClient.post('/messages/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setUploadedFilename(data.data.filename);
+    } catch {
+      setError(t('messages.errorUpload', 'Failed to upload attachment'));
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!effectiveRecipientId) {
       setError(t('messages.errorPickRecipient'));
       return;
     }
-    if (!body.trim()) {
+    if (!body.trim() && !uploadedFilename) {
       setError(t('messages.errorBodyRequired'));
       return;
     }
     setSaving(true);
     setError(null);
     try {
+      let finalBody = body.trim();
+      if (selectedRef) {
+        finalBody += `\n\n[ref:type=${selectedRef.type}&id=${selectedRef.id}&title=${encodeURIComponent(selectedRef.title)}&url=${selectedRef.url}]`;
+      }
+
       await sendMessage({
         recipientId: effectiveRecipientId,
         subject: subject.trim() || undefined,
-        body: body.trim(),
+        body: finalBody,
         companyId: shouldFetchAllAccessibleUsers ? undefined : effectiveCompanyId,
-      });
+        attachmentFilename: uploadedFilename || undefined,
+      } as any);
       onSent?.(effectiveRecipientId);
       onClose();
     } catch (err: unknown) {
@@ -293,49 +325,57 @@ export function ComposeMessage({ recipientId, recipientName, companyId, defaultS
                           fontWeight: isPicked ? 700 : 400,
                           fontSize: 13, fontFamily: 'var(--font-body)',
                           borderBottom: '1px solid var(--border-light)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                          display: 'flex', alignItems: 'center', gap: 10,
                           transition: 'background 0.1s',
                         }}
                         onMouseEnter={e => { if (!isPicked) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-warm)'; }}
                         onMouseLeave={e => { if (!isPicked) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                          <div style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: '50%',
-                            overflow: 'hidden',
-                            background: avatarUrl ? 'transparent' : getAvatarColor(fullName),
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            flexShrink: 0,
-                          }}>
-                            {avatarUrl ? (
-                              <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            ) : getInitials(fullName)}
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {emp.email}
+                        <div style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          background: avatarUrl ? 'transparent' : getAvatarColor(fullName),
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : getInitials(fullName)}
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {/* Top Row: Name (left) & Role Tag (top right) */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <div style={{ fontWeight: isPicked ? 700 : 600, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {fullName}
                             </div>
-                            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ flexShrink: 0 }}>
                               <Badge variant={ROLE_BADGE_VARIANT[emp.role]} size="sm">
                                 {roleLabel}
                               </Badge>
-                              {emp.companyName ? (
-                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                  {emp.companyName}
-                                </span>
-                              ) : null}
+                            </span>
+                          </div>
+                          {/* Bottom Row: Email (left) & Company Name (right) */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {emp.email}
                             </div>
+                            {emp.companyName ? (
+                              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                                {emp.companyName}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
-                        {isPicked && <span style={{ fontSize: 11 }}>✓</span>}
+
+                        {isPicked && <span style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 800 }}>✓</span>}
                       </button>
                     );
                   })}
@@ -405,7 +445,103 @@ export function ComposeMessage({ recipientId, recipientName, companyId, defaultS
             }}
           />
         </div>
+
+        {/* Attachment & Platform Reference Previews */}
+        {(uploadedFilename || selectedRef) && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {uploadedFilename && (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '4px 10px', borderRadius: 8,
+                background: 'var(--surface-warm)', border: '1px solid var(--border)',
+                fontSize: 12, color: 'var(--text-primary)',
+              }}>
+                <ImageIcon size={14} color="var(--accent)" />
+                <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {uploadedFilename}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setUploadedFilename(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {selectedRef && (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '4px 10px', borderRadius: 8,
+                background: 'rgba(201,151,58,0.1)', border: '1px solid rgba(201,151,58,0.3)',
+                fontSize: 12, color: 'var(--accent)', fontWeight: 600,
+              }}>
+                <span>🔗 {selectedRef.type.toUpperCase()}: {selectedRef.title}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRef(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0 }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Modal Toolbar: File Input + Plus Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            accept="image/*,.pdf,.doc,.docx"
+            style={{ display: 'none' }}
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingFile || saving}
+            title={t('messages.attachFile', 'Attach File or Image')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--surface)',
+              color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            {uploadingFile ? <Spinner size="sm" /> : <Paperclip size={14} />}
+            <span>{t('messages.attach', 'Attach')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowRefPicker(true)}
+            disabled={saving}
+            title={t('messages.attachReference', 'Reference Task/Doc/Shift')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--surface)',
+              color: 'var(--accent)', fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            <Plus size={14} />
+            <span>{t('messages.reference', 'Reference')}</span>
+          </button>
+        </div>
       </div>
+
+      {showRefPicker && (
+        <PlatformReferencePicker
+          onSelect={(ref) => setSelectedRef(ref)}
+          onClose={() => setShowRefPicker(false)}
+        />
+      )}
     </Modal>
   );
 }

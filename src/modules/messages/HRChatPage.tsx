@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { MessageSquare, Reply, Plus, Inbox, Send, ArrowLeft, Image, Trash2, Check, CheckCheck, MoreVertical, Edit2, Lock } from 'lucide-react';
+import { MessageSquare, Reply, Plus, Inbox, Send, ArrowLeft, Image, Trash2, Check, CheckCheck, MoreVertical, Edit2, Lock, Link2, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Message } from '../../types';
@@ -15,6 +15,7 @@ import { Alert } from '../../components/ui/Alert';
 import { ComposeMessage } from './ComposeMessage';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useSocket } from '../../context/SocketContext';
+import { PlatformReferencePicker, PlatformReference } from './PlatformReferencePicker';
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 
@@ -126,19 +127,32 @@ const ConversationRow: React.FC<ConversationRowProps> = ({ conv, isSelected, lan
           {unreadCount > 0 && (
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
           )}
-          <span style={{
-            fontSize: 12, color: 'var(--text-muted)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            fontWeight: unreadCount > 0 ? 600 : 400,
-          }}>
-            {conv.lastMessage.subject || conv.lastMessage.body || ((conv.lastMessage.attachmentFilename || (conv.lastMessage as any).attachment_filename) ? (lang.startsWith('it') ? '📷 Foto' : '📷 Photo') : '')}
-          </span>
-        </div>
-        <div style={{
-          fontSize: 11.5, color: 'var(--text-disabled)', marginTop: 3,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {(conv.lastMessage.body || '').slice(0, 80)}
+          {(() => {
+            const rawBody = conv.lastMessage.body || '';
+            const cleanBody = rawBody.replace(/\[ref:[^\]]+\]/g, '').trim();
+            const refMatch = rawBody.match(/\[ref:type=([^&]+)&id=([^&]+)&title=([^&]+)&url=([^\]]+)\]/);
+            const refTitle = refMatch ? decodeURIComponent(refMatch[3]) : null;
+
+            const snippet = conv.lastMessage.subject
+              ? conv.lastMessage.subject
+              : cleanBody
+                ? cleanBody
+                : refTitle
+                  ? `🔗 ${refTitle}`
+                  : ((conv.lastMessage.attachmentFilename || (conv.lastMessage as any).attachment_filename)
+                    ? (lang.startsWith('it') ? '📷 Foto' : '📷 Photo')
+                    : '—');
+
+            return (
+              <span style={{
+                fontSize: 12, color: 'var(--text-muted)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontWeight: unreadCount > 0 ? 600 : 400,
+              }}>
+                {snippet}
+              </span>
+            );
+          })()}
         </div>
       </div>
       {unreadCount > 0 && (
@@ -201,6 +215,10 @@ export default function HRChatPage() {
   // Image attachments states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
+  
+  // Platform Reference attachment
+  const [showRefPicker, setShowRefPicker] = useState(false);
+  const [selectedRef, setSelectedRef] = useState<PlatformReference | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [sendingReply, setSendingReply] = useState(false);
   
@@ -470,20 +488,23 @@ export default function HRChatPage() {
   const handleSendDirectReply = async () => {
     const hasText = replyText.trim() !== '';
     const hasAttachment = uploadedFilename !== null;
+    const hasRef = selectedRef !== null;
     
-    if ((!hasText && !hasAttachment) || !selectedConversationId || sendingReply || uploadingFile) return;
+    if ((!hasText && !hasAttachment && !hasRef) || !selectedConversationId || sendingReply || uploadingFile) return;
     setSendingReply(true);
     try {
-      const subjectToUse = subjectText.trim() ||
-                           selectedConv?.messages[selectedConv.messages.length - 1]?.subject ||
-                           selectedConv?.lastMessage?.subject ||
-                           '';
+      const subjectToUse = subjectText.trim();
       const companyIdToUse = selectedConv?.messages[0]?.companyId || activeCompanyId;
+
+      let finalBody = replyText.trim();
+      if (selectedRef) {
+        finalBody += `${finalBody ? '\n\n' : ''}[ref:type=${selectedRef.type}&id=${selectedRef.id}&title=${encodeURIComponent(selectedRef.title)}&url=${selectedRef.url}]`;
+      }
 
       await sendMessage({
         recipientId: selectedConversationId,
         subject: subjectToUse || undefined,
-        body: replyText.trim() || (uploadedFilename ? '' : undefined),
+        body: finalBody || (uploadedFilename ? '' : undefined),
         companyId: companyIdToUse,
         attachmentFilename: uploadedFilename || undefined,
       } as any);
@@ -493,6 +514,7 @@ export default function HRChatPage() {
       setShowSubjectInput(false);
       setSelectedFile(null);
       setUploadedFilename(null);
+      setSelectedRef(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       loadMessages();
     } catch (err) {
@@ -503,12 +525,28 @@ export default function HRChatPage() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingMessageId || !replyText.trim()) return;
+    if (!editingMessageId) return;
     try {
       setSendingReply(true);
-      await editMessage(editingMessageId, replyText.trim(), selectedConv?.messages[0]?.companyId || activeCompanyId);
+      let finalBody = replyText.trim();
+      if (selectedRef) {
+        finalBody += `${finalBody ? '\n\n' : ''}[ref:type=${selectedRef.type}&id=${selectedRef.id}&title=${encodeURIComponent(selectedRef.title)}&url=${selectedRef.url}]`;
+      }
+
+      await editMessage(
+        editingMessageId,
+        finalBody,
+        selectedConv?.messages[0]?.companyId || activeCompanyId,
+        subjectText.trim() || undefined,
+        uploadedFilename || undefined,
+      );
       setEditingMessageId(null);
       setReplyText('');
+      setSubjectText('');
+      setShowSubjectInput(false);
+      setSelectedFile(null);
+      setUploadedFilename(null);
+      setSelectedRef(null);
       setShowOptionsId(null);
       loadMessages();
       showToast(t('messages.editSuccess'), 'success');
@@ -550,7 +588,7 @@ export default function HRChatPage() {
   const showChatPane = !isMobile || selectedConversationId !== null;
 
   return (
-    <div className="page-enter" style={{ maxWidth: 1100, margin: '0 auto', fontFamily: 'var(--font-body)' }}>
+    <div className="page-enter" style={{ width: '100%', fontFamily: 'var(--font-body)' }}>
 
       {/* Page header */}
       <div style={{
@@ -822,7 +860,39 @@ export default function HRChatPage() {
                                   </button>
                                   {showOptions && (
                                     <div style={{ position: 'absolute', right: '100%', top: 0, marginRight: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)', zIndex: 10, display: 'flex', flexDirection: 'column', minWidth: 120, overflow: 'hidden' }}>
-                                      <button onClick={() => { setEditingMessageId(msg.id); setReplyText(msg.body || ''); setShowOptionsId(null); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-primary)', textAlign: 'left', width: '100%' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-warm)'} onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                                      <button
+                                        onClick={() => {
+                                          setEditingMessageId(msg.id);
+                                          const rawBody = msg.body || '';
+                                          const cleanBody = rawBody.replace(/\[ref:[^\]]+\]/g, '').trim();
+                                          setReplyText(cleanBody);
+                                          if (msg.subject) {
+                                            setSubjectText(msg.subject);
+                                            setShowSubjectInput(true);
+                                          } else {
+                                            setSubjectText('');
+                                            setShowSubjectInput(false);
+                                          }
+                                          setUploadedFilename(msg.attachmentFilename || (msg as any).attachment_filename || null);
+
+                                          const refMatch = rawBody.match(/\[ref:type=([^&]+)&id=([^&]+)&title=([^&]+)&url=([^\]]+)\]/);
+                                          if (refMatch) {
+                                            const [, refType, refId, refTitleEnc, refUrl] = refMatch;
+                                            setSelectedRef({
+                                              type: refType as any,
+                                              id: Number(refId),
+                                              title: decodeURIComponent(refTitleEnc),
+                                              url: refUrl,
+                                            });
+                                          } else {
+                                            setSelectedRef(null);
+                                          }
+                                          setShowOptionsId(null);
+                                        }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-primary)', textAlign: 'left', width: '100%' }}
+                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-warm)'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                      >
                                         <Edit2 size={12} /> {t('common.edit')}
                                       </button>
                                       <button onClick={() => void handleDelete(msg.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--danger)', textAlign: 'left', width: '100%' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-warm)'} onMouseLeave={e => e.currentTarget.style.background = 'none'}>
@@ -880,12 +950,72 @@ export default function HRChatPage() {
                               );
                             })()}
 
-                            {/* Message body rendering (second, below the image) */}
-                            {msg.body && !(['sent an image', 'send an image', 'immagine inviata', 'inviato un\'immagine', 'immagine'].includes(msg.body.trim().toLowerCase()) && (msg.attachmentFilename || (msg as any).attachment_filename)) && (
-                              <div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-body)', marginTop: (msg.attachmentFilename || (msg as any).attachment_filename) ? 8 : 0 }}>
-                                {msg.body}
-                              </div>
-                            )}
+                            {/* Message body & platform reference rendering */}
+                            {(() => {
+                              const rawBody = msg.body ?? '';
+                              const refMatch = rawBody.match(/\[ref:type=([^&]+)&id=([^&]+)&title=([^&]+)&url=([^\]]+)\]/);
+                              const cleanBody = rawBody.replace(/\[ref:[^\]]+\]/g, '').trim();
+
+                              return (
+                                <>
+                                  {cleanBody && !(['sent an image', 'send an image', 'immagine inviata', 'inviato un\'immagine', 'immagine'].includes(cleanBody.toLowerCase()) && (msg.attachmentFilename || (msg as any).attachment_filename)) && (
+                                    <div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-body)', marginTop: (msg.attachmentFilename || (msg as any).attachment_filename) ? 8 : 0 }}>
+                                      {cleanBody}
+                                    </div>
+                                  )}
+
+                                  {refMatch && (() => {
+                                    const [, refType, refId, refTitleEnc, refUrl] = refMatch;
+                                    const refTitle = decodeURIComponent(refTitleEnc);
+                                    return (
+                                      <div
+                                        onClick={() => { window.location.href = refUrl; }}
+                                        style={{
+                                          marginTop: 8,
+                                          padding: '10px 12px',
+                                          borderRadius: 10,
+                                          background: isSent ? 'rgba(255,255,255,0.18)' : 'var(--surface-warm)',
+                                          border: `1px solid ${isSent ? 'rgba(255,255,255,0.3)' : 'var(--border)'}`,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          gap: 10,
+                                          cursor: 'pointer',
+                                          transition: 'transform 0.15s, background 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                          <span style={{ fontSize: 14 }}>
+                                            {refType === 'task' ? '📋' : refType === 'document' ? '📄' : refType === 'shift' ? '📅' : refType === 'employee' ? '👥' : refType === 'job' ? '💼' : '🏢'}
+                                          </span>
+                                          <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.85, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                              {refType} #{refId}
+                                            </div>
+                                            <div style={{ fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                              {refTitle}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <span style={{
+                                          fontSize: 10.5,
+                                          fontWeight: 800,
+                                          padding: '3px 8px',
+                                          borderRadius: 6,
+                                          background: isSent ? 'rgba(255,255,255,0.25)' : 'var(--accent)',
+                                          color: isSent ? '#fff' : '#fff',
+                                          flexShrink: 0,
+                                        }}>
+                                          Open →
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
+                                </>
+                              );
+                            })()}
 
                             <div style={{
                               display: 'flex',
@@ -950,6 +1080,35 @@ export default function HRChatPage() {
                       }}
                     >
                       {t('common.cancel')}
+                    </button>
+                  </div>
+                )}
+
+                {/* Selected Platform Reference preview chip */}
+                {selectedRef && (
+                  <div style={{
+                    padding: '8px 16px',
+                    borderTop: '1px solid var(--border-light)',
+                    background: 'rgba(201,151,58,0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: 'var(--accent)', minWidth: 0 }}>
+                      <span>🔗 {selectedRef.type.toUpperCase()}: {selectedRef.title}</span>
+                      {selectedRef.subtitle && <span style={{ opacity: 0.7, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>({selectedRef.subtitle})</span>}
+                    </div>
+                    <button
+                      onClick={() => setSelectedRef(null)}
+                      disabled={sendingReply}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--accent)', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        borderRadius: '50%',
+                      }}
+                    >
+                      <X size={14} />
                     </button>
                   </div>
                 )}
@@ -1047,6 +1206,25 @@ export default function HRChatPage() {
                     title="Add Subject"
                   >
                     <Plus size={20} />
+                  </button>
+
+                  {/* Platform Reference picker button */}
+                  <button
+                    onClick={() => setShowRefPicker(true)}
+                    disabled={sendingReply || uploadingFile}
+                    style={{
+                      background: 'none', border: 'none', padding: 6, cursor: 'pointer',
+                      color: selectedRef ? 'var(--accent)' : 'var(--text-secondary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '50%',
+                      transition: 'background 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-warm)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    title="Attach Reference (Task, Document, Shift)"
+                  >
+                    <Link2 size={19} />
                   </button>
 
                   {/* Attachment image uploader */}
@@ -1163,6 +1341,14 @@ export default function HRChatPage() {
           defaultSubject={composeDefaultSubject}
           onClose={() => { setComposeOpen(false); setComposeRecipient(null); }}
           onSent={handleSent}
+        />
+      )}
+
+      {/* Platform Reference Picker modal */}
+      {showRefPicker && (
+        <PlatformReferencePicker
+          onSelect={(ref) => setSelectedRef(ref)}
+          onClose={() => setShowRefPicker(false)}
         />
       )}
     </div>
