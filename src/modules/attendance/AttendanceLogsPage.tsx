@@ -2196,20 +2196,31 @@ export default function AttendanceLogsPage() {
                 <div style={{
                   background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', padding: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
                 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>📊 {t('attendance.chartTitle', 'Confronto Grafico Presenze per Dipendente')}</span>
+                  <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>📊 {t('attendance.chartTitle', 'Confronto Grafico Presenze per Dipendente')}</span>
+                      </div>
                       <button
                         onClick={() => setShowBreakSettingsModal(true)}
                         title={t('attendance.breakPayrollTitle', 'Gestione Pause e Paghe')}
                         style={{
-                          background: 'var(--surface-warm)', color: '#b45309', borderRadius: 6,
-                          padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                          display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(180,83,9,0.2)',
+                          background: 'var(--surface-warm)', color: '#b45309', borderRadius: 8,
+                          padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid rgba(180,83,9,0.25)',
+                          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                         }}
                       >
-                        ⚙️ {t('attendance.breakPayrollTitle', 'Pause & Paghe')}
+                        ⚙️ {t('attendance.breakPayrollTitle', 'Gestione Pause & Paghe')}
                       </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--background)', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)' }}>
+                      <span>ℹ️</span>
+                      <span>
+                        {breakSettings.enforcementEnabled
+                          ? t('attendance.guideStrictActive', 'Strict Enforcement Active (Tolerance: {{tol}} min) — If recorded break is less than {{tol}} min from scheduled, full break is deducted to protect payroll costs.', { tol: breakSettings.toleranceMinutes })
+                          : t('attendance.guideStandardActive', 'Standard Mode Active — Scheduled breaks are always deducted from worked hours even if not clocked.')}
+                      </span>
                     </div>
                   </div>
 
