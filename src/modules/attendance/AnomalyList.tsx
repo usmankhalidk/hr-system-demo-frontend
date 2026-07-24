@@ -94,6 +94,11 @@ const IconX = () => (
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
+const IconChevronDown = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
 
 const ANOMALY_META: Record<string, { Icon: () => JSX.Element; color: string; bg: string; border: string }> = {
   late_arrival: { Icon: IconClock,   color: '#b45309', bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.20)' },
@@ -133,12 +138,18 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
   const [error, setError] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
   const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string | null>(null);
+  const [displayLimit, setDisplayLimit] = useState<number>(100);
 
   useEffect(() => {
     if (propCompact !== undefined) {
       setCompact(propCompact);
     }
   }, [propCompact]);
+
+  useEffect(() => {
+    setDisplayLimit(100);
+  }, [dateFrom, dateTo, storeId, userId, search, selectedTypeFilter]);
 
   const rangeExceeds14Days = (() => {
     const from = new Date(dateFrom);
@@ -255,6 +266,12 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
     return acc;
   }, {});
 
+  const displayedAnomalies = selectedTypeFilter
+    ? anomalies.filter((a) => a.anomalyType === selectedTypeFilter)
+    : anomalies;
+
+  const visibleAnomalies = displayedAnomalies.slice(0, displayLimit);
+
   return (
     <div style={{ padding: isMobile ? '16px 0 20px' : '20px 0 24px' }}>
 
@@ -263,7 +280,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
         display: 'grid',
         gridTemplateColumns: isMobile
           ? 'repeat(2, minmax(0, 1fr))'
-          : 'repeat(6, minmax(0, 1fr))',
+          : 'repeat(7, minmax(0, 1fr))',
         gap: isMobile ? 8 : 12,
         marginBottom: isMobile ? 16 : 24,
         padding: isMobile ? '0' : `0 ${pad}`,
@@ -271,23 +288,66 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
         {Object.entries(ANOMALY_META).map(([type, meta]) => {
           const count = countByType[type] ?? 0;
           const { Icon } = meta;
+          const isSelected = selectedTypeFilter === type;
           return (
-            <div key={type} style={{
-              padding: isMobile ? '12px 14px' : '14px 16px',
-              borderRadius: 'var(--radius-lg)',
-              background: count > 0 ? meta.bg : 'var(--surface)',
-              border: `1px solid ${count > 0 ? meta.border : 'var(--border)'}`,
-              borderTop: `3px solid ${count > 0 ? meta.color : 'var(--border)'}`,
-              transition: 'all 0.15s',
-            }}>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 28, height: 28, borderRadius: 'var(--radius-sm)',
-                background: count > 0 ? `${meta.color}18` : 'var(--background)',
-                color: count > 0 ? meta.color : 'var(--text-muted)',
-                marginBottom: 8,
-              }}>
-                <Icon />
+            <div
+              key={type}
+              onClick={() => {
+                if (count === 0) return;
+                setSelectedTypeFilter(isSelected ? null : type);
+              }}
+              style={{
+                padding: isMobile ? '12px 14px' : '16px',
+                borderRadius: '16px',
+                background: isSelected
+                  ? `linear-gradient(135deg, ${meta.bg} 0%, rgba(255,255,255,0.98) 100%)`
+                  : count > 0 ? meta.bg : 'var(--surface)',
+                border: isSelected
+                  ? `2px solid ${meta.color}`
+                  : `1px solid ${count > 0 ? meta.border : 'var(--border)'}`,
+                borderTop: `4px solid ${count > 0 ? meta.color : 'var(--border)'}`,
+                cursor: count > 0 ? 'pointer' : 'default',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: isSelected
+                  ? `0 6px 20px ${meta.color}33`
+                  : count > 0
+                    ? '0 2px 8px rgba(0,0,0,0.04)'
+                    : 'none',
+                transform: isSelected ? 'translateY(-2px)' : 'none',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onMouseEnter={(e) => {
+                if (count > 0 && !isSelected) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 6px 16px ${meta.color}22`;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected) {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = count > 0 ? '0 2px 8px rgba(0,0,0,0.04)' : 'none';
+                }
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 30, height: 30, borderRadius: 8,
+                  background: count > 0 ? `${meta.color}18` : 'var(--background)',
+                  color: count > 0 ? meta.color : 'var(--text-muted)',
+                  border: `1px solid ${count > 0 ? `${meta.color}30` : 'var(--border)'}`,
+                }}>
+                  <Icon />
+                </div>
+                {isSelected && (
+                  <span style={{
+                    fontSize: 8, fontWeight: 800, padding: '2px 5px', borderRadius: 20,
+                    background: meta.color, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.5px',
+                  }}>
+                    Filtro
+                  </span>
+                )}
               </div>
               <div style={{
                 fontSize: isMobile ? 22 : 26, fontWeight: 800, lineHeight: 1,
@@ -314,7 +374,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
       {/* ── Mobile: card list ──────────────────────────────────────────────── */}
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {anomalies.map((a, idx) => {
+          {visibleAnomalies.map((a, idx) => {
             const meta    = ANOMALY_META[a.anomalyType] ?? ANOMALY_META['late_arrival'];
             const sevMeta = SEVERITY_META[a.severity]   ?? SEVERITY_META['low'];
             const { Icon } = meta;
@@ -422,12 +482,34 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
               </div>
             );
           })}
-          {/* Footer */}
-          <div style={{ padding: '6px 2px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            <IconAlertTriangle />
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {t('attendance.anomalies_count', { count: anomalies.length })}
-            </span>
+          {/* Mobile Footer with pagination */}
+          <div style={{
+            padding: '12px 16px', borderRadius: 12,
+            border: '1px solid var(--border)', background: 'var(--surface)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginTop: 10, gap: 10,
+          }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {displayLimit < displayedAnomalies.length ? (
+                <>{t('attendance.showing')} <strong>{visibleAnomalies.length}</strong> / <strong>{displayedAnomalies.length}</strong></>
+              ) : (
+                <><strong>{displayedAnomalies.length}</strong> {t('attendance.found')}</>
+              )}
+            </div>
+            {displayLimit < displayedAnomalies.length && (
+              <button
+                onClick={() => setDisplayLimit((prev) => prev + 100)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                  border: '1px solid var(--border)', background: 'var(--background)',
+                  color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                <IconChevronDown />
+                {t('attendance.loadMore', 'Load more')} (+{Math.min(100, displayedAnomalies.length - displayLimit)})
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -507,7 +589,7 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
                 </tr>
               </thead>
               <tbody>
-                {anomalies.map((a, idx) => {
+                {visibleAnomalies.map((a, idx) => {
                   const meta    = ANOMALY_META[a.anomalyType] ?? ANOMALY_META['late_arrival'];
                   const sevMeta = SEVERITY_META[a.severity]   ?? SEVERITY_META['low'];
                   const { Icon } = meta;
@@ -632,13 +714,37 @@ export default function AnomalyList({ dateFrom, dateTo, storeId, userId, search,
             padding: '12px 24px',
             borderTop: '1px solid var(--border)',
             background: 'var(--surface-warm)',
-            display: 'flex', alignItems: 'center', gap: 6,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             fontSize: 12, color: 'var(--text-muted)',
           }}>
-            <IconAlertTriangle />
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {t('attendance.anomalies_count', { count: anomalies.length })}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconAlertTriangle />
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {displayLimit < displayedAnomalies.length ? (
+                  <>{t('attendance.showing')} <strong>{visibleAnomalies.length}</strong> / <strong>{displayedAnomalies.length}</strong></>
+                ) : (
+                  <><strong>{displayedAnomalies.length}</strong> {t('attendance.found')}</>
+                )}
+              </span>
+            </div>
+
+            {displayLimit < displayedAnomalies.length && (
+              <button
+                onClick={() => setDisplayLimit((prev) => prev + 100)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '7px 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                  border: '1px solid var(--border)', background: 'var(--surface)',
+                  color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+              >
+                <IconChevronDown />
+                {t('attendance.loadMore', 'Load more')} (+{Math.min(100, displayedAnomalies.length - displayLimit)})
+              </button>
+            )}
           </div>
         </div>
       )}

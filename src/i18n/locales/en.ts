@@ -1623,6 +1623,7 @@ const en = {
     successMessage: 'Attendance recorded successfully',
     found: 'found',
     showing: 'showing',
+    loadMore: 'Load more',
     maxResults: 'Max 500 results shown — use filters to narrow down',
     exportError: 'Error during export',
     viewLogs: 'Attendance Log',

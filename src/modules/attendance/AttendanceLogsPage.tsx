@@ -659,6 +659,9 @@ export default function AttendanceLogsPage() {
   const [tempDateFrom, setTempDateFrom] = useState('');
   const [tempDateTo, setTempDateTo] = useState('');
 
+  // Summary display limit (100 per page)
+  const [summaryDisplayLimit, setSummaryDisplayLimit] = useState(100);
+
   const openFilterModal = () => {
     setTempStoreId(filterStoreId);
     setTempUserId(filterUserId);
@@ -855,6 +858,7 @@ export default function AttendanceLogsPage() {
   }, [buildActiveParams, events.length, t]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => { setSummaryDisplayLimit(100); }, [viewMode, dateFrom, dateTo, filterStoreId, filterUserId]);
 
   const summaryRows = useMemo<SummaryRow[]>(() => {
     const getGroupInfo = (dateStr: string): { dateKey: string; periodLabel: string } => {
@@ -2735,7 +2739,7 @@ export default function AttendanceLogsPage() {
                             </td>
                           </tr>
                         ) : (
-                          summaryRows.slice(0, 500).map((row, idx) => {
+                          summaryRows.slice(0, summaryDisplayLimit).map((row, idx) => {
                             const vBadge = varianceDisplay(row, t, { applyTolerance: true, overtimeLimit, undertimeLimit });
                             const avatarUrl = getAvatarUrl(row.userAvatarFilename);
                             const initials = `${row.userName?.[0] ?? ''}${row.userSurname?.[0] ?? ''}`.toUpperCase();
@@ -2920,7 +2924,7 @@ export default function AttendanceLogsPage() {
               )}
 
               {/* Table footer */}
-              {!loading && events.length > 0 && (
+              {!loading && (events.length > 0 || (viewMode === 'summary' && summaryRows.length > 0)) && (
                 <div style={{
                   padding: '10px 20px',
                   borderTop: '1px solid var(--border)',
@@ -2928,10 +2932,15 @@ export default function AttendanceLogsPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {events.length < total
-                      ? <>{t('attendance.showing')} <strong>{events.length}</strong> / <strong>{total}</strong></>
-                      : <><strong>{total}</strong> {t('attendance.found')}</>
-                    }
+                    {viewMode === 'summary' ? (
+                      summaryDisplayLimit < summaryRows.length
+                        ? <>{t('attendance.showing')} <strong>{Math.min(summaryDisplayLimit, summaryRows.length)}</strong> / <strong>{summaryRows.length}</strong></>
+                        : <><strong>{summaryRows.length}</strong> {t('attendance.found')}</>
+                    ) : (
+                      events.length < total
+                        ? <>{t('attendance.showing')} <strong>{events.length}</strong> / <strong>{total}</strong></>
+                        : <><strong>{total}</strong> {t('attendance.found')}</>
+                    )}
                   </div>
                   {viewMode === 'logs' && events.length < total && (
                     <button
@@ -2952,7 +2961,23 @@ export default function AttendanceLogsPage() {
                       ) : (
                         <ChevronDown size={14} />
                       )}
-                      {t('attendance.loadMore', 'Carica altre')} (+{Math.min(LOGS_PAGE_SIZE, total - events.length)})
+                      {t('attendance.loadMore', 'Load more')} (+{Math.min(LOGS_PAGE_SIZE, total - events.length)})
+                    </button>
+                  )}
+                  {viewMode === 'summary' && summaryDisplayLimit < summaryRows.length && (
+                    <button
+                      onClick={() => setSummaryDisplayLimit(prev => prev + 100)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '7px 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                        border: '1px solid var(--border)', background: 'var(--surface)',
+                        color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    >
+                      <ChevronDown size={14} />
+                      {t('attendance.loadMore', 'Load more')} (+{Math.min(100, summaryRows.length - summaryDisplayLimit)})
                     </button>
                   )}
                 </div>

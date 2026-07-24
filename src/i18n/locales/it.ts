@@ -1617,6 +1617,7 @@ const it = {
     successMessage: 'Presenza registrata con successo',
     found: 'trovate',
     showing: 'mostrando',
+    loadMore: 'Carica altre',
     maxResults: 'Max 500 risultati mostrati — usa i filtri per restringere',
     exportError: 'Errore durante l\'esportazione',
     viewLogs: 'Registro Log',
