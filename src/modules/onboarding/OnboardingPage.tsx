@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { Building2, CheckCircle2, ChevronDown, ChevronUp, Pencil, Power, Store as StoreIcon, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -378,11 +378,19 @@ const TemplatesPanel: React.FC = () => {
   const { showToast } = useToast();
   const { isMobile } = useBreakpoint();
 
+  const [searchParams] = useSearchParams();
+  const searchParamVal = searchParams.get('search') || searchParams.get('q') || '';
   const [templates, setTemplates] = useState<OnboardingTemplate[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParamVal);
+
+  useEffect(() => {
+    if (searchParamVal) {
+      setSearch(searchParamVal);
+    }
+  }, [searchParamVal]);
   const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OnboardingTemplate | null>(null);

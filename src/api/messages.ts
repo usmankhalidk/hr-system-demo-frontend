@@ -39,8 +39,8 @@ export async function markMessageAsRead(id: number, companyId?: number | null): 
   return data.data;
 }
 
-export async function editMessage(id: number, body: string, companyId?: number | null): Promise<Message> {
-  const { data } = await apiClient.patch(`/messages/${id}`, { body }, {
+export async function editMessage(id: number, body: string, companyId?: number | null, subject?: string, attachmentFilename?: string): Promise<Message> {
+  const { data } = await apiClient.patch(`/messages/${id}`, { body, subject, attachmentFilename }, {
     params: companyId != null ? { company_id: companyId } : undefined,
   });
   return data.data;
