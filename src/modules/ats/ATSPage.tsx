@@ -4930,6 +4930,11 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const [intInterviewerId, setIntInterviewerId] = useState<string | null>(null);
   const [intSendIcs, setIntSendIcs] = useState(true);
   const [savingInt, setSavingInt] = useState(false);
+  // Address picker for in-person interviews: the company's store addresses plus
+  // any custom ones the user saved for reuse (kept per-browser in localStorage).
+  const [modalStores, setModalStores] = useState<Store[]>([]);
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<string[]>([]);
   const [interviewerUsers, setInterviewerUsers] = useState<Employee[]>([]);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
   const [interviewFeedback, setInterviewFeedback] = useState<Record<number, InterviewFeedbackComment[]>>({});
@@ -5497,9 +5502,49 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     }
   };
 
+  // Load the company's store addresses + saved custom addresses when the form opens.
+  const addressStorageKey = `veylo:interviewAddresses:${candidate.companyId}`;
+  useEffect(() => {
+    if (!showInterviewForm) return;
+    getStores()
+      .then((all) => setModalStores(all.filter((s) => s.companyId === candidate.companyId)))
+      .catch(() => setModalStores([]));
+    try {
+      const raw = localStorage.getItem(addressStorageKey);
+      setSavedAddresses(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch { setSavedAddresses([]); }
+  }, [showInterviewForm, candidate.companyId, addressStorageKey]);
+
+  const storeAddressOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { label: string; value: string }[] = [];
+    for (const s of modalStores) {
+      const value = [s.address, s.cap, s.city].filter(Boolean).join(', ');
+      if (value && !seen.has(value)) { seen.add(value); out.push({ label: s.name, value }); }
+    }
+    return out;
+  }, [modalStores]);
+
+  const persistSavedAddress = (addr: string) => {
+    const clean = addr.trim();
+    if (!clean) return;
+    setSavedAddresses((prev) => {
+      if (prev.includes(clean)) return prev;
+      const next = [...prev, clean].slice(-10);
+      try { localStorage.setItem(addressStorageKey, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   const handleCreateInterview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!intDate) return;
+    // In-person interviews must carry a physical address — the candidate needs
+    // to know where to show up (phone/video interviews don't use a location).
+    if (intType === 'in_person' && !intLocation.trim()) {
+      showToast(t('ats.interviewAddressRequired', 'An address is required for in-person interviews'), 'error');
+      return;
+    }
     setSavingInt(true);
     try {
       // Ensure time has a value, default to 09:00 if empty
@@ -6221,7 +6266,13 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       </label>
                       <select
                         value={intType}
-                        onChange={(e) => setIntType(e.target.value as InterviewType)}
+                        onChange={(e) => {
+                          const next = e.target.value as InterviewType;
+                          setIntType(next);
+                          // A phone interview has no physical location — clear any
+                          // address so it is never sent to the candidate.
+                          if (next === 'phone') { setIntLocation(''); setShowAddressPicker(false); }
+                        }}
                         style={{
                           width: '100%',
                           boxSizing: 'border-box',
@@ -6278,14 +6329,100 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
                       noOptionsMessage={t('ats.noInterviewerResults', 'No interviewers found')}
                     />
                   </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                      {t('ats.interviewLocation')}
-                    </label>
-                    <input className="field-input" value={intLocation} onChange={(e) => setIntLocation(e.target.value)}
-                      placeholder={t('ats.interviewLocationPlaceholder')}
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }} />
-                  </div>
+                  {/* Location — only for in-person (and video); hidden for phone. */}
+                  {intType !== 'phone' && (
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                          {t('ats.interviewLocation')}
+                          {intType === 'in_person' && <span style={{ color: 'var(--danger)', marginLeft: 3 }}>*</span>}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddressPicker((v) => !v)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}
+                        >
+                          <MapPin size={12} /> {t('ats.interviewAddAddress', 'Add address')}
+                        </button>
+                      </div>
+                      <input
+                        className="field-input"
+                        value={intLocation}
+                        onChange={(e) => setIntLocation(e.target.value)}
+                        placeholder={intType === 'in_person'
+                          ? t('ats.interviewAddressPlaceholder', 'Street, number, ZIP, city')
+                          : t('ats.interviewLocationPlaceholder')}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 13, borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none', display: 'block' }}
+                      />
+
+                      {showAddressPicker && (
+                        <div style={{ position: 'absolute', zIndex: 50, top: '100%', right: 0, marginTop: 4, width: 'min(340px, 100%)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-lg)', padding: 10, display: 'grid', gap: 10 }}>
+                          {/* Store addresses */}
+                          <div>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                              {t('ats.interviewStoreAddresses', 'Store addresses')}
+                            </div>
+                            {storeAddressOptions.length === 0 ? (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('ats.interviewNoStoreAddresses', 'No store addresses on file')}</div>
+                            ) : (
+                              <div style={{ display: 'grid', gap: 4, maxHeight: 130, overflowY: 'auto' }}>
+                                {storeAddressOptions.map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => { setIntLocation(opt.value); setShowAddressPicker(false); }}
+                                    style={{ textAlign: 'left', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }}
+                                  >
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>🏬 {opt.label}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{opt.value}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Saved custom addresses */}
+                          {savedAddresses.length > 0 && (
+                            <div>
+                              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                                {t('ats.interviewSavedAddresses', 'Saved addresses')}
+                              </div>
+                              <div style={{ display: 'grid', gap: 4, maxHeight: 100, overflowY: 'auto' }}>
+                                {savedAddresses.map((addr) => (
+                                  <button
+                                    key={addr}
+                                    type="button"
+                                    onClick={() => { setIntLocation(addr); setShowAddressPicker(false); }}
+                                    style={{ textAlign: 'left', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, color: 'var(--text-primary)' }}
+                                  >
+                                    📍 {addr}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                            <button
+                              type="button"
+                              onClick={() => { persistSavedAddress(intLocation); }}
+                              disabled={!intLocation.trim()}
+                              style={{ background: 'none', border: 'none', fontSize: 11.5, fontWeight: 600, color: intLocation.trim() ? 'var(--primary)' : 'var(--text-muted)', cursor: intLocation.trim() ? 'pointer' : 'not-allowed' }}
+                            >
+                              💾 {t('ats.interviewSaveAddress', 'Save typed address for reuse')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddressPicker(false)}
+                              style={{ background: 'none', border: 'none', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}
+                            >
+                              {t('common.close', 'Close')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {/* Description */}
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
